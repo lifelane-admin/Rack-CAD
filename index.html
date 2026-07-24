@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enterprise Datacenter Rack Designer</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- SEO & Meta -->
+  <meta name="description" content="Professional CAD application for Enterprise Datacenter Rack Design.">
+  
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="/src/styles/index.css" />
+  <link rel="stylesheet" href="/src/styles/layout.css" />
+  <link rel="stylesheet" href="/src/styles/toolbar.css" />
+  <link rel="stylesheet" href="/src/styles/sidebar.css" />
+  <link rel="stylesheet" href="/src/styles/canvas.css" />
+  <link rel="stylesheet" href="/src/styles/properties.css" />
+  <link rel="stylesheet" href="/src/styles/context-menu.css" />
+  <link rel="stylesheet" href="/src/styles/reports.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="toolbar"></header>
+    <div id="workspace">
+      <aside id="sidebar"></aside>
+      <main id="canvas-container">
+        <div id="ruler-corner"></div>
+        <div id="ruler-horizontal"></div>
+        <div id="ruler-vertical"></div>
+        <div id="canvas-viewport">
+          <svg id="canvas"></svg>
+        </div>
+        <div id="minimap"></div>
+      </main>
+      <aside id="properties-panel"></aside>
+    </div>
+    <footer id="statusbar"></footer>
+    <div id="context-menu" class="hidden"></div>
+  </div>
+  
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

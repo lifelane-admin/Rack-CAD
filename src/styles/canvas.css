@@ -1,0 +1,231 @@
+#ruler-corner {
+  grid-column: 1;
+  grid-row: 1;
+  background-color: var(--bg-panel);
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  z-index: 10;
+}
+
+#ruler-horizontal {
+  grid-column: 2;
+  grid-row: 1;
+  background-color: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+  background-image: 
+    linear-gradient(to right, var(--text-secondary) 1px, transparent 1px),
+    linear-gradient(to right, var(--border-color) 1px, transparent 1px);
+  background-repeat: repeat-x;
+}
+
+#ruler-vertical {
+  grid-column: 1;
+  grid-row: 2;
+  background-color: var(--bg-panel);
+  border-right: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+  background-image: 
+    linear-gradient(to bottom, var(--text-secondary) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border-color) 1px, transparent 1px);
+  background-repeat: repeat-y;
+}
+
+#canvas-viewport {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  overflow: hidden; /* Prevent browser scrollbar conflict with pan/zoom */
+  background-color: var(--bg-canvas);
+}
+
+#canvas {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  display: block;
+}
+
+/* Minimap */
+#minimap {
+  position: absolute;
+  bottom: var(--space-lg);
+  right: var(--space-lg);
+  width: 200px;
+  height: 150px;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-md);
+  z-index: 20;
+  overflow: hidden;
+  opacity: 0.9;
+  transition: opacity var(--transition-speed);
+}
+
+#minimap:hover {
+  opacity: 1;
+}
+
+.minimap-viewport-indicator {
+  position: absolute;
+  border: 1px solid var(--accent-primary);
+  background-color: rgba(88, 166, 255, 0.1);
+  cursor: move;
+}
+
+/* Selection */
+.selection-rect {
+  fill: rgba(88, 166, 255, 0.1);
+  stroke: var(--accent-primary);
+  stroke-width: 1px;
+  stroke-dasharray: 4;
+}
+
+/* Cursors */
+.cursor-grab { cursor: grab !important; }
+.cursor-grabbing { cursor: grabbing !important; }
+#canvas.dragging-active,
+#canvas.dragging-active * {
+  cursor: grabbing !important;
+}
+
+/* Selected Element Outlines */
+.selected {
+  outline: 2px solid var(--accent-primary) !important;
+  outline-offset: -1px;
+}
+
+svg .selected {
+  filter: drop-shadow(0 0 4px rgba(88, 166, 255, 0.6)) !important;
+}
+
+svg g.device-element.selected rect:first-of-type {
+  stroke: var(--accent-primary) !important;
+  stroke-width: 2px !important;
+}
+
+svg g.rack-element.selected rect:first-of-type {
+  stroke: var(--accent-primary) !important;
+  stroke-width: 2px !important;
+}
+
+svg g.cable-manager-vertical.selected rect:first-of-type {
+  stroke: var(--accent-primary) !important;
+  stroke-width: 2px !important;
+}
+
+svg path.cable-element.selected {
+  stroke: var(--accent-primary) !important;
+  stroke-width: 4px !important;
+  filter: drop-shadow(0 0 6px rgba(88, 166, 255, 0.8)) !important;
+}
+
+/* Cable Anchor Handles */
+.cable-anchor-handle {
+  cursor: grab !important;
+  transition: opacity 0.15s ease;
+}
+
+.cable-anchor-handle:hover polygon {
+  filter: drop-shadow(0 0 6px currentColor) brightness(1.4);
+}
+
+.cable-anchor-handle:active {
+  cursor: grabbing !important;
+}
+
+/* Pulsing glow on anchor glow ring */
+@keyframes anchor-pulse {
+  0%   { opacity: 0.15; r: 9; }
+  50%  { opacity: 0.35; r: 12; }
+  100% { opacity: 0.15; r: 9; }
+}
+
+.cable-anchor-handle circle:first-child {
+  animation: anchor-pulse 2s ease-in-out infinite;
+}
+
+/* Drag handle (dest endpoint) */
+.cable-drag-handle {
+  cursor: pointer;
+}
+
+.cable-drag-handle:hover circle {
+  filter: drop-shadow(0 0 8px rgba(255,255,255,0.6));
+}
+
+@keyframes handle-pulse {
+  0%   { opacity: 0.25; }
+  50%  { opacity: 0.55; }
+  100% { opacity: 0.25; }
+}
+
+.cable-drag-handle .handle-glow {
+  animation: handle-pulse 1.8s ease-in-out infinite;
+}
+
+/* ─── Port Neon Glow — Hover & Snap Effects ─────────────────────────────── */
+
+@keyframes port-neon-pulse {
+  0%   { opacity: 0.4; filter: drop-shadow(0 0 3px #00e5ff); }
+  50%  { opacity: 1.0; filter: drop-shadow(0 0 8px #00e5ff) drop-shadow(0 0 16px #00b8d9); }
+  100% { opacity: 0.4; filter: drop-shadow(0 0 3px #00e5ff); }
+}
+
+@keyframes port-power-pulse {
+  0%   { opacity: 0.4; filter: drop-shadow(0 0 3px #ff1744); }
+  50%  { opacity: 1.0; filter: drop-shadow(0 0 8px #ff1744) drop-shadow(0 0 16px #d50000); }
+  100% { opacity: 0.4; filter: drop-shadow(0 0 3px #ff1744); }
+}
+
+/* Port element hover glow on neon ring (Active in ALL modes and during cable laying) */
+.port-element:hover .port-neon-ring,
+.port-element.port-snap-target .port-neon-ring {
+  opacity: 1 !important;
+  animation: port-neon-pulse 0.9s ease-in-out infinite alternate !important;
+}
+
+/* Power ports red neon glow */
+.port-element:hover .port-neon-ring[stroke="#ff1744"],
+.port-element.port-snap-target .port-neon-ring[stroke="#ff1744"] {
+  animation: port-power-pulse 0.9s ease-in-out infinite alternate !important;
+}
+
+/* General port hover glow on the hole/rect shape */
+.port-element:hover .ear-port-hole {
+  filter: drop-shadow(0 0 5px #00e5ff) !important;
+}
+
+.port-element:hover rect {
+  filter: drop-shadow(0 0 5px #00e5ff) !important;
+}
+
+/* Snap-target highlight: bright ring around the port closest to cursor */
+.port-snap-target .port-neon-ring {
+  opacity: 1 !important;
+  stroke-width: 2.5 !important;
+  filter: drop-shadow(0 0 10px #00e5ff) !important;
+}
+
+/* Cursor cues when hovering connectable ports */
+.port-element {
+  cursor: pointer;
+}
+
+#canvas.cable-laying .port-element:hover {
+  cursor: cell;
+}
+
+/* ─── Animated Packet Flow Visualization ────────────────────────────── */
+@keyframes cableFlow {
+  from { stroke-dashoffset: 28; }
+  to   { stroke-dashoffset: 0; }
+}
+
+.cable-flow-line {
+  animation: cableFlow 1s linear infinite;
+}
+
