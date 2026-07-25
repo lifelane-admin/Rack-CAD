@@ -152,7 +152,6 @@ export class FloatingToolbar {
         <div class="ft-section">
           <button class="ft-btn" id="ft-act-undo" title="Undo (Ctrl+Z)">↩️</button>
           <button class="ft-btn" id="ft-act-redo" title="Redo (Ctrl+Y)">↪️</button>
-          <button class="ft-btn ${isSnap ? 'active' : ''}" id="ft-act-snap" title="Toggle Grid Snap (🧲)">🧲</button>
           <button class="ft-btn" id="ft-act-delete" ${!state.selection.length ? 'disabled' : ''} title="Delete Selected (Del)">🗑️</button>
         </div>
       </div>
@@ -164,9 +163,11 @@ export class FloatingToolbar {
         <!-- Cable Drawing Mode -->
         <div class="ft-section">
           <button class="ft-btn ${isCableMode ? 'active' : ''}" id="ft-tool-cable" title="Draw Ethernet Cable (C)">
-            <svg viewBox="0 0 24 24">
-              <rect x="6" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
-              <path d="M9 8V3M15 8V3M10 20v4M14 20v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="3" width="6" height="6" rx="1"></rect>
+              <rect x="3" y="15" width="6" height="6" rx="1"></rect>
+              <rect x="15" y="15" width="6" height="6" rx="1"></rect>
+              <path d="M12 9v4M6 15v-2h12v2"></path>
             </svg>
           </button>
         </div>
@@ -175,12 +176,8 @@ export class FloatingToolbar {
 
         <!-- Anchor Point Actions -->
         <div class="ft-section" id="ft-cable-anchors">
-          <span class="ft-context-label">Anchors:</span>
           <button class="ft-btn" id="ft-cab-add-anchor" ${!cable ? 'disabled' : ''} title="Add Anchor Point">➕⚓</button>
           <button class="ft-btn" id="ft-cab-rem-anchor" ${!cable || !cable.anchorPoints?.length ? 'disabled' : ''} title="Remove Last Anchor">🗑️⚓</button>
-          <button class="ft-btn ${cable && cable.anchorsLocked ? 'active' : ''}" id="ft-cab-lock" ${!cable ? 'disabled' : ''} title="${cable && cable.anchorsLocked ? 'Unlock Route' : 'Lock Route'}">
-            ${cable && cable.anchorsLocked ? '🔒' : '🔓'}
-          </button>
           <button class="ft-btn" id="ft-cab-reset" ${!cable ? 'disabled' : ''} title="Recalculate Route">🔄</button>
         </div>
 
@@ -224,9 +221,6 @@ export class FloatingToolbar {
     this.element.querySelector('#ft-act-redo')?.addEventListener('click', () => {
       EventBus.emit('edit:redo', undefined);
     });
-    this.element.querySelector('#ft-act-snap')?.addEventListener('click', () => {
-      EventBus.emit('view:toggle-snap', undefined);
-    });
     this.element.querySelector('#ft-act-delete')?.addEventListener('click', () => {
       EventBus.emit('edit:delete', undefined);
     });
@@ -255,10 +249,6 @@ export class FloatingToolbar {
             currentPts.pop();
             EventBus.emit('cable:update', { id: cableId, data: { anchorPoints: currentPts, anchorsLocked: currentPts.length > 0 } });
           }
-        });
-
-        this.element.querySelector('#ft-cab-lock')?.addEventListener('click', () => {
-          EventBus.emit('cable:update', { id: cableId, data: { anchorsLocked: !cable.anchorsLocked } });
         });
 
         this.element.querySelector('#ft-cab-reset')?.addEventListener('click', () => {

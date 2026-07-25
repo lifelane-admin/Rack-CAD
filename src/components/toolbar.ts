@@ -69,7 +69,7 @@ export class Toolbar {
       },
       { 
         id: 'tool-cable', 
-        icon: '<svg viewBox="0 0 24 24"><rect x="6" y="8" width="12" height="12" rx="2"/><path d="M9 8V3M15 8V3M10 20v4M14 20v4"/></svg>', 
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="6" rx="1"></rect><rect x="3" y="15" width="6" height="6" rx="1"></rect><rect x="15" y="15" width="6" height="6" rx="1"></rect><path d="M12 9v4M6 15v-2h12v2"></path></svg>', 
         title: 'Draw Ethernet Cable (C)', 
         action: () => this.setTool('cable'), 
         toggle: true 
