@@ -5,23 +5,46 @@
   transform: translateX(-50%);
   z-index: 90;
   display: flex;
-  align-items: center;
-  gap: var(--space-sm);
+  flex-direction: column;
+  gap: 8px;
   background: var(--bg-panel);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: var(--glass-border);
-  border-radius: 30px; /* Fully pill-shaped for a clean float */
-  padding: 6px 16px;
+  border-radius: 16px; /* Adjusted from pill to rounded rectangle for double-decker design */
+  padding: 10px 16px;
   box-shadow: var(--shadow-float);
-  transition: opacity var(--transition-speed) ease, transform var(--transition-speed) ease;
+  transition: opacity var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
   user-select: none;
-  opacity: 0.92;
+  opacity: 0.96;
 }
 
 .floating-toolbar:hover {
   opacity: 1;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.ft-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.ft-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: grab;
+  padding: 0 4px;
+  font-size: 14px;
+  font-weight: bold;
+  height: 32px;
+}
+
+.ft-drag-handle:active {
+  cursor: grabbing;
+  color: var(--accent-primary);
 }
 
 .ft-section {
@@ -44,12 +67,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%; /* Circular buttons for floating feel */
+  border-radius: 50%; /* Keep circular buttons inside rows */
   border: 1px solid transparent;
   background: rgba(255, 255, 255, 0.02);
   color: var(--text-secondary);
   font-size: 14px;
   transition: all var(--transition-speed) ease;
+  padding: 0;
+}
+
+.ft-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
 }
 
 .ft-btn:hover {
@@ -124,9 +155,4 @@
   text-transform: uppercase;
   letter-spacing: 0.6px;
   margin-right: var(--space-xs);
-}
-
-/* Animation on section hide/show */
-.ft-section.collapsed {
-  display: none !important;
 }
