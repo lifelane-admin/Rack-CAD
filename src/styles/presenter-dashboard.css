@@ -1,0 +1,339 @@
+#presenter-dashboard {
+  position: absolute;
+  top: 48px; /* Below toolbar */
+  left: 0;
+  right: 0;
+  bottom: 30px; /* Above statusbar */
+  background-color: #07090e;
+  display: grid;
+  grid-template-columns: 310px 1fr 340px;
+  grid-template-rows: 1fr 180px;
+  gap: 16px;
+  padding: 16px;
+  z-index: 100;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #e2e8f0;
+}
+
+#presenter-dashboard.hidden {
+  display: none !important;
+}
+
+/* Common Panels Style */
+.pres-panel {
+  background: rgba(10, 13, 20, 0.9);
+  border: 1px solid rgba(56, 189, 248, 0.08);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+}
+
+.pres-panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  border-bottom: 1px dashed rgba(56, 189, 248, 0.15);
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+}
+
+/* Left Column */
+.pres-left-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+}
+
+.pres-header {
+  margin-bottom: 4px;
+}
+
+.pres-header h1 {
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.pres-header p {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+/* Network Legend */
+.pres-legend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pres-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10.5px;
+}
+
+.pres-legend-color {
+  width: 28px;
+  height: 6px;
+  border-radius: 3px;
+}
+
+.pres-legend-label {
+  color: #e2e8f0;
+}
+
+/* Summaries */
+.pres-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pres-list li {
+  font-size: 10.5px;
+  color: #94a3b8;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.pres-list li::before {
+  content: "•";
+  color: #38bdf8;
+}
+
+/* Center Canvas Column */
+.pres-center-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(8, 10, 15, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.pres-canvas-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.pres-center-overlay-label {
+  position: absolute;
+  bottom: 20px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(56, 189, 248, 0.15);
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 10px;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.5px;
+}
+
+.pres-center-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* Right Column */
+.pres-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+}
+
+.pres-iso-cabinet {
+  flex: 1;
+  min-height: 200px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.pres-iso-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.pres-skeleton-outline {
+  flex: 1.2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 240px;
+}
+
+.pres-skeleton-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5px;
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 4px;
+}
+
+.pres-skeleton-ru {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 6px;
+  align-items: center;
+  font-size: 9px;
+  padding: 2.5px 6px;
+  background: rgba(255, 255, 255, 0.01);
+  border: 1px solid rgba(255, 255, 255, 0.02);
+  border-radius: 3px;
+}
+
+.pres-skeleton-ru.occupied {
+  background: rgba(56, 189, 248, 0.05);
+  border-color: rgba(56, 189, 248, 0.12);
+}
+
+.pres-skeleton-ru-num {
+  color: #58a6ff;
+  font-weight: 700;
+  text-align: right;
+}
+
+.pres-skeleton-ru-label {
+  color: #8b949e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pres-skeleton-ru.occupied .pres-skeleton-ru-label {
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+/* Bottom Row: Tables & Info Specs */
+.pres-bottom-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 340px;
+  gap: 16px;
+  height: 100%;
+}
+
+.pres-table-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pres-table-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.pres-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  text-align: left;
+}
+
+.pres-table th, .pres-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.pres-table th {
+  background: rgba(255, 255, 255, 0.02);
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pres-table tr:last-child td {
+  border-bottom: none;
+}
+
+.pres-table-color-dot {
+  width: 20px;
+  height: 4px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* Bottom Highlight Specs card */
+.pres-highlight-card {
+  background: rgba(10, 13, 20, 0.9);
+  border: 1px solid rgba(56, 189, 248, 0.08);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: grid;
+  grid-template-rows: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.pres-highlight-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pres-highlight-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(56, 189, 248, 0.1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #38bdf8;
+  font-size: 12px;
+}
+
+.pres-highlight-texts {
+  display: flex;
+  flex-direction: column;
+}
+
+.pres-highlight-title {
+  font-size: 9px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pres-highlight-value {
+  font-size: 10.5px;
+  color: #ffffff;
+  font-weight: 500;
+}

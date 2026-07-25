@@ -186,6 +186,13 @@ export class Toolbar {
         title: 'Toggle Isometric 3D Projection Mode',
         action: () => EventBus.emit('view:toggle-3d' as any, undefined),
         toggle: true
+      },
+      {
+        id: 'btn-view-presenter',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>',
+        title: 'Toggle Presenter Infographic Dashboard View',
+        action: () => EventBus.emit('view:toggle-presenter' as any, undefined),
+        toggle: true
       }
     ]));
 
@@ -265,6 +272,12 @@ export class Toolbar {
       if (btn3D) {
         if (s.isometricMode) btn3D.classList.add('active');
         else btn3D.classList.remove('active');
+      }
+
+      const btnPresenter = this.container.querySelector('#btn-view-presenter');
+      if (btnPresenter) {
+        if (s.presenterMode) btnPresenter.classList.add('active');
+        else btnPresenter.classList.remove('active');
       }
     });
   }

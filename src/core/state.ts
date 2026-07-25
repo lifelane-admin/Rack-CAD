@@ -37,7 +37,8 @@ class StateManager {
       cabinetViewMode: 'front',
       cabinetDrawMode: 'default',
       cabinetCoverVisible: true,
-      isometricMode: false
+      isometricMode: false,
+      presenterMode: false
     };
 
     // Load auto-save if present, otherwise load the Proxmox demo project automatically

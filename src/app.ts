@@ -8,6 +8,8 @@ import { CanvasManager } from './core/canvas';
 import { historyManager } from './core/history';
 import { Toolbar } from './components/toolbar';
 import { Sidebar } from './components/sidebar';
+import { PresenterDashboard } from './components/presenter-dashboard';
+import './styles/presenter-dashboard.css';
 import { PropertiesPanel } from './components/properties';
 import { StatusBar } from './components/statusbar';
 import { ContextMenu, MenuItem } from './components/context-menu';
@@ -35,6 +37,7 @@ export class App {
   private statusbar!: StatusBar;
   private contextMenu!: ContextMenu;
   private floatingToolbar!: FloatingToolbar;
+  private presenterDashboard!: PresenterDashboard;
 
   // Interaction state
   private spacePressed = false;
@@ -90,6 +93,9 @@ export class App {
 
     // Initialize Floating Quick Access Toolbar
     this.floatingToolbar = new FloatingToolbar();
+
+    // Initialize Presenter Mode Dashboard
+    this.presenterDashboard = new PresenterDashboard();
 
     // Render UI
     this.toolbar.render();
@@ -377,6 +383,32 @@ export class App {
     (eventBus as any).on('view:toggle-3d', () => {
       const s = stateManager.getState();
       stateManager.setState({ isometricMode: !s.isometricMode });
+      this.renderAll();
+    });
+
+    (eventBus as any).on('view:toggle-presenter', () => {
+      const s = stateManager.getState();
+      const newPresenterMode = !s.presenterMode;
+      stateManager.setState({ presenterMode: newPresenterMode });
+      
+      const workspace = document.getElementById('workspace');
+      const sidebar = document.getElementById('sidebar');
+      const properties = document.getElementById('properties-panel');
+      const statusbar = document.getElementById('statusbar');
+      
+      if (newPresenterMode) {
+        workspace?.classList.add('presenter-active');
+        sidebar?.classList.add('hidden');
+        properties?.classList.add('hidden');
+        statusbar?.classList.add('hidden');
+        this.presenterDashboard.toggle(true);
+      } else {
+        workspace?.classList.remove('presenter-active');
+        sidebar?.classList.remove('hidden');
+        properties?.classList.remove('hidden');
+        statusbar?.classList.remove('hidden');
+        this.presenterDashboard.toggle(false);
+      }
       this.renderAll();
     });
 

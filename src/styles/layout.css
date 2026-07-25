@@ -88,3 +88,7 @@
   background-color: var(--accent-primary);
   opacity: 0.3;
 }
+
+.hidden {
+  display: none !important;
+}

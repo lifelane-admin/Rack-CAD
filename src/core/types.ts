@@ -193,6 +193,7 @@ export interface AppState {
   cabinetDrawMode: 'default' | 'skeleton';
   cabinetCoverVisible: boolean;
   isometricMode: boolean;
+  presenterMode: boolean;
 }
 
 // === Events ===

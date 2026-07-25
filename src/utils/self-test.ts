@@ -349,6 +349,9 @@ export class SelfTestRunner {
     if (typeof s.isometricMode !== 'boolean') {
       throw new Error('Initial isometricMode is invalid');
     }
+    if (typeof s.presenterMode !== 'boolean') {
+      throw new Error('Initial presenterMode is invalid');
+    }
 
     stateManager.setState({ cabinetViewMode: 'rear' });
     if (stateManager.getState().cabinetViewMode !== 'rear') {
@@ -357,6 +360,10 @@ export class SelfTestRunner {
     stateManager.setState({ cabinetDrawMode: 'skeleton' });
     if (stateManager.getState().cabinetDrawMode !== 'skeleton') {
       throw new Error('Failed to update cabinetDrawMode');
+    }
+    stateManager.setState({ presenterMode: true });
+    if (stateManager.getState().presenterMode !== true) {
+      throw new Error('Failed to update presenterMode');
     }
   }
 }
