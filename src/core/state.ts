@@ -453,29 +453,34 @@ class StateManager {
   }
 
   addRack(data: RackData): void {
-    this.state.racks.push(data);
+    const racks = [...this.state.racks, data];
+    this.setState({ racks });
     eventBus.emit('rack:added', data);
   }
 
   removeRack(id: string): void {
-    this.state.racks = this.state.racks.filter(r => r.id !== id);
+    const racks = this.state.racks.filter(r => r.id !== id);
+    this.setState({ racks });
     eventBus.emit('rack:removed', id);
   }
 
   addDevice(data: DeviceData): void {
-    this.state.devices.push(data);
+    const devices = [...this.state.devices, data];
+    this.setState({ devices });
     eventBus.emit('device:added', data);
   }
 
   removeDevice(id: string): void {
     const device = this.getDevice(id);
+    let cables = this.state.cables;
     if (device) {
       const portIds = device.ports.map(p => p.id);
-      this.state.cables = this.state.cables.filter(
+      cables = this.state.cables.filter(
         c => !portIds.includes(c.sourcePortId) && (!c.destPortId || !portIds.includes(c.destPortId))
       );
     }
-    this.state.devices = this.state.devices.filter(d => d.id !== id);
+    const devices = this.state.devices.filter(d => d.id !== id);
+    this.setState({ devices, cables });
     eventBus.emit('device:removed', id);
   }
 
