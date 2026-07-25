@@ -13,7 +13,11 @@ export function renderPorts(ports: PortData[], deviceGroup: SVGGElement): void {
     const category = template?.category || 'server';
 
     let shouldRender = true;
-    if (category === 'server' || category === 'firewall' || category === 'storage' || category === 'ups' || category === 'pdu') {
+    const isEarPort = port.id.includes('-ear-');
+
+    if (isEarPort) {
+      shouldRender = !isRearView;
+    } else if (category === 'server' || category === 'firewall' || category === 'storage' || category === 'ups' || category === 'pdu') {
       shouldRender = isRearView;
     } else if (category === 'switch' || category === 'patch-panel') {
       if (port.type === 'power') {

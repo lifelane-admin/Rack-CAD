@@ -1851,6 +1851,10 @@ export class App {
           const temp = dev ? getTemplate(dev.templateId) : null;
           const cat = temp?.category || 'server';
           
+          if (p.id.includes('-ear-')) {
+            return !isRearSide;
+          }
+          
           if (cat === 'server' || cat === 'firewall' || cat === 'storage' || cat === 'ups' || cat === 'pdu') {
             return isRearSide;
           } else if (cat === 'switch' || cat === 'patch-panel') {
