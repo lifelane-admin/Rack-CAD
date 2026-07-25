@@ -60,6 +60,12 @@ export class App {
   // History tracking states for atomic drag undo
   private dragStartDevicesState: DeviceData[] | null = null;
   private dragStartCablesState: CableData[] | null = null;
+  private dragStartRacksState: RackData[] | null = null;
+
+  // Rack dragging state
+  private isDraggingRack = false;
+  private draggedRackId: string | null = null;
+  private dragStartRackX = 0;
 
   init() {
     // Initialize canvas
@@ -460,6 +466,21 @@ export class App {
         svgEl.classList.remove('cable-laying');
       }
 
+      // Rack drag handling
+      if (this.isDraggingRack && this.draggedRackId) {
+        const dx = this.mouseWorldPos.x - this.dragStartWorldPos.x;
+        let targetX = this.dragStartRackX + dx;
+        if (s.snapEnabled) {
+          targetX = Math.round(targetX / RACK_CONSTANTS.GRID_SIZE) * RACK_CONSTANTS.GRID_SIZE;
+        }
+        const racks = stateManager.getState().racks.map(r =>
+          r.id === this.draggedRackId ? { ...r, x: targetX } : r
+        );
+        stateManager.setState({ racks }, true);
+        this.renderAll();
+        return;
+      }
+
       // Device drag handling
       if (this.isDraggingDevice && this.draggedDeviceId) {
         const dy = this.mouseWorldPos.y - this.dragStartWorldPos.y;
@@ -590,6 +611,28 @@ export class App {
             
             svgEl.classList.add('dragging-active');
             e.stopPropagation();
+            return;
+          }
+        }
+
+        // Check for rack dragging
+        const rackEl = target.closest('.rack') as SVGElement;
+        if (rackEl) {
+          const rackId = rackEl.getAttribute('id')?.replace('rack-', '') || rackEl.getAttribute('data-rack-id');
+          const rack = rackId ? stateManager.getRack(rackId) : null;
+          if (rack) {
+            this.isDraggingRack = true;
+            this.draggedRackId = rack.id;
+            this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+            this.dragStartRackX = rack.x;
+            this.dragStartRacksState = JSON.parse(JSON.stringify(stateManager.getState().racks));
+            
+            stateManager.setState({ selection: [{ type: 'rack', id: rack.id }] });
+            eventBus.emit('selection:changed', [{ type: 'rack', id: rack.id }]);
+            
+            svgEl.classList.add('dragging-active');
+            e.stopPropagation();
+            return;
           }
         }
       }
@@ -794,6 +837,36 @@ export class App {
               this.dragStartDevicesState = null;
             }
             eventBus.emit('device:update', { id: deviceId, data: { rackId: finalDevice.rackId, startUnit: finalDevice.startUnit } });
+          }
+        }
+      }
+
+      // 3. Rack dragging completion
+      if (this.isDraggingRack && this.draggedRackId) {
+        svgEl.classList.remove('dragging-active');
+        
+        const rackId = this.draggedRackId;
+        const finalRack = stateManager.getRack(rackId);
+        
+        this.isDraggingRack = false;
+        this.draggedRackId = null;
+        
+        if (finalRack) {
+          const sState = stateManager.getState();
+          const overlap = sState.racks.some(r => r.id !== rackId && Math.abs(r.x - finalRack.x) < RACK_CONSTANTS.RACK_OUTER_WIDTH - 20);
+          if (overlap) {
+            if (this.dragStartRacksState) {
+              stateManager.setState({ racks: this.dragStartRacksState }, true);
+              this.dragStartRacksState = null;
+            }
+            this.renderAll();
+            eventBus.emit('notification', { message: 'Cannot place rack: Racks are overlapping', type: 'warning' });
+          } else {
+            if (this.dragStartRacksState) {
+              stateManager.setState({ racks: this.dragStartRacksState }, true);
+              this.dragStartRacksState = null;
+            }
+            eventBus.emit('rack:update', { id: rackId, data: { x: finalRack.x } });
           }
         }
       }
@@ -1875,6 +1948,26 @@ export class App {
     modal.querySelector('#modal-close-btn')?.addEventListener('click', () => modal.remove());
     modal.querySelector('#cancel-legend-btn')?.addEventListener('click', () => modal.remove());
     modal.querySelector('#save-legend-btn')?.addEventListener('click', () => {
+      const oldCables = stateManager.getState().cables;
+      const colorMap = new Map<string, string>();
+      currentItems.forEach(oldItem => {
+        const newItem = items.find(it => it.id === oldItem.id);
+        if (newItem && newItem.color !== oldItem.color) {
+          colorMap.set(oldItem.color.toLowerCase(), newItem.color);
+        }
+      });
+
+      if (colorMap.size > 0) {
+        const updatedCables = oldCables.map(cable => {
+          const newColor = colorMap.get(cable.color.toLowerCase());
+          if (newColor) {
+            return { ...cable, color: newColor };
+          }
+          return cable;
+        });
+        stateManager.setState({ cables: updatedCables });
+      }
+
       stateManager.setState({ customLegendItems: items });
       eventBus.emit('notification', { message: 'Network legend updated successfully!', type: 'success' });
       this.renderAll();

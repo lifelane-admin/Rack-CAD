@@ -4,29 +4,6 @@ const RU_HEIGHT = 30; // Matches RACK_CONSTANTS
 const DEVICE_WIDTH = 350; // Matches inner width minus rails (400 - 50)
 const PADDING = 20;
 
-function createPorts(
-  count: number,
-  prefix: string,
-  type: string,
-  heightUnits: number,
-  offsetY?: number
-): any[] {
-  const ports = [];
-  const spacing = (DEVICE_WIDTH - 2 * PADDING) / (count || 1);
-  const relativeY = offsetY !== undefined ? offsetY : (heightUnits * RU_HEIGHT) / 2;
-  
-  for (let i = 0; i < count; i++) {
-    ports.push({
-      id: `${prefix}${i}`,
-      name: `${prefix}${i}`,
-      type: type,
-      relativeX: PADDING + i * spacing,
-      relativeY: relativeY
-    });
-  }
-  return ports;
-}
-
 export const deviceCatalog: DeviceTemplate[] = [
   // Servers
   {
@@ -40,11 +17,29 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '🖥️',
     frontPanelImage: '/dell-poweredge-panel.png',
     ports: [
-      { id: 'nic1', name: 'NIC 1', type: 'rj45', relativeX: 325, relativeY: 12 },
-      { id: 'nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 325, relativeY: 22 },
-      { id: 'nic3', name: 'NIC 3', type: 'sfp-plus', relativeX: 325, relativeY: 32 },
-      { id: 'nic4', name: 'NIC 4', type: 'sfp-plus', relativeX: 325, relativeY: 42 },
-      { id: 'nic5', name: 'NIC 5 (iDRAC)', type: 'management', relativeX: 325, relativeY: 52 }
+      { id: 'nic1', name: 'NIC 1', type: 'rj45', relativeX: 325, relativeY: 12, speed: '1 Gbps' },
+      { id: 'nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 325, relativeY: 22, speed: '10 Gbps' },
+      { id: 'nic3', name: 'NIC 3', type: 'sfp-plus', relativeX: 325, relativeY: 32, speed: '10 Gbps' },
+      { id: 'nic4', name: 'NIC 4', type: 'sfp-plus', relativeX: 325, relativeY: 42, speed: '10 Gbps' },
+      { id: 'nic5', name: 'NIC 5 (iDRAC)', type: 'management', relativeX: 325, relativeY: 52, speed: '1 Gbps' }
+    ]
+  },
+  {
+    id: 'dell-r760-3u',
+    name: 'Dell PowerEdge R760 (3U)',
+    manufacturer: 'Dell',
+    model: 'R760-3U',
+    category: 'server',
+    heightUnits: 3,
+    color: '#1a1a1e',
+    icon: '🖥️',
+    frontPanelImage: '/dell-poweredge-panel.png',
+    ports: [
+      { id: 'nic1', name: 'NIC 1', type: 'rj45', relativeX: 325, relativeY: 15, speed: '10 Gbps' },
+      { id: 'nic2', name: 'NIC 2', type: 'rj45', relativeX: 325, relativeY: 30, speed: '10 Gbps' },
+      { id: 'nic3', name: 'NIC 3', type: 'rj45', relativeX: 325, relativeY: 45, speed: '10 Gbps' },
+      { id: 'nic4', name: 'NIC 4', type: 'rj45', relativeX: 325, relativeY: 60, speed: '10 Gbps' },
+      { id: 'nic5', name: 'NIC 5 (iDRAC)', type: 'management', relativeX: 325, relativeY: 75, speed: '1 Gbps' }
     ]
   },
   {
@@ -56,11 +51,11 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1a1a1e',
     icon: '🖥️',
-    frontPanelImage: '/dell-poweredge-panel.png', // Scales to 1U height
+    frontPanelImage: '/dell-poweredge-panel.png',
     ports: [
-      { id: 'nic1', name: 'NIC 1', type: 'rj45', relativeX: 325, relativeY: 8 },
-      { id: 'nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 325, relativeY: 15 },
-      { id: 'nic3', name: 'NIC 3 (iDRAC)', type: 'management', relativeX: 325, relativeY: 22 }
+      { id: 'nic1', name: 'NIC 1', type: 'rj45', relativeX: 325, relativeY: 8, speed: '1 Gbps' },
+      { id: 'nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 325, relativeY: 15, speed: '10 Gbps' },
+      { id: 'nic3', name: 'NIC 3 (iDRAC)', type: 'management', relativeX: 325, relativeY: 22, speed: '1 Gbps' }
     ]
   },
   {
@@ -73,11 +68,28 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#161d20',
     icon: '🖥️',
     ports: [
-      { id: 'nic1', name: 'NIC 1', type: 'rj45', relativeX: 325, relativeY: 12 },
-      { id: 'nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 325, relativeY: 22 },
-      { id: 'nic3', name: 'NIC 3', type: 'sfp-plus', relativeX: 325, relativeY: 32 },
-      { id: 'nic4', name: 'NIC 4', type: 'sfp-plus', relativeX: 325, relativeY: 42 },
-      { id: 'nic5', name: 'NIC 5 (iDRAC)', type: 'management', relativeX: 325, relativeY: 52 }
+      { id: 'nic1', name: 'NIC 1', type: 'rj45', relativeX: 325, relativeY: 12, speed: '1 Gbps' },
+      { id: 'nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 325, relativeY: 22, speed: '10 Gbps' },
+      { id: 'nic3', name: 'NIC 3', type: 'sfp-plus', relativeX: 325, relativeY: 32, speed: '10 Gbps' },
+      { id: 'nic4', name: 'NIC 4', type: 'sfp-plus', relativeX: 325, relativeY: 42, speed: '10 Gbps' },
+      { id: 'nic5', name: 'NIC 5 (iDRAC)', type: 'management', relativeX: 325, relativeY: 52, speed: '1 Gbps' }
+    ]
+  },
+  {
+    id: 'hpe-dl210-3u',
+    name: 'HPE ProLiant DL210 Gen11 (3U)',
+    manufacturer: 'HPE',
+    model: 'DL210-G11-3U',
+    category: 'server',
+    heightUnits: 3,
+    color: '#161d20',
+    icon: '🖥️',
+    ports: [
+      { id: 'nic1', name: 'NIC 1', type: 'rj45', relativeX: 325, relativeY: 15, speed: '1 Gbps' },
+      { id: 'nic2', name: 'NIC 2', type: 'rj45', relativeX: 325, relativeY: 30, speed: '10 Gbps' },
+      { id: 'nic3', name: 'NIC 3', type: 'rj45', relativeX: 325, relativeY: 45, speed: '10 Gbps' },
+      { id: 'nic4', name: 'NIC 4', type: 'rj45', relativeX: 325, relativeY: 60, speed: '10 Gbps' },
+      { id: 'nic5', name: 'NIC 5 (iDRAC)', type: 'management', relativeX: 325, relativeY: 75, speed: '1 Gbps' }
     ]
   },
   {
@@ -90,9 +102,9 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#161d20',
     icon: '🖥️',
     ports: [
-      { id: 'nic1', name: 'NIC 1', type: 'rj45', relativeX: 325, relativeY: 8 },
-      { id: 'nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 325, relativeY: 15 },
-      { id: 'nic3', name: 'NIC 3 (iDRAC)', type: 'management', relativeX: 325, relativeY: 22 }
+      { id: 'nic1', name: 'NIC 1', type: 'rj45', relativeX: 325, relativeY: 8, speed: '1 Gbps' },
+      { id: 'nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 325, relativeY: 15, speed: '10 Gbps' },
+      { id: 'nic3', name: 'NIC 3 (iDRAC)', type: 'management', relativeX: 325, relativeY: 22, speed: '1 Gbps' }
     ]
   },
   {
@@ -105,8 +117,8 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#111317',
     icon: '🖥️',
     ports: [
-      { id: 'nic1', name: 'NIC 1', type: 'rj45', relativeX: 325, relativeY: 10 },
-      { id: 'nic2', name: 'NIC 2 (iDRAC)', type: 'management', relativeX: 325, relativeY: 20 }
+      { id: 'nic1', name: 'NIC 1', type: 'rj45', relativeX: 325, relativeY: 10, speed: '1 Gbps' },
+      { id: 'nic2', name: 'NIC 2 (iDRAC)', type: 'management', relativeX: 325, relativeY: 20, speed: '1 Gbps' }
     ]
   },
 
@@ -122,19 +134,19 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '🔀',
     frontPanelImage: '/switch-panel.png',
     ports: [
-      { id: 'con0', name: 'Console', type: 'console', relativeX: 100, relativeY: 15 },
-      { id: 'port1', name: 'Port 1', type: 'sfp-plus', relativeX: 155, relativeY: 8 },
-      { id: 'port2', name: 'Port 2', type: 'sfp-plus', relativeX: 155, relativeY: 20 },
-      { id: 'port3', name: 'Port 3', type: 'sfp-plus', relativeX: 175, relativeY: 8 },
-      { id: 'port4', name: 'Port 4', type: 'sfp-plus', relativeX: 175, relativeY: 20 },
-      { id: 'port5', name: 'Port 5', type: 'sfp-plus', relativeX: 195, relativeY: 8 },
-      { id: 'port6', name: 'Port 6', type: 'sfp-plus', relativeX: 195, relativeY: 20 },
-      { id: 'port7', name: 'Port 7', type: 'sfp-plus', relativeX: 215, relativeY: 8 },
-      { id: 'port8', name: 'Port 8', type: 'sfp-plus', relativeX: 215, relativeY: 20 },
-      { id: 'port9', name: 'Port 9', type: 'sfp-plus', relativeX: 235, relativeY: 8 },
-      { id: 'port10', name: 'Port 10', type: 'sfp-plus', relativeX: 235, relativeY: 20 },
-      { id: 'port11', name: 'Port 11', type: 'rj45', relativeX: 260, relativeY: 8 },
-      { id: 'port12', name: 'Port 12', type: 'rj45', relativeX: 260, relativeY: 20 }
+      { id: 'con0', name: 'Console', type: 'console', relativeX: 100, relativeY: 15, speed: '115.2 Kbps' },
+      { id: 'port1', name: 'Port 1', type: 'sfp-plus', relativeX: 155, relativeY: 8, speed: '10 Gbps' },
+      { id: 'port2', name: 'Port 2', type: 'sfp-plus', relativeX: 155, relativeY: 20, speed: '10 Gbps' },
+      { id: 'port3', name: 'Port 3', type: 'sfp-plus', relativeX: 175, relativeY: 8, speed: '10 Gbps' },
+      { id: 'port4', name: 'Port 4', type: 'sfp-plus', relativeX: 175, relativeY: 20, speed: '10 Gbps' },
+      { id: 'port5', name: 'Port 5', type: 'sfp-plus', relativeX: 195, relativeY: 8, speed: '10 Gbps' },
+      { id: 'port6', name: 'Port 6', type: 'sfp-plus', relativeX: 195, relativeY: 20, speed: '10 Gbps' },
+      { id: 'port7', name: 'Port 7', type: 'sfp-plus', relativeX: 215, relativeY: 8, speed: '10 Gbps' },
+      { id: 'port8', name: 'Port 8', type: 'sfp-plus', relativeX: 215, relativeY: 20, speed: '10 Gbps' },
+      { id: 'port9', name: 'Port 9', type: 'sfp-plus', relativeX: 235, relativeY: 8, speed: '10 Gbps' },
+      { id: 'port10', name: 'Port 10', type: 'sfp-plus', relativeX: 235, relativeY: 20, speed: '10 Gbps' },
+      { id: 'port11', name: 'Port 11', type: 'rj45', relativeX: 260, relativeY: 8, speed: '10 Gbps' },
+      { id: 'port12', name: 'Port 12', type: 'rj45', relativeX: 260, relativeY: 20, speed: '10 Gbps' }
     ]
   },
   {
@@ -147,21 +159,22 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#1c1e22',
     icon: '🔀',
     ports: [
-      { id: 'con0', name: 'Console', type: 'console', relativeX: 25, relativeY: 15 },
-      // 24 ports grouped on the left/middle
+      { id: 'con0', name: 'Console', type: 'console', relativeX: 25, relativeY: 15, speed: '115.2 Kbps' },
       ...Array.from({ length: 12 }, (_, i) => ({
         id: `port${i * 2 + 1}`,
         name: `Port ${i * 2 + 1}`,
         type: 'rj45' as const,
         relativeX: 60 + i * 20,
-        relativeY: 8
+        relativeY: 8,
+        speed: '1 Gbps'
       })),
       ...Array.from({ length: 12 }, (_, i) => ({
         id: `port${i * 2 + 2}`,
         name: `Port ${i * 2 + 2}`,
         type: 'rj45' as const,
         relativeX: 60 + i * 20,
-        relativeY: 20
+        relativeY: 20,
+        speed: '1 Gbps'
       }))
     ]
   },
@@ -175,13 +188,14 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#1e2328',
     icon: '🔀',
     ports: [
-      { id: 'con0', name: 'Console', type: 'console', relativeX: 20, relativeY: 15 },
+      { id: 'con0', name: 'Console', type: 'console', relativeX: 20, relativeY: 15, speed: '115.2 Kbps' },
       ...Array.from({ length: 24 }, (_, i) => ({
         id: `port${i + 1}`,
         name: `Port ${i + 1}`,
         type: 'rj45' as const,
         relativeX: 50 + i * 11,
-        relativeY: 15
+        relativeY: 15,
+        speed: '1 Gbps'
       }))
     ]
   },
@@ -197,14 +211,15 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#2d1818',
     icon: '🛡️',
     ports: [
-      { id: 'con0', name: 'Console', type: 'console', relativeX: 20, relativeY: 15 },
-      { id: 'mgmt0', name: 'Management', type: 'management', relativeX: 40, relativeY: 15 },
+      { id: 'con0', name: 'Console', type: 'console', relativeX: 20, relativeY: 15, speed: '115.2 Kbps' },
+      { id: 'mgmt0', name: 'Management', type: 'management', relativeX: 40, relativeY: 15, speed: '1 Gbps' },
       ...Array.from({ length: 8 }, (_, i) => ({
         id: `port${i + 1}`,
         name: `Port ${i + 1}`,
         type: 'rj45' as const,
         relativeX: 80 + i * 15,
-        relativeY: 15
+        relativeY: 15,
+        speed: '1 Gbps'
       }))
     ]
   },
@@ -220,11 +235,11 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#151e2b',
     icon: '💾',
     ports: [
-      { id: 'mgmt0', name: 'MGMT', type: 'management', relativeX: 30, relativeY: 30 },
-      { id: 'port1', name: 'Port 1', type: 'sfp-plus', relativeX: 300, relativeY: 20 },
-      { id: 'port2', name: 'Port 2', type: 'sfp-plus', relativeX: 320, relativeY: 20 },
-      { id: 'port3', name: 'Port 3', type: 'sfp-plus', relativeX: 300, relativeY: 40 },
-      { id: 'port4', name: 'Port 4', type: 'sfp-plus', relativeX: 320, relativeY: 40 }
+      { id: 'mgmt0', name: 'MGMT', type: 'management', relativeX: 30, relativeY: 30, speed: '1 Gbps' },
+      { id: 'port1', name: 'Port 1', type: 'sfp-plus', relativeX: 300, relativeY: 20, speed: '10 Gbps' },
+      { id: 'port2', name: 'Port 2', type: 'sfp-plus', relativeX: 320, relativeY: 20, speed: '10 Gbps' },
+      { id: 'port3', name: 'Port 3', type: 'sfp-plus', relativeX: 300, relativeY: 40, speed: '10 Gbps' },
+      { id: 'port4', name: 'Port 4', type: 'sfp-plus', relativeX: 320, relativeY: 40, speed: '10 Gbps' }
     ]
   },
 
@@ -239,7 +254,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#222222',
     icon: '⚡',
     ports: [
-      { id: 'mgmt0', name: 'MGMT', type: 'management', relativeX: 325, relativeY: 30 }
+      { id: 'mgmt0', name: 'MGMT', type: 'management', relativeX: 325, relativeY: 30, speed: '1 Gbps' }
     ]
   },
   {

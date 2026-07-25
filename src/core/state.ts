@@ -110,12 +110,12 @@ class StateManager {
     // 2. Add Dell Servers (Nodes 1, 2, 3)
     const nodeIds = ['node-1', 'node-2', 'node-3'];
     const nodeNames = ['DELL POWEREDGE (Node 1)', 'DELL POWEREDGE (Node 2)', 'DELL POWEREDGE (Node 3)'];
-    const startUnits = [17, 13, 8];
+    const startUnits = [17, 11, 5];
 
     nodeIds.forEach((id, idx) => {
       const node: DeviceData = {
         id,
-        templateId: 'dell-r760',
+        templateId: 'dell-r760-3u',
         rackId,
         startUnit: startUnits[idx],
         name: nodeNames[idx],
@@ -126,7 +126,7 @@ class StateManager {
         frontPanelImage: '/dell-poweredge-panel.png',
         ports: []
       };
-      const template = getTemplate('dell-r760')!;
+      const template = getTemplate('dell-r760-3u')!;
       node.ports = template.ports.map((p, i) => ({ ...p, id: `${id}-port-${i}`, deviceId: id, connected: false, cableId: null }));
       devices.push(node);
     });
@@ -134,9 +134,9 @@ class StateManager {
     // 3. Add HPE Backup Server
     const backupServer: DeviceData = {
       id: 'backup-server',
-      templateId: 'hpe-dl380',
+      templateId: 'hpe-dl210-3u',
       rackId,
-      startUnit: 2,
+      startUnit: 1,
       name: 'HPE ProLiant BACKUP SERVER',
       hostname: 'pbs-server',
       managementIp: '10.10.10.20',
@@ -145,7 +145,7 @@ class StateManager {
       frontPanelImage: '/dell-poweredge-panel.png',
       ports: []
     };
-    const hpeTemplate = getTemplate('hpe-dl380')!;
+    const hpeTemplate = getTemplate('hpe-dl210-3u')!;
     backupServer.ports = hpeTemplate.ports.map((p, i) => ({ ...p, id: `backup-server-port-${i}`, deviceId: 'backup-server', connected: false, cableId: null }));
     devices.push(backupServer);
 
