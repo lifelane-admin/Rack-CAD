@@ -61,6 +61,49 @@ export function getExitPoint(
   }
 }
 
+export function getDeterministicLaneIndex(
+  cableId: string,
+  rackId: string,
+  side: 'left' | 'right'
+): number {
+  const s = stateManager.getState();
+  
+  const channelCables = s.cables.filter(c => {
+    const srcPort = stateManager.getPort(c.sourcePortId);
+    const destPort = c.destPortId ? stateManager.getPort(c.destPortId) : null;
+    
+    const srcDev = srcPort ? stateManager.getDevice(srcPort.deviceId) : null;
+    const destDev = destPort ? stateManager.getDevice(destPort.deviceId) : null;
+    
+    const srcSide = c.sidePreference ?? (srcPort && srcPort.relativeX > 175 ? 'right' : 'left');
+    const destSide = c.sidePreference ?? (destPort && destPort.relativeX > 175 ? 'right' : 'left');
+    
+    const usesSrc = srcDev && srcDev.rackId === rackId && srcSide === side;
+    const usesDest = destDev && destDev.rackId === rackId && destSide === side;
+    
+    return usesSrc || usesDest;
+  });
+  
+  channelCables.sort((a, b) => {
+    const getPortY = (cab: CableData) => {
+      const isSrc = cab.sourcePortId && stateManager.getPort(cab.sourcePortId);
+      const port = isSrc ? stateManager.getPort(cab.sourcePortId) : (cab.destPortId ? stateManager.getPort(cab.destPortId) : null);
+      if (!port) return 0;
+      const dev = stateManager.getDevice(port.deviceId);
+      if (!dev) return 0;
+      return dev.startUnit * 30 + port.relativeY;
+    };
+    
+    const yA = getPortY(a);
+    const yB = getPortY(b);
+    if (yA !== yB) return yA - yB;
+    return a.id.localeCompare(b.id);
+  });
+  
+  const idx = channelCables.findIndex(c => c.id === cableId);
+  return idx >= 0 ? idx : 0;
+}
+
 export function computeSmartRouting(
   cable: CableData,
   sourcePos: Point,
@@ -102,16 +145,16 @@ export function computeSmartRouting(
     ? (sideDest === 'right' ? destRack.x + RIGHT_HOLE_X_LOCAL   : destRack.x + LEFT_HOLE_X_LOCAL)
     : destPos.x;
 
-  // ── Lane staggering (so parallel cables are visually distinct) ────────────
-  const cableIndex = s.cables.findIndex(c => c.id === cable.id);
-  const lane = cableIndex >= 0 ? cableIndex % 8 : 0;
+  // ── Lane staggering (deterministic rack-channel routing) ─────────────────
+  const laneSrc = sourceRack ? getDeterministicLaneIndex(cable.id, sourceRack.id, sideSrc) : 0;
+  const laneDest = destRack ? getDeterministicLaneIndex(cable.id, destRack.id, sideDest) : 0;
   const LANE_STEP = 3; // px
 
-  const getLaneX = (holeX: number, side: 'left' | 'right') =>
+  const getLaneX = (holeX: number, side: 'left' | 'right', lane: number) =>
     side === 'right' ? holeX + lane * LANE_STEP : holeX - lane * LANE_STEP;
 
-  const laneXSrc  = getLaneX(holeXSrc,  sideSrc);
-  const laneXDest = getLaneX(holeXDest, sideDest);
+  const laneXSrc  = getLaneX(holeXSrc,  sideSrc, laneSrc);
+  const laneXDest = getLaneX(holeXDest, sideDest, laneDest);
 
   // ── Connector exits ───────────────────────────────────────────────────────
   const srcOrient = getPortOrientation(cable, 'source');

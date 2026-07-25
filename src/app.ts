@@ -13,6 +13,7 @@ import { StatusBar } from './components/statusbar';
 import { ContextMenu, MenuItem } from './components/context-menu';
 import { ReportsPanel } from './components/reports-panel';
 import { FloatingToolbar } from './components/floating-toolbar';
+import { runSelfTests } from './utils/self-test';
 import { renderRack } from './renderers/rack-renderer';
 import { renderDevice } from './renderers/device-renderer';
 import { renderCable, renderCableInProgress } from './renderers/cable-renderer';
@@ -398,6 +399,13 @@ export class App {
     eventBus.on('canvas:transformed', (transform) => {
       (eventBus as any).emit('canvas:zoom', transform.scale);
     });
+
+    // Run automated self-test runner on boot in development environment
+    if (import.meta.env.DEV) {
+      setTimeout(() => {
+        runSelfTests();
+      }, 1000);
+    }
   }
 
   /**
