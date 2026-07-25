@@ -89,3 +89,15 @@
   margin: 0 var(--space-md);
   align-self: center;
 }
+
+.toolbar-btn svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.2;
+}
+
+.toolbar-btn svg[fill="currentColor"] {
+  fill: currentColor;
+}
