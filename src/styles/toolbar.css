@@ -1,6 +1,6 @@
 #toolbar {
-  height: 58px;
-  background-color: var(--bg-header);
+  height: 52px; /* Matches layout.css */
+  background: var(--bg-header);
   border-bottom: 1px solid var(--border-color);
   user-select: none;
   display: flex;
@@ -17,14 +17,16 @@
 }
 
 .toolbar-logo {
-  font-size: 18px;
+  font-size: 14px;
   color: var(--accent-primary);
   font-weight: 800;
   margin-right: var(--space-xl);
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.45);
 }
 
 .toolbar-group {
@@ -33,53 +35,56 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 .toolbar-buttons {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 0 6px;
+  gap: 6px;
+  padding: 0 4px;
 }
 
 .toolbar-btn {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 17px;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-size: 15px;
   transition: all var(--transition-speed) ease;
   border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.01);
 }
 
 .toolbar-btn:hover {
-  background-color: var(--bg-panel-hover);
-  border-color: var(--border-color);
-  transform: translateY(-1px);
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  transform: translateY(-0.5px);
 }
 
 .toolbar-btn.active {
-  background-color: rgba(88, 166, 255, 0.2);
+  background-color: rgba(56, 189, 248, 0.15);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
 }
 
 .toolbar-group-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.6px;
-  margin-top: 3px;
+  letter-spacing: 0.8px;
+  margin-top: 2px;
 }
 
 .toolbar-separator {
   width: 1px;
-  height: 34px;
+  height: 28px;
   background-color: var(--border-color);
   margin: 0 var(--space-md);
   align-self: center;

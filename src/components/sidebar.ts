@@ -96,7 +96,7 @@ export class Sidebar {
 
       filteredItems.forEach(item => {
         const el = document.createElement('div');
-        el.className = 'catalog-item';
+        el.className = `catalog-item category-${item.category}`;
         el.draggable = true;
         el.innerHTML = `
           <div class="item-icon">${item.icon}</div>
