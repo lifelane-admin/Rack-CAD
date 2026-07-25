@@ -859,14 +859,12 @@ export class App {
             }
           }
 
-          // If no port snapped, keep tip floating at mouse location and commit drag action
+          // If no port snapped, snap the tip back to its original connected state to avoid leaving it floating
           if (this.dragStartCablesState && this.dragStartDevicesState) {
-            const finalCables = stateManager.getState().cables;
-            const finalDevices = stateManager.getState().devices;
-            stateManager.setState({ cables: this.dragStartCablesState, devices: this.dragStartDevicesState }, true);
-            stateManager.setState({ cables: finalCables, devices: finalDevices });
+            stateManager.setState({ cables: this.dragStartCablesState, devices: this.dragStartDevicesState });
             this.dragStartCablesState = null;
             this.dragStartDevicesState = null;
+            eventBus.emit('notification', { message: 'Drag canceled: Cable tip snapped back to original port.', type: 'info' });
           }
           this.renderAll();
         }
@@ -1171,8 +1169,8 @@ export class App {
     try {
       const previewGroup = renderCableInProgress(sourcePos, currentPos, s.cableInProgress.cableType, interactionLayer);
       interactionLayer.appendChild(previewGroup);
-    } catch {
-      // Silently fail if renderer has issues
+    } catch (e) {
+      console.error('Error rendering cable in progress:', e);
     }
   }
 

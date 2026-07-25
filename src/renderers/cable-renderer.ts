@@ -2,7 +2,7 @@ import { CableData, Point, CableType, RACK_CONSTANTS, CABLE_COLORS } from '../co
 import { createGroup, createPath, createRect, createLine, createSVGElement as createSVGEl, setAttributes } from '../utils/svg-helpers';
 import { generateOrthogonalPath } from '../utils/geometry';
 import { stateManager } from '../core/state';
-import { computeSmartRouting } from '../utils/routing';
+import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
 import { getMaterialProfile } from '../core/cable-materials';
 import { getTemplate } from '../library/device-catalog';
 
@@ -217,7 +217,11 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     });
     group.appendChild(anchorConnLine);
 
-    anchors.forEach((pt, idx) => {
+    const handlePoints = (cable.anchorsLocked && cable.anchorPoints && cable.anchorPoints.length > 0)
+      ? anchors
+      : get3DefaultAnchors(anchors);
+
+    handlePoints.forEach((pt, idx) => {
       const anchorGroup = createGroup(`cable-anchor-${cable.id}-${idx}`, 'cable-anchor-handle');
       setAttributes(anchorGroup, {
         'data-cable-id': cable.id,
@@ -303,13 +307,17 @@ export function renderCableInProgress(sourcePos: Point, currentPos: Point, cable
   });
   group.appendChild(line);
 
-  // Render high-fidelity connector plug at the cursor position
+  // Render high-fidelity connector plug slightly offset from the cursor position so it is not hidden under the pointer
   const isSFP = ['sfp', 'sfp-plus', 'sfp28', 'qsfp', 'qsfp28', 'dac-twinax'].some(t => cableType.includes(t));
   const isFiber = ['om3', 'om4', 'om5', 'fiber', 'lc', 'sc'].some(t => cableType.includes(t));
   const isPower = ['power', 'pwr', 'c13', 'c14', 'c19', 'c13-power', 'c19-power'].some(t => cableType.includes(t));
   
   const mouseDirection = currentPos.x > exitX ? 'right' : 'left';
-  const connector = createConnector(currentPos, strokeColor, mouseDirection, isFiber, isPower, isSFP);
+  const offsetPos = {
+    x: currentPos.x + (mouseDirection === 'right' ? -15 : 15),
+    y: currentPos.y + 12
+  };
+  const connector = createConnector(offsetPos, strokeColor, mouseDirection, isFiber, isPower, isSFP);
   group.appendChild(connector);
 
   cableLayer.appendChild(group);
