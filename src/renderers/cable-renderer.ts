@@ -1,4 +1,4 @@
-import { CableData, Point, CableType, RACK_CONSTANTS } from '../core/types';
+import { CableData, Point, CableType, RACK_CONSTANTS, CABLE_COLORS } from '../core/types';
 import { createGroup, createPath, createRect, createLine, createSVGElement as createSVGEl, setAttributes } from '../utils/svg-helpers';
 import { generateOrthogonalPath } from '../utils/geometry';
 import { stateManager } from '../core/state';
@@ -268,25 +268,49 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
 
 export function renderCableInProgress(sourcePos: Point, currentPos: Point, cableType: CableType, cableLayer: SVGGElement): SVGGElement {
   const group = createGroup('cable-in-progress', 'cable-in-progress');
+  
+  const s = stateManager.getState();
+  const mat = getMaterialProfile(cableType);
+  const strokeColor = CABLE_COLORS[cableType] || CABLE_COLORS.general || mat.defaultColor;
 
-  const dx = Math.abs(currentPos.x - sourcePos.x) / 2;
-  const midX = sourcePos.x + (currentPos.x > sourcePos.x ? dx : -dx);
-  const pathData = `M ${sourcePos.x} ${sourcePos.y} C ${midX} ${sourcePos.y} ${midX} ${currentPos.y} ${currentPos.x} ${currentPos.y}`;
+  // Find source port details to determine correct side gutter exit x coordinate
+  const sourcePort = s.cableInProgress ? stateManager.getPort(s.cableInProgress.sourcePortId) : null;
+  const dev = sourcePort ? stateManager.getDevice(sourcePort.deviceId) : null;
+  const rack = dev ? stateManager.getRack(dev.rackId) : null;
 
+  let exitX = sourcePos.x;
+  if (rack) {
+    const isLeftPort = sourcePos.x < rack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH / 2;
+    exitX = isLeftPort ? rack.x - 22 : rack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH + 22;
+  } else {
+    exitX = sourcePos.x + (currentPos.x > sourcePos.x ? 25 : -25);
+  }
+
+  // Double-elbow orthogonal preview path: Port -> Gutter Exit -> Vertical run -> Cursor
+  const a1 = { x: exitX, y: sourcePos.y };
+  const a2 = { x: exitX, y: currentPos.y };
+
+  const pathData = generateOrthogonalPath(sourcePos, currentPos, [a1, a2], 10);
+
+  // Render dashed preview line representing CAT6 wire length
   const line = createPath(pathData, {
     fill: 'none',
-    stroke: '#ff9800',
+    stroke: strokeColor,
     'stroke-width': 2.5,
-    'stroke-dasharray': '6,4',
-    'stroke-linecap': 'round'
+    'stroke-dasharray': '5,3',
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round'
   });
   group.appendChild(line);
 
-  const dot = createSVGEl('circle', {
-    cx: currentPos.x, cy: currentPos.y,
-    r: 5, fill: '#ff9800', opacity: 0.7
-  });
-  group.appendChild(dot);
+  // Render high-fidelity connector plug at the cursor position
+  const isSFP = ['sfp', 'sfp-plus', 'sfp28', 'qsfp', 'qsfp28', 'dac-twinax'].some(t => cableType.includes(t));
+  const isFiber = ['om3', 'om4', 'om5', 'fiber', 'lc', 'sc'].some(t => cableType.includes(t));
+  const isPower = ['power', 'pwr', 'c13', 'c14', 'c19', 'c13-power', 'c19-power'].some(t => cableType.includes(t));
+  
+  const mouseDirection = currentPos.x > exitX ? 'right' : 'left';
+  const connector = createConnector(currentPos, strokeColor, mouseDirection, isFiber, isPower, isSFP);
+  group.appendChild(connector);
 
   cableLayer.appendChild(group);
   return group;

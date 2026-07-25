@@ -1131,12 +1131,6 @@ export class App {
         anchorsLocked: false
       };
 
-      const sourcePos = stateManager.getPortWorldPosition(sourcePortId) || { x: 0, y: 0 };
-      const destPos = stateManager.getPortWorldPosition(portId) || { x: 0, y: 0 };
-      const autoPts = computeSmartRouting(newCable, sourcePos, destPos);
-      newCable.anchorPoints = get3DefaultAnchors(autoPts);
-      newCable.anchorsLocked = true;
-
       // Mark ports as connected
       sourcePort.connected = true;
       sourcePort.cableId = newCable.id;
