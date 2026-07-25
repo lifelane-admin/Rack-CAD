@@ -189,6 +189,10 @@ export interface AppState {
   selectedCableColor: string;
   selectedCableBend: number;
   selectedCableTermination: string;
+  cabinetViewMode: 'front' | 'rear';
+  cabinetDrawMode: 'default' | 'skeleton';
+  cabinetCoverVisible: boolean;
+  isometricMode: boolean;
 }
 
 // === Events ===

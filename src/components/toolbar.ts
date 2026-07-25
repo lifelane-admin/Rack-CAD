@@ -157,6 +157,35 @@ export class Toolbar {
         icon: '<svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6" stroke-linecap="round"/></svg>', 
         title: 'Reports & BOM Schedule', 
         action: () => EventBus.emit('reports:toggle', undefined) 
+      },
+      {
+        id: 'btn-view-side',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 11-.57-8.38l6.13-5.19"></path><rect x="9" y="9" width="6" height="6" rx="1"></rect></svg>',
+        title: 'Switch View Side (Front / Rear)',
+        action: () => EventBus.emit('view:toggle-side' as any, undefined),
+        toggle: true
+      },
+      {
+        id: 'btn-view-skeleton',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"></path><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"></path></svg>',
+        title: 'Toggle Skeleton Wireframe View',
+        action: () => EventBus.emit('view:toggle-skeleton' as any, undefined),
+        toggle: true
+      },
+      {
+        id: 'btn-view-cover',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M9 3v18"></path></svg>',
+        title: 'Toggle Side Covers / Doors',
+        action: () => EventBus.emit('view:toggle-cover' as any, undefined),
+        toggle: true,
+        defaultActive: State.getState().cabinetCoverVisible
+      },
+      {
+        id: 'btn-view-3d',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>',
+        title: 'Toggle Isometric 3D Projection Mode',
+        action: () => EventBus.emit('view:toggle-3d' as any, undefined),
+        toggle: true
       }
     ]));
 
@@ -208,6 +237,35 @@ export class Toolbar {
       this.container.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
       const activeBtn = this.container.querySelector(`#tool-${mode}`);
       if (activeBtn) activeBtn.classList.add('active');
+    });
+
+    // Listen to view states change and update active button highlighting
+    EventBus.on('state:changed', (partial: any) => {
+      const s = State.getState();
+      
+      const btnSide = this.container.querySelector('#btn-view-side');
+      if (btnSide) {
+        if (s.cabinetViewMode === 'rear') btnSide.classList.add('active');
+        else btnSide.classList.remove('active');
+      }
+
+      const btnSkel = this.container.querySelector('#btn-view-skeleton');
+      if (btnSkel) {
+        if (s.cabinetDrawMode === 'skeleton') btnSkel.classList.add('active');
+        else btnSkel.classList.remove('active');
+      }
+
+      const btnCover = this.container.querySelector('#btn-view-cover');
+      if (btnCover) {
+        if (s.cabinetCoverVisible) btnCover.classList.add('active');
+        else btnCover.classList.remove('active');
+      }
+
+      const btn3D = this.container.querySelector('#btn-view-3d');
+      if (btn3D) {
+        if (s.isometricMode) btn3D.classList.add('active');
+        else btn3D.classList.remove('active');
+      }
     });
   }
 

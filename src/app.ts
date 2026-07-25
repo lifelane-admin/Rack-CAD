@@ -356,6 +356,30 @@ export class App {
       this.renderAll();
     });
 
+    (eventBus as any).on('view:toggle-side', () => {
+      const s = stateManager.getState();
+      stateManager.setState({ cabinetViewMode: s.cabinetViewMode === 'front' ? 'rear' : 'front' });
+      this.renderAll();
+    });
+
+    (eventBus as any).on('view:toggle-skeleton', () => {
+      const s = stateManager.getState();
+      stateManager.setState({ cabinetDrawMode: s.cabinetDrawMode === 'default' ? 'skeleton' : 'default' });
+      this.renderAll();
+    });
+
+    (eventBus as any).on('view:toggle-cover', () => {
+      const s = stateManager.getState();
+      stateManager.setState({ cabinetCoverVisible: !s.cabinetCoverVisible });
+      this.renderAll();
+    });
+
+    (eventBus as any).on('view:toggle-3d', () => {
+      const s = stateManager.getState();
+      stateManager.setState({ isometricMode: !s.isometricMode });
+      this.renderAll();
+    });
+
     (eventBus as any).on('legend:edit', () => {
       this.showLegendCustomizerModal();
     });
@@ -1814,7 +1838,34 @@ export class App {
         destPos = cable.floatingDest;
       }
       if (sourcePos && destPos) {
-        renderCable(cable, sourcePos, destPos, cableLayer);
+        const srcPort = stateManager.getPort(cable.sourcePortId);
+        const destPort = cable.destPortId ? stateManager.getPort(cable.destPortId) : null;
+        
+        let srcVisible = true;
+        let destVisible = true;
+        const isRear = s.cabinetViewMode === 'rear';
+        
+        const isPortVisibleOnSide = (p: typeof srcPort, isRearSide: boolean) => {
+          if (!p) return true;
+          const dev = stateManager.getDevice(p.deviceId);
+          const temp = dev ? getTemplate(dev.templateId) : null;
+          const cat = temp?.category || 'server';
+          
+          if (cat === 'server' || cat === 'firewall' || cat === 'storage' || cat === 'ups' || cat === 'pdu') {
+            return isRearSide;
+          } else if (cat === 'switch' || cat === 'patch-panel') {
+            if (p.type === 'power') return isRearSide;
+            return !isRearSide;
+          }
+          return true;
+        };
+        
+        if (srcPort) srcVisible = isPortVisibleOnSide(srcPort, isRear);
+        if (destPort) destVisible = isPortVisibleOnSide(destPort, isRear);
+        
+        if (srcVisible || destVisible) {
+          renderCable(cable, sourcePos, destPos, cableLayer);
+        }
       }
     }
 

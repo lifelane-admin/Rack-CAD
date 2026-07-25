@@ -1,9 +1,31 @@
 import { PortData } from '../core/types';
 import { createGroup, createRect, createText, setAttributes } from '../utils/svg-helpers';
+import { stateManager } from '../core/state';
+import { getTemplate } from '../library/device-catalog';
 
 export function renderPorts(ports: PortData[], deviceGroup: SVGGElement): void {
+  const state = stateManager.getState();
+  const isRearView = state.cabinetViewMode === 'rear';
+
   ports.forEach(port => {
-    deviceGroup.appendChild(renderPort(port, deviceGroup));
+    const device = stateManager.getDevice(port.deviceId);
+    const template = device ? getTemplate(device.templateId) : null;
+    const category = template?.category || 'server';
+
+    let shouldRender = true;
+    if (category === 'server' || category === 'firewall' || category === 'storage' || category === 'ups' || category === 'pdu') {
+      shouldRender = isRearView;
+    } else if (category === 'switch' || category === 'patch-panel') {
+      if (port.type === 'power') {
+        shouldRender = isRearView;
+      } else {
+        shouldRender = !isRearView;
+      }
+    }
+
+    if (shouldRender) {
+      deviceGroup.appendChild(renderPort(port, deviceGroup));
+    }
   });
 }
 

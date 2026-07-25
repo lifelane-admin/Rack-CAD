@@ -1,7 +1,8 @@
 import { DeviceData, RACK_CONSTANTS } from '../core/types';
-import { createGroup, createRect, createText, createCircle, createSVGElement, setAttributes, createLinearGradient } from '../utils/svg-helpers';
+import { createGroup, createRect, createCircle, createText, createLinearGradient, createFilter, createSVGElement, setAttributes } from '../utils/svg-helpers';
 import { getTemplate } from '../library/device-catalog';
 import { renderPorts } from './port-renderer';
+import { stateManager } from '../core/state';
 
 export function renderDevice(device: DeviceData, rackX: number, rackY: number, rackUnits: number): SVGGElement {
   const template = getTemplate(device.templateId);
@@ -20,6 +21,10 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
     transform: `translate(${deviceX}, ${deviceY})`,
     'data-device-id': device.id
   });
+
+  const state = stateManager.getState();
+  const isRearView = state.cabinetViewMode === 'rear';
+  const isSkeleton = state.cabinetDrawMode === 'skeleton';
 
   // Local definitions for gradients/filters
   const defs = createSVGElement('defs');
@@ -59,8 +64,8 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
   
   // Left Ear
   const leftEar = createRect(-railW, 0, railW, deviceHeight, {
-    fill: `url(#ear-grad-${device.id})`,
-    stroke: '#1a1a1f',
+    fill: isSkeleton ? 'rgba(56, 189, 248, 0.05)' : `url(#ear-grad-${device.id})`,
+    stroke: isSkeleton ? '#38bdf8' : '#1a1a1f',
     'stroke-width': 1,
     rx: 2,
     ry: 2
@@ -69,8 +74,8 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
   
   // Right Ear
   const rightEar = createRect(deviceWidth, 0, railW, deviceHeight, {
-    fill: `url(#ear-grad-${device.id})`,
-    stroke: '#1a1a1f',
+    fill: isSkeleton ? 'rgba(56, 189, 248, 0.05)' : `url(#ear-grad-${device.id})`,
+    stroke: isSkeleton ? '#38bdf8' : '#1a1a1f',
     'stroke-width': 1,
     rx: 2,
     ry: 2
@@ -84,18 +89,114 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
       const screwY2 = u * RACK_CONSTANTS.RU_HEIGHT + 3 * RACK_CONSTANTS.RU_HEIGHT / 4;
       
       // Left Screws
-      deviceGroup.appendChild(createCircle(-railW + 8, screwY1, 3, { fill: '#111', stroke: '#555', 'stroke-width': 0.5 }));
-      deviceGroup.appendChild(createCircle(-railW + 8, screwY2, 3, { fill: '#111', stroke: '#555', 'stroke-width': 0.5 }));
+      deviceGroup.appendChild(createCircle(-railW + 8, screwY1, 3, { fill: isSkeleton ? 'none' : '#111', stroke: isSkeleton ? '#38bdf8' : '#555', 'stroke-width': 0.5 }));
+      deviceGroup.appendChild(createCircle(-railW + 8, screwY2, 3, { fill: isSkeleton ? 'none' : '#111', stroke: isSkeleton ? '#38bdf8' : '#555', 'stroke-width': 0.5 }));
       // Right Screws
-      deviceGroup.appendChild(createCircle(deviceWidth + 8, screwY1, 3, { fill: '#111', stroke: '#555', 'stroke-width': 0.5 }));
-      deviceGroup.appendChild(createCircle(deviceWidth + 8, screwY2, 3, { fill: '#111', stroke: '#555', 'stroke-width': 0.5 }));
+      deviceGroup.appendChild(createCircle(deviceWidth + 8, screwY1, 3, { fill: isSkeleton ? 'none' : '#111', stroke: isSkeleton ? '#38bdf8' : '#555', 'stroke-width': 0.5 }));
+      deviceGroup.appendChild(createCircle(deviceWidth + 8, screwY2, 3, { fill: isSkeleton ? 'none' : '#111', stroke: isSkeleton ? '#38bdf8' : '#555', 'stroke-width': 0.5 }));
     }
   }
 
   // === RENDER MAIN PANEL BODY ===
   const hasCustomImage = !!(device.frontPanelImage || template?.frontPanelImage);
   
-  if (hasCustomImage) {
+  if (isSkeleton) {
+    // Skeleton Wireframe Chassis
+    const panelBg = createRect(0, 0, deviceWidth, deviceHeight, {
+      fill: 'rgba(56, 189, 248, 0.04)',
+      stroke: '#38bdf8',
+      'stroke-width': 1.5,
+      'stroke-dasharray': '4,3',
+      rx: 1,
+      ry: 1
+    });
+    deviceGroup.appendChild(panelBg);
+    
+    // Draw visual grid inside wireframe
+    for (let x = 30; x < deviceWidth; x += 60) {
+      deviceGroup.appendChild(createSVGElement('line', {
+        x1: x, y1: 2, x2: x, y2: deviceHeight - 2,
+        stroke: '#38bdf8', 'stroke-width': 0.4, opacity: 0.25
+      }));
+    }
+  } else if (isRearView) {
+    // Rear View Mode: Draw PSUs, Fan bays, and PCIe slots
+    const panelBg = createRect(0, 0, deviceWidth, deviceHeight, {
+      fill: '#15171a',
+      stroke: '#000000',
+      'stroke-width': 1.2,
+      rx: 1,
+      ry: 1
+    });
+    deviceGroup.appendChild(panelBg);
+
+    // Draw redundant PSUs for server/ups/pdu/storage/cooling/firewall
+    if (category !== 'switch' && category !== 'patch-panel' && category !== 'cable-manager' && category !== 'blank-panel') {
+      // Left PSU
+      const psuLeft = createGroup(device.id + '-psu-l', 'psu-module');
+      psuLeft.appendChild(createRect(8, 4, 38, deviceHeight - 8, { fill: '#282b30', stroke: '#111', rx: 1 }));
+      psuLeft.appendChild(createRect(12, 10, 4, deviceHeight - 20, { fill: '#ef4444', rx: 1 })); // Latch
+      psuLeft.appendChild(createCircle(22, deviceHeight / 2 - 4, 2, { fill: '#00ff00', filter: 'drop-shadow(0 0 1px #00ff00)' })); // LED
+      psuLeft.appendChild(createRect(28, deviceHeight / 2 - 8, 12, 16, { fill: '#0a0a0c', rx: 2 })); // Plug inlet
+      deviceGroup.appendChild(psuLeft);
+
+      // Right PSU
+      const psuRight = createGroup(device.id + '-psu-r', 'psu-module');
+      psuRight.appendChild(createRect(deviceWidth - 46, 4, 38, deviceHeight - 8, { fill: '#282b30', stroke: '#111', rx: 1 }));
+      psuRight.appendChild(createRect(deviceWidth - 42, 10, 4, deviceHeight - 20, { fill: '#ef4444', rx: 1 })); // Latch
+      psuRight.appendChild(createCircle(deviceWidth - 32, deviceHeight / 2 - 4, 2, { fill: '#00ff00', filter: 'drop-shadow(0 0 1px #00ff00)' })); // LED
+      psuRight.appendChild(createRect(deviceWidth - 26, deviceHeight / 2 - 8, 12, 16, { fill: '#0a0a0c', rx: 2 })); // Plug inlet
+      deviceGroup.appendChild(psuRight);
+
+      // Draw redundant Fan Cages in the middle
+      const fanCount = heightUnits * 2 + 1;
+      const fanWidth = 24;
+      const startX = 60;
+      for (let i = 0; i < fanCount; i++) {
+        const fx = startX + i * 28;
+        const fy = deviceHeight / 2;
+        deviceGroup.appendChild(createCircle(fx, fy, 8, { fill: '#1b1b1e', stroke: '#555', 'stroke-width': 0.8 }));
+        deviceGroup.appendChild(createCircle(fx, fy, 2, { fill: '#888' }));
+        for (let a = 0; a < 360; a += 90) {
+          const rad = (a * Math.PI) / 180;
+          deviceGroup.appendChild(createSVGElement('line', {
+            x1: fx,
+            y1: fy,
+            x2: fx + Math.cos(rad) * 6,
+            y2: fy + Math.sin(rad) * 6,
+            stroke: '#444',
+            'stroke-width': 1.5
+          }));
+        }
+      }
+
+      // Draw PCIe expansion brackets
+      const pcieX = startX + fanCount * 28 + 15;
+      const pcieW = deviceWidth - pcieX - 60;
+      if (pcieW > 30) {
+        const slotCount = heightUnits === 1 ? 2 : 4;
+        const slotH = (deviceHeight - 12) / slotCount;
+        for (let i = 0; i < slotCount; i++) {
+          const sy = 6 + i * slotH;
+          deviceGroup.appendChild(createRect(pcieX, sy, pcieW, slotH - 2, {
+            fill: '#42454a',
+            stroke: '#1b1c1f',
+            rx: 1
+          }));
+        }
+      }
+    } else if (category === 'switch') {
+      // Switch Rear: power inlets and fan outlets
+      deviceGroup.appendChild(createRect(10, 4, 30, deviceHeight - 8, { fill: '#282b30', rx: 1 }));
+      deviceGroup.appendChild(createRect(16, deviceHeight / 2 - 6, 12, 12, { fill: '#050507', rx: 1 }));
+      
+      for (let i = 0; i < 3; i++) {
+        const fx = 60 + i * 22;
+        deviceGroup.appendChild(createCircle(fx, deviceHeight/2, 6, { fill: '#1b1b1e', stroke: '#444' }));
+      }
+      deviceGroup.appendChild(createRect(140, 5, deviceWidth - 160, deviceHeight - 10, { fill: '#1d1d23', stroke: '#2e2e38' }));
+    }
+  } else if (hasCustomImage) {
     // Custom OEM Panel Image Background
     const imgUrl = device.frontPanelImage || template?.frontPanelImage;
     const panelImg = createSVGElement('image', {

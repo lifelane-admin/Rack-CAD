@@ -33,7 +33,11 @@ class StateManager {
       selectedCableType: 'general',
       selectedCableColor: '#78909c',
       selectedCableBend: 10,
-      selectedCableTermination: 'RJ45 Ethernet'
+      selectedCableTermination: 'RJ45 Ethernet',
+      cabinetViewMode: 'front',
+      cabinetDrawMode: 'default',
+      cabinetCoverVisible: true,
+      isometricMode: false
     };
 
     // Load auto-save if present, otherwise load the Proxmox demo project automatically

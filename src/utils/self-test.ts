@@ -26,6 +26,7 @@ export class SelfTestRunner {
       this.runTest('Deletion Clean-up Test', () => this.testDeletionCleanup());
       this.runTest('Save/Load State Test', () => this.testSaveLoad());
       this.runTest('Deterministic Routing Output Test', () => this.testDeterministicRouting());
+      this.runTest('Cabinet Visual Modes Integrity Test', () => this.testCabinetVisualModes());
     } catch (e: any) {
       console.error('Critical test runner failure:', e);
     } finally {
@@ -331,6 +332,31 @@ export class SelfTestRunner {
     // Verify lanes are ordered deterministically by ID if Y is identical
     if (laneA !== 0 || laneB !== 1 || laneC !== 2) {
       throw new Error(`Deterministic ordering failed! Assigned: a=${laneA}, b=${laneB}, c=${laneC}`);
+    }
+  }
+
+  private testCabinetVisualModes() {
+    const s = stateManager.getState();
+    if (s.cabinetViewMode !== 'front' && s.cabinetViewMode !== 'rear') {
+      throw new Error('Initial cabinetViewMode is invalid');
+    }
+    if (s.cabinetDrawMode !== 'default' && s.cabinetDrawMode !== 'skeleton') {
+      throw new Error('Initial cabinetDrawMode is invalid');
+    }
+    if (typeof s.cabinetCoverVisible !== 'boolean') {
+      throw new Error('Initial cabinetCoverVisible is invalid');
+    }
+    if (typeof s.isometricMode !== 'boolean') {
+      throw new Error('Initial isometricMode is invalid');
+    }
+
+    stateManager.setState({ cabinetViewMode: 'rear' });
+    if (stateManager.getState().cabinetViewMode !== 'rear') {
+      throw new Error('Failed to update cabinetViewMode');
+    }
+    stateManager.setState({ cabinetDrawMode: 'skeleton' });
+    if (stateManager.getState().cabinetDrawMode !== 'skeleton') {
+      throw new Error('Failed to update cabinetDrawMode');
     }
   }
 }

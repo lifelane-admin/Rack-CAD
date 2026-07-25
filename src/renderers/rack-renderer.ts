@@ -1,5 +1,6 @@
 import { RackData, RACK_CONSTANTS } from '../core/types';
 import { createGroup, createRect, createCircle, createText, createLinearGradient, createFilter, createSVGElement, setAttributes } from '../utils/svg-helpers';
+import { stateManager } from '../core/state';
 
 export function renderRack(rack: RackData, parentGroup: SVGGElement): SVGGElement {
   const rackGroup = createGroup('rack-' + rack.id, 'rack');
@@ -50,18 +51,82 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement): SVGGElemen
   defs.appendChild(pduGradient);
   rackGroup.appendChild(defs);
 
+  const state = stateManager.getState();
+  const isSkel = state.cabinetDrawMode === 'skeleton';
+  const hasCover = state.cabinetCoverVisible;
+  const isIso = state.isometricMode;
+  const OUTER_W = RACK_CONSTANTS.RACK_OUTER_WIDTH;
+
+  // === 3D ISOMETRIC / PERSPECTIVE WALL DRAWINGS ===
+  if (isIso) {
+    const dx = 35;
+    const dy = -18;
+    
+    // Draw Top 3D Face
+    const topPoints = `0,0 ${dx},${dy} ${OUTER_W + dx},${dy} ${OUTER_W},0`;
+    const topFace = createSVGElement('polygon', {
+      points: topPoints,
+      fill: isSkel ? 'rgba(56, 189, 248, 0.05)' : '#23252a',
+      stroke: isSkel ? '#38bdf8' : '#111',
+      'stroke-width': 1.2
+    });
+    rackGroup.appendChild(topFace);
+    
+    // Draw Right Side 3D Face
+    const sidePoints = `${OUTER_W},0 ${OUTER_W + dx},${dy} ${OUTER_W + dx},${totalHeight + dy} ${OUTER_W},${totalHeight}`;
+    let sideFill = '#1c1e22';
+    if (isSkel) {
+      sideFill = 'rgba(56, 189, 248, 0.03)';
+    } else if (!hasCover) {
+      sideFill = 'rgba(255, 255, 255, 0.02)';
+    }
+    
+    const sideFace = createSVGElement('polygon', {
+      points: sidePoints,
+      fill: sideFill,
+      stroke: isSkel ? '#38bdf8' : '#111',
+      'stroke-width': 1.2
+    });
+    rackGroup.appendChild(sideFace);
+    
+    if (hasCover && !isSkel) {
+      rackGroup.appendChild(createSVGElement('line', {
+        x1: OUTER_W + dx/2, y1: dy + 40, x2: OUTER_W + dx/2, y2: totalHeight + dy - 40,
+        stroke: '#2b2f36', 'stroke-width': 1.5
+      }));
+    } else {
+      // Draw internal post
+      rackGroup.appendChild(createSVGElement('line', {
+        x1: OUTER_W + dx/2, y1: dy + innerY, x2: OUTER_W + dx/2, y2: totalHeight + dy - RACK_CONSTANTS.RACK_PADDING_BOTTOM,
+        stroke: isSkel ? '#38bdf8' : '#333', 'stroke-width': 2, opacity: 0.8
+      }));
+      // Horizontal braces
+      for (let y = innerY + 100; y < totalHeight - 100; y += 200) {
+        const braceY = y + (dy * (y / totalHeight));
+        rackGroup.appendChild(createSVGElement('line', {
+          x1: OUTER_W, y1: y, x2: OUTER_W + dx, y2: y + dy,
+          stroke: isSkel ? '#38bdf8' : '#333', 'stroke-width': 1.5, opacity: 0.8
+        }));
+      }
+    }
+  }
+
   // === 1. CABINET OUTER CABINET FRAME ===
   const outerFrame = createRect(0, 0, RACK_CONSTANTS.RACK_OUTER_WIDTH, totalHeight, {
-    fill: `url(#rack-gradient-${rack.id})`,
+    fill: isSkel ? 'rgba(56, 189, 248, 0.05)' : `url(#rack-gradient-${rack.id})`,
+    stroke: isSkel ? '#38bdf8' : 'none',
+    'stroke-width': isSkel ? 1.5 : 0,
     rx: 6,
     ry: 6,
-    filter: `url(#shadow-${rack.id})`
+    filter: isSkel ? 'none' : `url(#shadow-${rack.id})`
   });
   rackGroup.appendChild(outerFrame);
 
   // === 2. INNER CAVITY (Dark bay behind servers) ===
   const innerCavity = createRect(innerX, innerY, innerWidth, innerHeight, {
-    fill: '#090a0c'
+    fill: isSkel ? 'rgba(0, 0, 0, 0.2)' : '#090a0c',
+    stroke: isSkel ? '#38bdf8' : 'none',
+    'stroke-width': isSkel ? 0.5 : 0
   });
   rackGroup.appendChild(innerCavity);
 
@@ -69,8 +134,16 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement): SVGGElemen
   const leftRailX = innerX;
   const rightRailX = innerX + innerWidth - RACK_CONSTANTS.RAIL_WIDTH;
   
-  const leftRail = createRect(leftRailX, innerY, RACK_CONSTANTS.RAIL_WIDTH, innerHeight, { fill: '#1a1a1f' });
-  const rightRail = createRect(rightRailX, innerY, RACK_CONSTANTS.RAIL_WIDTH, innerHeight, { fill: '#1a1a1f' });
+  const leftRail = createRect(leftRailX, innerY, RACK_CONSTANTS.RAIL_WIDTH, innerHeight, { 
+    fill: isSkel ? 'rgba(56, 189, 248, 0.08)' : '#1a1a1f',
+    stroke: isSkel ? '#38bdf8' : 'none',
+    'stroke-width': isSkel ? 1 : 0
+  });
+  const rightRail = createRect(rightRailX, innerY, RACK_CONSTANTS.RAIL_WIDTH, innerHeight, { 
+    fill: isSkel ? 'rgba(56, 189, 248, 0.08)' : '#1a1a1f',
+    stroke: isSkel ? '#38bdf8' : 'none',
+    'stroke-width': isSkel ? 1 : 0
+  });
   rackGroup.appendChild(leftRail);
   rackGroup.appendChild(rightRail);
 
@@ -118,8 +191,8 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement): SVGGElemen
 
     for (let h = 0; h < 3; h++) {
       const holeY = yOffset + holeOffset + h * holeOffset * 2;
-      rackGroup.appendChild(createCircle(holeXLeft, holeY, holeRadius, { fill: '#0a0a0d', stroke: '#202026', 'stroke-width': 0.5 }));
-      rackGroup.appendChild(createCircle(holeXRight, holeY, holeRadius, { fill: '#0a0a0d', stroke: '#202026', 'stroke-width': 0.5 }));
+      rackGroup.appendChild(createCircle(holeXLeft, holeY, holeRadius, { fill: isSkel ? 'none' : '#0a0a0d', stroke: isSkel ? '#38bdf8' : '#202026', 'stroke-width': 0.5 }));
+      rackGroup.appendChild(createCircle(holeXRight, holeY, holeRadius, { fill: isSkel ? 'none' : '#0a0a0d', stroke: isSkel ? '#38bdf8' : '#202026', 'stroke-width': 0.5 }));
     }
 
     // Interaction Hit Target for RU placement
@@ -132,28 +205,29 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement): SVGGElemen
   }
 
   // === 4. VERTICAL INTELLIGENT PDUS ===
+  const showPDUs = state.cabinetViewMode === 'rear';
   const pduWidth = 18;
   const pduHeight = innerHeight - 20;
   const pduY = innerY + 10;
   
   // Left PDU
-  if (rack.showPduLeft !== false) {
+  if (rack.showPduLeft !== false && showPDUs) {
     const leftPduGroup = createGroup('rack-' + rack.id + '-pdu-left', 'pdu-element');
     
     // Chassis
     const pduChassis = createRect(3, pduY, pduWidth, pduHeight, {
-      fill: `url(#pdu-grad-${rack.id})`,
-      stroke: '#0e1012',
+      fill: isSkel ? 'rgba(56, 189, 248, 0.05)' : `url(#pdu-grad-${rack.id})`,
+      stroke: isSkel ? '#38bdf8' : '#0e1012',
       'stroke-width': 1,
       rx: 2,
       ry: 2
     });
     leftPduGroup.appendChild(pduChassis);
 
-    // Blue LCD display at the top
-    const lcd = createRect(5, pduY + 10, pduWidth - 4, 14, { fill: '#005f73', rx: 1 });
+    // LCD display at the top
+    const lcd = createRect(5, pduY + 10, pduWidth - 4, 14, { fill: isSkel ? 'none' : '#005f73', stroke: isSkel ? '#38bdf8' : 'none', 'stroke-width': isSkel ? 0.8 : 0, rx: 1 });
     const lcdTxt = createText(6, pduY + 20, '12.4A', {
-      fill: '#a2d2ff',
+      fill: isSkel ? '#38bdf8' : '#a2d2ff',
       'font-size': 4.5,
       'font-weight': 'bold',
       'font-family': 'monospace'
@@ -166,14 +240,12 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement): SVGGElemen
     const outletSpacing = (pduHeight - 60) / outletCount;
     for (let i = 0; i < outletCount; i++) {
       const outletY = pduY + 40 + i * outletSpacing;
-      // Socket circle
       const socket = createCircle(12, outletY, 3, {
-        fill: '#151719',
-        stroke: i % 2 === 0 ? '#1b4332' : '#0f3057', // Alternating dark green and dark blue ring
+        fill: isSkel ? 'none' : '#151719',
+        stroke: isSkel ? '#38bdf8' : (i % 2 === 0 ? '#1b4332' : '#0f3057'),
         'stroke-width': 0.8
       });
-      // Center socket pin hole
-      const pin = createCircle(12, outletY, 1, { fill: '#000' });
+      const pin = createCircle(12, outletY, 1, { fill: isSkel ? '#38bdf8' : '#000' });
       
       leftPduGroup.appendChild(socket);
       leftPduGroup.appendChild(pin);
@@ -181,7 +253,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement): SVGGElemen
 
     // PDU Vertical Text label
     const label = createText(9, pduY + pduHeight - 20, 'VERTICAL INTELLIGENT PDU - A', {
-      fill: '#8b949e',
+      fill: isSkel ? '#38bdf8' : '#8b949e',
       'font-size': 4.5,
       'font-family': 'Inter, sans-serif',
       'font-weight': 'bold',
@@ -193,24 +265,24 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement): SVGGElemen
   }
 
   // Right PDU
-  if (rack.showPduRight !== false) {
+  if (rack.showPduRight !== false && showPDUs) {
     const rightPduGroup = createGroup('rack-' + rack.id + '-pdu-right', 'pdu-element');
     const pduX = RACK_CONSTANTS.RACK_OUTER_WIDTH - pduWidth - 3;
     
     // Chassis
     const pduChassis = createRect(pduX, pduY, pduWidth, pduHeight, {
-      fill: `url(#pdu-grad-${rack.id})`,
-      stroke: '#0e1012',
+      fill: isSkel ? 'rgba(56, 189, 248, 0.05)' : `url(#pdu-grad-${rack.id})`,
+      stroke: isSkel ? '#38bdf8' : '#0e1012',
       'stroke-width': 1,
       rx: 2,
       ry: 2
     });
     rightPduGroup.appendChild(pduChassis);
 
-    // Blue LCD display at the top
-    const lcd = createRect(pduX + 2, pduY + 10, pduWidth - 4, 14, { fill: '#005f73', rx: 1 });
+    // LCD display at the top
+    const lcd = createRect(pduX + 2, pduY + 10, pduWidth - 4, 14, { fill: isSkel ? 'none' : '#005f73', stroke: isSkel ? '#38bdf8' : 'none', 'stroke-width': isSkel ? 0.8 : 0, rx: 1 });
     const lcdTxt = createText(pduX + 3, pduY + 20, '11.8A', {
-      fill: '#a2d2ff',
+      fill: isSkel ? '#38bdf8' : '#a2d2ff',
       'font-size': 4.5,
       'font-weight': 'bold',
       'font-family': 'monospace'
@@ -223,14 +295,12 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement): SVGGElemen
     const outletSpacing = (pduHeight - 60) / outletCount;
     for (let i = 0; i < outletCount; i++) {
       const outletY = pduY + 40 + i * outletSpacing;
-      // Socket circle
       const socket = createCircle(pduX + 6, outletY, 3, {
-        fill: '#151719',
-        stroke: i % 2 === 0 ? '#1b4332' : '#0f3057', // Alternating dark green and dark blue ring
+        fill: isSkel ? 'none' : '#151719',
+        stroke: isSkel ? '#38bdf8' : (i % 2 === 0 ? '#1b4332' : '#0f3057'),
         'stroke-width': 0.8
       });
-      // Center socket pin hole
-      const pin = createCircle(pduX + 6, outletY, 1, { fill: '#000' });
+      const pin = createCircle(pduX + 6, outletY, 1, { fill: isSkel ? '#38bdf8' : '#000' });
       
       rightPduGroup.appendChild(socket);
       rightPduGroup.appendChild(pin);
@@ -238,7 +308,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement): SVGGElemen
 
     // PDU Vertical Text label
     const label = createText(pduX + 12, pduY + pduHeight - 20, 'VERTICAL INTELLIGENT PDU - B', {
-      fill: '#8b949e',
+      fill: isSkel ? '#38bdf8' : '#8b949e',
       'font-size': 4.5,
       'font-family': 'Inter, sans-serif',
       'font-weight': 'bold',
