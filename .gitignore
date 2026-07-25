@@ -24,4 +24,7 @@ dist-ssr
 *.sw?
 *.zip
 scratch/
+project_export.md
+Rack_CAD_Compact_Bundle/
+
 

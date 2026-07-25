@@ -2,6 +2,7 @@ import { AppState, RackData, DeviceData, PortData, CableData, SelectableItem, Tr
 import { eventBus } from './event-bus';
 import { getTemplate } from '../library/device-catalog';
 import { runValidationAlerts } from './validation';
+import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
 
 class StateManager {
   private state: AppState;
@@ -31,7 +32,7 @@ class StateManager {
       showLegends: false,
       selectedCableType: 'general',
       selectedCableColor: '#78909c',
-      selectedCableBend: 15,
+      selectedCableBend: 10,
       selectedCableTermination: 'RJ45 Ethernet'
     };
 
@@ -159,6 +160,23 @@ class StateManager {
       if (!srcPort || !destPort) return;
 
       const cableId = `cable-${cableCount++}`;
+      
+      const getDemoPortWorldPosition = (device: DeviceData, port: PortData) => {
+        const rack = racks.find(r => r.id === device.rackId)!;
+        const template = getTemplate(device.templateId)!;
+        const heightUnits = template.heightUnits;
+        const deviceY = rack.y + RACK_CONSTANTS.RACK_PADDING_TOP + (rack.units - device.startUnit - heightUnits + 1) * RACK_CONSTANTS.RU_HEIGHT;
+        const innerX = (RACK_CONSTANTS.RACK_OUTER_WIDTH - RACK_CONSTANTS.RACK_INNER_WIDTH) / 2;
+        const deviceX = rack.x + innerX + RACK_CONSTANTS.RAIL_WIDTH;
+        return {
+          x: deviceX + port.relativeX,
+          y: deviceY + port.relativeY
+        };
+      };
+
+      const srcPos = getDemoPortWorldPosition(srcDev, srcPort);
+      const destPos = getDemoPortWorldPosition(destDev, destPort);
+
       const cable: CableData = {
         id: cableId,
         name: `Cable ${cableCount - 1}`,
@@ -167,11 +185,18 @@ class StateManager {
         sourcePortId: srcPort.id,
         destPortId: destPort.id,
         bendPoints: [],
-        thickness: 3,
-        bendRadius: 8,
+        thickness: 2,
+        bendRadius: 10,
         bundleId: null,
-        notes: ''
+        notes: '',
+        anchorPoints: [],
+        anchorsLocked: false
       };
+
+      // Set default 3 anchors
+      const autoPts = computeSmartRouting(cable, srcPos, destPos);
+      cable.anchorPoints = get3DefaultAnchors(autoPts);
+      cable.anchorsLocked = true;
 
       srcPort.connected = true;
       srcPort.cableId = cableId;
@@ -221,7 +246,7 @@ class StateManager {
     eventBus.emit('notification', { message: 'Loaded Proxmox Cluster Demo Project!', type: 'success' });
   }
 
-  setState(partial: Partial<AppState>): void {
+  setState(partial: Partial<AppState>, skipHistory = false): void {
     if (partial.devices !== undefined) {
       partial.devices = partial.devices.map(d => {
         const template = getTemplate(d.templateId);
@@ -237,7 +262,7 @@ class StateManager {
 
     const isStructuralChange = partial.racks !== undefined || partial.devices !== undefined || partial.cables !== undefined || partial.bundles !== undefined;
     
-    if (isStructuralChange) {
+    if (isStructuralChange && !skipHistory) {
       const snapshot = JSON.stringify({
         racks: this.state.racks,
         devices: this.state.devices,
@@ -511,22 +536,35 @@ export function injectEarPorts(deviceId: string, category: string, heightUnits: 
   const leftX = -12.5;
   const rightX = 350 + 12.5;
 
-  const y1 = height * 0.2;
-  const y2 = height * 0.4;
-  const y3 = height * 0.6;
-  const y4 = height * 0.8;
+  const earPorts: PortData[] = [];
+  const numHoles = heightUnits === 2 ? 5 : (heightUnits === 1 ? 4 : heightUnits * 2);
+  const dy = height / (numHoles + 1);
 
-  const earPorts: PortData[] = [
-    { id: `${deviceId}-ear-left-nic1`, deviceId, name: `${deviceId} Left Ear Network 1 (RJ45)`, type: 'rj45', relativeX: leftX, relativeY: y1, connected: false, cableId: null },
-    { id: `${deviceId}-ear-left-nic2`, deviceId, name: `${deviceId} Left Ear Network 2 (RJ45)`, type: 'rj45', relativeX: leftX, relativeY: y2, connected: false, cableId: null },
-    { id: `${deviceId}-ear-left-nic3`, deviceId, name: `${deviceId} Left Ear Network 3 (RJ45)`, type: 'rj45', relativeX: leftX, relativeY: y3, connected: false, cableId: null },
-    { id: `${deviceId}-ear-left-power`, deviceId, name: `${deviceId} Left Ear Power (C14)`, type: 'power', relativeX: leftX, relativeY: y4, connected: false, cableId: null },
-
-    { id: `${deviceId}-ear-right-nic1`, deviceId, name: `${deviceId} Right Ear Network 1 (RJ45)`, type: 'rj45', relativeX: rightX, relativeY: y1, connected: false, cableId: null },
-    { id: `${deviceId}-ear-right-nic2`, deviceId, name: `${deviceId} Right Ear Network 2 (RJ45)`, type: 'rj45', relativeX: rightX, relativeY: y2, connected: false, cableId: null },
-    { id: `${deviceId}-ear-right-nic3`, deviceId, name: `${deviceId} Right Ear Network 3 (RJ45)`, type: 'rj45', relativeX: rightX, relativeY: y3, connected: false, cableId: null },
-    { id: `${deviceId}-ear-right-power`, deviceId, name: `${deviceId} Right Ear Power (C14)`, type: 'power', relativeX: rightX, relativeY: y4, connected: false, cableId: null }
-  ];
+  for (let i = 1; i <= numHoles; i++) {
+    const yVal = Math.round(i * dy);
+    // Left ear port
+    earPorts.push({
+      id: `${deviceId}-ear-left-nic${i}`,
+      deviceId,
+      name: `${deviceId} Left Ear Network ${i} (RJ45)`,
+      type: 'rj45',
+      relativeX: leftX,
+      relativeY: yVal,
+      connected: false,
+      cableId: null
+    });
+    // Right ear port
+    earPorts.push({
+      id: `${deviceId}-ear-right-nic${i}`,
+      deviceId,
+      name: `${deviceId} Right Ear Network ${i} (RJ45)`,
+      type: 'rj45',
+      relativeX: rightX,
+      relativeY: yVal,
+      connected: false,
+      cableId: null
+    });
+  }
 
   // Merge any connection state from matching port IDs if they already exist
   const mergedEarPorts = earPorts.map(ep => {

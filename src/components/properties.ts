@@ -2,7 +2,7 @@ import EventBus from '../core/event-bus';
 import State from '../core/state';
 import { SelectableItem, CableType, CABLE_COLORS } from '../core/types';
 import { getTemplate } from '../library/device-catalog';
-import { computeSmartRouting } from '../utils/routing';
+import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
 
 export class PropertiesPanel {
   private container: HTMLElement;
@@ -371,9 +371,15 @@ export class PropertiesPanel {
       { label: 'Sweeping Bend (50px)', val: 50 }
     ];
 
+    const sourcePos = cable.floatingSource || State.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
+    const destPos = (cable.destPortId ? State.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
+    const activeAnchors = (cable.anchorPoints && cable.anchorPoints.length > 0)
+      ? cable.anchorPoints
+      : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos));
+
     const anchorStatus = cable.anchorsLocked
-      ? `<span style="color:#43a047;">● Custom (${cable.anchorPoints?.length || 0} points)</span>`
-      : `<span style="color:#78909c;">◌ Auto-computed</span>`;
+      ? `<span style="color:#43a047;">● Custom (${activeAnchors.length} points)</span>`
+      : `<span style="color:#78909c;">◌ Auto-computed (${activeAnchors.length} points)</span>`;
 
     const alerts = state.validationAlerts?.filter((a: any) => a.targetId === id) || [];
     const validationHTML = alerts.length > 0
@@ -465,20 +471,29 @@ export class PropertiesPanel {
 
         <div style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;">
           <div style="display: flex; align-items: center; justify-content: space-between;">
-            <label style="font-size: 10px; font-weight: bold; color: var(--accent-primary);">📍 Anchor Point Controls (${(cable.anchorPoints || []).length} Anchors)</label>
+            <label style="font-size: 10px; font-weight: bold; color: var(--accent-primary);">📍 Anchor Point Controls (${activeAnchors.length} Anchors)</label>
             <button id="prop-cab-add-anchor" style="padding: 2px 6px; font-size: 10px; background: rgba(0,229,255,0.12); border: 1px solid var(--accent-primary); border-radius: 3px; color: var(--accent-primary); cursor: pointer;" title="Add new anchor point">➕ Add Anchor</button>
           </div>
           <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 6px; max-height: 180px; overflow-y: auto;">
-            ${(cable.anchorPoints || []).map((pt: any, idx: number) => `
+            ${activeAnchors.map((pt: any, idx: number) => {
+              const borderStyle = cable.anchorsLocked 
+                ? 'border: 1px solid var(--border-color); color: #fff;' 
+                : 'border: 1px dashed rgba(255,152,0,0.4); color: #aaa; opacity: 0.8;';
+              const labelPrefix = cable.anchorsLocked 
+                ? '' 
+                : '<span style="font-size: 8px; color: #fb8c00; font-family: monospace; margin-left: 2px;" title="Auto-computed bend point. Editing will lock this path.">(auto)</span>';
+              return `
               <div style="display: flex; align-items: center; gap: 4px; font-size: 10px;">
                 <span style="width: 22px; font-weight: bold; color: var(--accent-primary);">A${idx + 1}:</span>
                 <span style="font-size: 9px; color: #888;">X</span>
-                <input type="number" class="anchor-coord-x" data-anchor-idx="${idx}" value="${Math.round(pt.x)}" style="width: 48px; padding: 2px 4px; font-size: 10px; background: #000; border: 1px solid var(--border-color); color: #fff; border-radius: 3px;" />
+                <input type="number" class="anchor-coord-x" data-anchor-idx="${idx}" value="${Math.round(pt.x)}" style="width: 48px; padding: 2px 4px; font-size: 10px; background: #000; border-radius: 3px; ${borderStyle}" />
                 <span style="font-size: 9px; color: #888;">Y</span>
-                <input type="number" class="anchor-coord-y" data-anchor-idx="${idx}" value="${Math.round(pt.y)}" style="width: 48px; padding: 2px 4px; font-size: 10px; background: #000; border: 1px solid var(--border-color); color: #fff; border-radius: 3px;" />
+                <input type="number" class="anchor-coord-y" data-anchor-idx="${idx}" value="${Math.round(pt.y)}" style="width: 48px; padding: 2px 4px; font-size: 10px; background: #000; border-radius: 3px; ${borderStyle}" />
                 <button class="anchor-remove-btn" data-anchor-idx="${idx}" style="padding: 2px 5px; font-size: 10px; background: rgba(244,67,54,0.15); border: 1px solid #e53935; color: #ef5350; border-radius: 3px; cursor: pointer;" title="Remove Anchor A${idx + 1}">✕</button>
+                ${labelPrefix}
               </div>
-            `).join('')}
+              `;
+            }).join('')}
           </div>
         </div>
 
@@ -615,14 +630,16 @@ export class PropertiesPanel {
       EventBus.emit('cable:update', { id, data: { bendRadius: parseInt(e.target.value) } });
     });
     container.querySelector('#prop-cab-side')?.addEventListener('change', (e: any) => {
-      EventBus.emit('cable:update', { id, data: { sidePreference: e.target.value, anchorPoints: [], anchorsLocked: false } });
+      EventBus.emit('cable:update', { id, data: { sidePreference: e.target.value } });
     });
     // 6-Anchor Coordinate Listeners
     container.querySelectorAll('.anchor-coord-x').forEach(input => {
       input.addEventListener('change', (e: any) => {
         const idx = parseInt(e.target.getAttribute('data-anchor-idx'));
         const val = parseInt(e.target.value) || 0;
-        const currentPts = [...(cable.anchorPoints || [])];
+        const sourcePos = cable.floatingSource || State.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
+        const destPos = (cable.destPortId ? State.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
+        const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos)))];
         if (currentPts[idx]) {
           currentPts[idx] = { ...currentPts[idx], x: val };
           EventBus.emit('cable:update', { id, data: { anchorPoints: currentPts, anchorsLocked: true } });
@@ -634,7 +651,9 @@ export class PropertiesPanel {
       input.addEventListener('change', (e: any) => {
         const idx = parseInt(e.target.getAttribute('data-anchor-idx'));
         const val = parseInt(e.target.value) || 0;
-        const currentPts = [...(cable.anchorPoints || [])];
+        const sourcePos = cable.floatingSource || State.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
+        const destPos = (cable.destPortId ? State.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
+        const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos)))];
         if (currentPts[idx]) {
           currentPts[idx] = { ...currentPts[idx], y: val };
           EventBus.emit('cable:update', { id, data: { anchorPoints: currentPts, anchorsLocked: true } });
@@ -646,7 +665,7 @@ export class PropertiesPanel {
     container.querySelector('#prop-cab-add-anchor')?.addEventListener('click', () => {
       const sourcePos = cable.floatingSource || State.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
       const destPos = (cable.destPortId ? State.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
-      const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : computeSmartRouting(cable, sourcePos, destPos))];
+      const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos)))];
       
       const lastPt = currentPts[currentPts.length - 1] || sourcePos;
       currentPts.push({ x: Math.round(lastPt.x + 25), y: Math.round(lastPt.y + 25) });
@@ -658,7 +677,7 @@ export class PropertiesPanel {
         const idx = parseInt(e.target.getAttribute('data-anchor-idx'));
         const sourcePos = cable.floatingSource || State.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
         const destPos = (cable.destPortId ? State.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
-        const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : computeSmartRouting(cable, sourcePos, destPos))];
+        const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos)))];
 
         if (currentPts.length > 1) {
           currentPts.splice(idx, 1);
@@ -682,7 +701,7 @@ export class PropertiesPanel {
       EventBus.emit('cable:update', { id, data: { weight: parseFloat(e.target.value) || undefined } });
     });
     container.querySelector('#prop-cab-exit-offset')?.addEventListener('change', (e: any) => {
-      EventBus.emit('cable:update', { id, data: { exitStraightOffset: parseInt(e.target.value) || 18, anchorPoints: [], anchorsLocked: false } });
+      EventBus.emit('cable:update', { id, data: { exitStraightOffset: parseInt(e.target.value) || 18 } });
     });
     container.querySelector('#prop-cab-animated-flow')?.addEventListener('change', (e: any) => {
       EventBus.emit('cable:update', { id, data: { animatedFlow: e.target.checked } });
@@ -693,25 +712,25 @@ export class PropertiesPanel {
     container.querySelectorAll('.tilt-btn-src').forEach(btn => {
       btn.addEventListener('click', (e: any) => {
         const dir = e.currentTarget.getAttribute('data-dir');
-        EventBus.emit('cable:update', { id, data: { sourceOrientation: dir, anchorPoints: [], anchorsLocked: false } });
+        EventBus.emit('cable:update', { id, data: { sourceOrientation: dir } });
       });
     });
 
     container.querySelectorAll('.tilt-btn-dest').forEach(btn => {
       btn.addEventListener('click', (e: any) => {
         const dir = e.currentTarget.getAttribute('data-dir');
-        EventBus.emit('cable:update', { id, data: { destOrientation: dir, anchorPoints: [], anchorsLocked: false } });
+        EventBus.emit('cable:update', { id, data: { destOrientation: dir } });
       });
     });
 
     container.querySelector('#prop-cab-src-orient')?.addEventListener('change', (e: any) => {
-      EventBus.emit('cable:update', { id, data: { sourceOrientation: e.target.value, anchorPoints: [], anchorsLocked: false } });
+      EventBus.emit('cable:update', { id, data: { sourceOrientation: e.target.value } });
     });
     container.querySelector('#prop-cab-dest-term')?.addEventListener('change', (e: any) => {
       EventBus.emit('cable:update', { id, data: { destTermination: e.target.value } });
     });
     container.querySelector('#prop-cab-dest-orient')?.addEventListener('change', (e: any) => {
-      EventBus.emit('cable:update', { id, data: { destOrientation: e.target.value, anchorPoints: [], anchorsLocked: false } });
+      EventBus.emit('cable:update', { id, data: { destOrientation: e.target.value } });
     });
     container.querySelector('#prop-cab-tags')?.addEventListener('change', (e: any) => {
       const tags = e.target.value.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);

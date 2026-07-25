@@ -4,6 +4,7 @@ import { generateOrthogonalPath } from '../utils/geometry';
 import { stateManager } from '../core/state';
 import { computeSmartRouting } from '../utils/routing';
 import { getMaterialProfile } from '../core/cable-materials';
+import { getTemplate } from '../library/device-catalog';
 
 /**
  * Compute default anchor points for a cable given its source and dest world positions.
@@ -126,22 +127,25 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
       return userOverride;
     }
 
-    // Determine which side (left/right gutter) this cable uses
     const portId  = end === 'source' ? cable.sourcePortId  : cable.destPortId;
     const port    = portId ? stateManager.getPort(portId) : null;
-
-    // Infer side: cable.sidePreference → port relativeX heuristic
-    let side: 'left' | 'right' = 'right'; // default: right gutter
-    if (cable.sidePreference) {
-      side = cable.sidePreference;
-    } else if (port) {
-      side = port.relativeX > 175 ? 'right' : 'left';
+    if (!port) {
+      return cable.sidePreference || 'right';
     }
 
-    // The connector cable-exit direction matches the gutter side:
-    //   right gutter → cable exits RIGHT from connector
-    //   left  gutter → cable exits LEFT  from connector
-    return side;
+    const device = stateManager.getDevice(port.deviceId);
+    const template = device ? getTemplate(device.templateId) : null;
+    const height = template ? template.heightUnits * 30 : 30;
+
+    // Server-side / storage / ups devices ports align left/right horizontally
+    if (device && (device.templateId.includes('server') || template?.category === 'server' || template?.category === 'storage' || template?.category === 'ups')) {
+      return port.relativeX > 175 ? 'right' : 'left';
+    }
+
+    // Switch/patch panels / other network devices:
+    // Top-row port (relativeY < height / 2) -> cable exits UPWARD (orientation 'down')
+    // Bottom-row port (relativeY >= height / 2) -> cable exits DOWNWARD (orientation 'up')
+    return port.relativeY < height / 2 ? 'down' : 'up';
   };
 
   const srcOrient  = getEffectiveOrientation(cable, 'source');
@@ -403,21 +407,7 @@ function createEthernetConnector(pos: Point, color: string, orientation: 'up' | 
   });
   g.appendChild(rib);
 
-  // ── Wire jacket (slim cylinder) ───────────────────────────────────────────
-  const jacket = createRect(10, 38, 8, 16, {
-    fill: `${mainColor}dd`,
-    stroke: outline,
-    'stroke-width': 0.6,
-    rx: 1
-  });
-  g.appendChild(jacket);
-
-  // ── Jacket specular centerline ─────────────────────────────────────────────
-  const jacketLine = createRect(12.5, 38, 1.5, 16, {
-    fill: 'rgba(255,255,255,0.28)',
-    rx: 0.5
-  });
-  g.appendChild(jacketLine);
+  // Tail wire jacket removed (as requested, cable lines render directly out of boot)
 
   return g;
 }

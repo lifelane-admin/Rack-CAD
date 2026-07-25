@@ -19,7 +19,7 @@ import { renderDashboardWidgets } from './renderers/dashboard-renderer';
 import { getTemplate } from './library/device-catalog';
 import { generateId, distToSegment } from './utils/geometry';
 import { initExportHandlers } from './utils/export';
-import { computeSmartRouting } from './utils/routing';
+import { computeSmartRouting, get3DefaultAnchors } from './utils/routing';
 import {
   RackData, DeviceData, PortData, CableData, LegendItem,
   RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode
@@ -54,6 +54,10 @@ export class App {
   private isDraggingAnchor = false;
   private draggedAnchorCableId: string | null = null;
   private draggedAnchorIndex: number = -1;
+
+  // History tracking states for atomic drag undo
+  private dragStartDevicesState: DeviceData[] | null = null;
+  private dragStartCablesState: CableData[] | null = null;
 
   init() {
     // Initialize canvas
@@ -409,7 +413,7 @@ export class App {
           const destPos = (targetCable.destPortId ? stateManager.getPortWorldPosition(targetCable.destPortId) : targetCable.floatingDest) || { x: 0, y: 0 };
           const baseAnchors = (targetCable.anchorPoints && targetCable.anchorPoints.length > 0)
             ? targetCable.anchorPoints
-            : computeSmartRouting(targetCable, sourcePos, destPos);
+            : get3DefaultAnchors(computeSmartRouting(targetCable, sourcePos, destPos));
           
           const updatedAnchors = baseAnchors.map((p: Point, i: number) =>
             i === idx ? { ...this.mouseWorldPos } : p
@@ -418,7 +422,7 @@ export class App {
           const cables = sState.cables.map(c =>
             c.id === cableId ? { ...c, anchorPoints: updatedAnchors, anchorsLocked: true } : c
           );
-          stateManager.setState({ cables });
+          stateManager.setState({ cables }, true);
           this.renderAll();
           return;
         }
@@ -434,7 +438,7 @@ export class App {
             return { ...c, floatingDest: this.mouseWorldPos };
           }
         });
-        stateManager.setState({ cables });
+        stateManager.setState({ cables }, true);
         // Highlight nearest snappable port for visual feedback
         this.highlightNearestPort(this.mouseWorldPos, this.draggedCableId);
         this.renderAll();
@@ -478,7 +482,7 @@ export class App {
             const devices = stateManager.getState().devices.map(d => 
               d.id === this.draggedDeviceId ? { ...d, rackId: targetRackId, startUnit: targetUnit } : d
             );
-            stateManager.setState({ devices });
+            stateManager.setState({ devices }, true);
             this.renderAll();
           }
         }
@@ -499,6 +503,7 @@ export class App {
         this.draggedAnchorCableId = cableId;
         this.draggedAnchorIndex = anchorIdx;
         this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+        this.dragStartCablesState = JSON.parse(JSON.stringify(stateManager.getState().cables));
         svgEl.classList.add('dragging-active');
         e.stopPropagation();
         return;
@@ -514,6 +519,8 @@ export class App {
         this.draggedCableId = cableId;
         this.draggedHandleType = handleType;
         this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+        this.dragStartCablesState = JSON.parse(JSON.stringify(stateManager.getState().cables));
+        this.dragStartDevicesState = JSON.parse(JSON.stringify(stateManager.getState().devices));
 
         const sState = stateManager.getState();
         const cable = stateManager.getCable(cableId);
@@ -571,6 +578,7 @@ export class App {
             this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
             this.dragStartUnit = device.startUnit;
             this.dragStartRackId = device.rackId;
+            this.dragStartDevicesState = JSON.parse(JSON.stringify(stateManager.getState().devices));
             
             stateManager.setState({ selection: [{ type: 'device', id: deviceId }] });
             eventBus.emit('selection:changed', [{ type: 'device', id: deviceId }]);
@@ -590,6 +598,15 @@ export class App {
         this.draggedAnchorCableId = null;
         this.draggedAnchorIndex = -1;
         svgEl.classList.remove('dragging-active');
+
+        // Restore start state silently and commit final state normally to push a single history frame
+        if (this.dragStartCablesState) {
+          const finalCables = stateManager.getState().cables;
+          stateManager.setState({ cables: this.dragStartCablesState }, true);
+          stateManager.setState({ cables: finalCables });
+          this.dragStartCablesState = null;
+        }
+
         this.renderAll();
         return;
       }
@@ -704,7 +721,14 @@ export class App {
                 return { ...d, ports: updatedPorts };
               });
 
+              // Restore start state silently and commit final state normally to push a single history frame
+              if (this.dragStartCablesState && this.dragStartDevicesState) {
+                stateManager.setState({ cables: this.dragStartCablesState, devices: this.dragStartDevicesState }, true);
+              }
               stateManager.setState({ cables: updatedCables, devices: updatedDevices });
+              this.dragStartCablesState = null;
+              this.dragStartDevicesState = null;
+
               eventBus.emit('notification', { message: `Cable tip reconnected to ${candidatePort.name}!`, type: 'success' });
               this.renderAll();
               this.properties.update([{ type: 'cable', id: cableId }]);
@@ -712,7 +736,15 @@ export class App {
             }
           }
 
-          // If no port snapped, keep tip floating at mouse location!
+          // If no port snapped, keep tip floating at mouse location and commit drag action
+          if (this.dragStartCablesState && this.dragStartDevicesState) {
+            const finalCables = stateManager.getState().cables;
+            const finalDevices = stateManager.getState().devices;
+            stateManager.setState({ cables: this.dragStartCablesState, devices: this.dragStartDevicesState }, true);
+            stateManager.setState({ cables: finalCables, devices: finalDevices });
+            this.dragStartCablesState = null;
+            this.dragStartDevicesState = null;
+          }
           this.renderAll();
         }
       }
@@ -744,14 +776,18 @@ export class App {
           
           if (occupied) {
             // Revert
-            const devices = stateManager.getState().devices.map(d => 
-              d.id === deviceId ? { ...d, rackId: this.dragStartRackId, startUnit: this.dragStartUnit } : d
-            );
-            stateManager.setState({ devices });
+            if (this.dragStartDevicesState) {
+              stateManager.setState({ devices: this.dragStartDevicesState }, true);
+              this.dragStartDevicesState = null;
+            }
             this.renderAll();
             eventBus.emit('notification', { message: 'Cannot place device: Slot is occupied', type: 'warning' });
           } else {
-            // Commit final update
+            // Silently restore to start position, then perform standard update to push a single history frame
+            if (this.dragStartDevicesState) {
+              stateManager.setState({ devices: this.dragStartDevicesState }, true);
+              this.dragStartDevicesState = null;
+            }
             eventBus.emit('device:update', { id: deviceId, data: { rackId: finalDevice.rackId, startUnit: finalDevice.startUnit } });
           }
         }
@@ -937,8 +973,16 @@ export class App {
         sourceTermination: s.selectedCableTermination || 'RJ45 Ethernet',
         destTermination: s.selectedCableTermination || 'RJ45 Ethernet',
         bundleId: null,
-        notes: ''
+        notes: '',
+        anchorPoints: [],
+        anchorsLocked: false
       };
+
+      const sourcePos = stateManager.getPortWorldPosition(sourcePortId) || { x: 0, y: 0 };
+      const destPos = stateManager.getPortWorldPosition(portId) || { x: 0, y: 0 };
+      const autoPts = computeSmartRouting(newCable, sourcePos, destPos);
+      newCable.anchorPoints = get3DefaultAnchors(autoPts);
+      newCable.anchorsLocked = true;
 
       // Mark ports as connected
       sourcePort.connected = true;
@@ -1305,6 +1349,9 @@ export class App {
           stateManager.setState({ selection: [{ type: 'cable', id: targetCableId }] });
           this.properties.update([{ type: 'cable', id: targetCableId }]);
 
+          const anchorEl = targetEl ? targetEl.closest?.('.cable-anchor-handle') as SVGElement : null;
+          const targetAnchorIdx = anchorEl ? parseInt(anchorEl.getAttribute('data-anchor-index') || '0', 10) : null;
+
           const items: MenuItem[] = [
             { label: `⚙️ ${cable.displayName || cable.name || 'Ethernet Cable'} Options`, icon: '🔌', disabled: true },
             { separator: true, label: '' },
@@ -1379,11 +1426,40 @@ export class App {
               action: () => {
                 const sourcePos = cable.floatingSource || stateManager.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
                 const destPos = (cable.destPortId ? stateManager.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
-                const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : computeSmartRouting(cable, sourcePos, destPos))];
-                currentPts.push({ x: Math.round(point.x), y: Math.round(point.y) });
+                const baseAnchors = (cable.anchorPoints && cable.anchorPoints.length > 0)
+                  ? cable.anchorPoints
+                  : computeSmartRouting(cable, sourcePos, destPos);
+                
+                const points = [sourcePos, ...baseAnchors, destPos];
+                let minDistance = Infinity;
+                let insertIdx = baseAnchors.length;
+                
+                for (let i = 0; i < points.length - 1; i++) {
+                  const dist = distToSegment(point, points[i], points[i+1]);
+                  if (dist < minDistance) {
+                    minDistance = dist;
+                    insertIdx = i;
+                  }
+                }
+                
+                const currentPts = [...baseAnchors];
+                currentPts.splice(insertIdx, 0, { x: Math.round(point.x), y: Math.round(point.y) });
                 eventBus.emit('cable:update', { id: targetCableId, data: { anchorPoints: currentPts, anchorsLocked: true } });
               }
             },
+            ...(targetAnchorIdx !== null ? [{
+              label: `🗑 Remove Anchor Point A${targetAnchorIdx + 1}`,
+              icon: '🗑',
+              action: () => {
+                const sourcePos = cable.floatingSource || stateManager.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
+                const destPos = (cable.destPortId ? stateManager.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
+                const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : computeSmartRouting(cable, sourcePos, destPos))];
+                if (currentPts.length > 0) {
+                  currentPts.splice(targetAnchorIdx, 1);
+                  eventBus.emit('cable:update', { id: targetCableId, data: { anchorPoints: currentPts, anchorsLocked: currentPts.length > 0 } });
+                }
+              }
+            }] : []),
             {
               label: '↺ Reset Cable Routing',
               icon: '↺',
@@ -1575,6 +1651,62 @@ export class App {
     rackLayer.innerHTML = '';
     cableLayer.innerHTML = '';
     if (labelLayer) labelLayer.innerHTML = '';
+
+    // Render overhead cable runway tray if there are multiple racks
+    if (s.racks.length > 1) {
+      const minRackY = Math.min(...s.racks.map(r => r.y));
+      const trayY = minRackY - 45;
+      
+      const rackXCoords = s.racks.map(r => r.x);
+      const minX = Math.min(...rackXCoords) + 44; 
+      const maxX = Math.max(...rackXCoords) + 406; 
+      
+      const trayGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      trayGroup.setAttribute('id', 'overhead-cable-tray');
+      trayGroup.setAttribute('style', 'pointer-events: none;');
+      
+      const railTop = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      railTop.setAttribute('x1', String(minX - 50));
+      railTop.setAttribute('y1', String(trayY - 6));
+      railTop.setAttribute('x2', String(maxX + 50));
+      railTop.setAttribute('y2', String(trayY - 6));
+      railTop.setAttribute('stroke', '#3a3a42');
+      railTop.setAttribute('stroke-width', '2');
+      trayGroup.appendChild(railTop);
+
+      const railBottom = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      railBottom.setAttribute('x1', String(minX - 50));
+      railBottom.setAttribute('y1', String(trayY + 6));
+      railBottom.setAttribute('x2', String(maxX + 50));
+      railBottom.setAttribute('y2', String(trayY + 6));
+      railBottom.setAttribute('stroke', '#3a3a42');
+      railBottom.setAttribute('stroke-width', '2');
+      trayGroup.appendChild(railBottom);
+      
+      for (let x = Math.floor(minX - 50); x <= Math.floor(maxX + 50); x += 20) {
+        const rung = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        rung.setAttribute('x1', String(x));
+        rung.setAttribute('y1', String(trayY - 6));
+        rung.setAttribute('x2', String(x));
+        rung.setAttribute('y2', String(trayY + 6));
+        rung.setAttribute('stroke', '#2b2b32');
+        rung.setAttribute('stroke-width', '1.5');
+        trayGroup.appendChild(rung);
+      }
+      
+      const trayLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      trayLabel.setAttribute('x', String((minX + maxX) / 2));
+      trayLabel.setAttribute('y', String(trayY - 12));
+      trayLabel.setAttribute('text-anchor', 'middle');
+      trayLabel.setAttribute('fill', '#4f5660');
+      trayLabel.setAttribute('font-size', '8');
+      trayLabel.setAttribute('font-family', 'monospace');
+      trayLabel.setAttribute('letter-spacing', '1');
+      trayLabel.textContent = 'OVERHEAD CABLE RUNWAY';
+      trayGroup.appendChild(trayLabel);
+      
+      rackLayer.appendChild(trayGroup);
+    }
 
     // Render racks
     for (const rack of s.racks) {

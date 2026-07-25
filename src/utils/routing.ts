@@ -1,43 +1,65 @@
 import { CableData, Point, RACK_CONSTANTS } from '../core/types';
 import { stateManager } from '../core/state';
 import { getMaterialProfile } from '../core/cable-materials';
+import { getTemplate } from '../library/device-catalog';
 
 /**
- * ═══════════════════════════════════════════════════════════════
- *  CABLE ROUTING — passes through the physical mounting holes
- * ═══════════════════════════════════════════════════════════════
- *
- * Rack geometry (coordinates relative to rack.x / rack.y):
- *
- *   innerX     = 25   px  (= (RACK_OUTER_WIDTH - RACK_INNER_WIDTH) / 2)
- *   leftRailX  = 25   px  (= innerX)
- *   rightRailX = 400  px  (= innerX + RACK_INNER_WIDTH - RAIL_WIDTH)
- *   outerWidth = 450  px
- *
- *   ┌───────────────────────────────────────────────────────────┐
- *   │25 ←left rail→ 50 ←── device body ──→ 400 ←right rail→ 425│ 0..450
- *   └───────────────────────────────────────────────────────────┘
- *
- *  RIGHT side mounting holes (from rack-renderer.ts):
- *    holeXRight = rightRailX + 6 = 406  (inner face of right rail)
- *
- *  LEFT side mounting holes:
- *    holeXLeft  = leftRailX + RAIL_WIDTH - 6 = 44  (inner face of left rail)
- *
- *  Hole Y positions per rack unit u (yOffset = innerY + innerHeight - u*RU_HEIGHT):
- *    Hole 0: yOffset + RU_HEIGHT/6      (= yOffset + 5)
- *    Hole 1: yOffset + RU_HEIGHT/2      (= yOffset + 15)  ← middle hole (used for routing)
- *    Hole 2: yOffset + 5*RU_HEIGHT/6   (= yOffset + 25)
- *
- *  Cable path:
- *    Server port ──horizontal──▶ Rail hole (x=406, y=portY)
- *        ──vertical inside rail▶ Rail hole (x=406, y=switchPortY)
- *        ──horizontal──▶ Switch port
- *
- *  Staggering: for multiple cables sharing the same side, each cable
- *  gets a slightly different X lane (406, 410, 414 ...) so they are
- *  visible as individual lines on the rail face.
+ * Helper to get the orientation for a port connector.
+ * If user explicitly overrides orientation, it takes precedence.
+ * Otherwise, it auto-detects based on the port Y position relative to device height:
+ * - Down side ports (bottom half) -> Cable exits UPWARD (orientation 'down')
+ * - Up side ports (top half) -> Cable exits DOWNWARD (orientation 'up')
  */
+export function getPortOrientation(
+  cable: CableData,
+  end: 'source' | 'dest'
+): 'up' | 'down' | 'left' | 'right' {
+  const userOverride = end === 'source' ? cable.sourceOrientation : cable.destOrientation;
+  if (userOverride && userOverride !== 'auto') {
+    return userOverride;
+  }
+
+  const portId = end === 'source' ? cable.sourcePortId : cable.destPortId;
+  const port = portId ? stateManager.getPort(portId) : null;
+  if (!port) {
+    return cable.sidePreference || 'right';
+  }
+
+  const device = stateManager.getDevice(port.deviceId);
+  const template = device ? getTemplate(device.templateId) : null;
+  const height = template ? template.heightUnits * 30 : 30;
+
+  // Server-side / storage / ups devices ports align left/right horizontally
+  if (device && (device.templateId.includes('server') || template?.category === 'server' || template?.category === 'storage' || template?.category === 'ups')) {
+    return port.relativeX > 175 ? 'right' : 'left';
+  }
+
+  // Switch/patch panels / other network devices:
+  // Top-row port (relativeY < height / 2) -> cable exits UPWARD (orientation 'down')
+  // Bottom-row port (relativeY >= height / 2) -> cable exits DOWNWARD (orientation 'up')
+  return port.relativeY < height / 2 ? 'down' : 'up';
+}
+
+/**
+ * Helper to calculate the straight exit point based on position, orientation, and offset.
+ */
+export function getExitPoint(
+  pos: Point,
+  orientation: 'up' | 'down' | 'left' | 'right',
+  offset: number
+): Point {
+  if (orientation === 'left') {
+    return { x: pos.x - offset, y: pos.y };
+  } else if (orientation === 'right') {
+    return { x: pos.x + offset, y: pos.y };
+  } else if (orientation === 'down') {
+    // Connector faces down, cable tail exits upward
+    return { x: pos.x, y: pos.y - offset };
+  } else {
+    // Connector faces up, cable tail exits downward
+    return { x: pos.x, y: pos.y + offset };
+  }
+}
 
 export function computeSmartRouting(
   cable: CableData,
@@ -66,8 +88,6 @@ export function computeSmartRouting(
   const LEFT_HOLE_X_LOCAL  = LEFT_RAIL_X + RACK_CONSTANTS.RAIL_WIDTH - 6; // 44 relative to rack.x
 
   // ── Side preference ───────────────────────────────────────────────────────
-  // Server ports are at relativeX=325 (right side of 350px device body) → always right
-  // Switch/management ports at lower relativeX may go left or right
   const sideSrc: 'left' | 'right' =
     cable.sidePreference ?? (sourcePort.relativeX > 175 ? 'right' : 'left');
   const sideDest: 'left' | 'right' =
@@ -83,32 +103,89 @@ export function computeSmartRouting(
     : destPos.x;
 
   // ── Lane staggering (so parallel cables are visually distinct) ────────────
-  // Cables share the same hole face but are staggered 3px apart along X.
-  // Lane 0 sits exactly on the hole face; lanes 1-7 step further into the column.
   const cableIndex = s.cables.findIndex(c => c.id === cable.id);
   const lane = cableIndex >= 0 ? cableIndex % 8 : 0;
   const LANE_STEP = 3; // px
 
-  // For right side: lanes go rightward from the hole (406, 409, 412 ...)
-  // For left side: lanes go leftward from the hole (44, 41, 38 ...)
   const getLaneX = (holeX: number, side: 'left' | 'right') =>
     side === 'right' ? holeX + lane * LANE_STEP : holeX - lane * LANE_STEP;
 
   const laneXSrc  = getLaneX(holeXSrc,  sideSrc);
   const laneXDest = getLaneX(holeXDest, sideDest);
 
-  // ── Anchor points ─────────────────────────────────────────────────────────
-  //
-  //  Path:  sourcePos ─▶ A1 ─▶ A2 ─▶ A3 ─▶ destPos
-  //
-  //  A1 = at the rail hole, same Y as source port  (horizontal exit)
-  //  A2 = at the rail hole, same Y as dest   port  (vertical run along rail face)
-  //
-  //  A1 and A2 share the same X (the lane inside the hole column).
-  //  The cable bends at A1, travels vertically to A2, then bends and enters dest port.
+  // ── Connector exits ───────────────────────────────────────────────────────
+  const srcOrient = getPortOrientation(cable, 'source');
+  const destOrient = getPortOrientation(cable, 'dest');
+  const exitOffset = cable.exitStraightOffset ?? 15; // px
 
-  const A1: Point = { x: laneXSrc,  y: sourcePos.y };
-  const A2: Point = { x: laneXDest, y: destPos.y   };
+  const srcExit = getExitPoint(sourcePos, srcOrient, exitOffset);
+  const destExit = getExitPoint(destPos, destOrient, exitOffset);
 
-  return [A1, A2];
+  // ── Smart Routing Logic & Obstacle Avoidance ──────────────────────────────
+  
+  // Case 1: Floating or Dragging cable end (no destination rack yet)
+  if (!sourceRack || !destRack) {
+    const A1: Point = { x: laneXSrc,  y: srcExit.y };
+    const A2: Point = { x: laneXDest, y: destExit.y   };
+    return [srcExit, A1, A2, destExit];
+  }
+
+  // Case 2: Cross-Rack Cabling (Overhead Cable Tray routing)
+  if (sourceRack.id !== destRack.id) {
+    const minRackY = Math.min(sourceRack.y, destRack.y);
+    const trayY = minRackY - 45; // Run in cable tray 45px above the racks
+
+    const A1: Point = { x: laneXSrc, y: srcExit.y };
+    const A1_top: Point = { x: laneXSrc, y: sourceRack.y + 10 };
+    const A1_tray: Point = { x: laneXSrc, y: trayY };
+
+    const A2_tray: Point = { x: laneXDest, y: trayY };
+    const A2_top: Point = { x: laneXDest, y: destRack.y + 10 };
+    const A2: Point = { x: laneXDest, y: destExit.y };
+
+    return [srcExit, A1, A1_top, A1_tray, A2_tray, A2_top, A2, destExit];
+  }
+
+  // Case 3: Same Rack Routing
+  // Case 3a: Same side gutter run
+  if (sideSrc === sideDest) {
+    const A1: Point = { x: laneXSrc,  y: srcExit.y };
+    const A2: Point = { x: laneXDest, y: destExit.y   };
+    return [srcExit, A1, A2, destExit];
+  }
+
+  // Case 3b: Cross-side run within the same rack (opposite side gutters)
+  const rackTopY = sourceRack.y + 10;
+  const rackBottomY = sourceRack.y + RACK_CONSTANTS.RACK_PADDING_TOP + sourceRack.units * RACK_CONSTANTS.RU_HEIGHT + 15;
+  
+  const avgY = (srcExit.y + destExit.y) / 2;
+  const crossY = Math.abs(avgY - rackTopY) < Math.abs(avgY - rackBottomY) ? rackTopY : rackBottomY;
+
+  const A1: Point = { x: laneXSrc, y: srcExit.y };
+  const A1_cross: Point = { x: laneXSrc, y: crossY };
+  const A2_cross: Point = { x: laneXDest, y: crossY };
+  const A2: Point = { x: laneXDest, y: destExit.y };
+
+  return [srcExit, A1, A1_cross, A2_cross, A2, destExit];
+}
+
+/**
+ * Downsamples any list of points to exactly 3 points (first, middle, last).
+ * This ensures that when the user customizes or locks a cable, it starts with exactly 3 default anchor points.
+ */
+export function get3DefaultAnchors(pts: Point[]): Point[] {
+  if (pts.length === 3) return pts;
+  if (pts.length < 3) {
+    if (pts.length === 0) return [];
+    if (pts.length === 1) return [pts[0], pts[0], pts[0]];
+    const p0 = pts[0];
+    const p1 = pts[1];
+    const mid = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+    return [p0, mid, p1];
+  }
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  const midIdx = Math.floor(pts.length / 2);
+  const middle = pts[midIdx];
+  return [first, middle, last];
 }

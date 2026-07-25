@@ -264,7 +264,7 @@ export const RACK_CONSTANTS = {
   PORT_SIZE: 12,           // default port width
   PORT_HEIGHT: 10,         // default port height
   GRID_SIZE: 20,           // grid snap size
-  CABLE_THICKNESS: 3,
-  CABLE_BEND_RADIUS: 8,
+  CABLE_THICKNESS: 2,
+  CABLE_BEND_RADIUS: 10,
   CABLE_PARALLEL_SPACING: 6,
 };
