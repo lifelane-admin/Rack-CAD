@@ -38,7 +38,8 @@ class StateManager {
       cabinetDrawMode: 'default',
       cabinetCoverVisible: true,
       isometricMode: false,
-      presenterMode: false
+      presenterMode: false,
+      cableRoutingTrayMode: 'overhead'
     };
 
     // Load auto-save if present, otherwise load the Proxmox demo project automatically

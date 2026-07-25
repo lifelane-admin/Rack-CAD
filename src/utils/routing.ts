@@ -173,20 +173,40 @@ export function computeSmartRouting(
     return [srcExit, A1, A2, destExit];
   }
 
-  // Case 2: Cross-Rack Cabling (Overhead Cable Tray routing)
+  // Case 2: Cross-Rack Cabling (Overhead vs Underfloor routing)
   if (sourceRack.id !== destRack.id) {
-    const minRackY = Math.min(sourceRack.y, destRack.y);
-    const trayY = minRackY - 45; // Run in cable tray 45px above the racks
+    const s = stateManager.getState();
+    const isUnderfloor = s.cableRoutingTrayMode === 'underfloor';
+    
+    if (isUnderfloor) {
+      const hSrc = RACK_CONSTANTS.RACK_PADDING_TOP + sourceRack.units * RACK_CONSTANTS.RU_HEIGHT + RACK_CONSTANTS.RACK_PADDING_BOTTOM;
+      const hDest = RACK_CONSTANTS.RACK_PADDING_TOP + destRack.units * RACK_CONSTANTS.RU_HEIGHT + RACK_CONSTANTS.RACK_PADDING_BOTTOM;
+      const maxBottomY = Math.max(sourceRack.y + hSrc, destRack.y + hDest);
+      const trayY = maxBottomY + 45; // Underfloor tray 45px below the cabinets
 
-    const A1: Point = { x: laneXSrc, y: srcExit.y };
-    const A1_top: Point = { x: laneXSrc, y: sourceRack.y + 10 };
-    const A1_tray: Point = { x: laneXSrc, y: trayY };
+      const A1: Point = { x: laneXSrc, y: srcExit.y };
+      const A1_bottom: Point = { x: laneXSrc, y: sourceRack.y + hSrc - 10 };
+      const A1_tray: Point = { x: laneXSrc, y: trayY };
 
-    const A2_tray: Point = { x: laneXDest, y: trayY };
-    const A2_top: Point = { x: laneXDest, y: destRack.y + 10 };
-    const A2: Point = { x: laneXDest, y: destExit.y };
+      const A2_tray: Point = { x: laneXDest, y: trayY };
+      const A2_bottom: Point = { x: laneXDest, y: destRack.y + hDest - 10 };
+      const A2: Point = { x: laneXDest, y: destExit.y };
 
-    return [srcExit, A1, A1_top, A1_tray, A2_tray, A2_top, A2, destExit];
+      return [srcExit, A1, A1_bottom, A1_tray, A2_tray, A2_bottom, A2, destExit];
+    } else {
+      const minRackY = Math.min(sourceRack.y, destRack.y);
+      const trayY = minRackY - 45; // Overhead runway 45px above the cabinets
+
+      const A1: Point = { x: laneXSrc, y: srcExit.y };
+      const A1_top: Point = { x: laneXSrc, y: sourceRack.y + 10 };
+      const A1_tray: Point = { x: laneXSrc, y: trayY };
+
+      const A2_tray: Point = { x: laneXDest, y: trayY };
+      const A2_top: Point = { x: laneXDest, y: destRack.y + 10 };
+      const A2: Point = { x: laneXDest, y: destExit.y };
+
+      return [srcExit, A1, A1_top, A1_tray, A2_tray, A2_top, A2, destExit];
+    }
   }
 
   // Case 3: Same Rack Routing

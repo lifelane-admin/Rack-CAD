@@ -412,6 +412,17 @@ export class App {
       this.renderAll();
     });
 
+    (eventBus as any).on('view:toggle-cable-tray-mode', () => {
+      const s = stateManager.getState();
+      const newMode = s.cableRoutingTrayMode === 'underfloor' ? 'overhead' : 'underfloor';
+      stateManager.setState({ cableRoutingTrayMode: newMode });
+      this.renderAll();
+      eventBus.emit('notification', { 
+        message: `Cable routing tray set to ${newMode.toUpperCase()} mode`, 
+        type: 'info' 
+      });
+    });
+
     (eventBus as any).on('legend:edit', () => {
       this.showLegendCustomizerModal();
     });
@@ -1794,17 +1805,26 @@ export class App {
     cableLayer.innerHTML = '';
     if (labelLayer) labelLayer.innerHTML = '';
 
-    // Render overhead cable runway tray if there are multiple racks
+    // Render overhead/underfloor cable runway tray if there are multiple racks
     if (s.racks.length > 1) {
-      const minRackY = Math.min(...s.racks.map(r => r.y));
-      const trayY = minRackY - 45;
+      const isUnderfloor = s.cableRoutingTrayMode === 'underfloor';
+      let trayY = 0;
+      
+      if (isUnderfloor) {
+        const heights = s.racks.map(r => RACK_CONSTANTS.RACK_PADDING_TOP + r.units * RACK_CONSTANTS.RU_HEIGHT + RACK_CONSTANTS.RACK_PADDING_BOTTOM);
+        const maxBottomY = Math.max(...s.racks.map((r, idx) => r.y + heights[idx]));
+        trayY = maxBottomY + 45;
+      } else {
+        const minRackY = Math.min(...s.racks.map(r => r.y));
+        trayY = minRackY - 45;
+      }
       
       const rackXCoords = s.racks.map(r => r.x);
       const minX = Math.min(...rackXCoords) + 44; 
       const maxX = Math.max(...rackXCoords) + 406; 
       
       const trayGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      trayGroup.setAttribute('id', 'overhead-cable-tray');
+      trayGroup.setAttribute('id', 'cable-runway-tray');
       trayGroup.setAttribute('style', 'pointer-events: none;');
       
       const railTop = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -1812,7 +1832,7 @@ export class App {
       railTop.setAttribute('y1', String(trayY - 6));
       railTop.setAttribute('x2', String(maxX + 50));
       railTop.setAttribute('y2', String(trayY - 6));
-      railTop.setAttribute('stroke', '#3a3a42');
+      railTop.setAttribute('stroke', isUnderfloor ? '#1f2937' : '#3a3a42');
       railTop.setAttribute('stroke-width', '2');
       trayGroup.appendChild(railTop);
 
@@ -1821,7 +1841,7 @@ export class App {
       railBottom.setAttribute('y1', String(trayY + 6));
       railBottom.setAttribute('x2', String(maxX + 50));
       railBottom.setAttribute('y2', String(trayY + 6));
-      railBottom.setAttribute('stroke', '#3a3a42');
+      railBottom.setAttribute('stroke', isUnderfloor ? '#1f2937' : '#3a3a42');
       railBottom.setAttribute('stroke-width', '2');
       trayGroup.appendChild(railBottom);
       
@@ -1831,20 +1851,20 @@ export class App {
         rung.setAttribute('y1', String(trayY - 6));
         rung.setAttribute('x2', String(x));
         rung.setAttribute('y2', String(trayY + 6));
-        rung.setAttribute('stroke', '#2b2b32');
+        rung.setAttribute('stroke', isUnderfloor ? '#111827' : '#2b2b32');
         rung.setAttribute('stroke-width', '1.5');
         trayGroup.appendChild(rung);
       }
       
       const trayLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       trayLabel.setAttribute('x', String((minX + maxX) / 2));
-      trayLabel.setAttribute('y', String(trayY - 12));
+      trayLabel.setAttribute('y', String(isUnderfloor ? trayY + 16 : trayY - 12));
       trayLabel.setAttribute('text-anchor', 'middle');
-      trayLabel.setAttribute('fill', '#4f5660');
+      trayLabel.setAttribute('fill', isUnderfloor ? '#374151' : '#4f5660');
       trayLabel.setAttribute('font-size', '8');
       trayLabel.setAttribute('font-family', 'monospace');
       trayLabel.setAttribute('letter-spacing', '1');
-      trayLabel.textContent = 'OVERHEAD CABLE RUNWAY';
+      trayLabel.textContent = isUnderfloor ? 'UNDERFLOOR CABLE TRAY' : 'OVERHEAD CABLE RUNWAY';
       trayGroup.appendChild(trayLabel);
       
       rackLayer.appendChild(trayGroup);

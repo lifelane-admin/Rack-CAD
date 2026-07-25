@@ -352,6 +352,9 @@ export class SelfTestRunner {
     if (typeof s.presenterMode !== 'boolean') {
       throw new Error('Initial presenterMode is invalid');
     }
+    if (s.cableRoutingTrayMode !== 'overhead' && s.cableRoutingTrayMode !== 'underfloor') {
+      throw new Error('Initial cableRoutingTrayMode is invalid');
+    }
 
     stateManager.setState({ cabinetViewMode: 'rear' });
     if (stateManager.getState().cabinetViewMode !== 'rear') {
@@ -364,6 +367,10 @@ export class SelfTestRunner {
     stateManager.setState({ presenterMode: true });
     if (stateManager.getState().presenterMode !== true) {
       throw new Error('Failed to update presenterMode');
+    }
+    stateManager.setState({ cableRoutingTrayMode: 'underfloor' });
+    if (stateManager.getState().cableRoutingTrayMode !== 'underfloor') {
+      throw new Error('Failed to update cableRoutingTrayMode');
     }
   }
 }

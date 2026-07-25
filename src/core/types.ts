@@ -194,6 +194,7 @@ export interface AppState {
   cabinetCoverVisible: boolean;
   isometricMode: boolean;
   presenterMode: boolean;
+  cableRoutingTrayMode: 'overhead' | 'underfloor';
 }
 
 // === Events ===

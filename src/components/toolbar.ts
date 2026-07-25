@@ -193,6 +193,13 @@ export class Toolbar {
         title: 'Toggle Presenter Infographic Dashboard View',
         action: () => EventBus.emit('view:toggle-presenter' as any, undefined),
         toggle: true
+      },
+      {
+        id: 'btn-view-cable-tray-mode',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h16M4 14h16M4 6h16M4 18h16"></path></svg>',
+        title: 'Toggle Cable Routing Mode (Overhead / Underfloor)',
+        action: () => EventBus.emit('view:toggle-cable-tray-mode' as any, undefined),
+        toggle: true
       }
     ]));
 
@@ -278,6 +285,12 @@ export class Toolbar {
       if (btnPresenter) {
         if (s.presenterMode) btnPresenter.classList.add('active');
         else btnPresenter.classList.remove('active');
+      }
+
+      const btnCableTray = this.container.querySelector('#btn-view-cable-tray-mode');
+      if (btnCableTray) {
+        if (s.cableRoutingTrayMode === 'underfloor') btnCableTray.classList.add('active');
+        else btnCableTray.classList.remove('active');
       }
     });
   }
