@@ -12,6 +12,7 @@ import { PropertiesPanel } from './components/properties';
 import { StatusBar } from './components/statusbar';
 import { ContextMenu, MenuItem } from './components/context-menu';
 import { ReportsPanel } from './components/reports-panel';
+import { FloatingToolbar } from './components/floating-toolbar';
 import { renderRack } from './renderers/rack-renderer';
 import { renderDevice } from './renderers/device-renderer';
 import { renderCable, renderCableInProgress } from './renderers/cable-renderer';
@@ -32,6 +33,7 @@ export class App {
   private properties!: PropertiesPanel;
   private statusbar!: StatusBar;
   private contextMenu!: ContextMenu;
+  private floatingToolbar!: FloatingToolbar;
 
   // Interaction state
   private spacePressed = false;
@@ -78,6 +80,9 @@ export class App {
     
     // Initialize Reports & Documentation Panel
     const reportsPanel = new ReportsPanel();
+
+    // Initialize Floating Quick Access Toolbar
+    this.floatingToolbar = new FloatingToolbar();
 
     // Render UI
     this.toolbar.render();

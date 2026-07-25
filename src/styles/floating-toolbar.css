@@ -1,0 +1,132 @@
+.floating-toolbar {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  background: var(--bg-panel);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: 30px; /* Fully pill-shaped for a clean float */
+  padding: 6px 16px;
+  box-shadow: var(--shadow-float);
+  transition: opacity var(--transition-speed) ease, transform var(--transition-speed) ease;
+  user-select: none;
+  opacity: 0.92;
+}
+
+.floating-toolbar:hover {
+  opacity: 1;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.ft-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ft-separator {
+  width: 1px;
+  height: 20px;
+  background-color: var(--border-color);
+  margin: 0 4px;
+}
+
+/* Base button styling */
+.ft-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%; /* Circular buttons for floating feel */
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-secondary);
+  font-size: 14px;
+  transition: all var(--transition-speed) ease;
+}
+
+.ft-btn:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+  transform: scale(1.08);
+}
+
+.ft-btn.active {
+  background-color: rgba(56, 189, 248, 0.18);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+
+.ft-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+/* Color swatches container */
+.ft-colors {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.ft-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: all var(--transition-speed) ease;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ft-swatch:hover {
+  transform: scale(1.25);
+  box-shadow: 0 0 6px currentColor;
+}
+
+.ft-swatch.active {
+  transform: scale(1.15);
+  border-color: #fff;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.ft-swatch.active::after {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: #fff;
+  display: block;
+}
+
+/* Contextual subheaders/hints inside floating bar */
+.ft-context-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-right: var(--space-xs);
+}
+
+/* Animation on section hide/show */
+.ft-section.collapsed {
+  display: none !important;
+}
