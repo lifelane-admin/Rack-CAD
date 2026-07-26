@@ -55,16 +55,18 @@ export class Sidebar {
     container.innerHTML = '';
 
     const categories: { id: DeviceCategory, label: string, icon: string }[] = [
-      { id: 'server', label: 'Servers', icon: '🖥️' },
-      { id: 'switch', label: 'Network', icon: '🔀' },
-      { id: 'router', label: 'Network', icon: '🔀' },
-      { id: 'firewall', label: 'Security', icon: '🛡️' },
-      { id: 'storage', label: 'Storage', icon: '💾' },
-      { id: 'pdu', label: 'Power', icon: '⚡' },
-      { id: 'ups', label: 'Power', icon: '⚡' },
-      { id: 'patch-panel', label: 'Accessories', icon: '🔧' },
-      { id: 'blank-panel', label: 'Accessories', icon: '🔧' },
-      { id: 'cable-manager', label: 'Cable Management', icon: '📂' }
+      { id: 'server',       label: 'Servers',          icon: '🖥️' },
+      { id: 'switch',       label: 'Network Switches',  icon: '🔀' },
+      { id: 'router',       label: 'Routers',           icon: '🌐' },
+      { id: 'firewall',     label: 'Firewalls',         icon: '🛡️' },
+      { id: 'storage',      label: 'Storage',           icon: '💾' },
+      { id: 'console',      label: 'KVM & Console',     icon: '📟' },
+      { id: 'patch-panel',  label: 'Patch Panels',      icon: '🔲' },
+      { id: 'pdu',          label: 'PDU',               icon: '🔌' },
+      { id: 'ups',          label: 'UPS',               icon: '⚡' },
+      { id: 'cooling',      label: 'Cooling',           icon: '❄️' },
+      { id: 'blank-panel',  label: 'Blank Panels',      icon: '▬' },
+      { id: 'cable-manager', label: 'Cable Management', icon: '📂' },
     ];
 
     const grouped = categories.reduce((acc, cat) => {
@@ -74,9 +76,8 @@ export class Sidebar {
     }, {} as Record<string, { icon: string, items: DeviceTemplate[] }>);
 
     for (const [groupName, groupData] of Object.entries(grouped)) {
-      const filteredItems = groupData.items.filter(item => 
-        item.name.toLowerCase().includes(this.searchTerm) || 
-        item.manufacturer.toLowerCase().includes(this.searchTerm)
+      const filteredItems = groupData.items.filter(item =>
+        item.name.toLowerCase().includes(this.searchTerm)
       );
 
       if (filteredItems.length === 0) continue;
@@ -102,7 +103,7 @@ export class Sidebar {
           <div class="item-icon">${item.icon}</div>
           <div class="item-details">
             <div class="item-name">${item.name}</div>
-            <div class="item-meta">${item.manufacturer} • ${item.heightUnits}U</div>
+            <div class="item-meta">${item.heightUnits > 0 ? item.heightUnits + 'U' : 'Accessory'} • ${item.ports.length} ports</div>
           </div>
         `;
         
