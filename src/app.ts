@@ -4,6 +4,7 @@
  */
 import { eventBus } from './core/event-bus';
 import { stateManager } from './core/state';
+import { ClaudeProvider } from './ai/claude-provider';
 import { CanvasManager } from './core/canvas';
 import { historyManager } from './core/history';
 import { Toolbar } from './components/toolbar';
@@ -473,6 +474,43 @@ export class App {
         runSelfTests();
       }, 1000);
     }
+
+    // Initialize AI Key Modal
+    this.setupAiKeyModal();
+  }
+
+  /**
+   * Initialize the AI Key Modal
+   */
+  private setupAiKeyModal(): void {
+    const modal = document.getElementById('ai-key-modal');
+    const input = document.getElementById('ai-key-input') as HTMLInputElement;
+    const toggleBtn = document.getElementById('ai-key-toggle');
+    const skipBtn = document.getElementById('ai-key-skip');
+    const connectBtn = document.getElementById('ai-key-connect');
+
+    if (!modal || !input || !toggleBtn || !skipBtn || !connectBtn) return;
+
+    toggleBtn.addEventListener('click', () => {
+      input.type = input.type === 'password' ? 'text' : 'password';
+    });
+
+    skipBtn.addEventListener('click', () => {
+      modal.classList.add('hidden');
+      stateManager.setState({ aiMode: true });
+      eventBus.emit('ai:mode-changed', true);
+    });
+
+    connectBtn.addEventListener('click', () => {
+      const key = input.value.trim();
+      if (key) {
+        ClaudeProvider.saveKey(key);
+        eventBus.emit('notification', { message: 'Claude API key saved', type: 'success' });
+      }
+      modal.classList.add('hidden');
+      stateManager.setState({ aiMode: true });
+      eventBus.emit('ai:mode-changed', true);
+    });
   }
 
   /**
@@ -1573,7 +1611,7 @@ export class App {
                 const destPos = (cable.destPortId ? stateManager.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
                 const baseAnchors = (cable.anchorPoints && cable.anchorPoints.length > 0)
                   ? cable.anchorPoints
-                  : computeSmartRouting(cable, sourcePos, destPos);
+                  : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos));
                 
                 const points = [sourcePos, ...baseAnchors, destPos];
                 let minDistance = Infinity;
@@ -1598,7 +1636,7 @@ export class App {
               action: () => {
                 const sourcePos = cable.floatingSource || stateManager.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
                 const destPos = (cable.destPortId ? stateManager.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
-                const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : computeSmartRouting(cable, sourcePos, destPos))];
+                const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos)))];
                 if (currentPts.length > 0) {
                   currentPts.splice(targetAnchorIdx, 1);
                   eventBus.emit('cable:update', { id: targetCableId, data: { anchorPoints: currentPts, anchorsLocked: currentPts.length > 0 } });
