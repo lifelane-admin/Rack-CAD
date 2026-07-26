@@ -29,6 +29,7 @@ function buildUserMessage(context: RackContext, messages: AIMessage[]): string {
 export class ClaudeProvider implements AIProvider {
   readonly name: AIProviderName = 'claude';
   private client: Anthropic | null = null;
+  private clientKey: string | null = null;
   private fallback = new RuleEngine();
 
   private getKey(): string | null {
@@ -37,9 +38,14 @@ export class ClaudeProvider implements AIProvider {
 
   private getClient(): Anthropic | null {
     const key = this.getKey();
-    if (!key) return null;
-    if (!this.client) {
+    if (!key) {
+      this.client = null;
+      this.clientKey = null;
+      return null;
+    }
+    if (!this.client || this.clientKey !== key) {
       this.client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true });
+      this.clientKey = key;
     }
     return this.client;
   }
@@ -57,14 +63,7 @@ export class ClaudeProvider implements AIProvider {
   }
 
   async isAvailable(): Promise<boolean> {
-    const client = this.getClient();
-    if (!client) return false;
-    try {
-      await client.models.retrieve(MODEL);
-      return true;
-    } catch {
-      return false;
-    }
+    return !!this.getKey();
   }
 
   async getHints(context: RackContext, selectedId?: string): Promise<AIHint[]> {
@@ -80,22 +79,27 @@ export class ClaudeProvider implements AIProvider {
 
     const userMessage = buildUserMessage(context, messages);
 
-    const stream = client.messages.stream({
-      model: MODEL,
-      max_tokens: 2048,
-      thinking: { type: 'adaptive' },
-      output_config: { effort: 'medium' },
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
-    });
+    try {
+      const stream = client.messages.stream({
+        model: MODEL,
+        max_tokens: 2048,
+        thinking: { type: 'adaptive' },
+        output_config: { effort: 'medium' },
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userMessage }],
+      });
 
-    for await (const event of stream) {
-      if (
-        event.type === 'content_block_delta' &&
-        event.delta.type === 'text_delta'
-      ) {
-        yield event.delta.text;
+      for await (const event of stream) {
+        if (
+          event.type === 'content_block_delta' &&
+          event.delta.type === 'text_delta'
+        ) {
+          yield event.delta.text;
+        }
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      yield JSON.stringify({ explanation: `Claude error: ${msg}`, diff: null });
     }
   }
 
