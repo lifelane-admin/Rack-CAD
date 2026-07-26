@@ -40,7 +40,7 @@ export interface RackContextCable {
 export interface RackContext {
   racks: RackContextRack[];
   cables: RackContextCable[];
-  validation: { alerts: { severity: string; message: string }[] };
+  validation: { alerts: { severity: string; message: string; targetId?: string }[] };
   selectedId?: string;
 }
 
@@ -55,6 +55,7 @@ export interface RackDiff {
     updateCables?: (Partial<CableData> & { id: string })[];
     updateAnchors?: { cableId: string; anchors: Point[] }[];
     addRacks?: RackData[];
+    removeRacks?: string[];
     updateRacks?: (Partial<RackData> & { id: string })[];
   } | null;
 }

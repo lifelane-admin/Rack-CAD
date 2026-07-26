@@ -1,3 +1,5 @@
+import type { RackDiff, AIMessage, AIHint, AIProviderName } from '../ai/types';
+
 // === Geometry ===
 export interface Point { x: number; y: number; }
 export interface Rect { x: number; y: number; width: number; height: number; }
@@ -197,8 +199,8 @@ export interface AppState {
   cableRoutingTrayMode: 'overhead' | 'underfloor';
   // AI Mode
   aiMode: boolean;
-  aiProvider: 'claude' | 'local' | 'rules';
-  previewDiff: import('../ai/types').RackDiff | null;
+  aiProvider: AIProviderName;
+  previewDiff: RackDiff | null;
 }
 
 // === Events ===
@@ -261,14 +263,14 @@ export interface AppEvents {
   'view:toggle-legends': void;
   'notification': { message: string; type: 'info' | 'success' | 'warning' | 'error' };
   'ai:mode-changed': boolean;
-  'ai:provider-changed': 'claude' | 'local' | 'rules';
-  'ai:request': { messages: import('../ai/types').AIMessage[]; selectedId?: string };
-  'ai:response': import('../ai/types').RackDiff;
+  'ai:provider-changed': AIProviderName;
+  'ai:request': { messages: AIMessage[]; selectedId?: string };
+  'ai:response': RackDiff;
   'ai:stream-chunk': string;
-  'ai:stream-done': import('../ai/types').RackDiff;
-  'ai:hints-updated': import('../ai/types').AIHint[];
-  'ai:preview-diff': import('../ai/types').RackDiff | null;
-  'ai:apply-diff': import('../ai/types').RackDiff;
+  'ai:stream-done': RackDiff;
+  'ai:hints-updated': AIHint[];
+  'ai:preview-diff': RackDiff | null;
+  'ai:apply-diff': RackDiff;
   'ai:error': string;
 }
 
