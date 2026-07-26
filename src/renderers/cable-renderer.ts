@@ -3,8 +3,18 @@ import { createGroup, createPath, createRect, createLine, createSVGElement as cr
 import { generateOrthogonalPath } from '../utils/geometry';
 import { stateManager } from '../core/state';
 import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
+import { getExitDirection } from '../utils/routing';
 import { getMaterialProfile } from '../core/cable-materials';
 import { getTemplate } from '../library/device-catalog';
+
+let _previewDirection: 'up' | 'down' | 'left' | 'right' = 'right';
+let _previewDirLockPos: Point | null = null;
+const HYSTERESIS_PX = 8;
+
+export function resetPreviewDirection(): void {
+  _previewDirection = 'right';
+  _previewDirLockPos = null;
+}
 
 /**
  * Compute default anchor points for a cable given its source and dest world positions.
@@ -321,29 +331,34 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
 
 export function renderCableInProgress(sourcePos: Point, currentPos: Point, cableType: CableType, cableLayer: SVGGElement): SVGGElement {
   const group = createGroup('cable-in-progress', 'cable-in-progress');
-  
+
+  // Direction-aware exit with 8px hysteresis
+  const rawDir = getExitDirection(sourcePos, currentPos);
+  if (_previewDirLockPos === null) {
+    _previewDirection = rawDir;
+    _previewDirLockPos = currentPos;
+  } else {
+    const dx = Math.abs(currentPos.x - _previewDirLockPos.x);
+    const dy = Math.abs(currentPos.y - _previewDirLockPos.y);
+    if (dx > HYSTERESIS_PX || dy > HYSTERESIS_PX) {
+      _previewDirection = rawDir;
+      _previewDirLockPos = currentPos;
+    }
+  }
+  const exitOffset = 18;
+  let exitPoint: Point;
+  switch (_previewDirection) {
+    case 'up':    exitPoint = { x: sourcePos.x, y: sourcePos.y - exitOffset }; break;
+    case 'down':  exitPoint = { x: sourcePos.x, y: sourcePos.y + exitOffset }; break;
+    case 'left':  exitPoint = { x: sourcePos.x - exitOffset, y: sourcePos.y }; break;
+    case 'right': exitPoint = { x: sourcePos.x + exitOffset, y: sourcePos.y }; break;
+  }
+
   const s = stateManager.getState();
   const mat = getMaterialProfile(cableType);
   const strokeColor = CABLE_COLORS[cableType] || CABLE_COLORS.general || mat.defaultColor;
 
-  // Find source port details to determine correct side gutter exit x coordinate
-  const sourcePort = s.cableInProgress ? stateManager.getPort(s.cableInProgress.sourcePortId) : null;
-  const dev = sourcePort ? stateManager.getDevice(sourcePort.deviceId) : null;
-  const rack = dev ? stateManager.getRack(dev.rackId) : null;
-
-  let exitX = sourcePos.x;
-  if (rack) {
-    const isLeftPort = sourcePos.x < rack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH / 2;
-    exitX = isLeftPort ? rack.x - 22 : rack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH + 22;
-  } else {
-    exitX = sourcePos.x + (currentPos.x > sourcePos.x ? 25 : -25);
-  }
-
-  // Double-elbow orthogonal preview path: Port -> Gutter Exit -> Vertical run -> Cursor
-  const a1 = { x: exitX, y: sourcePos.y };
-  const a2 = { x: exitX, y: currentPos.y };
-
-  const pathData = generateOrthogonalPath(sourcePos, currentPos, [a1, a2], 10);
+  const pathData = generateOrthogonalPath(sourcePos, currentPos, [exitPoint], 10);
 
   // Render dashed preview line representing CAT6 wire length
   const line = createPath(pathData, {
@@ -360,11 +375,11 @@ export function renderCableInProgress(sourcePos: Point, currentPos: Point, cable
   const isSFP = ['sfp', 'sfp-plus', 'sfp28', 'qsfp', 'qsfp28', 'dac-twinax'].some(t => cableType.includes(t));
   const isFiber = ['om3', 'om4', 'om5', 'fiber', 'lc', 'sc'].some(t => cableType.includes(t));
   const isPower = ['power', 'pwr', 'c13', 'c14', 'c19', 'c13-power', 'c19-power'].some(t => cableType.includes(t));
-  
-  const mouseDirection = currentPos.x > exitX ? 'right' : 'left';
+
+  const mouseDirection = _previewDirection;
   const offsetPos = {
-    x: currentPos.x + (mouseDirection === 'right' ? -15 : 15),
-    y: currentPos.y + 12
+    x: currentPos.x + (mouseDirection === 'right' ? -15 : mouseDirection === 'left' ? 15 : 0),
+    y: currentPos.y + (mouseDirection === 'down' ? -15 : mouseDirection === 'up' ? 15 : 12)
   };
   const connector = createConnector(offsetPos, strokeColor, mouseDirection, isFiber, isPower, isSFP);
   group.appendChild(connector);
@@ -395,8 +410,19 @@ function createEthernetConnector(pos: Point, color: string, orientation: 'up' | 
   else if (orientation === 'right') rot = -90;
   else if (orientation === 'left')  rot = 90;
 
+  // Offset so the connector TAIL (boot end at native y=38, scaled to 10.64px) aligns with pos
+  // (the cable path start), not the head. This puts the plug face inside the port socket
+  // and the visible boot + cable exit at the port face edge.
+  const TAIL_OFFSET = 38 * 0.28; // ≈ 10.64px
+  let ax = pos.x;
+  let ay = pos.y;
+  if (orientation === 'right') ax -= TAIL_OFFSET;
+  else if (orientation === 'left')  ax += TAIL_OFFSET;
+  else if (orientation === 'up')    ay -= TAIL_OFFSET; // 'up' exits downward in SVG coords
+  else if (orientation === 'down')  ay += TAIL_OFFSET; // 'down' exits upward in SVG coords
+
   // Slim scale: 0.28 (was 0.48) — much thinner, precision look
-  setAttributes(g, { transform: `translate(${pos.x}, ${pos.y}) rotate(${rot}) scale(0.28) translate(-14, 0)`, opacity: '0.92' });
+  setAttributes(g, { transform: `translate(${ax}, ${ay}) rotate(${rot}) scale(0.28) translate(-14, 0)`, opacity: '0.92' });
 
   const mainColor = color || '#7b2fbe';
   const glassWhite = 'rgba(220, 240, 255, 0.82)';

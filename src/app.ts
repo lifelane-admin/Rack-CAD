@@ -20,7 +20,7 @@ import { AIPanel } from './components/ai-panel';
 import { runSelfTests } from './utils/self-test';
 import { renderRack } from './renderers/rack-renderer';
 import { renderDevice } from './renderers/device-renderer';
-import { renderCable, renderCableInProgress } from './renderers/cable-renderer';
+import { renderCable, renderCableInProgress, resetPreviewDirection } from './renderers/cable-renderer';
 import { renderDashboardWidgets } from './renderers/dashboard-renderer';
 import { getTemplate } from './library/device-catalog';
 import { generateId, distToSegment } from './utils/geometry';
@@ -1102,6 +1102,7 @@ export class App {
         }
 
         // Clicked on empty canvas - deselect
+        resetPreviewDirection();
         stateManager.setState({ selection: [], cableInProgress: null });
         eventBus.emit('selection:changed', []);
         this.clearHighlights();
@@ -1192,6 +1193,7 @@ export class App {
       destPort.connected = true;
       destPort.cableId = newCable.id;
 
+      resetPreviewDirection();
       stateManager.setState({
         cables: [...stateManager.getState().cables, newCable],
         cableInProgress: null
@@ -1492,6 +1494,7 @@ export class App {
 
       // Escape = Deselect / Cancel cable
       if (e.key === 'Escape') {
+        resetPreviewDirection();
         stateManager.setState({ selection: [], cableInProgress: null });
         eventBus.emit('selection:changed', []);
         this.clearHighlights();
