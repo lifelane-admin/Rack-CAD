@@ -96,9 +96,16 @@ class StateManager {
       const destPort = destDev.ports[destIdx];
       if (!srcPort || !destPort) return;
       const cableId = `cable-${cableCount++}`;
-      cables.push({ id: cableId, name: `Cable ${cableCount - 1}`, type, color, sourcePortId: srcPort.id, destPortId: destPort.id, bendPoints: [], thickness: 2, bendRadius: 10, bundleId: null, notes: '', anchorPoints: [], anchorsLocked: false });
-      srcPort.connected = true; srcPort.cableId = cableId;
-      destPort.connected = true; destPort.cableId = cableId;
+      cables.push({
+        id: cableId, name: `Cable ${cableCount - 1}`, type, color,
+        sourcePortId: srcPort.id, destPortId: destPort.id,
+        bendPoints: [], thickness: 2, bendRadius: 10,
+        bundleId: null, notes: '', anchorPoints: [], anchorsLocked: false,
+      });
+      srcPort.connected = true;
+      srcPort.cableId = cableId;
+      destPort.connected = true;
+      destPort.cableId = cableId;
     };
 
     // Node 1

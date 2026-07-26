@@ -103,7 +103,7 @@ export class Sidebar {
           <div class="item-icon">${item.icon}</div>
           <div class="item-details">
             <div class="item-name">${item.name}</div>
-            <div class="item-meta">${item.heightUnits > 0 ? item.heightUnits + 'U' : 'Accessory'} • ${item.ports.length} ports</div>
+            <div class="item-meta">${item.heightUnits}U • ${item.ports.length} ports</div>
           </div>
         `;
         
