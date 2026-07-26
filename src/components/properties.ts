@@ -217,10 +217,10 @@ export class PropertiesPanel {
       </div>
 
       <div class="form-group" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 12px;">
-        <label style="font-weight: bold; color: var(--text-secondary);">OEM Front Panel Design</label>
+        <label style="font-weight: bold; color: var(--text-secondary);">Front Panel Image</label>
         <div style="display: flex; gap: 8px; margin-top: 8px;">
           <input type="file" id="prop-dev-panel-file" accept="image/*" style="display: none;" />
-          <button class="btn-action" style="flex: 1; background: var(--border-color); border: 1px solid var(--border-color-focus); border-radius: 4px; padding: 6px; font-size: 11px;" onclick="document.getElementById('prop-dev-panel-file').click()">Upload Image</button>
+          <button class="btn-action" style="flex: 1; background: var(--border-color); border: 1px solid var(--border-color-focus); border-radius: 4px; padding: 6px; font-size: 11px;" onclick="document.getElementById('prop-dev-panel-file').click()">Upload Front Panel Image</button>
           <button class="btn-action" style="background: rgba(248, 81, 73, 0.15); border: 1px solid var(--danger-color); color: var(--danger-color); border-radius: 4px; padding: 6px; font-size: 11px;" id="prop-dev-panel-clear">Clear</button>
         </div>
         ${device.frontPanelImage ? `
