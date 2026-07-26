@@ -87,6 +87,28 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   });
   group.appendChild(path);
 
+  // Preview highlight: yellow glow if cable is in previewDiff
+  const previewDiff = stateManager.getState().previewDiff;
+  if (previewDiff?.diff) {
+    const pd = previewDiff.diff;
+    const cableId = cable.id;
+    const isAffected =
+      pd.removeCables?.includes(cableId) ||
+      pd.updateCables?.some(u => u.id === cableId) ||
+      pd.updateAnchors?.some(u => u.cableId === cableId);
+
+    if (isAffected) {
+      const glowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      glowPath.setAttribute('d', pathData);
+      glowPath.setAttribute('fill', 'none');
+      glowPath.setAttribute('stroke', '#ffd600');
+      glowPath.setAttribute('stroke-width', String((cable.thickness || mat.renderThicknessPx || 3) + 4));
+      glowPath.setAttribute('opacity', '0.4');
+      glowPath.setAttribute('pointer-events', 'none');
+      group.insertBefore(glowPath, group.firstChild);
+    }
+  }
+
   // 3D Specular Highlight path overlay (glassmorphism sheen)
   const highlight = createPath(pathData, {
     fill: 'none',
@@ -119,15 +141,18 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   // 'left'  orientation → cable exits to the LEFT   (plug faces right into port)
   const getEffectiveOrientation = (
     cable: CableData,
-    end: 'source' | 'dest'
+    end: 'source' | 'dest',
+    points: Point[]
   ): 'up' | 'down' | 'left' | 'right' => {
-    // User explicit override always wins
+    const portId  = end === 'source' ? cable.sourcePortId  : cable.destPortId;
+    const isEarPort = portId && portId.includes('-ear-');
+
+    // User explicit override always wins, EXCEPT for ear-ports which have fixed orientations
     const userOverride = end === 'source' ? cable.sourceOrientation : cable.destOrientation;
-    if (userOverride && userOverride !== 'auto') {
+    if (userOverride && userOverride !== 'auto' && !isEarPort) {
       return userOverride;
     }
 
-    const portId  = end === 'source' ? cable.sourcePortId  : cable.destPortId;
     const port    = portId ? stateManager.getPort(portId) : null;
     if (!port) {
       return cable.sidePreference || 'right';
@@ -137,19 +162,43 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     const template = device ? getTemplate(device.templateId) : null;
     const height = template ? template.heightUnits * 30 : 30;
 
-    // Server-side / storage / ups devices ports align left/right horizontally
-    if (device && (device.templateId.includes('server') || template?.category === 'server' || template?.category === 'storage' || template?.category === 'ups')) {
-      return port.relativeX > 175 ? 'right' : 'left';
+    // Check device category formatting rules (PBR rules)
+    const isHorizontalDevice = device && (
+      device.templateId.includes('server') ||
+      template?.category === 'server' ||
+      template?.category === 'storage' ||
+      template?.category === 'ups'
+    );
+
+    // Dynamic flow-based orientation: align with the direction the cable is running!
+    if (points.length >= 2) {
+      const start = end === 'source' ? points[0] : points[points.length - 1];
+      const target = end === 'source' ? points[1] : points[points.length - 2];
+      
+      const dx = target.x - start.x;
+      const dy = target.y - start.y;
+      
+      if (isHorizontalDevice) {
+        // Servers always plug in horizontally (left or right)
+        return dx >= 0 ? 'right' : 'left';
+      } else {
+        // Switches always plug in vertically (up or down)
+        return dy >= 0 ? 'up' : 'down'; // 'up' = extends downward, exits downward; 'down' = extends upward, exits upward
+      }
     }
 
+    // Static fallback if points list is empty
+    if (isHorizontalDevice) {
+      return port.relativeX > 175 ? 'right' : 'left';
+    }
     // Switch/patch panels / other network devices:
     // Top-row port (relativeY < height / 2) -> cable exits UPWARD (orientation 'down')
     // Bottom-row port (relativeY >= height / 2) -> cable exits DOWNWARD (orientation 'up')
     return port.relativeY < height / 2 ? 'down' : 'up';
   };
 
-  const srcOrient  = getEffectiveOrientation(cable, 'source');
-  const destOrient = getEffectiveOrientation(cable, 'dest');
+  const srcOrient  = getEffectiveOrientation(cable, 'source', allPoints);
+  const destOrient = getEffectiveOrientation(cable, 'dest', allPoints);
 
   // Determine connector type from cable type
   const cableType = cable.type || 'general';

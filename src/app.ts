@@ -270,6 +270,10 @@ export class App {
         type: 'success' 
       });
     });
+    eventBus.on('ai:preview-diff', (_diff) => {
+      this.renderAll();
+    });
+
     // Set dark theme on body
     document.body.setAttribute('data-theme', stateManager.getState().theme);
 

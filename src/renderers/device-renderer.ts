@@ -362,5 +362,31 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
   // Draw standard interactive port connectors on top of everything
   renderPorts(device.ports, deviceGroup);
 
+  // Preview highlight: yellow ring if device is in previewDiff
+  const previewDiff = stateManager.getState().previewDiff;
+  if (previewDiff?.diff) {
+    const d = previewDiff.diff;
+    const deviceId = device.id;
+    const isAffected =
+      d.removeDevices?.includes(deviceId) ||
+      d.updateDevices?.some(u => u.id === deviceId) ||
+      d.addDevices?.some(a => a.id === deviceId);
+
+    if (isAffected) {
+      const ring = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      ring.setAttribute('x', String(-3));
+      ring.setAttribute('y', String(-3));
+      ring.setAttribute('width', String(deviceWidth + 6));
+      ring.setAttribute('height', String(deviceHeight + 6));
+      ring.setAttribute('rx', '3');
+      ring.setAttribute('fill', 'none');
+      ring.setAttribute('stroke', '#ffd600');
+      ring.setAttribute('stroke-width', '2');
+      ring.setAttribute('opacity', '0.85');
+      ring.setAttribute('pointer-events', 'none');
+      deviceGroup.appendChild(ring);
+    }
+  }
+
   return deviceGroup;
 }
