@@ -217,14 +217,7 @@ function renderFirewallPanel(template: DeviceTemplate | null, W: number, H: numb
   const group = g('firewall-panel');
   const defs = el('defs');
   const gradId = `fw-grad-${Math.random().toString(36).slice(2)}`;
-  const grad = el('linearGradient', { id: gradId, x1: '0%', y1: '0%', x2: '0%', y2: '100%' });
-  [{ offset: '0%', color: '#2a1a1a' }, { offset: '100%', color: '#1a0e0e' }].forEach(({ offset, color }) => {
-    const s = el('stop');
-    s.setAttribute('offset', offset);
-    s.setAttribute('stop-color', color);
-    grad.appendChild(s);
-  });
-  defs.appendChild(grad);
+  makeChassisGradient(gradId, defs);
   group.appendChild(defs);
 
   const chY = 2;
@@ -240,6 +233,7 @@ function renderFirewallPanel(template: DeviceTemplate | null, W: number, H: numb
 
   const portTopY = chY + Math.round((chH - (PORT_H + LED_H + LED_GAP)) / 2);
 
+  const ZONE_COLORS = ['#e53935', '#fb8c00', '#43a047'] as const;
   allDataPorts.forEach((p, i) => {
     const ax = STATUS_END + 6 + i * PORT_PITCH;
     if (p.type === 'sfp-plus') {
@@ -248,8 +242,7 @@ function renderFirewallPanel(template: DeviceTemplate | null, W: number, H: numb
       drawRJ45(group, ax, portTopY, `${i + 1}`, false);
     }
     const zoneIdx = i === 0 ? 0 : i <= 2 ? 1 : 2;
-    const zoneColors = ['#e53935', '#fb8c00', '#43a047'];
-    const zoneTxt = el('text', { x: ax + PORT_W / 2, y: chY + 5, 'text-anchor': 'middle', 'font-size': '5', fill: zoneColors[zoneIdx], 'font-family': 'monospace' });
+    const zoneTxt = el('text', { x: ax + PORT_W / 2, y: chY + 5, 'text-anchor': 'middle', 'font-size': '5', fill: ZONE_COLORS[zoneIdx], 'font-family': 'monospace' });
     zoneTxt.textContent = i === 0 ? 'WAN' : i <= 2 ? 'DMZ' : 'LAN';
     group.appendChild(zoneTxt);
   });
@@ -276,14 +269,10 @@ function renderRouterPanel(template: DeviceTemplate | null, W: number, H: number
   const ports = template?.ports ?? [];
   const qsfp = ports.filter(p => p.type === 'qsfp28');
   const sfp = ports.filter(p => p.type === 'sfp-plus');
-  const portTopY = chY + Math.round((chH - (PORT_H + LED_H + LED_GAP)) / 2);
-
   let portX = STATUS_END + 64;
   qsfp.forEach((_, i) => { drawQSFPCage(group, portX + i * 52, chY, chH, `Q${i + 1}`); });
   portX += qsfp.length * 52 + (qsfp.length ? 8 : 0);
   sfp.forEach((_, i) => { drawSFPCage(group, portX + i * SFP_PITCH, chY, chH, `SFP${i + 1}`, true); });
-
-  void portTopY; // unused but kept for symmetry
 
   return group;
 }
@@ -348,7 +337,7 @@ function renderPduPanel(template: DeviceTemplate | null, W: number, H: number): 
   return group;
 }
 
-function renderUpsPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
+function renderUpsPanel(_template: DeviceTemplate | null, W: number, H: number): SVGGElement {
   const group = g('ups-panel');
   const chY = 2;
   const chH = H - 4;
@@ -440,7 +429,7 @@ function renderBlankPanel(W: number, H: number): SVGGElement {
   return group;
 }
 
-function renderCoolingPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
+function renderCoolingPanel(_template: DeviceTemplate | null, W: number, H: number): SVGGElement {
   const group = g('cooling-panel');
   const chY = 2;
   const chH = H - 4;
