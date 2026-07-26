@@ -526,6 +526,8 @@ export class App {
     document.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
         modal.classList.add('hidden');
+        stateManager.setState({ aiMode: true });
+        eventBus.emit('ai:mode-changed', true);
       }
     });
   }

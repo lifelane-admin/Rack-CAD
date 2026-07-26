@@ -110,6 +110,16 @@ export function executeResolvedDiff(
   // Devices
   if (resolved.removeDevices) {
     devices = devices.filter(d => !resolved.removeDevices!.includes(d.id));
+    // After devices are removed, also remove cables connected to removed device ports
+    const removedPortIds = new Set<string>(
+      currentDevices
+        .filter(d => resolved.removeDevices!.includes(d.id))
+        .flatMap(d => d.ports.map(p => p.id))
+    );
+    cables = cables.filter(c =>
+      !removedPortIds.has(c.sourcePortId) &&
+      !(c.destPortId && removedPortIds.has(c.destPortId))
+    );
   }
   if (resolved.addDevices) devices = [...devices, ...resolved.addDevices];
   if (resolved.updateDevices) {
