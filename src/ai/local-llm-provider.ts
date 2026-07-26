@@ -23,17 +23,25 @@ export class LocalLLMProvider implements AIProvider {
 
   async *chat(context: RackContext, messages: AIMessage[]): AsyncIterable<string> {
     const contextJson = JSON.stringify(context, null, 2);
-    const last = messages[messages.length - 1]?.content ?? '';
 
-    const systemPrompt = `You are a datacenter engineer assistant. The current rack layout is:\n${contextJson}\n\nAlways respond with JSON: {"explanation":"...","diff":null_or_object}`;
+    const systemPrompt = `You are an expert datacenter engineer assistant. The current rack layout is:
+${contextJson}
+
+ALWAYS respond with valid JSON matching exactly this schema:
+{"explanation": "<markdown text to show the user>", "diff": <RackDiff object> | null}
+
+diff is null when no canvas change is needed (analysis, questions).
+For diffs, use minimal operations — only change what was explicitly requested.
+Check free RUs before adding devices. Verify ports are not connected before adding cables.`;
 
     const body = {
       model: DEFAULT_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: last },
+        ...messages,
       ],
       stream: true,
+      max_tokens: 2048,
     };
 
     let res: Response;
@@ -55,30 +63,43 @@ export class LocalLLMProvider implements AIProvider {
     }
 
     const reader = res.body?.getReader();
-    if (!reader) return;
+    if (!reader) {
+      console.error('[LocalLLM] Response body is null');
+      yield* this.fallback.chat(context, messages);
+      return;
+    }
 
     const decoder = new TextDecoder();
     let buffer = '';
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
 
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') return;
-        try {
-          const json = JSON.parse(data);
-          const delta = json.choices?.[0]?.delta?.content;
-          if (delta) yield delta;
-        } catch {
-          // malformed chunk — skip
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') return;
+          try {
+            const json = JSON.parse(data);
+            const delta = json.choices?.[0]?.delta?.content;
+            if (delta) yield delta;
+          } catch {
+            // malformed chunk — skip
+          }
         }
       }
+    } catch (err) {
+      // Stream timeout or abort — fall back gracefully
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[LocalLLM] Stream error: ${msg}`);
+      yield* this.fallback.chat(context, messages);
+    } finally {
+      reader.cancel().catch(() => {});
     }
   }
 
