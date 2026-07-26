@@ -207,5 +207,42 @@ export function runValidationAlerts(
     }
   }
 
+  // Power draw validation per rack
+  const PDU_WATTS = 7200;
+  for (const rack of racks) {
+    const rackDevices = devices.filter(d => d.rackId === rack.id);
+    const pduCount = (rack.showPduLeft ? 1 : 0) + (rack.showPduRight ? 1 : 0);
+    const totalCapacity = pduCount * PDU_WATTS;
+
+    if (totalCapacity === 0) continue;
+
+    const usedWatts = rackDevices.reduce((sum, d) => {
+      const match = d.description.match(/(\d+)\s*[wW](?:atts?)?/);
+      return sum + (match ? parseInt(match[1], 10) : 0);
+    }, 0);
+
+    const ratio = usedWatts / totalCapacity;
+
+    if (ratio >= 0.95) {
+      alerts.push({
+        id: generateId(),
+        type: 'error',
+        category: 'power',
+        message: `${rack.name}: power draw at ${Math.round(ratio * 100)}% of PDU capacity — critical`,
+        targetId: rack.id,
+        targetType: 'rack',
+      });
+    } else if (ratio >= 0.8) {
+      alerts.push({
+        id: generateId(),
+        type: 'warning',
+        category: 'power',
+        message: `${rack.name}: power draw at ${Math.round(ratio * 100)}% of PDU capacity`,
+        targetId: rack.id,
+        targetType: 'rack',
+      });
+    }
+  }
+
   return alerts;
 }
