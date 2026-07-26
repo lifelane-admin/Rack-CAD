@@ -13,6 +13,7 @@ export const aiService = {
     const context = serializeState(state);
 
     const provider = await registry.detect();
+    stateManager.setState({ aiProvider: provider.name });
     eventBus.emit('ai:provider-changed', provider.name);
 
     let accumulated = '';
@@ -35,6 +36,7 @@ export const aiService = {
     const state = stateManager.getState();
     const context = serializeState(state);
     const provider = await registry.detect();
+    stateManager.setState({ aiProvider: provider.name });
     const hints = await provider.getHints(context, selectedId);
     eventBus.emit('ai:hints-updated', hints);
   },
@@ -55,8 +57,7 @@ export const aiService = {
       state.cables,
       state.racks,
     );
-    stateManager.setState({ devices, cables, racks });
-    stateManager.setState({ previewDiff: null });
+    stateManager.setState({ devices, cables, racks, previewDiff: null });
   },
 
   setPreviewDiff(diff: RackDiff | null): void {
