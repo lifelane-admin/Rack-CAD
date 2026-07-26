@@ -60,6 +60,7 @@ export interface DeviceData {
   managementIp: string;
   serialNumber: string;
   description: string;
+  locked?: boolean;
   ports: PortData[];
   frontPanelImage?: string;
 }
