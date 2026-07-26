@@ -14,12 +14,14 @@ export function getPortOrientation(
   cable: CableData,
   end: 'source' | 'dest'
 ): 'up' | 'down' | 'left' | 'right' {
+  const portId = end === 'source' ? cable.sourcePortId : cable.destPortId;
+  const isEarPort = portId && portId.includes('-ear-');
+
   const userOverride = end === 'source' ? cable.sourceOrientation : cable.destOrientation;
-  if (userOverride && userOverride !== 'auto') {
+  if (userOverride && userOverride !== 'auto' && !isEarPort) {
     return userOverride;
   }
 
-  const portId = end === 'source' ? cable.sourcePortId : cable.destPortId;
   const port = portId ? stateManager.getPort(portId) : null;
   if (!port) {
     return cable.sidePreference || 'right';
