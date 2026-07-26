@@ -511,6 +511,12 @@ export class App {
       stateManager.setState({ aiMode: true });
       eventBus.emit('ai:mode-changed', true);
     });
+
+    document.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+        modal.classList.add('hidden');
+      }
+    });
   }
 
   /**

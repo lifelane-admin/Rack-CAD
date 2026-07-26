@@ -45,21 +45,18 @@
   </div>
 
   <!-- AI Key Modal -->
-  <div id="ai-key-modal" class="hidden" style="
-    position:fixed;inset:0;background:rgba(0,0,0,0.7);
-    display:flex;align-items:center;justify-content:center;z-index:9999;">
-    <div style="background:#1e1e2e;border:1px solid #333;border-radius:8px;padding:24px;width:380px;color:#ccc;">
-      <h3 style="margin:0 0 12px;color:#fff">Connect to Claude</h3>
-      <p style="font-size:13px;margin:0 0 16px">Enter your Anthropic API key to enable cloud AI. Leave blank to use Local or Rule-based mode.</p>
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <input id="ai-key-input" type="password" placeholder="sk-ant-..."
-          style="flex:1;padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#fff;font-size:13px"/>
-        <button id="ai-key-toggle" style="padding:8px;background:#333;border:1px solid #444;border-radius:4px;cursor:pointer;color:#ccc">👁</button>
+  <div id="ai-key-modal" class="hidden">
+    <div class="modal-box">
+      <h3>Connect to Claude</h3>
+      <p>Enter your Anthropic API key to enable cloud AI. Leave blank to use Local or Rule-based mode.</p>
+      <div class="modal-input-row">
+        <input id="ai-key-input" type="password" placeholder="sk-ant-..."/>
+        <button id="ai-key-toggle">👁</button>
       </div>
-      <p style="font-size:11px;color:#888;margin:0 0 16px">Key stored in localStorage only. Never sent anywhere except Anthropic.</p>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button id="ai-key-skip" style="padding:8px 16px;background:#333;border:1px solid #444;border-radius:4px;cursor:pointer;color:#ccc">Skip</button>
-        <button id="ai-key-connect" style="padding:8px 16px;background:#6c63ff;border:none;border-radius:4px;cursor:pointer;color:#fff">Connect</button>
+      <p class="modal-hint">Key stored in localStorage only. Never sent anywhere except Anthropic.</p>
+      <div class="modal-actions">
+        <button id="ai-key-skip">Skip</button>
+        <button id="ai-key-connect">Connect</button>
       </div>
     </div>
   </div>
