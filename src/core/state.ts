@@ -39,7 +39,10 @@ class StateManager {
       cabinetCoverVisible: true,
       isometricMode: false,
       presenterMode: false,
-      cableRoutingTrayMode: 'overhead'
+      cableRoutingTrayMode: 'overhead',
+      aiMode: false,
+      aiProvider: 'rules',
+      previewDiff: null
     };
 
     // Load auto-save if present, otherwise load the Proxmox demo project automatically
@@ -252,18 +255,22 @@ class StateManager {
     eventBus.emit('notification', { message: 'Loaded Proxmox Cluster Demo Project!', type: 'success' });
   }
 
+  private prepareDevices(devices: DeviceData[]): DeviceData[] {
+    return devices.map(d => {
+      const template = getTemplate(d.templateId);
+      if (template && template.category === 'server') {
+        return {
+          ...d,
+          ports: injectEarPorts(d.id, 'server', template.heightUnits, d.ports)
+        };
+      }
+      return d;
+    });
+  }
+
   setState(partial: Partial<AppState>, skipHistory = false): void {
     if (partial.devices !== undefined) {
-      partial.devices = partial.devices.map(d => {
-        const template = getTemplate(d.templateId);
-        if (template && template.category === 'server') {
-          return {
-            ...d,
-            ports: injectEarPorts(d.id, 'server', template.heightUnits, d.ports)
-          };
-        }
-        return d;
-      });
+      partial.devices = this.prepareDevices(partial.devices);
     }
 
     const isStructuralChange = partial.racks !== undefined || partial.devices !== undefined || partial.cables !== undefined || partial.bundles !== undefined;
@@ -318,7 +325,7 @@ class StateManager {
     try {
       const data = JSON.parse(prevSnapshot);
       this.state.racks = data.racks;
-      this.state.devices = data.devices;
+      this.state.devices = this.prepareDevices(data.devices);
       this.state.cables = data.cables;
       this.state.bundles = data.bundles || [];
       
@@ -353,7 +360,7 @@ class StateManager {
     try {
       const data = JSON.parse(nextSnapshot);
       this.state.racks = data.racks;
-      this.state.devices = data.devices;
+      this.state.devices = this.prepareDevices(data.devices);
       this.state.cables = data.cables;
       this.state.bundles = data.bundles || [];
 
@@ -392,7 +399,7 @@ class StateManager {
       const parsed = JSON.parse(data);
       if (parsed.racks && parsed.devices && parsed.cables) {
         this.state.racks = parsed.racks;
-        this.state.devices = parsed.devices;
+        this.state.devices = this.prepareDevices(parsed.devices);
         this.state.cables = parsed.cables;
         this.state.bundles = parsed.bundles || [];
         return true;

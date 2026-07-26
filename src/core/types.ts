@@ -100,7 +100,7 @@ export interface CableBundle {
 export interface ValidationAlert {
   id: string;
   type: 'error' | 'warning' | 'info';
-  category: 'medium' | 'connector' | 'speed' | 'bend' | 'loop' | 'congestion' | 'distance';
+  category: 'medium' | 'connector' | 'speed' | 'bend' | 'loop' | 'congestion' | 'distance' | 'power' | 'weight';
   message: string;
   targetId: string; // cableId, portId, or rackId
   targetType: 'cable' | 'port' | 'rack';
@@ -195,6 +195,10 @@ export interface AppState {
   isometricMode: boolean;
   presenterMode: boolean;
   cableRoutingTrayMode: 'overhead' | 'underfloor';
+  // AI Mode
+  aiMode: boolean;
+  aiProvider: 'claude' | 'local' | 'rules';
+  previewDiff: import('../ai/types').RackDiff | null;
 }
 
 // === Events ===
@@ -256,6 +260,16 @@ export interface AppEvents {
   'view:toggle-theme': void;
   'view:toggle-legends': void;
   'notification': { message: string; type: 'info' | 'success' | 'warning' | 'error' };
+  'ai:mode-changed': boolean;
+  'ai:provider-changed': 'claude' | 'local' | 'rules';
+  'ai:request': { messages: import('../ai/types').AIMessage[]; selectedId?: string };
+  'ai:response': import('../ai/types').RackDiff;
+  'ai:stream-chunk': string;
+  'ai:stream-done': import('../ai/types').RackDiff;
+  'ai:hints-updated': import('../ai/types').AIHint[];
+  'ai:preview-diff': import('../ai/types').RackDiff | null;
+  'ai:apply-diff': import('../ai/types').RackDiff;
+  'ai:error': string;
 }
 
 // === Constants ===
