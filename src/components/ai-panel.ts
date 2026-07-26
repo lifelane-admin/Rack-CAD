@@ -78,7 +78,14 @@ export class AIPanel {
       this.streaming = false;
       this.thinkingEl.style.display = 'none';
       this.sendBtn.disabled = false;
+      const assistantText = this.currentAssistantEl?.textContent ?? '';
       this.currentAssistantEl = null;
+      if (assistantText) {
+        this.messages.push({ role: 'assistant', content: assistantText });
+      }
+      if (!assistantText && rackDiff.diff === null) {
+        this.appendMessage('assistant', '(no response)');
+      }
 
       if (rackDiff.diff) {
         this.pendingDiff = rackDiff;
@@ -108,13 +115,19 @@ export class AIPanel {
     card.className = 'ai-diff-card';
     card.innerHTML = `
       <div><strong>Suggested changes:</strong></div>
-      <div>${lines.join('<br>')}</div>
+      <div class="diff-summary"></div>
       <div class="diff-actions">
         <button class="btn-preview">Preview</button>
         <button class="btn-apply">Apply</button>
         <button class="btn-dismiss">&#x2715;</button>
       </div>
     `;
+    const summaryEl = card.querySelector('.diff-summary')!;
+    lines.forEach(line => {
+      const p = document.createElement('div');
+      p.textContent = line;
+      summaryEl.appendChild(p);
+    });
     card.querySelector('.btn-preview')!.addEventListener('click', () => {
       aiService.setPreviewDiff(diff);
       eventBus.emit('ai:preview-diff', diff);
@@ -149,6 +162,9 @@ export class AIPanel {
     this.inputEl.value = '';
     this.appendMessage('user', text);
     this.messages.push({ role: 'user', content: text });
+    if (this.messages.length > 20) {
+      this.messages = this.messages.slice(-20);
+    }
 
     this.streaming = true;
     this.sendBtn.disabled = true;
@@ -158,5 +174,12 @@ export class AIPanel {
   }
 
   open(): void { this.el.classList.add('open'); }
-  close(): void { this.el.classList.remove('open'); }
+  close(): void {
+    this.el.classList.remove('open');
+    if (this.streaming) {
+      this.streaming = false;
+      this.sendBtn.disabled = false;
+      this.thinkingEl.style.display = 'none';
+    }
+  }
 }
