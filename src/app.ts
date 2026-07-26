@@ -16,6 +16,7 @@ import { StatusBar } from './components/statusbar';
 import { ContextMenu, MenuItem } from './components/context-menu';
 import { ReportsPanel } from './components/reports-panel';
 import { FloatingToolbar } from './components/floating-toolbar';
+import { AIPanel } from './components/ai-panel';
 import { runSelfTests } from './utils/self-test';
 import { renderRack } from './renderers/rack-renderer';
 import { renderDevice } from './renderers/device-renderer';
@@ -477,6 +478,9 @@ export class App {
 
     // Initialize AI Key Modal
     this.setupAiKeyModal();
+
+    // Initialize AI Chat Panel
+    new AIPanel();
   }
 
   /**
