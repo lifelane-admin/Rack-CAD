@@ -11,7 +11,7 @@ import { Toolbar } from './components/toolbar';
 import { Sidebar } from './components/sidebar';
 import { PresenterDashboard } from './components/presenter-dashboard';
 import './styles/presenter-dashboard.css';
-import { PropertiesPanel } from './components/properties';
+import { PropertiesPanel, initAIHints } from './components/properties';
 import { StatusBar } from './components/statusbar';
 import { ContextMenu, MenuItem } from './components/context-menu';
 import { ReportsPanel } from './components/reports-panel';
@@ -104,6 +104,9 @@ export class App {
     this.sidebar.render();
     this.properties.render();
     this.statusbar.render();
+
+    // Initialize inline AI hints in the properties panel
+    initAIHints();
 
     // Setup event bridges
     this.setupToolbarBridge();

@@ -1,8 +1,12 @@
 import EventBus from '../core/event-bus';
+import { eventBus } from '../core/event-bus';
 import State from '../core/state';
+import { stateManager } from '../core/state';
 import { SelectableItem, CableType, CABLE_COLORS } from '../core/types';
 import { getTemplate } from '../library/device-catalog';
 import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
+import { aiService } from '../ai/ai-service';
+import { AIHint } from '../ai/types';
 
 export class PropertiesPanel {
   private container: HTMLElement;
@@ -548,8 +552,8 @@ export class PropertiesPanel {
             <option value="auto" ${(!cable.sourceOrientation || cable.sourceOrientation === 'auto') ? 'selected' : ''}>Auto (Smart Row Alignment)</option>
             <option value="up" ${cable.sourceOrientation === 'up' ? 'selected' : ''}>⬆️ Plug Up (Exit Downwards)</option>
             <option value="down" ${cable.sourceOrientation === 'down' ? 'selected' : ''}>⬇️ Plug Down (Exit Upwards)</option>
-            <option value="left" ${cable.sourceOrientation === 'left' ? 'selected' : ''}>⬅️ Plug Left (Exit Rightwards)</option>
-            <option value="right" ${cable.sourceOrientation === 'right' ? 'selected' : ''}>➡️ Plug Right (Exit Leftwards)</option>
+            <option value="left" ${cable.sourceOrientation === 'left' ? 'selected' : ''}>⬅️ Plug Left (Exit Leftwards)</option>
+            <option value="right" ${cable.sourceOrientation === 'right' ? 'selected' : ''}>➡️ Plug Right (Exit Rightwards)</option>
           </select>
         </div>
 
@@ -573,8 +577,8 @@ export class PropertiesPanel {
             <option value="auto" ${(!cable.destOrientation || cable.destOrientation === 'auto') ? 'selected' : ''}>Auto (Smart Row Alignment)</option>
             <option value="up" ${cable.destOrientation === 'up' ? 'selected' : ''}>⬆️ Plug Up (Exit Downwards)</option>
             <option value="down" ${cable.destOrientation === 'down' ? 'selected' : ''}>⬇️ Plug Down (Exit Upwards)</option>
-            <option value="left" ${cable.destOrientation === 'left' ? 'selected' : ''}>⬅️ Plug Left (Exit Rightwards)</option>
-            <option value="right" ${cable.destOrientation === 'right' ? 'selected' : ''}>➡️ Plug Right (Exit Leftwards)</option>
+            <option value="left" ${cable.destOrientation === 'left' ? 'selected' : ''}>⬅️ Plug Left (Exit Leftwards)</option>
+            <option value="right" ${cable.destOrientation === 'right' ? 'selected' : ''}>➡️ Plug Right (Exit Rightwards)</option>
           </select>
         </div>
       </div>
@@ -922,4 +926,54 @@ export class PropertiesPanel {
       EventBus.emit('selection:changed', []);
     });
   }
+}
+
+export function initAIHints(): void {
+  let hintsContainer: HTMLElement | null = null;
+
+  function getOrCreateContainer(): HTMLElement {
+    if (hintsContainer) return hintsContainer;
+    hintsContainer = document.createElement('div');
+    hintsContainer.className = 'ai-hints-section';
+    hintsContainer.id = 'ai-hints-section';
+    const panel = document.getElementById('properties-panel') ?? document.querySelector('.properties-panel');
+    if (panel) panel.appendChild(hintsContainer);
+    return hintsContainer;
+  }
+
+  function renderHints(hints: AIHint[]): void {
+    const container = getOrCreateContainer();
+    if (hints.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+    container.innerHTML =
+      `<div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600">AI Insights</div>` +
+      hints.map(h =>
+        `<div class="ai-hint ${h.severity}">` +
+        `<span>${h.severity === 'error' ? '&#x26A0;' : h.severity === 'warning' ? '&#x26A1;' : h.severity === 'tip' ? '&#x1F4A1;' : '&#x2139;'}</span>` +
+        `<span></span>` +
+        `</div>`
+      ).join('');
+    // Set message text safely (textContent prevents XSS from AI strings)
+    const spans = container.querySelectorAll('.ai-hint span:last-child');
+    hints.forEach((h, i) => {
+      if (spans[i]) (spans[i] as HTMLElement).textContent = h.message;
+    });
+  }
+
+  eventBus.on('ai:hints-updated', renderHints);
+
+  eventBus.on('selection:changed', (selection) => {
+    const state = stateManager.getState();
+    if (!state.aiMode || selection.length === 0) {
+      renderHints([]);
+      return;
+    }
+    aiService.refreshHints(selection[0].id);
+  });
+
+  eventBus.on('ai:mode-changed', (enabled) => {
+    if (!enabled) renderHints([]);
+  });
 }
