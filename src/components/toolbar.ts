@@ -379,6 +379,9 @@ export class Toolbar {
     const wrapper = document.createElement('div');
     wrapper.className = 'toolbar-group toolbar-group--ai';
 
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.className = 'toolbar-buttons';
+
     const btn = document.createElement('button');
     btn.className = 'toolbar-btn ai-toggle-btn';
     btn.id = 'ai-toggle-btn';
@@ -393,7 +396,7 @@ export class Toolbar {
       if (!current && !ClaudeProvider.hasKey()) {
         const aiProvider = State.getState().aiProvider;
         if (aiProvider === 'claude') {
-          // First enable with Claude and no key — show key modal
+          // Only show key modal when Claude is the active provider — local/rules don't need a key
           document.getElementById('ai-key-modal')?.classList.remove('hidden');
           return;
         }
@@ -410,7 +413,8 @@ export class Toolbar {
     const separator = document.createElement('div');
     separator.className = 'toolbar-separator';
 
-    wrapper.appendChild(btn);
+    buttonsContainer.appendChild(btn);
+    wrapper.appendChild(buttonsContainer);
     wrapper.appendChild(label);
     wrapper.appendChild(separator);
 
