@@ -8,7 +8,7 @@ import { stateManager } from '../core/state';
 export function renderDevice(device: DeviceData, rackX: number, rackY: number, rackUnits: number): SVGGElement {
   const template = getTemplate(device.templateId);
   const heightUnits = template?.heightUnits || 1;
-  const category = template?.category || 'server';
+  const category: DeviceCategory = template?.category ?? 'server';
 
   const innerX = rackX + (RACK_CONSTANTS.RACK_OUTER_WIDTH - RACK_CONSTANTS.RACK_INNER_WIDTH) / 2;
   const deviceX = innerX + RACK_CONSTANTS.RAIL_WIDTH;
@@ -135,7 +135,6 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
 
       // Draw redundant Fan Cages in the middle
       const fanCount = heightUnits * 2 + 1;
-      const fanWidth = 24;
       const startX = 60;
       for (let i = 0; i < fanCount; i++) {
         const fx = startX + i * 28;
@@ -204,7 +203,7 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
     deviceGroup.appendChild(overlay);
   } else {
     // High-fidelity SVG panel renderer
-    const panel = renderFrontPanel(category as DeviceCategory, template ?? null, deviceWidth, deviceHeight);
+    const panel = renderFrontPanel(category, template ?? null, deviceWidth, deviceHeight);
     deviceGroup.appendChild(panel);
   }
 
