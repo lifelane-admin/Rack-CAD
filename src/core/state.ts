@@ -2,7 +2,6 @@ import { AppState, RackData, DeviceData, PortData, CableData, SelectableItem, Tr
 import { eventBus } from './event-bus';
 import { getTemplate } from '../library/device-catalog';
 import { runValidationAlerts } from './validation';
-import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
 
 class StateManager {
   private state: AppState;
@@ -201,11 +200,6 @@ class StateManager {
         anchorPoints: [],
         anchorsLocked: false
       };
-
-      // Set default 3 anchors
-      const autoPts = computeSmartRouting(cable, srcPos, destPos);
-      cable.anchorPoints = get3DefaultAnchors(autoPts);
-      cable.anchorsLocked = true;
 
       srcPort.connected = true;
       srcPort.cableId = cableId;
