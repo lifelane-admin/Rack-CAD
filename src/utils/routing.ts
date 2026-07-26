@@ -254,3 +254,15 @@ export function get3DefaultAnchors(pts: Point[]): Point[] {
   const middle = pts[midIdx];
   return [first, middle, last];
 }
+
+export function getExitDirection(
+  sourcePos: Point,
+  mousePos: Point,
+): 'up' | 'down' | 'left' | 'right' {
+  const dx = mousePos.x - sourcePos.x;
+  const dy = mousePos.y - sourcePos.y;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    return dx > 0 ? 'right' : 'left';
+  }
+  return dy > 0 ? 'down' : 'up';
+}
