@@ -15,7 +15,7 @@ export interface ResolvedDiff {
 }
 
 /**
- * Validates and resolves a RackDiff against current device/cable IDs.
+ * Validates and resolves a RackDiff against current device/cable/rack IDs.
  * Returns null if diff is null (analysis-only response).
  * Filters out operations targeting non-existent IDs.
  */
@@ -23,32 +23,56 @@ export function applyDiff(
   rackDiff: RackDiff,
   existingDeviceIds: string[],
   existingCableIds: string[],
+  existingRackIds: string[] = [],
 ): ResolvedDiff | null {
   if (!rackDiff.diff) return null;
 
   const d = rackDiff.diff;
   const resolved: ResolvedDiff = {};
 
-  if (d.addDevices?.length) resolved.addDevices = d.addDevices;
+  if (d.addDevices?.length) {
+    const filtered = d.addDevices.filter(d => !existingDeviceIds.includes(d.id));
+    if (filtered.length) resolved.addDevices = filtered;
+  }
   if (d.removeDevices?.length) {
-    resolved.removeDevices = d.removeDevices.filter(id => existingDeviceIds.includes(id));
+    const filtered = d.removeDevices.filter(id => existingDeviceIds.includes(id));
+    if (filtered.length) resolved.removeDevices = filtered;
   }
   if (d.updateDevices?.length) {
-    resolved.updateDevices = d.updateDevices.filter(u => existingDeviceIds.includes(u.id));
+    const filtered = d.updateDevices.filter(u => existingDeviceIds.includes(u.id));
+    if (filtered.length) resolved.updateDevices = filtered;
   }
-  if (d.addCables?.length) resolved.addCables = d.addCables;
+  if (d.addCables?.length) {
+    const filtered = d.addCables.filter(c => !existingCableIds.includes(c.id));
+    if (filtered.length) resolved.addCables = filtered;
+  }
   if (d.removeCables?.length) {
-    resolved.removeCables = d.removeCables.filter(id => existingCableIds.includes(id));
+    const filtered = d.removeCables.filter(id => existingCableIds.includes(id));
+    if (filtered.length) resolved.removeCables = filtered;
   }
   if (d.updateCables?.length) {
-    resolved.updateCables = d.updateCables.filter(u => existingCableIds.includes(u.id));
+    const filtered = d.updateCables.filter(u => existingCableIds.includes(u.id));
+    if (filtered.length) resolved.updateCables = filtered;
   }
   if (d.updateAnchors?.length) {
-    resolved.updateAnchors = d.updateAnchors.filter(u => existingCableIds.includes(u.cableId));
+    const filtered = d.updateAnchors.filter(u => existingCableIds.includes(u.cableId));
+    if (filtered.length) resolved.updateAnchors = filtered;
   }
-  if (d.addRacks?.length) resolved.addRacks = d.addRacks;
-  if (d.removeRacks?.length) resolved.removeRacks = d.removeRacks;
-  if (d.updateRacks?.length) resolved.updateRacks = d.updateRacks;
+  if (d.addRacks?.length) {
+    const filtered = d.addRacks.filter(r => !existingRackIds.includes(r.id));
+    if (filtered.length) resolved.addRacks = filtered;
+  }
+  if (d.removeRacks?.length) {
+    const filtered = d.removeRacks.filter(id => existingRackIds.includes(id));
+    if (filtered.length) resolved.removeRacks = filtered;
+  }
+  if (d.updateRacks?.length) {
+    const filtered = d.updateRacks.filter(u => existingRackIds.includes(u.id));
+    if (filtered.length) resolved.updateRacks = filtered;
+  }
+
+  // If all operations were filtered out, treat as no-op (same as null diff)
+  if (Object.keys(resolved).length === 0) return null;
 
   return resolved;
 }
@@ -56,6 +80,10 @@ export function applyDiff(
 /**
  * Applies a resolved diff to the current state arrays.
  * Returns the updated arrays to pass to stateManager.setState().
+ *
+ * NOTE: Removing devices does NOT automatically remove cables
+ * connected to those devices' ports. Callers should include
+ * corresponding removeCables entries in the diff.
  */
 export function executeResolvedDiff(
   resolved: ResolvedDiff,
