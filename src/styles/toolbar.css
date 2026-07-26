@@ -101,3 +101,37 @@
 .toolbar-btn svg[fill="currentColor"] {
   fill: currentColor;
 }
+
+/* AI Mode toggle button */
+.ai-toggle-btn {
+  width: auto;
+  min-width: 64px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.ai-toggle-btn.active {
+  background: rgba(108, 99, 255, 0.2);
+  border-color: #6c63ff;
+  color: #a89fff;
+  box-shadow: 0 0 8px rgba(108, 99, 255, 0.3);
+}
+
+.ai-toggle-btn:hover {
+  border-color: rgba(108, 99, 255, 0.5);
+}
+
+.ai-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.toolbar-group--ai {
+  margin-left: auto;
+}
+
+.toolbar-group--ai .toolbar-buttons {
+  padding: 0 4px;
+}

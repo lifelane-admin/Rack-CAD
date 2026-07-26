@@ -1,6 +1,7 @@
 import EventBus from '../core/event-bus';
 import State from '../core/state';
 import { ToolMode } from '../core/types';
+import { ClaudeProvider } from '../ai/claude-provider';
 
 export class Toolbar {
   private container: HTMLElement;
@@ -245,6 +246,9 @@ export class Toolbar {
       }
     ]));
 
+    // AI Mode toggle — standalone button after all groups
+    inner.appendChild(this.createAiToggle());
+
     this.container.appendChild(inner);
 
     EventBus.on('tool:changed', (mode: ToolMode) => {
@@ -292,6 +296,31 @@ export class Toolbar {
         if (s.cableRoutingTrayMode === 'underfloor') btnCableTray.classList.add('active');
         else btnCableTray.classList.remove('active');
       }
+
+      // AI mode toggle active state
+      const btnAi = this.container.querySelector('#ai-toggle-btn');
+      if (btnAi) {
+        if (s.aiMode) btnAi.classList.add('active');
+        else btnAi.classList.remove('active');
+      }
+
+      // AI provider badge
+      const badge = this.container.querySelector('#ai-provider-badge');
+      if (badge) {
+        const labels: Record<string, string> = { claude: '☁ Claude', local: '⚡ Local', rules: '⚙ Rules' };
+        badge.textContent = labels[s.aiProvider] ?? '⚙ Rules';
+      }
+    });
+
+    EventBus.on('ai:mode-changed', (enabled: boolean) => {
+      this.container.querySelector('#ai-toggle-btn')?.classList.toggle('active', enabled);
+    });
+
+    EventBus.on('ai:provider-changed', (name) => {
+      const badge = this.container.querySelector('#ai-provider-badge');
+      if (!badge) return;
+      const labels: Record<string, string> = { claude: '☁ Claude', local: '⚡ Local', rules: '⚙ Rules' };
+      badge.textContent = labels[name] ?? '⚙ Rules';
     });
   }
 
@@ -344,5 +373,47 @@ export class Toolbar {
       reader.readAsText(file);
     };
     input.click();
+  }
+
+  private createAiToggle(): HTMLElement {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'toolbar-group toolbar-group--ai';
+
+    const btn = document.createElement('button');
+    btn.className = 'toolbar-btn ai-toggle-btn';
+    btn.id = 'ai-toggle-btn';
+    btn.title = 'Enable / Disable AI Mode';
+    const currentProvider = State.getState().aiProvider;
+    const labels: Record<string, string> = { claude: '☁ Claude', local: '⚡ Local', rules: '⚙ Rules' };
+    btn.innerHTML = `<span class="ai-badge" id="ai-provider-badge">${labels[currentProvider] ?? '⚙ Rules'}</span>`;
+    if (State.getState().aiMode) btn.classList.add('active');
+
+    btn.addEventListener('click', () => {
+      const current = State.getState().aiMode;
+      if (!current && !ClaudeProvider.hasKey()) {
+        const aiProvider = State.getState().aiProvider;
+        if (aiProvider === 'claude') {
+          // First enable with Claude and no key — show key modal
+          document.getElementById('ai-key-modal')?.classList.remove('hidden');
+          return;
+        }
+      }
+      const newMode = !current;
+      State.setState({ aiMode: newMode });
+      EventBus.emit('ai:mode-changed', newMode);
+    });
+
+    const label = document.createElement('div');
+    label.className = 'toolbar-group-label';
+    label.innerText = 'AI';
+
+    const separator = document.createElement('div');
+    separator.className = 'toolbar-separator';
+
+    wrapper.appendChild(btn);
+    wrapper.appendChild(label);
+    wrapper.appendChild(separator);
+
+    return wrapper;
   }
 }
