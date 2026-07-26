@@ -1,6 +1,18 @@
 import { AppState } from '../core/types';
 import { RackContext } from './types';
 import { getTemplate } from '../library/device-catalog';
+import type { DeviceCategory, PortType } from '../core/types';
+
+function getPortSide(category: DeviceCategory | undefined, portType: PortType): 'front' | 'rear' {
+  const rearCategories = new Set(['server', 'firewall', 'storage', 'ups', 'pdu', 'cooling']);
+  const categoryStr = category ?? 'server';
+
+  if (rearCategories.has(categoryStr)) return 'rear';
+  if (categoryStr === 'switch' || categoryStr === 'router' || categoryStr === 'patch-panel') {
+    return portType === 'power' ? 'rear' : 'front';
+  }
+  return 'front';
+}
 
 export function serializeState(state: AppState): RackContext {
   const selectedId = state.selection.length > 0 ? state.selection[0].id : undefined;
@@ -10,6 +22,9 @@ export function serializeState(state: AppState): RackContext {
 
     const devices = rackDevices.map(device => {
       const template = getTemplate(device.templateId);
+      if (!template) {
+        console.warn(`[AI Serializer] No template found for templateId: ${device.templateId}, assuming 1U`);
+      }
       const ruEnd = device.startUnit + (template?.heightUnits ?? 1) - 1;
       return {
         id: device.id,
@@ -21,7 +36,7 @@ export function serializeState(state: AppState): RackContext {
           id: p.id,
           name: p.name,
           type: p.type,
-          side: 'front',
+          side: getPortSide(template?.category, p.type),
           connected: p.connected,
         })),
       };
