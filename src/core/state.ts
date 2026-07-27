@@ -2,6 +2,7 @@ import { AppState, RackData, DeviceData, PortData, CableData, CableType, Selecta
 import { eventBus } from './event-bus';
 import { getTemplate } from '../library/device-catalog';
 import { runValidationAlerts } from './validation';
+import { loadCustomTemplates, saveAllCustomTemplates } from '../library/custom-catalog';
 
 class StateManager {
   private state: AppState;
@@ -41,7 +42,8 @@ class StateManager {
       cableRoutingTrayMode: 'overhead',
       aiMode: false,
       aiProvider: 'rules',
-      previewDiff: null
+      previewDiff: null,
+      customTemplates: loadCustomTemplates()
     };
 
     // Load auto-save if present, otherwise load the Proxmox demo project automatically
@@ -174,6 +176,10 @@ class StateManager {
     }
 
     this.state = { ...this.state, ...partial };
+
+    if ('customTemplates' in partial) {
+      saveAllCustomTemplates((partial as any).customTemplates);
+    }
 
     if (isStructuralChange) {
       this.state.validationAlerts = runValidationAlerts(this.state.racks, this.state.devices, this.state.cables);

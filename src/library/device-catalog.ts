@@ -1031,8 +1031,8 @@ export const deviceCatalog: DeviceTemplate[] = [
   },
 ];
 
-export function getTemplate(id: string): DeviceTemplate | undefined {
-  return deviceCatalog.find(t => t.id === id);
+export function getTemplate(id: string, customTemplates: DeviceTemplate[] = []): DeviceTemplate | undefined {
+  return customTemplates.find(t => t.id === id) ?? deviceCatalog.find(t => t.id === id);
 }
 
 export function getTemplatesByCategory(category: DeviceCategory): DeviceTemplate[] {
