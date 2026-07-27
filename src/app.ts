@@ -59,6 +59,11 @@ export class App {
   private dragStartUnit = 1;
   private dragStartRackId = '';
 
+  // Cloning state (Ctrl+Drag)
+  private cloningMode = false;
+  private cloneThresholdMet = false;
+  private dragOriginalDevice: DeviceData | null = null;
+
   // Cable dragging state
   private isDraggingCableEnd = false;
   private draggedCableId: string | null = null;
@@ -635,6 +640,26 @@ export class App {
         return;
       }
 
+      // Cloning mode threshold check (Ctrl+Drag)
+      if (this.cloningMode && !this.cloneThresholdMet && this.dragOriginalDevice) {
+        const dx = Math.abs(this.mouseWorldPos.x - this.dragStartWorldPos.x);
+        const dy = Math.abs(this.mouseWorldPos.y - this.dragStartWorldPos.y);
+        if (dx > 4 || dy > 4) {
+          this.cloneThresholdMet = true;
+          const clone = cloneDevice(this.dragOriginalDevice);
+          stateManager.addDevice(clone);
+          this.isDraggingDevice = true;
+          this.draggedDeviceId = clone.id;
+          this.dragStartWorldPos = this.mouseWorldPos;
+          this.dragStartUnit = clone.startUnit;
+          this.dragStartRackId = clone.rackId;
+          const cloneEl = document.querySelector(`[data-device-id="${clone.id}"]`) as SVGGElement | null;
+          if (cloneEl) cloneEl.style.opacity = '0.7';
+          stateManager.setState({ selection: [{ type: 'device', id: clone.id }] });
+          eventBus.emit('selection:changed', [{ type: 'device', id: clone.id }]);
+        }
+      }
+
       // Device drag handling
       if (this.isDraggingDevice && this.draggedDeviceId) {
         const dy = this.mouseWorldPos.y - this.dragStartWorldPos.y;
@@ -753,16 +778,22 @@ export class App {
           const deviceId = deviceEl.getAttribute('data-device-id')!;
           const device = stateManager.getDevice(deviceId);
           if (device) {
-            this.isDraggingDevice = true;
-            this.draggedDeviceId = deviceId;
             this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
-            this.dragStartUnit = device.startUnit;
-            this.dragStartRackId = device.rackId;
-            this.dragStartDevicesState = JSON.parse(JSON.stringify(stateManager.getState().devices));
-            
-            stateManager.setState({ selection: [{ type: 'device', id: deviceId }] });
-            eventBus.emit('selection:changed', [{ type: 'device', id: deviceId }]);
-            
+            if (e.ctrlKey && !device.locked) {
+              this.cloningMode = true;
+              this.cloneThresholdMet = false;
+              this.dragOriginalDevice = device;
+              stateManager.setState({ selection: [{ type: 'device', id: deviceId }] });
+              eventBus.emit('selection:changed', [{ type: 'device', id: deviceId }]);
+            } else {
+              this.isDraggingDevice = true;
+              this.draggedDeviceId = deviceId;
+              this.dragStartUnit = device.startUnit;
+              this.dragStartRackId = device.rackId;
+              this.dragStartDevicesState = JSON.parse(JSON.stringify(stateManager.getState().devices));
+              stateManager.setState({ selection: [{ type: 'device', id: deviceId }] });
+              eventBus.emit('selection:changed', [{ type: 'device', id: deviceId }]);
+            }
             svgEl.classList.add('dragging-active');
             e.stopPropagation();
             return;
@@ -946,6 +977,17 @@ export class App {
             eventBus.emit('notification', { message: 'Drag canceled: Cable tip snapped back to original port.', type: 'info' });
           }
           this.renderAll();
+        }
+      }
+
+      // 2a. Cloning mode cleanup
+      if (this.cloningMode) {
+        this.cloningMode = false;
+        this.cloneThresholdMet = false;
+        this.dragOriginalDevice = null;
+        if (this.draggedDeviceId) {
+          const cloneEl = document.querySelector(`[data-device-id="${this.draggedDeviceId}"]`) as SVGGElement | null;
+          if (cloneEl) cloneEl.style.opacity = '1';
         }
       }
 
