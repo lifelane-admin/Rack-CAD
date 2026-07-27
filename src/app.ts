@@ -88,6 +88,11 @@ export class App {
   private lastMouseScreenX = 0;
   private lastMouseScreenY = 0;
 
+  // Rubber-band multi-select state
+  private isRubberBanding = false;
+  private rubberBandStart: Point = { x: 0, y: 0 };
+  private rubberBandEl: SVGRectElement | null = null;
+
   init() {
     // Initialize canvas
     this.canvas = new CanvasManager('canvas-viewport', 'canvas');
@@ -692,6 +697,18 @@ export class App {
           }
         }
       }
+
+      // Rubber-band rect update
+      if (this.isRubberBanding && this.rubberBandEl) {
+        const x = Math.min(this.mouseWorldPos.x, this.rubberBandStart.x);
+        const y = Math.min(this.mouseWorldPos.y, this.rubberBandStart.y);
+        const w = Math.abs(this.mouseWorldPos.x - this.rubberBandStart.x);
+        const h = Math.abs(this.mouseWorldPos.y - this.rubberBandStart.y);
+        this.rubberBandEl.setAttribute('x', String(x));
+        this.rubberBandEl.setAttribute('y', String(y));
+        this.rubberBandEl.setAttribute('width', String(w));
+        this.rubberBandEl.setAttribute('height', String(h));
+      }
     });
 
     svgEl.addEventListener('mousedown', (e) => {
@@ -818,6 +835,25 @@ export class App {
             svgEl.classList.add('dragging-active');
             e.stopPropagation();
             return;
+          }
+        }
+
+        // Nothing was hit — start rubber-band multi-select
+        {
+          const worldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+          this.isRubberBanding = true;
+          this.rubberBandStart = worldPos;
+          const svgCanvas = document.getElementById('canvas') as SVGSVGElement | null;
+          if (svgCanvas) {
+            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            rect.id = 'selection-rect';
+            rect.setAttribute('fill', 'rgba(88,166,255,0.08)');
+            rect.setAttribute('stroke', '#58a6ff');
+            rect.setAttribute('stroke-width', '1');
+            rect.setAttribute('stroke-dasharray', '4,2');
+            rect.setAttribute('pointer-events', 'none');
+            svgCanvas.appendChild(rect);
+            this.rubberBandEl = rect;
           }
         }
       }
@@ -1063,6 +1099,40 @@ export class App {
             eventBus.emit('rack:update', { id: rackId, data: { x: finalRack.x } });
           }
         }
+      }
+
+      // 4. Rubber-band multi-select completion
+      if (this.isRubberBanding) {
+        this.isRubberBanding = false;
+        this.rubberBandEl?.remove();
+        this.rubberBandEl = null;
+
+        const worldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+        const selX = Math.min(worldPos.x, this.rubberBandStart.x);
+        const selY = Math.min(worldPos.y, this.rubberBandStart.y);
+        const selW = Math.abs(worldPos.x - this.rubberBandStart.x);
+        const selH = Math.abs(worldPos.y - this.rubberBandStart.y);
+
+        const state = stateManager.getState();
+        const selected: SelectableItem[] = [];
+
+        state.devices.forEach(dev => {
+          const rack = stateManager.getRack(dev.rackId);
+          if (!rack) return;
+          const template = getTemplate(dev.templateId);
+          const hU = template?.heightUnits ?? 1;
+          const deviceX = rack.x + (RACK_CONSTANTS.RACK_OUTER_WIDTH - RACK_CONSTANTS.RACK_INNER_WIDTH) / 2 + RACK_CONSTANTS.RAIL_WIDTH;
+          const deviceY = rack.y + RACK_CONSTANTS.RACK_PADDING_TOP + (rack.units - dev.startUnit - hU + 1) * RACK_CONSTANTS.RU_HEIGHT;
+          const deviceW = RACK_CONSTANTS.RACK_INNER_WIDTH - 2 * RACK_CONSTANTS.RAIL_WIDTH;
+          const deviceH = hU * RACK_CONSTANTS.RU_HEIGHT;
+
+          const intersects = deviceX < selX + selW && deviceX + deviceW > selX && deviceY < selY + selH && deviceY + deviceH > selY;
+          if (intersects) selected.push({ type: 'device', id: dev.id });
+        });
+
+        const newSelection = e.shiftKey ? [...state.selection, ...selected] : selected;
+        stateManager.setState({ selection: newSelection });
+        eventBus.emit('selection:changed', newSelection);
       }
     });
 
