@@ -28,6 +28,7 @@ import { getTemplate } from './library/device-catalog';
 import { generateId, distToSegment } from './utils/geometry';
 import { initExportHandlers } from './utils/export';
 import { computeSmartRouting, get3DefaultAnchors } from './utils/routing';
+import { cloneDevice } from './utils/clone';
 import {
   RackData, DeviceData, PortData, CableData, LegendItem,
   RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode
@@ -42,6 +43,9 @@ export class App {
   private contextMenu!: ContextMenu;
   private floatingToolbar!: FloatingToolbar;
   private presenterDashboard!: PresenterDashboard;
+
+  // Clipboard for copy/paste
+  private clipboard: DeviceData | null = null;
 
   // Interaction state
   private spacePressed = false;
@@ -1518,6 +1522,92 @@ export class App {
         this.clearHighlights();
         const interactionLayer = this.canvas.getLayer('interaction-layer');
         if (interactionLayer) interactionLayer.innerHTML = '';
+      }
+
+      // Ctrl+A = Select all devices and cables
+      if (e.ctrlKey && e.key === 'a') {
+        e.preventDefault();
+        const allSelection = [
+          ...s.devices.map(d => ({ type: 'device' as const, id: d.id })),
+          ...s.cables.map(c => ({ type: 'cable' as const, id: c.id })),
+        ];
+        stateManager.setState({ selection: allSelection });
+        eventBus.emit('selection:changed', allSelection);
+      }
+
+      // Ctrl+C = Copy selected device
+      if (e.ctrlKey && e.key === 'c') {
+        e.preventDefault();
+        const devSel = s.selection.find(sel => sel.type === 'device');
+        if (devSel) {
+          this.clipboard = stateManager.getDevice(devSel.id) ?? null;
+        }
+      }
+
+      // Ctrl+X = Cut selected device
+      if (e.ctrlKey && e.key === 'x') {
+        e.preventDefault();
+        const devSel = s.selection.find(sel => sel.type === 'device');
+        if (devSel) {
+          const dev = stateManager.getDevice(devSel.id);
+          if (dev && !dev.locked) {
+            this.clipboard = dev;
+            stateManager.removeDevice(devSel.id);
+            stateManager.setState({ selection: [] });
+            eventBus.emit('selection:changed', []);
+          }
+        }
+      }
+
+      // Ctrl+V = Paste clipboard device
+      if (e.ctrlKey && e.key === 'v') {
+        e.preventDefault();
+        if (this.clipboard) {
+          const cloned = cloneDevice(this.clipboard);
+          const rack = stateManager.getRack(cloned.rackId);
+          if (rack) {
+            const nextRU = stateManager.getNextAvailableRU(cloned.rackId, getTemplate(cloned.templateId)?.heightUnits ?? 1);
+            if (nextRU !== null) cloned.startUnit = nextRU;
+          }
+          stateManager.addDevice(cloned);
+          stateManager.setState({ selection: [{ type: 'device', id: cloned.id }] });
+          eventBus.emit('selection:changed', [{ type: 'device', id: cloned.id }]);
+        }
+      }
+
+      // Ctrl+D = Duplicate selected device
+      if (e.ctrlKey && e.key === 'd') {
+        e.preventDefault();
+        const devSel = s.selection.find(sel => sel.type === 'device');
+        if (devSel) {
+          const dev = stateManager.getDevice(devSel.id);
+          if (dev) {
+            const cloned = cloneDevice(dev);
+            const nextRU = stateManager.getNextAvailableRU(cloned.rackId, getTemplate(cloned.templateId)?.heightUnits ?? 1);
+            if (nextRU !== null) cloned.startUnit = nextRU;
+            stateManager.addDevice(cloned);
+            stateManager.setState({ selection: [{ type: 'device', id: cloned.id }] });
+            eventBus.emit('selection:changed', [{ type: 'device', id: cloned.id }]);
+          }
+        }
+      }
+
+      // Arrow keys = Move selected rack
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        const rackSel = s.selection.find(sel => sel.type === 'rack');
+        if (rackSel) {
+          e.preventDefault();
+          const rack = stateManager.getRack(rackSel.id);
+          if (rack) {
+            const step = e.shiftKey ? 10 : 1;
+            let { x, y } = rack;
+            if (e.key === 'ArrowLeft') x -= step;
+            if (e.key === 'ArrowRight') x += step;
+            if (e.key === 'ArrowUp') y -= step;
+            if (e.key === 'ArrowDown') y += step;
+            eventBus.emit('rack:update', { id: rackSel.id, data: { x, y } });
+          }
+        }
       }
     });
 
