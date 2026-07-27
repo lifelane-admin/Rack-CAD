@@ -1,6 +1,7 @@
 import { eventBus } from '../core/event-bus';
 import { stateManager } from '../core/state';
 import { buildReport, ReportMetadata } from '../export/report-builder';
+import { DeviceTemplate } from '../core/types';
 
 export interface ExportOptions {
   area: 'full' | 'viewport' | 'rack';
@@ -415,6 +416,7 @@ export function exportJSON(): string {
     racks: s.racks,
     devices: s.devices,
     cables: s.cables,
+    customTemplates: s.customTemplates ?? [],
   };
   return JSON.stringify(project, null, 2);
 }
@@ -428,10 +430,21 @@ export function importJSON(jsonString: string): void {
     if (!project.racks || !project.devices || !project.cables) {
       throw new Error('Invalid project format');
     }
+
+    // Merge custom templates: project file wins on ID conflict
+    const projectTemplates: DeviceTemplate[] = project.customTemplates ?? [];
+    const existingTemplates = stateManager.getState().customTemplates ?? [];
+    const projectIds = new Set(projectTemplates.map((t: any) => t.id));
+    const merged = [
+      ...projectTemplates,
+      ...existingTemplates.filter(t => !projectIds.has(t.id)),
+    ];
+
     stateManager.setState({
       racks: project.racks,
       devices: project.devices,
       cables: project.cables,
+      customTemplates: merged,
       selection: [],
     });
     eventBus.emit('notification', { message: 'Project loaded successfully', type: 'success' });
