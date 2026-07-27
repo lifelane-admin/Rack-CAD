@@ -11,6 +11,8 @@ import { Toolbar } from './components/toolbar';
 import { Sidebar } from './components/sidebar';
 import { PresenterDashboard } from './components/presenter-dashboard';
 import './styles/presenter-dashboard.css';
+import './styles/tooltip.css';
+import { PortTooltip } from './components/tooltip';
 import { PropertiesPanel, initAIHints } from './components/properties';
 import { StatusBar } from './components/statusbar';
 import { ContextMenu, MenuItem } from './components/context-menu';
@@ -72,6 +74,10 @@ export class App {
   private isDraggingRack = false;
   private draggedRackId: string | null = null;
   private dragStartRackX = 0;
+
+  // Mouse screen position tracking for tooltip
+  private lastMouseScreenX = 0;
+  private lastMouseScreenY = 0;
 
   init() {
     // Initialize canvas
@@ -488,6 +494,16 @@ export class App {
 
     // Initialize AI Chat Panel
     new AIPanel();
+
+    // Initialize Port Hover Tooltip
+    const portTooltip = new PortTooltip();
+    eventBus.on('port:hover', (portId: string | null) => {
+      if (!portId) {
+        portTooltip.hide();
+      } else {
+        portTooltip.show(portId, this.lastMouseScreenX, this.lastMouseScreenY);
+      }
+    });
   }
 
   /**
@@ -542,6 +558,8 @@ export class App {
     // Track mouse position for status bar
     svgEl.addEventListener('mousemove', (e) => {
       this.mouseWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+      this.lastMouseScreenX = e.clientX;
+      this.lastMouseScreenY = e.clientY;
       (eventBus as any).emit('canvas:mousemove', this.mouseWorldPos);
 
       // Anchor point drag handling (highest priority mid-drag)
