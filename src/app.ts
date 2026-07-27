@@ -1906,6 +1906,48 @@ export class App {
             { label: `${device.name}`, icon: '🖥️', disabled: true },
             { separator: true, label: '' },
             {
+              label: 'Cut',
+              shortcut: 'Ctrl+X',
+              action: () => {
+                this.clipboard = device;
+                stateManager.removeDevice(deviceId);
+                stateManager.setState({ selection: [] });
+                eventBus.emit('selection:changed', []);
+              }
+            },
+            {
+              label: 'Copy',
+              shortcut: 'Ctrl+C',
+              action: () => { this.clipboard = cloneDevice(device); }
+            },
+            {
+              label: 'Paste',
+              shortcut: 'Ctrl+V',
+              disabled: !this.clipboard,
+              action: () => {
+                if (this.clipboard) {
+                  const cloned = cloneDevice(this.clipboard);
+                  const rack = stateManager.getRack(cloned.rackId);
+                  if (rack) {
+                    const nextRU = stateManager.getNextAvailableRU(cloned.rackId, getTemplate(cloned.templateId)?.heightUnits ?? 1);
+                    if (nextRU !== null) cloned.startUnit = nextRU;
+                  }
+                  stateManager.addDevice(cloned);
+                }
+              }
+            },
+            {
+              label: 'Duplicate',
+              shortcut: 'Ctrl+D',
+              action: () => {
+                const cloned = cloneDevice(device);
+                const nextRU = stateManager.getNextAvailableRU(cloned.rackId, getTemplate(cloned.templateId)?.heightUnits ?? 1);
+                if (nextRU !== null) cloned.startUnit = nextRU;
+                stateManager.addDevice(cloned);
+              }
+            },
+            { separator: true, label: '' },
+            {
               label: '⚡ Auto-Generate 8 Cables to Gutter',
               icon: '⚡',
               action: () => {
@@ -1922,7 +1964,13 @@ export class App {
               label: '🗑 Delete Device',
               icon: '🗑',
               shortcut: 'Del',
+              disabled: !!device.locked,
               action: () => this.deleteSelection()
+            },
+            { separator: true, label: '' },
+            {
+              label: device.locked ? 'Unlock' : 'Lock',
+              action: () => { eventBus.emit('device:update', { id: deviceId, data: { locked: !device.locked } }); }
             }
           ];
 
@@ -1931,17 +1979,63 @@ export class App {
         }
       }
 
+      // 3.5. Rack Right-Click Context Menu
+      const rackEl2 = targetEl ? targetEl.closest?.('[data-rack-id]') as SVGElement : null;
+      if (rackEl2) {
+        const rackId = rackEl2.getAttribute('data-rack-id')!;
+        const rack = stateManager.getRack(rackId);
+        if (rack) {
+          this.contextMenu.show(screenPos.x, screenPos.y, [
+            { label: 'Edit Rack Name', action: () => {
+              const name = prompt('Rack name:', rack.name);
+              if (name) eventBus.emit('rack:update', { id: rackId, data: { name } });
+            }},
+            { separator: true, label: '' },
+            { label: 'Delete Rack', action: () => {
+              const devices = stateManager.getDevicesInRack(rackId);
+              for (const d of devices) stateManager.removeDevice(d.id);
+              stateManager.removeRack(rackId);
+            }}
+          ]);
+          return;
+        }
+      }
+
       // 4. Default Canvas / Rack Right-Click Context Menu
+      const allSel: SelectableItem[] = [
+        ...s.devices.map(d => ({ type: 'device' as const, id: d.id })),
+        ...s.cables.map(c => ({ type: 'cable' as const, id: c.id }))
+      ];
       const items: MenuItem[] = [
+        {
+          label: 'Paste',
+          shortcut: 'Ctrl+V',
+          disabled: !this.clipboard,
+          action: () => {
+            if (this.clipboard) {
+              const cloned = cloneDevice(this.clipboard);
+              const rack = stateManager.getRack(cloned.rackId);
+              if (rack) {
+                const nextRU = stateManager.getNextAvailableRU(cloned.rackId, getTemplate(cloned.templateId)?.heightUnits ?? 1);
+                if (nextRU !== null) cloned.startUnit = nextRU;
+              }
+              stateManager.addDevice(cloned);
+            }
+          }
+        },
+        {
+          label: 'Select All',
+          shortcut: 'Ctrl+A',
+          action: () => {
+            stateManager.setState({ selection: allSel });
+            eventBus.emit('selection:changed', allSel);
+          }
+        },
+        { separator: true, label: '' },
         { label: 'Add 42U Rack', icon: '➕', action: () => stateManager.addRack({ id: generateId(), name: `Rack ${s.racks.length + 1}`, units: 42, x: point.x, y: point.y }) },
         { label: 'Add 48U Rack', icon: '➕', action: () => stateManager.addRack({ id: generateId(), name: `Rack ${s.racks.length + 1}`, units: 48, x: point.x, y: point.y }) },
         { separator: true, label: '' },
-        { label: 'Select All Racks', icon: '⬜', shortcut: 'Ctrl+A', action: () => {
-          const allItems: SelectableItem[] = stateManager.getState().racks.map(r => ({ type: 'rack' as const, id: r.id }));
-          stateManager.setState({ selection: allItems });
-          eventBus.emit('selection:changed', allItems);
-        }},
-        { label: 'Fit View to Content', icon: '🔲', action: () => this.canvas.fitToContent() },
+        { label: 'Fit View to Content', icon: '🔲', shortcut: 'Ctrl+0', action: () => this.canvas.fitToContent() },
         { label: 'Toggle Grid', icon: '▦', action: () => eventBus.emit('view:toggle-grid', undefined as any) }
       ];
 
