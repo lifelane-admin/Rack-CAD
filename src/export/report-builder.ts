@@ -271,9 +271,13 @@ const REPORT_CSS = `
   }
 `;
 
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 export function buildReport(state: AppState, meta: ReportMetadata): string {
   const rackSections = state.racks.map(r => buildRackSection(r, state)).join('\n');
-  const safeTitle = meta.title || 'RackCAD Design Report';
+  const safeTitle = esc(meta.title || 'RackCAD Design Report');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -286,8 +290,8 @@ export function buildReport(state: AppState, meta: ReportMetadata): string {
 <header>
   <h1>${safeTitle}</h1>
   <div class="rpt-meta">
-    <span><strong>Author:</strong> ${meta.author || '—'}</span>
-    <span><strong>Revision:</strong> ${meta.revision || '—'}</span>
+    <span><strong>Author:</strong> ${esc(meta.author) || '—'}</span>
+    <span><strong>Revision:</strong> ${esc(meta.revision) || '—'}</span>
     <span><strong>Generated:</strong> ${meta.generatedAt}</span>
     <span><strong>Racks:</strong> ${state.racks.length}</span>
     <span><strong>Devices:</strong> ${state.devices.length}</span>
@@ -310,7 +314,7 @@ ${rackSections}
 <section class="design-notes">
   <h2>Design Notes</h2>
   ${meta.notes
-    ? `<pre>${meta.notes.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`
+    ? `<pre>${esc(meta.notes)}</pre>`
     : '<p class="rpt-empty">— No design notes provided —</p>'
   }
 </section>
