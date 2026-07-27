@@ -1540,7 +1540,8 @@ export class App {
         e.preventDefault();
         const devSel = s.selection.find(sel => sel.type === 'device');
         if (devSel) {
-          this.clipboard = stateManager.getDevice(devSel.id) ?? null;
+          const src = stateManager.getDevice(devSel.id);
+          this.clipboard = src ? cloneDevice(src) : null;
         }
       }
 
@@ -1913,7 +1914,8 @@ export class App {
     const s = stateManager.getState();
     for (const item of s.selection) {
       if (item.type === 'device') {
-        stateManager.removeDevice(item.id);
+        const dev = stateManager.getDevice(item.id);
+        if (dev && !dev.locked) stateManager.removeDevice(item.id);
       } else if (item.type === 'rack') {
         // Remove all devices in the rack first
         const devices = stateManager.getDevicesInRack(item.id);
