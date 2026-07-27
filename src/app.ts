@@ -2021,10 +2021,11 @@ export class App {
           }
         },
         { separator: true, label: '' },
+        { label: 'Zoom to Fit', icon: '🔲', shortcut: 'Ctrl+0', action: () => this.canvas.fitToContent() },
+        { separator: true, label: '' },
         { label: 'Add 42U Rack', icon: '➕', action: () => stateManager.addRack({ id: generateId(), name: `Rack ${s.racks.length + 1}`, units: 42, x: point.x, y: point.y }) },
         { label: 'Add 48U Rack', icon: '➕', action: () => stateManager.addRack({ id: generateId(), name: `Rack ${s.racks.length + 1}`, units: 48, x: point.x, y: point.y }) },
         { separator: true, label: '' },
-        { label: 'Fit View to Content', icon: '🔲', shortcut: 'Ctrl+0', action: () => this.canvas.fitToContent() },
         { label: 'Toggle Grid', icon: '▦', action: () => eventBus.emit('view:toggle-grid', undefined as any) }
       ];
 
