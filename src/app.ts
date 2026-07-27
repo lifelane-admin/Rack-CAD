@@ -12,6 +12,7 @@ import { Sidebar } from './components/sidebar';
 import { PresenterDashboard } from './components/presenter-dashboard';
 import './styles/presenter-dashboard.css';
 import './styles/tooltip.css';
+import './styles/custom-asset-modal.css';
 import { PortTooltip } from './components/tooltip';
 import { PropertiesPanel, initAIHints } from './components/properties';
 import { StatusBar } from './components/statusbar';
