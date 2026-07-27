@@ -27,6 +27,7 @@ const minimalState: AppState = {
   cableRoutingTrayMode: 'overhead',
   aiMode: false,
   aiProvider: 'rules',
+  customTemplates: [],
   previewDiff: null,
 };
 
