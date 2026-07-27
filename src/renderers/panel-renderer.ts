@@ -123,23 +123,20 @@ function renderSwitchRJ45(
     fill: ledOn ? '#00e676' : '#0c160c',
   }));
 
-  // Outer surround — slightly lighter than chassis to create an embossed recess look
-  // NO stroke so ports blend cleanly into the panel metal
-  parent.appendChild(el('rect', { x: ax, y: ay, width: pW, height: pH, rx: 1, fill: '#252528' }));
-
-  // Inner socket darkness — the actual hole
-  parent.appendChild(el('rect', { x: ax + 1, y: ay + 1, width: pW - 2, height: pH - 2, rx: 0.5, fill: '#05050a' }));
-
-  // Bottom ledge shadow inside socket (depth effect)
-  parent.appendChild(el('rect', { x: ax + 1, y: ay + pH - 4, width: pW - 2, height: 3, rx: 0, fill: '#0a0a10', opacity: 0.8 }));
+  // Socket body — dark interior with thin 1px gold border, no thick surround
+  parent.appendChild(el('rect', {
+    x: ax, y: ay, width: pW, height: pH, rx: 1,
+    fill: '#05050a',
+    stroke: '#c8a840', 'stroke-width': '1',
+  }));
 
   // Gold contact pins (RJ45 style)
   const pinCount = pW >= 8 ? 4 : 3;
-  const usableW = pW - 3;
+  const usableW = pW - 4;
   const step = usableW / (pinCount + 1);
   for (let c = 0; c < pinCount; c++) {
     parent.appendChild(el('rect', {
-      x: ax + 1.5 + (c + 0.5) * step, y: ay + pH - 3.8,
+      x: ax + 2 + (c + 0.5) * step, y: ay + pH - 3.5,
       width: 1.2, height: 2.8, fill: '#c8a840', rx: 0.2,
     }));
   }
