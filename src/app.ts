@@ -841,10 +841,8 @@ export class App {
         // Nothing was hit — start rubber-band multi-select
         {
           const worldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
-          this.isRubberBanding = true;
           this.rubberBandStart = worldPos;
-          const svgCanvas = document.getElementById('canvas') as SVGSVGElement | null;
-          if (svgCanvas) {
+          if (svgEl) {
             const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
             rect.id = 'selection-rect';
             rect.setAttribute('fill', 'rgba(88,166,255,0.08)');
@@ -852,8 +850,9 @@ export class App {
             rect.setAttribute('stroke-width', '1');
             rect.setAttribute('stroke-dasharray', '4,2');
             rect.setAttribute('pointer-events', 'none');
-            svgCanvas.appendChild(rect);
+            svgEl.appendChild(rect);
             this.rubberBandEl = rect;
+            this.isRubberBanding = true;
           }
         }
       }
@@ -1130,7 +1129,9 @@ export class App {
           if (intersects) selected.push({ type: 'device', id: dev.id });
         });
 
-        const newSelection = e.shiftKey ? [...state.selection, ...selected] : selected;
+        const existingIds = new Set(state.selection.map(s => s.id));
+        const deduped = selected.filter(s => !existingIds.has(s.id));
+        const newSelection = e.shiftKey ? [...state.selection, ...deduped] : selected;
         stateManager.setState({ selection: newSelection });
         eventBus.emit('selection:changed', newSelection);
       }
@@ -1626,8 +1627,13 @@ export class App {
         eventBus.emit('export:json', undefined as any);
       }
 
-      // Escape = Deselect / Cancel cable
+      // Escape = Deselect / Cancel cable / Cancel rubber-band
       if (e.key === 'Escape') {
+        if (this.isRubberBanding) {
+          this.isRubberBanding = false;
+          this.rubberBandEl?.remove();
+          this.rubberBandEl = null;
+        }
         resetPreviewDirection();
         stateManager.setState({ selection: [], cableInProgress: null });
         eventBus.emit('selection:changed', []);
