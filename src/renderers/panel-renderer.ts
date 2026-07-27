@@ -115,24 +115,43 @@ function renderSwitchRJ45(
 ): void {
   const ax = cx - pW / 2;
   const ay = cy - pH / 2;
-  // LED strip
+
+  // LED strip — bright green when active, near-invisible when off
   const ledY = labelBelow ? ay - 2.5 : ay + pH + 1;
-  parent.appendChild(el('rect', { x: ax + 1, y: ledY, width: pW - 2, height: 2, rx: 0.5, fill: ledOn ? '#00e676' : '#152015' }));
-  // Socket body
-  parent.appendChild(el('rect', { x: ax, y: ay, width: pW, height: pH, rx: 1.5, fill: '#0a0a0f', stroke: '#3a3a3f', 'stroke-width': 0.8 }));
-  parent.appendChild(el('rect', { x: ax + 1, y: ay + 1, width: pW - 2, height: pH - 2, rx: 1, fill: '#050508' }));
-  // Contacts (3 gold pins at bottom of opening)
-  const pinCount = pW > 7 ? 4 : 3;
-  const pinSpacing = (pW - 3) / (pinCount + 1);
+  parent.appendChild(el('rect', {
+    x: ax + 0.5, y: ledY, width: pW - 1, height: 2, rx: 0.4,
+    fill: ledOn ? '#00e676' : '#0c160c',
+  }));
+
+  // Outer surround — slightly lighter than chassis to create an embossed recess look
+  // NO stroke so ports blend cleanly into the panel metal
+  parent.appendChild(el('rect', { x: ax, y: ay, width: pW, height: pH, rx: 1, fill: '#252528' }));
+
+  // Inner socket darkness — the actual hole
+  parent.appendChild(el('rect', { x: ax + 1, y: ay + 1, width: pW - 2, height: pH - 2, rx: 0.5, fill: '#05050a' }));
+
+  // Bottom ledge shadow inside socket (depth effect)
+  parent.appendChild(el('rect', { x: ax + 1, y: ay + pH - 4, width: pW - 2, height: 3, rx: 0, fill: '#0a0a10', opacity: 0.8 }));
+
+  // Gold contact pins (RJ45 style)
+  const pinCount = pW >= 8 ? 4 : 3;
+  const usableW = pW - 3;
+  const step = usableW / (pinCount + 1);
   for (let c = 0; c < pinCount; c++) {
-    parent.appendChild(el('rect', { x: ax + 1.5 + c * pinSpacing, y: ay + pH - 3.5, width: 1.5, height: 2.5, fill: '#c0b870', rx: 0.3 }));
+    parent.appendChild(el('rect', {
+      x: ax + 1.5 + (c + 0.5) * step, y: ay + pH - 3.8,
+      width: 1.2, height: 2.8, fill: '#c8a840', rx: 0.2,
+    }));
   }
-  // Port number label
+
+  // Port number
   const numTxt = el('text', {
     x: cx,
-    y: labelBelow ? ay + pH + 8 : ay - 3.5,
-    'text-anchor': 'middle', 'font-size': pW > 7 ? '5.5' : '4.5',
-    fill: '#888', 'font-family': 'monospace',
+    y: labelBelow ? ay + pH + 8 : ay - 3,
+    'text-anchor': 'middle',
+    'font-size': pW >= 8 ? '5.5' : '4.5',
+    fill: '#6a6a7a',
+    'font-family': 'monospace',
   });
   numTxt.textContent = label;
   parent.appendChild(numTxt);
@@ -222,15 +241,19 @@ function renderSwitchPanel(template: DeviceTemplate | null, W: number, H: number
     }
   }
 
-  // SFP+ uplink cages (at exact template positions)
+  // SFP+ uplink cages (at exact template positions) — no stroke, cyan inner glow
   sfpPorts.forEach((p, i) => {
     const sfpW = 9;
     const sfpH = Math.min(chH - 6, 17);
     const cX = p.relativeX - sfpW / 2;
     const cY = chY + (chH - sfpH) / 2;
-    group.appendChild(el('rect', { x: cX, y: cY, width: sfpW, height: sfpH, rx: 1.5, fill: '#08080c', stroke: '#3a4060', 'stroke-width': 0.8 }));
-    group.appendChild(el('rect', { x: cX + 1.5, y: cY + sfpH - 4, width: sfpW - 3, height: 3, rx: 0.5, fill: '#00e5ff', opacity: 0.55 }));
-    const numTxt = el('text', { x: p.relativeX, y: cY + sfpH + 7.5, 'text-anchor': 'middle', 'font-size': '4.5', fill: '#558', 'font-family': 'monospace' });
+    // Cage surround (embossed, no stroke)
+    group.appendChild(el('rect', { x: cX, y: cY, width: sfpW, height: sfpH, rx: 1.5, fill: '#1a1d28' }));
+    // Dark cage interior
+    group.appendChild(el('rect', { x: cX + 1, y: cY + 1, width: sfpW - 2, height: sfpH - 2, rx: 1, fill: '#06060e' }));
+    // Cyan fiber-glow at bottom (indicates module inserted)
+    group.appendChild(el('rect', { x: cX + 1.5, y: cY + sfpH - 4, width: sfpW - 3, height: 3, rx: 0.5, fill: '#00d4ff', opacity: 0.75, filter: 'drop-shadow(0 0 2px #00d4ff)' }));
+    const numTxt = el('text', { x: p.relativeX, y: cY + sfpH + 7.5, 'text-anchor': 'middle', 'font-size': '4.5', fill: '#4a6a8a', 'font-family': 'monospace' });
     numTxt.textContent = String(i + 1);
     group.appendChild(numTxt);
   });
@@ -241,9 +264,10 @@ function renderSwitchPanel(template: DeviceTemplate | null, W: number, H: number
     const qH = Math.min(chH - 6, 18);
     const cX = p.relativeX - qW / 2;
     const cY = chY + (chH - qH) / 2;
-    group.appendChild(el('rect', { x: cX, y: cY, width: qW, height: qH, rx: 2, fill: '#08080c', stroke: '#444', 'stroke-width': 0.8 }));
-    group.appendChild(el('rect', { x: cX + 2, y: cY + qH - 4, width: qW - 4, height: 3, rx: 0.5, fill: '#00e5ff', opacity: 0.7 }));
-    const numTxt = el('text', { x: p.relativeX, y: cY + qH + 7.5, 'text-anchor': 'middle', 'font-size': '4.5', fill: '#558', 'font-family': 'monospace' });
+    group.appendChild(el('rect', { x: cX, y: cY, width: qW, height: qH, rx: 2, fill: '#1a1d28' }));
+    group.appendChild(el('rect', { x: cX + 1, y: cY + 1, width: qW - 2, height: qH - 2, rx: 1, fill: '#06060e' }));
+    group.appendChild(el('rect', { x: cX + 2, y: cY + qH - 4, width: qW - 4, height: 3, rx: 0.5, fill: '#00d4ff', opacity: 0.85 }));
+    const numTxt = el('text', { x: p.relativeX, y: cY + qH + 7.5, 'text-anchor': 'middle', 'font-size': '4.5', fill: '#4a6a8a', 'font-family': 'monospace' });
     numTxt.textContent = `Q${i + 1}`;
     group.appendChild(numTxt);
   });
