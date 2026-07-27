@@ -795,22 +795,20 @@ export class App {
           const deviceId = deviceEl.getAttribute('data-device-id')!;
           const device = stateManager.getDevice(deviceId);
           if (device) {
-            if (device.locked) return; // Can't drag locked devices
+            stateManager.setState({ selection: [{ type: 'device', id: deviceId }] });
+            eventBus.emit('selection:changed', [{ type: 'device', id: deviceId }]);
+            if (device.locked) return; // Selection allowed; drag/clone blocked
             this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
-            if (e.ctrlKey && !device.locked) {
+            if (e.ctrlKey) {
               this.cloningMode = true;
               this.cloneThresholdMet = false;
               this.dragOriginalDevice = device;
-              stateManager.setState({ selection: [{ type: 'device', id: deviceId }] });
-              eventBus.emit('selection:changed', [{ type: 'device', id: deviceId }]);
             } else {
               this.isDraggingDevice = true;
               this.draggedDeviceId = deviceId;
               this.dragStartUnit = device.startUnit;
               this.dragStartRackId = device.rackId;
               this.dragStartDevicesState = JSON.parse(JSON.stringify(stateManager.getState().devices));
-              stateManager.setState({ selection: [{ type: 'device', id: deviceId }] });
-              eventBus.emit('selection:changed', [{ type: 'device', id: deviceId }]);
             }
             svgEl.classList.add('dragging-active');
             e.stopPropagation();

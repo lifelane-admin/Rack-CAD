@@ -234,7 +234,7 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
     lockGroup.appendChild(lockBody);
     // Lock shackle arc
     const shackle = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    shackle.setAttribute('d', 'M 8 9 L 8 7 A 3 3 0 0 1 14 7 L 14 9');
+    shackle.setAttribute('d', 'M 8 9 L 8 7 A 3 3 0 0 0 14 7 L 14 9');
     shackle.setAttribute('fill', 'none');
     shackle.setAttribute('stroke', '#fb8c00');
     shackle.setAttribute('stroke-width', '1.5');
