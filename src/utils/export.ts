@@ -1,5 +1,6 @@
 import { eventBus } from '../core/event-bus';
 import { stateManager } from '../core/state';
+import { buildReport, ReportMetadata } from '../export/report-builder';
 
 export interface ExportOptions {
   area: 'full' | 'viewport' | 'rack';
@@ -524,5 +525,43 @@ export function initExportHandlers(): void {
 
   eventBus.on('project:load', (jsonString: string) => {
     importJSON(jsonString);
+  });
+
+  eventBus.on('export:report' as any, () => {
+    const modal = document.getElementById('export-report-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+
+    const closeModal = () => modal.classList.add('hidden');
+
+    document.getElementById('rpt-cancel')?.addEventListener('click', closeModal, { once: true });
+
+    document.getElementById('rpt-generate')?.addEventListener('click', () => {
+      const title    = (document.getElementById('rpt-title')  as HTMLInputElement).value;
+      const author   = (document.getElementById('rpt-author') as HTMLInputElement).value;
+      const revision = (document.getElementById('rpt-rev')    as HTMLInputElement).value;
+      const notes    = (document.getElementById('rpt-notes')  as HTMLTextAreaElement).value;
+      const meta: ReportMetadata = {
+        title,
+        author,
+        revision,
+        notes,
+        generatedAt: new Date().toISOString(),
+      };
+      closeModal();
+      try {
+        const html = buildReport(stateManager.getState(), meta);
+        const win = window.open('', '_blank');
+        if (!win) {
+          eventBus.emit('notification', { message: 'Popup blocked — please allow popups to generate report', type: 'error' });
+          return;
+        }
+        win.document.write(html);
+        win.document.close();
+        eventBus.emit('notification', { message: 'Design report generated', type: 'success' });
+      } catch (err) {
+        eventBus.emit('notification', { message: `Report generation failed: ${err}`, type: 'error' });
+      }
+    }, { once: true });
   });
 }

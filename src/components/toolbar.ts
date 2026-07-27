@@ -238,11 +238,17 @@ export class Toolbar {
         title: 'Export JPEG Image...', 
         action: () => EventBus.emit('export:jpeg', undefined) 
       },
-      { 
-        id: 'btn-exp-pdf', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>', 
-        title: 'Export PDF Document...', 
-        action: () => EventBus.emit('export:pdf', undefined) 
+      {
+        id: 'btn-exp-pdf',
+        icon: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>',
+        title: 'Export PDF Document...',
+        action: () => EventBus.emit('export:pdf', undefined)
+      },
+      {
+        id: 'btn-exp-report',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>',
+        title: 'Export Design Report (HTML/PDF)...',
+        action: () => EventBus.emit('export:report' as any, undefined)
       }
     ]));
 

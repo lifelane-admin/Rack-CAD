@@ -61,6 +61,33 @@
     </div>
   </div>
 
+  <!-- Export Report Modal -->
+  <div id="export-report-modal" class="hidden">
+    <div class="modal-box">
+      <h3>Export Design Report</h3>
+      <div class="report-field">
+        <label for="rpt-title">Project Name</label>
+        <input id="rpt-title" type="text" placeholder="Data Centre Rack Design"/>
+      </div>
+      <div class="report-field">
+        <label for="rpt-author">Author</label>
+        <input id="rpt-author" type="text" placeholder="Your name"/>
+      </div>
+      <div class="report-field">
+        <label for="rpt-rev">Revision</label>
+        <input id="rpt-rev" type="text" placeholder="Rev 1.0"/>
+      </div>
+      <div class="report-field">
+        <label for="rpt-notes">Design Notes</label>
+        <textarea id="rpt-notes" rows="4" placeholder="Deployment notes, change log..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button id="rpt-cancel">Cancel</button>
+        <button id="rpt-generate">Generate Report</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
