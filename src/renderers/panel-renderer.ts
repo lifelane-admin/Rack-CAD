@@ -109,7 +109,7 @@ function drawVentSlots(parent: SVGGElement, startX: number, chY: number, chH: nu
   }
 }
 
-function renderSwitchPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
+function renderSwitchPanel(_template: DeviceTemplate | null, W: number, H: number): SVGGElement {
   const group = g('switch-panel');
   const defs = el('defs');
   const gradId = `sw-grad-${Math.random().toString(36).slice(2)}`;
@@ -119,57 +119,10 @@ function renderSwitchPanel(template: DeviceTemplate | null, W: number, H: number
   const chY = 2;
   const chH = H - 4;
 
+  // Chassis background — actual port connectors rendered by renderPorts()
   group.appendChild(el('rect', { x: 0, y: chY, width: W, height: chH, rx: 2, fill: `url(#${gradId})`, stroke: '#111', 'stroke-width': 1 }));
 
-  const ports = template?.ports ?? [];
-  const rj45Ports = ports.filter(p => p.type === 'rj45');
-  const sfpPorts = ports.filter(p => p.type === 'sfp-plus' || p.type === 'sfp');
-  const qsfpPorts = ports.filter(p => p.type === 'qsfp28');
-
-  const portCount = rj45Ports.length;
-  const is48 = portCount === 48;
-  const portTopY = is48
-    ? chY + Math.round((chH - (PORT_H * 2 + LED_H * 2 + LED_GAP * 2 + 6)) / 2)
-    : chY + Math.round((chH - (PORT_H + LED_H + LED_GAP)) / 2);
-
   drawStatusBlock(group, chY, chH);
-
-  if (portCount > 0) {
-    if (is48) {
-      const topY = portTopY;
-      const botY = topY + PORT_H + LED_H + LED_GAP + 6;
-      const groupCount = portCount / 2;
-      for (let gi = 0; gi < groupCount; gi++) {
-        const ax = STATUS_END + 6 + gi * PORT_PITCH;
-        drawRJ45(group, ax, topY, String(gi * 2 + 1), false);
-        drawRJ45(group, ax, botY, String(gi * 2 + 2), false);
-      }
-    } else {
-      for (let i = 0; i < portCount; i++) {
-        const ax = STATUS_END + 6 + i * PORT_PITCH;
-        drawRJ45(group, ax, portTopY, String(i + 1), false);
-      }
-    }
-  }
-
-  let sfpStartX: number;
-  if (is48) {
-    sfpStartX = STATUS_END + 6 + (portCount / 2) * PORT_PITCH + 8;
-  } else {
-    sfpStartX = STATUS_END + 6 + portCount * PORT_PITCH + 8;
-  }
-  sfpPorts.forEach((_, i) => {
-    drawSFPCage(group, sfpStartX + i * SFP_PITCH, chY, chH, `SFP${i + 1}`, true);
-  });
-
-  const qsfpStartX = sfpStartX + sfpPorts.length * SFP_PITCH + 8;
-  qsfpPorts.forEach((_, i) => {
-    drawQSFPCage(group, qsfpStartX + i * 52, chY, chH, `Q${i + 1}`);
-  });
-
-  const modelTxt = el('text', { x: W - 6, y: chY + chH / 2 + 3, 'text-anchor': 'end', 'font-size': '7', fill: '#555', 'font-family': 'monospace' });
-  modelTxt.textContent = template?.model ?? 'Switch';
-  group.appendChild(modelTxt);
 
   return group;
 }
