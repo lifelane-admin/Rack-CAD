@@ -795,6 +795,7 @@ export class App {
           const deviceId = deviceEl.getAttribute('data-device-id')!;
           const device = stateManager.getDevice(deviceId);
           if (device) {
+            if (device.locked) return; // Can't drag locked devices
             this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
             if (e.ctrlKey && !device.locked) {
               this.cloningMode = true;

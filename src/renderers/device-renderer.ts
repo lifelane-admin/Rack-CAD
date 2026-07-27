@@ -210,6 +210,39 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
   // Draw standard interactive port connectors on top of everything
   renderPorts(device.ports, deviceGroup);
 
+  // Lock icon overlay
+  if (device.locked) {
+    const lockGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    lockGroup.setAttribute('pointer-events', 'none');
+    // Background badge
+    const badge = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    badge.setAttribute('x', '4');
+    badge.setAttribute('y', '4');
+    badge.setAttribute('width', '14');
+    badge.setAttribute('height', '14');
+    badge.setAttribute('rx', '2');
+    badge.setAttribute('fill', 'rgba(0,0,0,0.6)');
+    lockGroup.appendChild(badge);
+    // Lock body
+    const lockBody = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    lockBody.setAttribute('x', '6');
+    lockBody.setAttribute('y', '9');
+    lockBody.setAttribute('width', '10');
+    lockBody.setAttribute('height', '7');
+    lockBody.setAttribute('rx', '1');
+    lockBody.setAttribute('fill', '#fb8c00');
+    lockGroup.appendChild(lockBody);
+    // Lock shackle arc
+    const shackle = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    shackle.setAttribute('d', 'M 8 9 L 8 7 A 3 3 0 0 1 14 7 L 14 9');
+    shackle.setAttribute('fill', 'none');
+    shackle.setAttribute('stroke', '#fb8c00');
+    shackle.setAttribute('stroke-width', '1.5');
+    shackle.setAttribute('stroke-linecap', 'round');
+    lockGroup.appendChild(shackle);
+    deviceGroup.appendChild(lockGroup);
+  }
+
   // Preview highlight: yellow ring if device is in previewDiff
   const previewDiff = stateManager.getState().previewDiff;
   if (previewDiff?.diff) {
