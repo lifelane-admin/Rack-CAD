@@ -116,10 +116,10 @@ function drawRJ45Housing(
   hx: number, hy: number, hW: number, hH: number,
   ledOn: boolean,
 ): void {
-  // Outer bezel — slightly lighter than chassis, thin visible border
+  // Outer bezel — slightly lighter than chassis, no stroke (gap between ports shows chassis)
   parent.appendChild(el('rect', {
     x: hx, y: hy, width: hW, height: hH,
-    rx: 1, fill: '#3e4248', stroke: '#5c6068', 'stroke-width': 0.5,
+    rx: 1, fill: '#3e4248',
   }));
 
   // LED indicator — small bright square at top-left of interior
@@ -239,7 +239,7 @@ function renderSwitchPanel(template: DeviceTemplate | null, W: number, H: number
       x: p.relativeX, y: numY,
       'text-anchor': 'middle', 'font-size': '3.5', fill: '#5a8aaa', 'font-family': 'monospace',
     })).textContent = `SFP${i + 1}`;
-    group.appendChild(el('rect', { x: hx, y: hy, width: sfpW, height: sfpH, rx: 1, fill: '#2a2e3a', stroke: '#4a5060', 'stroke-width': 0.5 }));
+    group.appendChild(el('rect', { x: hx, y: hy, width: sfpW, height: sfpH, rx: 1, fill: '#2a2e3a' }));
     group.appendChild(el('rect', { x: hx + 1, y: hy + 1.5, width: sfpW - 2, height: sfpH - 3, rx: 0.5, fill: '#07070e' }));
     group.appendChild(el('rect', { x: hx + 2, y: hy + sfpH - 4.5, width: sfpW - 4, height: 3, rx: 0.3, fill: '#00c8ff', opacity: 0.75 }));
   });
@@ -254,7 +254,7 @@ function renderSwitchPanel(template: DeviceTemplate | null, W: number, H: number
       x: p.relativeX, y: numY,
       'text-anchor': 'middle', 'font-size': '3.5', fill: '#5a8aaa', 'font-family': 'monospace',
     })).textContent = `Q${i + 1}`;
-    group.appendChild(el('rect', { x: hx, y: hy, width: qW, height: qH, rx: 1.5, fill: '#22263a', stroke: '#4a5060', 'stroke-width': 0.5 }));
+    group.appendChild(el('rect', { x: hx, y: hy, width: qW, height: qH, rx: 1.5, fill: '#22263a' }));
     group.appendChild(el('rect', { x: hx + 1.5, y: hy + 1.5, width: qW - 3, height: qH - 3, rx: 1, fill: '#07070e' }));
     group.appendChild(el('rect', { x: hx + 2, y: hy + qH - 4.5, width: qW - 4, height: 3, rx: 0.3, fill: '#00c8ff', opacity: 0.85 }));
   });
