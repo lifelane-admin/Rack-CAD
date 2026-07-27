@@ -109,57 +109,34 @@ function drawVentSlots(parent: SVGGElement, startX: number, chY: number, chH: nu
   }
 }
 
-// Draws one industrial-style RJ45 port housing at absolute position (hx, hy).
-// hW × hH = outer housing bounds (the lighter raised frame).
-// Everything — LED, socket, pins, number — lives inside those bounds.
-function drawSwitchPort(
+// Draws one realistic RJ45 port housing: bezel frame + LED indicator + dark socket.
+// Numbers are drawn by the caller ABOVE this housing (outside it).
+function drawRJ45Housing(
   parent: SVGGElement,
   hx: number, hy: number, hW: number, hH: number,
-  label: string, ledOn: boolean,
+  ledOn: boolean,
 ): void {
-  // ── Housing (raised lighter rect, no stroke) ──────────────────────────────
-  parent.appendChild(el('rect', { x: hx, y: hy, width: hW, height: hH, rx: 1.5, fill: '#2c2f36' }));
-
-  // ── Inner dark socket opening ────────────────────────────────────────────
-  const pad  = 1.5;
-  const ledH = Math.max(1.5, hH * 0.12);   // LED height scales with port size
-  const numH = Math.max(4.5, hH * 0.22);   // reserve space at bottom for label
-  const inX  = hx + pad;
-  const inY  = hy + pad + ledH + 0.5;      // below LED gap
-  const inW  = hW - pad * 2;
-  const inH  = hH - pad * 2 - ledH - 0.5 - numH;
-
-  parent.appendChild(el('rect', { x: inX, y: inY, width: inW, height: inH, rx: 1, fill: '#06060c' }));
-
-  // ── LED bar at very top of housing interior ───────────────────────────────
+  // Outer bezel — slightly lighter than chassis, thin visible border
   parent.appendChild(el('rect', {
-    x: hx + pad + 0.5, y: hy + pad,
-    width: hW - pad * 2 - 1, height: ledH,
-    rx: 0.3, fill: ledOn ? '#00d060' : '#0b150b',
+    x: hx, y: hy, width: hW, height: hH,
+    rx: 1, fill: '#3e4248', stroke: '#5c6068', 'stroke-width': 0.5,
   }));
 
-  // ── Gold contact pins (4 for wide, 3 for narrow) ─────────────────────────
-  const pinCount = hW >= 9 ? 4 : 3;
-  const pinZone  = inW - 2;
-  const pinStep  = pinZone / (pinCount + 1);
-  for (let c = 0; c < pinCount; c++) {
-    parent.appendChild(el('rect', {
-      x: inX + 1 + (c + 0.5) * pinStep,
-      y: inY + inH - Math.min(3, inH * 0.45),
-      width: 0.9, height: Math.min(2.5, inH * 0.35),
-      fill: '#c8a840', rx: 0.2,
-    }));
-  }
+  // LED indicator — small bright square at top-left of interior
+  const ledW = Math.max(2.2, hW * 0.30);
+  const ledH = Math.max(1.4, hH * 0.16);
+  parent.appendChild(el('rect', {
+    x: hx + 1.2, y: hy + 1.2,
+    width: ledW, height: ledH, rx: 0.3,
+    fill: ledOn ? '#44ee44' : '#142014',
+  }));
 
-  // ── Port number — bottom of housing interior, always inside bounds ────────
-  parent.appendChild(el('text', {
-    x: hx + hW / 2,
-    y: hy + hH - 0.8,
-    'text-anchor': 'middle',
-    'font-size': String(Math.min(numH - 0.5, hW >= 9 ? 5 : 4)),
-    fill: '#8888a0',
-    'font-family': 'monospace',
-  })).textContent = label;
+  // RJ45 socket — large dark recess below the LED
+  parent.appendChild(el('rect', {
+    x: hx + 1, y: hy + ledH + 2.5,
+    width: hW - 2, height: hH - ledH - 3.5,
+    rx: 0.5, fill: '#07070e',
+  }));
 }
 
 function renderSwitchPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
@@ -174,7 +151,7 @@ function renderSwitchPanel(template: DeviceTemplate | null, W: number, H: number
 
   // Chassis body
   group.appendChild(el('rect', { x: 0, y: chY, width: W, height: chH, rx: 2, fill: `url(#${gradId})`, stroke: '#111', 'stroke-width': 1 }));
-  group.appendChild(el('rect', { x: 1, y: chY + 1, width: W - 2, height: 1.5, rx: 0.5, fill: 'rgba(255,255,255,0.06)', 'pointer-events': 'none' }));
+  group.appendChild(el('rect', { x: 1, y: chY + 1, width: W - 2, height: 1.5, rx: 0.5, fill: 'rgba(255,255,255,0.05)', 'pointer-events': 'none' }));
 
   drawStatusBlock(group, chY, chH);
 
@@ -183,36 +160,42 @@ function renderSwitchPanel(template: DeviceTemplate | null, W: number, H: number
   const sfpPorts  = ports.filter(p => p.type === 'sfp-plus' || p.type === 'sfp' || p.type === 'sfp28');
   const qsfpPorts = ports.filter(p => p.type === 'qsfp28' || p.type === 'qsfp');
 
-  const ySet  = new Set(rj45Ports.map(p => Math.round(p.relativeY)));
+  const ySet   = new Set(rj45Ports.map(p => Math.round(p.relativeY)));
   const isDual = ySet.size > 1;
 
-  // Port pitch from template (distance between adjacent port centers)
+  // Port pitch from template (center-to-center distance between adjacent ports)
   const pitch = rj45Ports.length > 1
     ? Math.abs(rj45Ports[1]?.relativeX - rj45Ports[0]?.relativeX) || 10
     : 10;
 
-  // Housing width = pitch - 1px gap on each side (min 6px)
+  // Housing width fills pitch minus a 1px gap on each side
   const hW = Math.max(6, pitch - 2);
 
+  // Vertical space at top of chassis for port number labels
+  const numZone = 5;
+  const numY    = chY + numZone - 0.5;  // text baseline
+
   if (isDual) {
-    // Two-row layout: top half and bottom half of chassis
-    const rowH   = Math.floor((chH - 3) / 2);   // height for each row's housing
-    const topHY  = chY + 1;
-    const botHY  = chY + chH - 1 - rowH;
+    // Two-row layout: labels above top row, housings fill remaining height
+    const rowH   = Math.floor((chH - numZone - 2) / 2);
+    const topHY  = chY + numZone;
+    const botHY  = topHY + rowH + 1.5;
 
     const yVals    = [...ySet].sort((a, b) => a - b);
-    const topRowY  = yVals[0];
-    const botRowY  = yVals[1];
-    const topPorts = rj45Ports.filter(p => Math.round(p.relativeY) === topRowY);
-    const botPorts = rj45Ports.filter(p => Math.round(p.relativeY) === botRowY);
+    const topPorts = rj45Ports.filter(p => Math.round(p.relativeY) === yVals[0]);
+    const botPorts = rj45Ports.filter(p => Math.round(p.relativeY) === yVals[1]);
 
     topPorts.forEach((p, i) => {
       const num = parseInt(p.name.replace(/\D/g, ''), 10) || (i * 2 + 1);
-      drawSwitchPort(group, p.relativeX - hW / 2, topHY, hW, rowH, String(num), (i % 4) < 2);
+      group.appendChild(el('text', {
+        x: p.relativeX, y: numY,
+        'text-anchor': 'middle', 'font-size': '3.5', fill: '#888', 'font-family': 'monospace',
+      })).textContent = String(num);
+      drawRJ45Housing(group, p.relativeX - hW / 2, topHY, hW, rowH, (num % 2) === 1);
     });
     botPorts.forEach((p, i) => {
       const num = parseInt(p.name.replace(/\D/g, ''), 10) || (i * 2 + 2);
-      drawSwitchPort(group, p.relativeX - hW / 2, botHY, hW, rowH, String(num), (i % 4) < 2);
+      drawRJ45Housing(group, p.relativeX - hW / 2, botHY, hW, rowH, (num % 2) === 0);
     });
 
     // Group dividers every 8 columns
@@ -220,59 +203,65 @@ function renderSwitchPanel(template: DeviceTemplate | null, W: number, H: number
     [8, 16, 24].forEach(idx => {
       if (idx < allX.length) {
         const sepX = (allX[idx - 1] + allX[idx]) / 2;
-        group.appendChild(el('line', { x1: sepX, y1: chY + 2, x2: sepX, y2: chY + chH - 2, stroke: '#444', 'stroke-width': 0.5, 'stroke-dasharray': '2,2' }));
+        group.appendChild(el('line', { x1: sepX, y1: chY + 2, x2: sepX, y2: chY + chH - 2, stroke: '#2e2e2e', 'stroke-width': 0.8 }));
       }
     });
 
   } else {
-    // Single row — housing fills almost full chassis height
-    const hH  = chH - 4;
-    const hY  = chY + 2;
+    // Single row — labels above, housing fills remaining chassis height
+    const hH = chH - numZone - 2;
+    const hY = chY + numZone;
 
     rj45Ports.forEach((p, i) => {
-      drawSwitchPort(group, p.relativeX - hW / 2, hY, hW, hH, String(i + 1), (i % 4) < 2);
+      group.appendChild(el('text', {
+        x: p.relativeX, y: numY,
+        'text-anchor': 'middle', 'font-size': '3.5', fill: '#888', 'font-family': 'monospace',
+      })).textContent = String(i + 1);
+      drawRJ45Housing(group, p.relativeX - hW / 2, hY, hW, hH, (i % 4) < 2);
     });
 
     // Group dividers every 8 ports
     for (let sep = 8; sep < rj45Ports.length; sep += 8) {
       if (rj45Ports[sep - 1] && rj45Ports[sep]) {
         const sepX = (rj45Ports[sep - 1].relativeX + rj45Ports[sep].relativeX) / 2;
-        group.appendChild(el('line', { x1: sepX, y1: chY + 2, x2: sepX, y2: chY + chH - 2, stroke: '#444', 'stroke-width': 0.5, 'stroke-dasharray': '2,2' }));
+        group.appendChild(el('line', { x1: sepX, y1: chY + 2, x2: sepX, y2: chY + chH - 2, stroke: '#2e2e2e', 'stroke-width': 0.8 }));
       }
     }
   }
 
-  // SFP+ uplink cages — housing style matching RJ45, cyan glow
+  // SFP+ cages — same language, cyan fiber glow
   sfpPorts.forEach((p, i) => {
-    const sfpW = Math.max(8, pitch - 2);
-    const sfpH = chH - 4;
+    const sfpW = Math.max(10, pitch * 1.4);
+    const sfpH = chH - numZone - 2;
     const hx   = p.relativeX - sfpW / 2;
-    const hy   = chY + 2;
-    // Housing
-    group.appendChild(el('rect', { x: hx, y: hy, width: sfpW, height: sfpH, rx: 1.5, fill: '#22253a' }));
-    // Dark interior
-    group.appendChild(el('rect', { x: hx + 1.5, y: hy + 1.5, width: sfpW - 3, height: sfpH - 3, rx: 1, fill: '#06060e' }));
-    // Cyan fiber glow
-    group.appendChild(el('rect', { x: hx + 2, y: hy + sfpH - 6, width: sfpW - 4, height: 3.5, rx: 0.5, fill: '#00d4ff', opacity: 0.8 }));
-    // Number inside
-    group.appendChild(el('text', { x: p.relativeX, y: hy + sfpH - 0.8, 'text-anchor': 'middle', 'font-size': '4', fill: '#4a7aaa', 'font-family': 'monospace' })).textContent = String(i + 1);
+    const hy   = chY + numZone;
+    group.appendChild(el('text', {
+      x: p.relativeX, y: numY,
+      'text-anchor': 'middle', 'font-size': '3.5', fill: '#5a8aaa', 'font-family': 'monospace',
+    })).textContent = `SFP${i + 1}`;
+    group.appendChild(el('rect', { x: hx, y: hy, width: sfpW, height: sfpH, rx: 1, fill: '#2a2e3a', stroke: '#4a5060', 'stroke-width': 0.5 }));
+    group.appendChild(el('rect', { x: hx + 1, y: hy + 1.5, width: sfpW - 2, height: sfpH - 3, rx: 0.5, fill: '#07070e' }));
+    group.appendChild(el('rect', { x: hx + 2, y: hy + sfpH - 4.5, width: sfpW - 4, height: 3, rx: 0.3, fill: '#00c8ff', opacity: 0.75 }));
   });
 
   // QSFP28 cages
   qsfpPorts.forEach((p, i) => {
-    const qW  = Math.max(12, pitch * 1.4);
-    const qH  = chH - 4;
-    const hx  = p.relativeX - qW / 2;
-    const hy  = chY + 2;
-    group.appendChild(el('rect', { x: hx, y: hy, width: qW, height: qH, rx: 2, fill: '#22253a' }));
-    group.appendChild(el('rect', { x: hx + 1.5, y: hy + 1.5, width: qW - 3, height: qH - 3, rx: 1, fill: '#06060e' }));
-    group.appendChild(el('rect', { x: hx + 2, y: hy + qH - 6, width: qW - 4, height: 3.5, rx: 0.5, fill: '#00d4ff', opacity: 0.85 }));
-    group.appendChild(el('text', { x: p.relativeX, y: hy + qH - 0.8, 'text-anchor': 'middle', 'font-size': '4', fill: '#4a7aaa', 'font-family': 'monospace' })).textContent = `Q${i + 1}`;
+    const qW = Math.max(14, pitch * 1.8);
+    const qH = chH - numZone - 2;
+    const hx = p.relativeX - qW / 2;
+    const hy = chY + numZone;
+    group.appendChild(el('text', {
+      x: p.relativeX, y: numY,
+      'text-anchor': 'middle', 'font-size': '3.5', fill: '#5a8aaa', 'font-family': 'monospace',
+    })).textContent = `Q${i + 1}`;
+    group.appendChild(el('rect', { x: hx, y: hy, width: qW, height: qH, rx: 1.5, fill: '#22263a', stroke: '#4a5060', 'stroke-width': 0.5 }));
+    group.appendChild(el('rect', { x: hx + 1.5, y: hy + 1.5, width: qW - 3, height: qH - 3, rx: 1, fill: '#07070e' }));
+    group.appendChild(el('rect', { x: hx + 2, y: hy + qH - 4.5, width: qW - 4, height: 3, rx: 0.3, fill: '#00c8ff', opacity: 0.85 }));
   });
 
   // Vent slots right of last port
   const lastPortX = ports.reduce((mx, p) => Math.max(mx, p.relativeX), STATUS_END + 8);
-  const ventStart = lastPortX + 7;
+  const ventStart = lastPortX + pitch / 2 + 4;
   if (ventStart < W - 20) drawVentSlots(group, ventStart, chY, chH);
 
   return group;
