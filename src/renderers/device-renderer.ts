@@ -1,11 +1,11 @@
-import { DeviceData, DeviceCategory, RACK_CONSTANTS } from '../core/types';
+import { DeviceData, DeviceCategory, RACK_CONSTANTS, AppState } from '../core/types';
 import { createGroup, createRect, createCircle, createLinearGradient, createSVGElement, setAttributes } from '../utils/svg-helpers';
 import { getTemplate } from '../library/device-catalog';
 import { renderPorts } from './port-renderer';
 import { renderFrontPanel } from './panel-renderer';
 import { stateManager } from '../core/state';
 
-export function renderDevice(device: DeviceData, rackX: number, rackY: number, rackUnits: number): SVGGElement {
+export function renderDevice(device: DeviceData, rackX: number, rackY: number, rackUnits: number, stateOverride?: Partial<AppState>): SVGGElement {
   const template = getTemplate(device.templateId);
   const heightUnits = template?.heightUnits || 1;
   const category: DeviceCategory = template?.category ?? 'server';
@@ -23,7 +23,7 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
     'data-device-id': device.id
   });
 
-  const state = stateManager.getState();
+  const state = { ...stateManager.getState(), ...stateOverride };
   const isRearView = state.cabinetViewMode === 'rear';
   const isSkeleton = state.cabinetDrawMode === 'skeleton';
 

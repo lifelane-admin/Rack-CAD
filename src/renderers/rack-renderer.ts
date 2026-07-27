@@ -1,8 +1,8 @@
-import { RackData, RACK_CONSTANTS } from '../core/types';
+import { RackData, RACK_CONSTANTS, AppState } from '../core/types';
 import { createGroup, createRect, createCircle, createText, createLinearGradient, createFilter, createSVGElement, setAttributes } from '../utils/svg-helpers';
 import { stateManager } from '../core/state';
 
-export function renderRack(rack: RackData, parentGroup: SVGGElement): SVGGElement {
+export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverride?: Partial<AppState>): SVGGElement {
   const rackGroup = createGroup('rack-' + rack.id, 'rack');
   setAttributes(rackGroup, {
     transform: `translate(${rack.x}, ${rack.y})`,
@@ -51,7 +51,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement): SVGGElemen
   defs.appendChild(pduGradient);
   rackGroup.appendChild(defs);
 
-  const state = stateManager.getState();
+  const state = { ...stateManager.getState(), ...stateOverride };
   const isSkel = state.cabinetDrawMode === 'skeleton';
   const hasCover = state.cabinetCoverVisible;
   const isIso = state.isometricMode;
