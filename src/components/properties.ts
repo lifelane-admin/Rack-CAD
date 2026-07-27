@@ -4,6 +4,9 @@ import State from '../core/state';
 import { stateManager } from '../core/state';
 import { SelectableItem, CableType, CABLE_COLORS } from '../core/types';
 import { getTemplate } from '../library/device-catalog';
+import { CustomAssetModal } from './custom-asset-modal';
+
+const customAssetModal = new CustomAssetModal();
 import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
 import { aiService } from '../ai/ai-service';
 import { AIHint } from '../ai/types';
@@ -228,6 +231,7 @@ export class PropertiesPanel {
             <span>✔ Custom background image active</span>
           </div>
         ` : ''}
+        <button id="btn-save-custom-asset" class="prop-btn" title="Save this device configuration to My Library" style="width:100%;margin-top:8px;background:#1f6feb;color:#fff;font-weight:600;border:none;border-radius:4px;padding:7px 10px;font-size:12px;cursor:pointer;">Save as Custom Asset</button>
       </div>
 
       <div class="form-group" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 12px;">
@@ -314,6 +318,16 @@ export class PropertiesPanel {
     // Clear background image listener
     container.querySelector('#prop-dev-panel-clear')?.addEventListener('click', () => {
       EventBus.emit('device:update', { id, data: { frontPanelImage: undefined } });
+    });
+
+    // Save as Custom Asset
+    container.querySelector('#btn-save-custom-asset')?.addEventListener('click', () => {
+      const state = stateManager.getState();
+      const device = state.devices.find(d => d.id === id);
+      if (!device) return;
+      const baseTemplate = getTemplate(device.templateId, state.customTemplates) ?? null;
+      const existingCustom = baseTemplate?.isCustom ? baseTemplate : null;
+      customAssetModal.show(device, baseTemplate, existingCustom, () => {});
     });
 
     // Cable laying helper listener
