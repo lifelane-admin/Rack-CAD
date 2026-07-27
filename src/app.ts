@@ -1711,6 +1711,8 @@ export class App {
           const items: MenuItem[] = [
             { label: `⚙️ ${cable.displayName || cable.name || 'Ethernet Cable'} Options`, icon: '🔌', disabled: true },
             { separator: true, label: '' },
+            { label: 'Edit Cable Type', action: () => { stateManager.setState({ selection: [{ type: 'cable', id: targetCableId }] }); eventBus.emit('selection:changed', [{ type: 'cable', id: targetCableId }]); } },
+            { separator: true, label: '' },
             {
               label: '🔌 Source Connector Orientation',
               icon: '🔌',
@@ -1945,19 +1947,6 @@ export class App {
                 if (nextRU !== null) cloned.startUnit = nextRU;
                 stateManager.addDevice(cloned);
               }
-            },
-            { separator: true, label: '' },
-            {
-              label: '⚡ Auto-Generate 8 Cables to Gutter',
-              icon: '⚡',
-              action: () => {
-                eventBus.emit('cable:batch-generate', { deviceId, side: 'right', type: 'vm-network', color: '#fb8c00', count: 8 });
-              }
-            },
-            {
-              label: '⚙️ View / Edit Device Properties',
-              icon: '⚙️',
-              action: () => this.properties.update([{ type: 'device', id: deviceId }])
             },
             { separator: true, label: '' },
             {
