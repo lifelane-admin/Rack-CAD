@@ -48,6 +48,10 @@ export interface DeviceTemplate {
   ports: Omit<PortData, 'deviceId' | 'connected' | 'cableId'>[];
   icon: string;  // emoji or text label for sidebar
   frontPanelImage?: string;
+  isCustom?: boolean;
+  basedOnTemplateId?: string;
+  customDescription?: string;
+  createdAt?: string;
 }
 
 export interface DeviceData {
@@ -202,6 +206,7 @@ export interface AppState {
   aiMode: boolean;
   aiProvider: AIProviderName;
   previewDiff: RackDiff | null;
+  customTemplates: DeviceTemplate[];
 }
 
 // === Events ===
