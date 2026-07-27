@@ -88,6 +88,57 @@
     </div>
   </div>
 
+  <!-- Custom Asset Modal -->
+  <div id="custom-asset-modal" class="hidden">
+    <div class="modal-box">
+      <h3>Save as Custom Asset</h3>
+      <div class="cam-field">
+        <label for="cam-name">Name</label>
+        <input id="cam-name" type="text" placeholder="DELL PowerEdge R770 2U"/>
+      </div>
+      <div class="cam-field">
+        <label for="cam-cat">Category</label>
+        <select id="cam-cat">
+          <option value="server">Server</option>
+          <option value="switch">Switch</option>
+          <option value="router">Router</option>
+          <option value="firewall">Firewall</option>
+          <option value="storage">Storage</option>
+          <option value="patch-panel">Patch Panel</option>
+          <option value="pdu">PDU</option>
+          <option value="ups">UPS</option>
+          <option value="blank-panel">Blank Panel</option>
+          <option value="cable-manager">Cable Manager</option>
+          <option value="cooling">Cooling</option>
+          <option value="console">Console</option>
+        </select>
+      </div>
+      <div class="cam-field">
+        <label for="cam-based-on">Based On</label>
+        <input id="cam-based-on" type="text" readonly/>
+      </div>
+      <div class="cam-field">
+        <label>Front Panel Image</label>
+        <div class="cam-image-row">
+          <img id="cam-image-thumb" class="cam-image-thumb hidden" src="" alt="Front panel"/>
+          <div id="cam-no-image" class="cam-no-image">No image</div>
+          <div class="cam-image-actions">
+            <button id="cam-upload-btn" class="cam-btn-sm">Upload</button>
+            <button id="cam-remove-btn" class="cam-btn-sm">Remove</button>
+          </div>
+        </div>
+      </div>
+      <div class="cam-field">
+        <label for="cam-desc">Description</label>
+        <textarea id="cam-desc" rows="2" placeholder="Optional notes..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button id="cam-cancel">Cancel</button>
+        <button id="cam-save">Save to My Library</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

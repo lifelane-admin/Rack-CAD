@@ -1,11 +1,14 @@
 import EventBus from '../core/event-bus';
 import State from '../core/state';
-import { deviceCatalog } from '../library/device-catalog';
+import { deviceCatalog, getTemplate } from '../library/device-catalog';
 import { DeviceCategory, DeviceTemplate } from '../core/types';
+import { CustomAssetModal } from './custom-asset-modal';
+import { deleteCustomTemplate, exportCustomLibraryJSON, parseCustomLibraryJSON } from '../library/custom-catalog';
 
 export class Sidebar {
   private container: HTMLElement;
   private searchTerm: string = '';
+  private customAssetModal = new CustomAssetModal();
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -48,11 +51,154 @@ export class Sidebar {
     this.renderCatalog();
   }
 
+  private renderMyLibrary(container: HTMLElement): void {
+    const state = State.getState();
+    const customTemplates = state.customTemplates ?? [];
+
+    const section = document.createElement('div');
+    section.className = 'sidebar-section expanded';
+    section.id = 'my-library-section';
+
+    const titleRow = document.createElement('div');
+    titleRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+
+    const title = document.createElement('div');
+    title.className = 'sidebar-section-title';
+    title.style.flex = '1';
+    title.textContent = '⭐ My Library';
+    title.onclick = () => section.classList.toggle('expanded');
+    titleRow.appendChild(title);
+
+    const importBtn = document.createElement('button');
+    importBtn.textContent = '+ Import';
+    importBtn.title = 'Import custom library from JSON file';
+    importBtn.style.cssText = 'font-size:10px;padding:2px 6px;border:1px solid #30363d;background:transparent;color:#8b949e;border-radius:3px;cursor:pointer;margin-right:4px;';
+    importBtn.onclick = (e) => {
+      e.stopPropagation();
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = (evt: any) => {
+        const file: File = evt.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (r: any) => {
+          try {
+            const imported = parseCustomLibraryJSON(r.target.result);
+            const existing = state.customTemplates ?? [];
+            const existingIds = new Set(existing.map(t => t.id));
+            const merged = [...existing, ...imported.filter(t => !existingIds.has(t.id))];
+            State.setState({ customTemplates: merged });
+            EventBus.emit('notification' as any, { message: `Imported ${imported.length} asset(s)`, type: 'success' });
+            this.renderCatalog();
+          } catch (err) {
+            EventBus.emit('notification' as any, { message: `Import failed: ${err}`, type: 'error' });
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    };
+    titleRow.appendChild(importBtn);
+    section.appendChild(titleRow);
+
+    const content = document.createElement('div');
+    content.className = 'sidebar-section-content';
+
+    if (customTemplates.length === 0) {
+      const empty = document.createElement('p');
+      empty.style.cssText = 'font-size:11px;color:#8b949e;font-style:italic;padding:8px 4px;margin:0;';
+      empty.textContent = 'No custom assets yet. Select a device on canvas and click "Save as Custom Asset" in Properties.';
+      content.appendChild(empty);
+    } else {
+      customTemplates.forEach(item => {
+        const el = document.createElement('div');
+        el.className = `catalog-item category-${item.category}`;
+        el.draggable = true;
+        el.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding-right:4px;';
+
+        const leftPart = document.createElement('div');
+        leftPart.style.cssText = 'display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow:hidden;';
+        leftPart.innerHTML = `
+          <div class="item-icon">${item.icon}</div>
+          <div class="item-details" style="min-width:0;overflow:hidden;">
+            <div class="item-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.name}</div>
+            <div class="item-meta">${item.heightUnits > 0 ? item.heightUnits + 'U' : 'Accessory'} • Custom</div>
+          </div>
+        `;
+
+        const actions = document.createElement('div');
+        actions.style.cssText = 'display:flex;gap:2px;flex-shrink:0;';
+
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '✎';
+        editBtn.title = 'Edit custom asset';
+        editBtn.style.cssText = 'background:none;border:none;color:#8b949e;cursor:pointer;font-size:13px;padding:2px 4px;';
+        editBtn.onclick = (e) => {
+          e.stopPropagation();
+          const fakeDevice: any = {
+            id: '__edit__',
+            name: item.name,
+            hostname: '',
+            managementIp: '',
+            serialNumber: '',
+            description: item.customDescription ?? '',
+            templateId: item.id,
+            rackId: '',
+            startUnit: 1,
+            ports: item.ports.map(p => ({ ...p, deviceId: '__edit__', connected: false, cableId: null })),
+            frontPanelImage: item.frontPanelImage,
+          };
+          const base = getTemplate(item.basedOnTemplateId ?? '') ?? null;
+          this.customAssetModal.show(fakeDevice, base, item, (_saved) => {
+            this.renderCatalog();
+          });
+        };
+
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '×';
+        delBtn.title = 'Delete custom asset';
+        delBtn.style.cssText = 'background:none;border:none;color:#8b949e;cursor:pointer;font-size:16px;padding:2px 4px;';
+        delBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (!confirm(`Delete custom asset "${item.name}"? Devices already placed on the canvas will keep their appearance.`)) return;
+          deleteCustomTemplate(item.id);
+          const newTemplates = (State.getState().customTemplates ?? []).filter(t => t.id !== item.id);
+          State.setState({ customTemplates: newTemplates });
+          this.renderCatalog();
+        };
+
+        actions.appendChild(editBtn);
+        actions.appendChild(delBtn);
+        el.appendChild(leftPart);
+        el.appendChild(actions);
+
+        el.ondragstart = (e) => {
+          e.dataTransfer?.setData('application/json', JSON.stringify({ templateId: item.id }));
+        };
+
+        content.appendChild(el);
+      });
+
+      const exportBtn = document.createElement('button');
+      exportBtn.textContent = 'Export My Library';
+      exportBtn.title = 'Download all custom assets as JSON';
+      exportBtn.style.cssText = 'margin:6px 4px 2px;font-size:11px;padding:4px 10px;border:1px solid #30363d;background:transparent;color:#8b949e;border-radius:4px;cursor:pointer;width:calc(100% - 8px);';
+      exportBtn.onclick = () => exportCustomLibraryJSON(customTemplates);
+      content.appendChild(exportBtn);
+    }
+
+    section.appendChild(content);
+    container.appendChild(section);
+  }
+
   private renderCatalog() {
     const container = this.container.querySelector('#catalog-container') as HTMLElement;
     if (!container) return;
-    
+
     container.innerHTML = '';
+
+    this.renderMyLibrary(container);
 
     const categories: { id: DeviceCategory, label: string, icon: string }[] = [
       { id: 'server',       label: 'Servers',          icon: '🖥️' },
