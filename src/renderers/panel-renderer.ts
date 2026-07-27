@@ -109,7 +109,7 @@ function drawVentSlots(parent: SVGGElement, startX: number, chY: number, chH: nu
   }
 }
 
-function renderSwitchPanel(_template: DeviceTemplate | null, W: number, H: number): SVGGElement {
+function renderSwitchPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
   const group = g('switch-panel');
   const defs = el('defs');
   const gradId = `sw-grad-${Math.random().toString(36).slice(2)}`;
@@ -119,10 +119,61 @@ function renderSwitchPanel(_template: DeviceTemplate | null, W: number, H: numbe
   const chY = 2;
   const chH = H - 4;
 
-  // Chassis background — actual port connectors rendered by renderPorts()
+  // Chassis body
   group.appendChild(el('rect', { x: 0, y: chY, width: W, height: chH, rx: 2, fill: `url(#${gradId})`, stroke: '#111', 'stroke-width': 1 }));
 
+  // Status block (LEDs + power indicator)
   drawStatusBlock(group, chY, chH);
+
+  const ports = template?.ports ?? [];
+  const rj45 = ports.filter(p => p.type === 'rj45');
+  const sfp  = ports.filter(p => p.type === 'sfp-plus' || p.type === 'sfp' || p.type === 'sfp28');
+  const qsfp = ports.filter(p => p.type === 'qsfp28' || p.type === 'qsfp');
+
+  // Draw port recesses behind each RJ45 at its exact template position
+  // The interactive port rect is 12×10 centered at (relativeX, relativeY), so the
+  // recess is a 18×14 dark slot aligned to the same center — gives the "socket opening" look.
+  rj45.forEach(p => {
+    group.appendChild(el('rect', {
+      x: p.relativeX - 10, y: p.relativeY - 8,
+      width: 20, height: 16,
+      rx: 2, fill: '#050508', stroke: '#2a2a2e', 'stroke-width': 0.7,
+    }));
+    // Tiny LED indicator above each port
+    group.appendChild(el('rect', {
+      x: p.relativeX - 5, y: p.relativeY - 12,
+      width: 10, height: 2.5,
+      rx: 1, fill: '#0d1f0d',
+    }));
+  });
+
+  // Draw SFP cage outlines behind each SFP port
+  const sfpW = 14;
+  sfp.forEach(p => {
+    const cageX = p.relativeX - sfpW / 2;
+    const cageH = Math.min(chH - 8, 20);
+    const cageY = chY + (chH - cageH) / 2;
+    group.appendChild(el('rect', { x: cageX, y: cageY, width: sfpW, height: cageH, rx: 1.5, fill: '#08080c', stroke: '#3a3a44', 'stroke-width': 0.8 }));
+    // Fiber-glow lip at bottom of cage
+    group.appendChild(el('rect', { x: cageX + 2, y: cageY + cageH - 5, width: sfpW - 4, height: 3, rx: 1, fill: '#00e5ff', opacity: 0.5 }));
+  });
+
+  // Draw QSFP cage outlines
+  const qsfpW = 22;
+  qsfp.forEach(p => {
+    const cageX = p.relativeX - qsfpW / 2;
+    const cageH = Math.min(chH - 8, 20);
+    const cageY = chY + (chH - cageH) / 2;
+    group.appendChild(el('rect', { x: cageX, y: cageY, width: qsfpW, height: cageH, rx: 2, fill: '#08080c', stroke: '#444', 'stroke-width': 0.8 }));
+    group.appendChild(el('rect', { x: cageX + 2, y: cageY + cageH - 5, width: qsfpW - 4, height: 3, rx: 1, fill: '#00e5ff', opacity: 0.7 }));
+  });
+
+  // Vent slots on the right (past all port positions)
+  const allPortsRightEdge = ports.reduce((max, p) => Math.max(max, p.relativeX + 12), STATUS_END + 10);
+  const ventStart = Math.min(allPortsRightEdge + 12, W - 24);
+  if (ventStart < W - 20) {
+    drawVentSlots(group, ventStart, chY, chH);
+  }
 
   return group;
 }
