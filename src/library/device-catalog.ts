@@ -422,6 +422,67 @@ export const deviceCatalog: DeviceTemplate[] = [
   },
 
   // ─── PDU ────────────────────────────────────────────────────────────────────
+  // ─── PDU (vendor-specific, with deviceConfig) ────────────────────────────
+  {
+    id: 'pdu-basic-8c13',
+    name: 'Basic PDU 8×C13',
+    manufacturer: 'Generic',
+    model: 'Basic PDU 8×C13',
+    category: 'pdu',
+    heightUnits: 1,
+    color: '#0f0f0f',
+    icon: '🔌',
+    ports: Array.from({ length: 8 }, (_, i) => ({
+      id: `pdu-basic-8c13-o${i+1}`, name: `Outlet ${i+1}`, type: 'power' as const,
+      relativeX: 24 + i * 40, relativeY: 15,
+    })),
+    deviceConfig: { finish: 'ral9005-texture', rows: [{ count: 8, socketType: 'C13' }] },
+  },
+  {
+    id: 'pdu-metered-16c13',
+    name: 'Metered PDU 16×C13',
+    manufacturer: 'Generic',
+    model: 'Metered PDU 16×C13',
+    category: 'pdu',
+    heightUnits: 1,
+    color: '#33373b',
+    icon: '🔌',
+    ports: Array.from({ length: 16 }, (_, i) => ({
+      id: `pdu-metered-16c13-o${i+1}`, name: `Outlet ${i+1}`, type: 'power' as const,
+      relativeX: 24 + i * 20, relativeY: 15,
+    })),
+    deviceConfig: { finish: 'darkGrey', rows: [{ count: 16, socketType: 'C13' }] },
+  },
+  {
+    id: 'pdu-smart-20mix',
+    name: 'Smart PDU 20×C13 + 2×C19',
+    manufacturer: 'Generic',
+    model: 'Smart PDU 20×C13 + 2×C19',
+    category: 'pdu',
+    heightUnits: 2,
+    color: '#0f0f0f',
+    icon: '🔌',
+    ports: [
+      ...Array.from({ length: 20 }, (_, i) => ({ id: `pdu-smart-c13-${i+1}`, name: `C13 ${i+1}`, type: 'power' as const, relativeX: 24 + i * 15, relativeY: 20 })),
+      ...Array.from({ length: 2 },  (_, i) => ({ id: `pdu-smart-c19-${i+1}`, name: `C19 ${i+1}`, type: 'power' as const, relativeX: 24 + i * 25, relativeY: 45 })),
+    ],
+    deviceConfig: { finish: 'ral9005-texture', rows: [{ count: 20, socketType: 'C13' }, { count: 2, socketType: 'C19' }] },
+  },
+  {
+    id: 'pdu-apc-ap7920',
+    name: 'APC AP7920',
+    manufacturer: 'APC',
+    model: 'AP7920',
+    category: 'pdu',
+    heightUnits: 1,
+    color: '#e8eaec',
+    icon: '🔌',
+    ports: Array.from({ length: 8 }, (_, i) => ({
+      id: `pdu-apc-ap7920-o${i+1}`, name: `Outlet ${i+1}`, type: 'power' as const,
+      relativeX: 24 + i * 40, relativeY: 15,
+    })),
+    deviceConfig: { finish: 'brushedAluminium', rows: [{ count: 8, socketType: 'C13' }] },
+  },
   {
     id: 'pdu-8',
     name: 'Basic PDU 8-Outlet',
