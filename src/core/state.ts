@@ -82,9 +82,9 @@ class StateManager {
       };
     };
 
-    const torA = mkDevice('tor-a', 'sw-tplink-sg2424', 40, 'TOR SWITCH A', 'tor-switch-a', '10.10.10.11', 'SRN-TOR-A', 'Top of Rack Switch A');
-    const torB = mkDevice('tor-b', 'sw-tplink-sg2424', 38, 'TOR SWITCH B', 'tor-switch-b', '10.10.10.12', 'SRN-TOR-B', 'Top of Rack Switch B');
-    const mgmtSwitch = mkDevice('mgmt-switch', 'sw-tplink-sg2424', 36, 'MANAGEMENT SWITCH', 'mgmt-switch', '10.10.10.10', 'SRN-MGMT', '1GbE OOB Management Switch');
+    const torA = mkDevice('tor-a', 'rs-sw-24p', 40, 'TOR SWITCH A', 'tor-switch-a', '10.10.10.11', 'SRN-TOR-A', 'Top of Rack Switch A');
+    const torB = mkDevice('tor-b', 'rs-sw-24p', 38, 'TOR SWITCH B', 'tor-switch-b', '10.10.10.12', 'SRN-TOR-B', 'Top of Rack Switch B');
+    const mgmtSwitch = mkDevice('mgmt-switch', 'rs-sw-24p', 36, 'MANAGEMENT SWITCH', 'mgmt-switch', '10.10.10.10', 'SRN-MGMT', '1GbE OOB Management Switch');
     const node1 = mkDevice('node-1', 'server-2u', 20, 'Server Node 1', 'server-node-1', '10.10.10.21', 'SRN-NODE-1', 'Cluster Node 1');
     const node2 = mkDevice('node-2', 'server-2u', 17, 'Server Node 2', 'server-node-2', '10.10.10.22', 'SRN-NODE-2', 'Cluster Node 2');
     const node3 = mkDevice('node-3', 'server-2u', 14, 'Server Node 3', 'server-node-3', '10.10.10.23', 'SRN-NODE-3', 'Cluster Node 3');

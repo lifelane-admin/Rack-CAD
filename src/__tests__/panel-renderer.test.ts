@@ -5,15 +5,15 @@ import { getTemplate } from '../library/device-catalog';
 describe('renderFrontPanel', () => {
   const W = 350;
 
-  it('returns an SVGGElement for sw-tplink-sg2424', () => {
-    const t = getTemplate('sw-tplink-sg2424')!;
+  it('returns an SVGGElement for rs-sw-24p', () => {
+    const t = getTemplate('rs-sw-24p')!;
     const result = renderFrontPanel('switch', t, null, W, 30);
     expect(result).toBeDefined();
     expect(result.tagName.toLowerCase()).toBe('g');
   });
 
-  it('returns an SVGGElement for sw-tplink-sg2448', () => {
-    const t = getTemplate('sw-tplink-sg2448')!;
+  it('returns an SVGGElement for rs-sw-48p', () => {
+    const t = getTemplate('rs-sw-48p')!;
     const result = renderFrontPanel('switch', t, null, W, 30);
     expect(result.tagName.toLowerCase()).toBe('g');
   });

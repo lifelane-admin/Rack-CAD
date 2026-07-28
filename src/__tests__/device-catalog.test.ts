@@ -24,8 +24,8 @@ describe('Standard Library catalog', () => {
     }
   });
 
-  it('sw-tplink-sg2424 has 24 rj45 ports and 4 sfp-plus ports', () => {
-    const t = getTemplate('sw-tplink-sg2424');
+  it('rs-sw-24p has 24 rj45 ports and 4 sfp-plus ports', () => {
+    const t = getTemplate('rs-sw-24p');
     expect(t).toBeDefined();
     const rj45 = t!.ports.filter(p => p.type === 'rj45');
     const sfp = t!.ports.filter(p => p.type === 'sfp-plus');
@@ -33,8 +33,8 @@ describe('Standard Library catalog', () => {
     expect(sfp.length).toBe(4);
   });
 
-  it('sw-tplink-sg2448 has 48 rj45 ports and 4 sfp-plus ports', () => {
-    const t = getTemplate('sw-tplink-sg2448');
+  it('rs-sw-48p has 48 rj45 ports and 4 sfp-plus ports', () => {
+    const t = getTemplate('rs-sw-48p');
     expect(t).toBeDefined();
     const rj45 = t!.ports.filter(p => p.type === 'rj45');
     const sfp = t!.ports.filter(p => p.type === 'sfp-plus');
