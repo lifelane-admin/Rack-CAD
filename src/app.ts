@@ -1590,6 +1590,7 @@ export class App {
           serialNumber: '',
           description: '',
           ports,
+          deviceConfig: template.deviceConfig ? { ...template.deviceConfig } : undefined,
         };
 
         stateManager.addDevice(newDevice);

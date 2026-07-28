@@ -1,3 +1,4 @@
+import { mountPduConfigurator, unmountPduConfigurator } from './pdu-configurator';
 import EventBus from '../core/event-bus';
 import { eventBus } from '../core/event-bus';
 import State from '../core/state';
@@ -189,6 +190,9 @@ export class PropertiesPanel {
     const racks = state.racks || [];
     const rackOptions = racks.map((r: any) => `<option value="${r.id}" ${r.id === device.rackId ? 'selected' : ''}>${r.name}</option>`).join('');
 
+    const prevMount = container.querySelector<HTMLElement>('#pdu-configurator-mount');
+    if (prevMount) unmountPduConfigurator(prevMount);
+
     container.innerHTML = `
       <div class="form-group">
         <label>Name</label>
@@ -294,7 +298,21 @@ export class PropertiesPanel {
           </button>
         </div>
       ` : ''}
+
+      ${template?.category === 'pdu' ? `
+        <div id="pdu-configurator-mount" style="margin-top:15px;border-top:1px solid var(--border-color);padding-top:12px;">
+        </div>
+      ` : ''}
     `;
+
+    if (template?.category === 'pdu') {
+      const mount = container.querySelector<HTMLElement>('#pdu-configurator-mount');
+      if (mount) {
+        mountPduConfigurator(mount, device, (newConfig) => {
+          EventBus.emit('device:update', { id, data: { deviceConfig: newConfig } });
+        });
+      }
+    }
 
     container.querySelector('#prop-dev-rack')?.addEventListener('change', (e: any) => {
       EventBus.emit('device:update', { id, data: { rackId: e.target.value } });
