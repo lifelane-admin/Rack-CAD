@@ -1,5 +1,6 @@
 import { DeviceTemplate, DeviceCategory } from '../core/types';
 import { switchPorts } from '../renderers/switch-renderer';
+import { fortigatePorts } from '../renderers/fortigate-renderer';
 
 export const deviceCatalog: DeviceTemplate[] = [
 
@@ -320,6 +321,17 @@ export const deviceCatalog: DeviceTemplate[] = [
         speed: '100 Gbps',
       })),
     ],
+  },
+  {
+    id: 'fw-fortigate-400f',
+    name: 'FortiGate 400F',
+    manufacturer: 'Fortinet',
+    model: 'FortiGate 400F',
+    category: 'firewall',
+    heightUnits: 1,
+    color: '#ffffff',
+    icon: '🛡️',
+    ports: fortigatePorts(),
   },
 
   // ─── PATCH PANELS ───────────────────────────────────────────────────────────

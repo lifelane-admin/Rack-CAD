@@ -1,5 +1,6 @@
 import { DeviceCategory, DeviceTemplate } from '../core/types';
 import { renderSwitchPanel } from './switch-renderer';
+import { renderFortiGatePanel } from './fortigate-renderer';
 
 // ─── Port geometry constants ─────────────────────────────────────────────────
 const PORT_W = 18;
@@ -444,7 +445,10 @@ export function renderFrontPanel(
   switch (category) {
     case 'switch':        return renderSwitchPanel(template, deviceWidth, deviceHeight);
     case 'server':        return renderServerPanel(template, deviceWidth, deviceHeight);
-    case 'firewall':      return renderFirewallPanel(template, deviceWidth, deviceHeight);
+    case 'firewall':
+      return template?.id === 'fw-fortigate-400f'
+        ? renderFortiGatePanel(template, deviceWidth, deviceHeight)
+        : renderFirewallPanel(template, deviceWidth, deviceHeight);
     case 'router':        return renderRouterPanel(template, deviceWidth, deviceHeight);
     case 'patch-panel':   return renderPatchPanel(template, deviceWidth, deviceHeight);
     case 'pdu':           return renderPduPanel(template, deviceWidth, deviceHeight);
