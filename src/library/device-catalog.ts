@@ -14,6 +14,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1a1a1e',
     icon: '🖥️',
+    powerWatts: 200,
     ports: [
       { id: 's1u-nic1', name: 'NIC 1', type: 'rj45', relativeX: 320, relativeY: 8, speed: '1 Gbps' },
       { id: 's1u-nic2', name: 'NIC 2', type: 'rj45', relativeX: 332, relativeY: 8, speed: '1 Gbps' },
@@ -29,6 +30,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#1a1a1e',
     icon: '🖥️',
+    powerWatts: 350,
     ports: [
       { id: 's2u-nic1', name: 'NIC 1', type: 'rj45', relativeX: 320, relativeY: 15, speed: '1 Gbps' },
       { id: 's2u-nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 332, relativeY: 15, speed: '10 Gbps' },
@@ -46,6 +48,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#1a1a1e',
     icon: '🖥️',
+    powerWatts: 350,
     ports: [
       { id: 's2uhd-nic1', name: 'NIC 1', type: 'sfp-plus', relativeX: 315, relativeY: 10, speed: '10 Gbps' },
       { id: 's2uhd-nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 327, relativeY: 10, speed: '10 Gbps' },
@@ -64,6 +67,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 4,
     color: '#1a1a1e',
     icon: '🖥️',
+    powerWatts: 600,
     ports: [
       { id: 's4u-nic1', name: 'NIC 1', type: 'rj45', relativeX: 315, relativeY: 20, speed: '1 Gbps' },
       { id: 's4u-nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 327, relativeY: 20, speed: '10 Gbps' },
@@ -81,6 +85,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 4,
     color: '#1a1a1e',
     icon: '🖥️',
+    powerWatts: 200,
     ports: [
       { id: 'stow-nic1', name: 'NIC 1', type: 'rj45', relativeX: 315, relativeY: 25, speed: '1 Gbps' },
       { id: 'stow-nic2', name: 'NIC 2', type: 'rj45', relativeX: 327, relativeY: 25, speed: '1 Gbps' },
@@ -98,6 +103,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1a1e21',
     icon: '🔀',
+    powerWatts: 28,
     ports: switchPorts(24, 4, 2, 'tpsg2424-'),
   },
   {
@@ -109,6 +115,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1a1e21',
     icon: '🔀',
+    powerWatts: 55,
     ports: switchPorts(48, 4, 2, 'tpsg2448-'),
   },
   {
@@ -120,6 +127,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1a1e21',
     icon: '🔀',
+    powerWatts: 32,
     ports: switchPorts(24, 4, 2, 'sg35028-'),
   },
   {
@@ -131,6 +139,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1a1e21',
     icon: '🔀',
+    powerWatts: 55,
     ports: switchPorts(48, 4, 2, 'sg35052-'),
   },
   {
@@ -142,6 +151,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1a1e21',
     icon: '🔀',
+    powerWatts: 32,
     ports: switchPorts(24, 4, 2, 'c920024-'),
   },
 
@@ -155,6 +165,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1a1f2e',
     icon: '🌐',
+    powerWatts: 45,
     ports: [
       ...Array.from({ length: 4 }, (_, i) => ({
         id: `rtr4-rj${i + 1}`,
@@ -183,6 +194,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1a1f2e',
     icon: '🌐',
+    powerWatts: 45,
     ports: [
       ...Array.from({ length: 8 }, (_, i) => ({
         id: `rtr8-rj${i + 1}`,
@@ -211,6 +223,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#1a1f2e',
     icon: '🌐',
+    powerWatts: 120,
     ports: [
       ...Array.from({ length: 8 }, (_, i) => ({
         id: `rtrcore-q${i + 1}`,
@@ -235,6 +248,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1f1a1a',
     icon: '🛡️',
+    powerWatts: 65,
     ports: [
       { id: 'fw4-con', name: 'CON', type: 'console' as const, relativeX: 20, relativeY: 15, speed: '115.2 Kbps' },
       { id: 'fw4-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 42, relativeY: 15, speed: '1 Gbps' },
@@ -257,6 +271,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1f1a1a',
     icon: '🛡️',
+    powerWatts: 65,
     ports: [
       { id: 'fw6-con', name: 'CON', type: 'console' as const, relativeX: 20, relativeY: 15 },
       { id: 'fw6-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 42, relativeY: 15, speed: '1 Gbps' },
@@ -279,6 +294,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1f1a1a',
     icon: '🛡️',
+    powerWatts: 65,
     ports: [
       { id: 'fw8-con', name: 'CON', type: 'console' as const, relativeX: 20, relativeY: 15 },
       { id: 'fw8-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 42, relativeY: 15, speed: '1 Gbps' },
@@ -301,6 +317,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1f1a1a',
     icon: '🛡️',
+    powerWatts: 65,
     ports: [
       { id: 'fw12-con', name: 'CON', type: 'console' as const, relativeX: 20, relativeY: 15 },
       { id: 'fw12-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 42, relativeY: 15, speed: '1 Gbps' },
@@ -331,6 +348,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#ffffff',
     icon: '🛡️',
+    powerWatts: 150,
     ports: fortigatePorts(),
   },
 
@@ -344,6 +362,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1e1824',
     icon: '🔲',
+    powerWatts: 0,
     ports: Array.from({ length: 12 }, (_, i) => ({
       id: `pp12-p${i + 1}`,
       name: `P${i + 1}`,
@@ -361,6 +380,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1e1824',
     icon: '🔲',
+    powerWatts: 0,
     ports: Array.from({ length: 24 }, (_, i) => ({
       id: `pp24-p${i + 1}`,
       name: `P${i + 1}`,
@@ -378,6 +398,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1e1824',
     icon: '🔲',
+    powerWatts: 0,
     ports: Array.from({ length: 48 }, (_, i) => ({
       id: `pp48-p${i + 1}`,
       name: `P${i + 1}`,
@@ -395,6 +416,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1e1824',
     icon: '🔲',
+    powerWatts: 0,
     ports: Array.from({ length: 24 }, (_, i) => ({
       id: `ppf24-p${i + 1}`,
       name: `F${i + 1}`,
@@ -412,6 +434,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1e1824',
     icon: '🔲',
+    powerWatts: 0,
     ports: Array.from({ length: 48 }, (_, i) => ({
       id: `ppf48-p${i + 1}`,
       name: `F${i + 1}`,
@@ -432,6 +455,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#0f0f0f',
     icon: '🔌',
+    powerWatts: 8,
     ports: Array.from({ length: 8 }, (_, i) => ({
       id: `pdu-basic-8c13-o${i+1}`, name: `Outlet ${i+1}`, type: 'power' as const,
       relativeX: 24 + i * 40, relativeY: 15,
@@ -447,6 +471,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#33373b',
     icon: '🔌',
+    powerWatts: 8,
     ports: Array.from({ length: 16 }, (_, i) => ({
       id: `pdu-metered-16c13-o${i+1}`, name: `Outlet ${i+1}`, type: 'power' as const,
       relativeX: 24 + i * 20, relativeY: 15,
@@ -462,6 +487,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#0f0f0f',
     icon: '🔌',
+    powerWatts: 8,
     ports: [
       ...Array.from({ length: 20 }, (_, i) => ({ id: `pdu-smart-c13-${i+1}`, name: `C13 ${i+1}`, type: 'power' as const, relativeX: 24 + i * 15, relativeY: 20 })),
       ...Array.from({ length: 2 },  (_, i) => ({ id: `pdu-smart-c19-${i+1}`, name: `C19 ${i+1}`, type: 'power' as const, relativeX: 24 + i * 25, relativeY: 45 })),
@@ -477,6 +503,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#e8eaec',
     icon: '🔌',
+    powerWatts: 8,
     ports: Array.from({ length: 8 }, (_, i) => ({
       id: `pdu-apc-ap7920-o${i+1}`, name: `Outlet ${i+1}`, type: 'power' as const,
       relativeX: 24 + i * 40, relativeY: 15,
@@ -492,6 +519,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#212121',
     icon: '🔌',
+    powerWatts: 5,
     ports: Array.from({ length: 8 }, (_, i) => ({
       id: `pdu8-c13-${i + 1}`,
       name: `C13-${i + 1}`,
@@ -509,6 +537,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#212121',
     icon: '🔌',
+    powerWatts: 5,
     ports: Array.from({ length: 12 }, (_, i) => ({
       id: `pdu12-c13-${i + 1}`,
       name: `C13-${i + 1}`,
@@ -526,6 +555,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1b5e20',
     icon: '🔌',
+    powerWatts: 5,
     ports: Array.from({ length: 16 }, (_, i) => ({
       id: `pdu16m-c13-${i + 1}`,
       name: `C13-${i + 1}`,
@@ -543,6 +573,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#1b5e20',
     icon: '🔌',
+    powerWatts: 5,
     ports: [
       ...Array.from({ length: 20 }, (_, i) => ({
         id: `pdu20s-c13-${i + 1}`,
@@ -570,6 +601,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#37474f',
     icon: '🔌',
+    powerWatts: 5,
     ports: Array.from({ length: 16 }, (_, i) => ({
       id: `pduv16-c13-${i + 1}`,
       name: `C13-${i + 1}`,
@@ -587,6 +619,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#37474f',
     icon: '🔌',
+    powerWatts: 5,
     ports: Array.from({ length: 24 }, (_, i) => ({
       id: `pduv24-c13-${i + 1}`,
       name: `C13-${i + 1}`,
@@ -606,6 +639,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1c2029',
     icon: '⚡',
+    powerWatts: 25,
     ports: [
       { id: 'ups750-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 330, relativeY: 15, speed: '1 Gbps' },
     ],
@@ -619,6 +653,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#1c2029',
     icon: '⚡',
+    powerWatts: 25,
     ports: [
       { id: 'ups1500-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 330, relativeY: 25, speed: '1 Gbps' },
     ],
@@ -632,6 +667,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#1c2029',
     icon: '⚡',
+    powerWatts: 25,
     ports: [
       { id: 'ups3000-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 330, relativeY: 25, speed: '1 Gbps' },
     ],
@@ -645,6 +681,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 3,
     color: '#1c2029',
     icon: '⚡',
+    powerWatts: 25,
     ports: [
       { id: 'ups6000-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 330, relativeY: 35, speed: '1 Gbps' },
     ],
@@ -660,6 +697,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#151e2b',
     icon: '💾',
+    powerWatts: 180,
     ports: [
       { id: 'nas4-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 300, relativeY: 10, speed: '1 Gbps' },
       { id: 'nas4-p1', name: 'Port 1', type: 'rj45' as const, relativeX: 315, relativeY: 10, speed: '1 Gbps' },
@@ -675,6 +713,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#151e2b',
     icon: '💾',
+    powerWatts: 180,
     ports: [
       { id: 'nas8-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 300, relativeY: 20, speed: '1 Gbps' },
       { id: 'nas8-p1', name: 'Port 1', type: 'sfp-plus' as const, relativeX: 315, relativeY: 20, speed: '10 Gbps' },
@@ -690,6 +729,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#151e2b',
     icon: '💾',
+    powerWatts: 180,
     ports: [
       { id: 'st12-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 295, relativeY: 15, speed: '1 Gbps' },
       { id: 'st12-p1', name: 'SAS 1', type: 'sfp-plus' as const, relativeX: 310, relativeY: 15, speed: '12 Gbps' },
@@ -707,6 +747,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 4,
     color: '#151e2b',
     icon: '💾',
+    powerWatts: 180,
     ports: [
       { id: 'st24-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 295, relativeY: 30, speed: '1 Gbps' },
       { id: 'st24-p1', name: 'SAS 1', type: 'sfp-plus' as const, relativeX: 310, relativeY: 30, speed: '12 Gbps' },
@@ -724,6 +765,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#151e2b',
     icon: '💾',
+    powerWatts: 180,
     ports: [
       { id: 'aff-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 290, relativeY: 15, speed: '1 Gbps' },
       { id: 'aff-p1', name: 'NVMe 1', type: 'sfp28' as const, relativeX: 305, relativeY: 15, speed: '25 Gbps' },
@@ -743,6 +785,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#2e2828',
     icon: '📟',
+    powerWatts: 18,
     ports: [
       ...Array.from({ length: 8 }, (_, i) => ({
         id: `kvm8-p${i + 1}`,
@@ -763,6 +806,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#2e2828',
     icon: '📟',
+    powerWatts: 18,
     ports: [
       ...Array.from({ length: 16 }, (_, i) => ({
         id: `kvm16-p${i + 1}`,
@@ -783,6 +827,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#2e2828',
     icon: '📟',
+    powerWatts: 18,
     ports: [
       ...Array.from({ length: 8 }, (_, i) => ({
         id: `cs8-p${i + 1}`,
@@ -803,6 +848,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#2e2828',
     icon: '📟',
+    powerWatts: 18,
     ports: [
       ...Array.from({ length: 16 }, (_, i) => ({
         id: `cs16-p${i + 1}`,
@@ -825,6 +871,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1a1a1c',
     icon: '📂',
+    powerWatts: 0,
     ports: [],
   },
   {
@@ -836,6 +883,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1e1e20',
     icon: '📂',
+    powerWatts: 0,
     ports: [],
   },
   {
@@ -847,6 +895,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#151518',
     icon: '📂',
+    powerWatts: 0,
     ports: [],
   },
   {
@@ -858,6 +907,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 4,
     color: '#121215',
     icon: '📂',
+    powerWatts: 0,
     ports: [],
   },
 
@@ -871,6 +921,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#232326',
     icon: '▬',
+    powerWatts: 0,
     ports: [],
   },
   {
@@ -882,6 +933,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#232326',
     icon: '▬',
+    powerWatts: 0,
     ports: [],
   },
 
@@ -895,6 +947,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 1,
     color: '#1a1c1f',
     icon: '❄️',
+    powerWatts: 150,
     ports: [],
   },
   {
@@ -906,6 +959,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#1a1c1f',
     icon: '❄️',
+    powerWatts: 150,
     ports: [],
   },
 ];
