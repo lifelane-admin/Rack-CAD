@@ -16,6 +16,9 @@ export interface RackData {
   showPduRight?: boolean;
   leftCableManagerWidth?: '4-inch' | '6-inch' | 'none';
   rightCableManagerWidth?: '4-inch' | '6-inch' | 'none';
+  powerCircuitA?: string[];   // device IDs on circuit A
+  powerCircuitB?: string[];   // device IDs on circuit B
+  pduCapacityWatts?: number;  // max watts per circuit; default 3600
 }
 
 // === Ports ===
@@ -55,6 +58,7 @@ export interface DeviceTemplate {
   basedOnTemplateId?: string;
   customDescription?: string;
   createdAt?: string;
+  powerWatts?: number;  // nameplate watts; 0 for passive devices
 }
 
 export interface DeviceData {
@@ -71,6 +75,7 @@ export interface DeviceData {
   ports: PortData[];
   frontPanelImage?: string;
   deviceConfig?: Record<string, unknown>;  // PDU configurator state
+  powerWatts?: number;  // per-instance override; falls back to template.powerWatts
 }
 
 export type CableType = 'idrac' | 'vm-network' | 'ceph-primary' | 'ceph-secondary' | 'live-migration' | 'backup' | 'general' | 'general-a' | 'general-b' | 'power' | 'cat6' | 'cat6a' | 'cat8' | 'om4' | 'om5' | 'dac-twinax' | 'qsfp28' | 'c13-power' | 'c19-power' | 'console' | 'custom';
