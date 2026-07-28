@@ -223,6 +223,16 @@ export class PropertiesPanel {
         <textarea id="prop-dev-desc">${device.description || ''}</textarea>
       </div>
 
+      <div style="margin-bottom:12px;">
+        <label style="font-size:11px;display:block;margin-bottom:4px;color:var(--text-muted);">Power Consumption</label>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input id="power-watts-input" type="number" min="0" value="${device.powerWatts ?? template?.powerWatts ?? 0}"
+            style="width:80px;background:#000;border:1px solid var(--border-color);color:#fff;border-radius:4px;padding:5px 8px;font-size:12px;" />
+          <span style="font-size:12px;color:var(--text-muted);">W</span>
+          <span style="font-size:10px;color:var(--text-muted);margin-left:4px;">Volts × Amps = Watts</span>
+        </div>
+      </div>
+
       <div class="form-group" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 12px;">
         <label style="font-weight: bold; color: var(--text-secondary);">Front Panel Image</label>
         <div style="display: flex; gap: 8px; margin-top: 8px;">
@@ -304,6 +314,14 @@ export class PropertiesPanel {
         </div>
       ` : ''}
     `;
+
+    const powerInput = container.querySelector<HTMLInputElement>('#power-watts-input');
+    if (powerInput) {
+      powerInput.addEventListener('change', () => {
+        const watts = Math.max(0, parseInt(powerInput.value) || 0);
+        EventBus.emit('device:update', { id, data: { powerWatts: watts } });
+      });
+    }
 
     if (template?.category === 'pdu') {
       const mount = container.querySelector<HTMLElement>('#pdu-configurator-mount');
