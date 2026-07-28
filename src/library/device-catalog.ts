@@ -1,66 +1,5 @@
-import { DeviceTemplate, DeviceCategory, PortData } from '../core/types';
-
-// Computes JSX-accurate port positions for switch templates.
-// Uses the exact same geometry as rackstudio-demo.jsx so that interactive
-// port overlays land on the correct visual locations after viewBox scaling.
-function switchPorts(
-  rj45: number, sfp: number, rows: number, idPfx: string,
-): DeviceTemplate['ports'] {
-  const JU=132, RW=1240, MBW=34, EAR=26, PAD=22, CON=250;
-  const RJW=30, RJH=40, RCGP=4, RRGP=7, BGAP=15, CPB=4;
-  const SFPW=46, SFPH=42.5, SFGG=9, SGAP=26;
-  const W=350, H=30;
-
-  const rjRows = rows;
-  const units  = rjRows === 1 ? rj45 : Math.ceil(rj45 / 2);
-  const blks   = units > 0 ? Math.ceil(units / CPB) : 0;
-  const blkW   = CPB * RJW + (CPB - 1) * RCGP;
-  let totRjW   = units > 0
-    ? blks * blkW + (blks - 1) * BGAP - (blks * CPB - units) * (RJW + RCGP)
-    : 0;
-  totRjW = Math.max(0, totRjW);
-  const sfpRowW  = sfp > 0 ? sfp * SFPW + (sfp - 1) * SFGG : 0;
-  const chassisW = EAR*2 + PAD*2 + CON + SGAP + totRjW + (sfp > 0 ? SGAP + sfpRowW : 0);
-  let bladeW = (RW - chassisW) / 2;
-  let totW   = RW;
-  if (bladeW < MBW) { bladeW = MBW; totW = chassisW + bladeW * 2; }
-
-  const sx   = W / totW;
-  const sy   = H / JU;
-  const rjX  = bladeW + EAR + PAD + CON + SGAP;
-  const sfpX = rjX + totRjW + (sfp > 0 ? SGAP : 0);
-  const rjTop  = (JU - (rjRows === 1 ? RJH : RJH * 2 + RRGP)) / 2;
-  const sfpTop = (JU - SFPH) / 2;
-
-  type PortEntry = Omit<PortData, 'deviceId' | 'connected' | 'cableId'>;
-  const out: PortEntry[] = [];
-
-  for (let n = 1; n <= rj45; n++) {
-    let jx: number, jy: number;
-    if (rjRows === 1) {
-      const c = n-1, b = Math.floor(c/CPB), ci = c%CPB;
-      jx = rjX + b*(blkW+BGAP) + ci*(RJW+RCGP);
-      jy = rjTop;
-    } else {
-      const col = Math.floor((n-1)/2), row = (n-1)%2;
-      const b = Math.floor(col/CPB), ci = col%CPB;
-      jx = rjX + b*(blkW+BGAP) + ci*(RJW+RCGP);
-      jy = rjTop + row*(RJH+RRGP);
-    }
-    out.push({ id:`${idPfx}p${n}`, name:`Port ${n}`, type:'rj45', speed:'1 Gbps',
-      relativeX: Math.round((jx + RJW/2) * sx), relativeY: Math.round((jy + RJH/2) * sy),
-      portW: Math.round(RJW * sx), portH: Math.round(RJH * sy) });
-  }
-
-  for (let n = 1; n <= sfp; n++) {
-    const jx = sfpX + (n-1) * (SFPW + SFGG);
-    out.push({ id:`${idPfx}sfp${n}`, name:`SFP ${n}`, type:'sfp-plus', speed:'10 Gbps',
-      relativeX: Math.round((jx + SFPW/2) * sx), relativeY: Math.round((sfpTop + SFPH/2) * sy),
-      portW: Math.round(SFPW * sx), portH: Math.round(SFPH * sy) });
-  }
-
-  return out;
-}
+import { DeviceTemplate, DeviceCategory } from '../core/types';
+import { switchPorts } from '../renderers/switch-renderer';
 
 export const deviceCatalog: DeviceTemplate[] = [
 
@@ -148,43 +87,61 @@ export const deviceCatalog: DeviceTemplate[] = [
     ],
   },
 
-  // ─── SWITCHES (exact JSX VARIANTS from rackstudio-demo.jsx) ─────────────────
-  // Port positions computed from JSX geometry scaled to W=350, H=30.
+  // ─── SWITCHES (vendor-specific) ─────────────────────────────────────────────
   {
-    id: 'switch-8p', name: 'RS-800M 8-Port Switch',
-    manufacturer: 'Rack Slicer', model: 'RS-800M',
-    category: 'switch', heightUnits: 1, color: '#1a1a20', icon: '🔀',
-    ports: switchPorts(8, 2, 1, 'sw8-'),
+    id: 'sw-tplink-sg2424',
+    name: 'TP-LINK TL-SG2424',
+    manufacturer: 'TP-LINK',
+    model: 'TL-SG2424',
+    category: 'switch',
+    heightUnits: 1,
+    color: '#1a1e21',
+    icon: '🔀',
+    ports: switchPorts(24, 4, 2, 'tpsg2424-'),
   },
   {
-    id: 'switch-12p', name: 'RS-1200M 12-Port Switch',
-    manufacturer: 'Rack Slicer', model: 'RS-1200M',
-    category: 'switch', heightUnits: 1, color: '#1a1a20', icon: '🔀',
-    ports: switchPorts(12, 2, 2, 'sw12-'),
+    id: 'sw-tplink-sg2448',
+    name: 'TP-LINK TL-SG2448',
+    manufacturer: 'TP-LINK',
+    model: 'TL-SG2448',
+    category: 'switch',
+    heightUnits: 1,
+    color: '#1a1e21',
+    icon: '🔀',
+    ports: switchPorts(48, 4, 2, 'tpsg2448-'),
   },
   {
-    id: 'switch-16p', name: 'RS-1600M 16-Port Switch',
-    manufacturer: 'Rack Slicer', model: 'RS-1600M',
-    category: 'switch', heightUnits: 1, color: '#1a1a20', icon: '🔀',
-    ports: switchPorts(16, 2, 2, 'sw16-'),
+    id: 'sw-cisco-sg350-28',
+    name: 'Cisco SG350-28',
+    manufacturer: 'Cisco',
+    model: 'SG350-28',
+    category: 'switch',
+    heightUnits: 1,
+    color: '#1a1e21',
+    icon: '🔀',
+    ports: switchPorts(24, 4, 2, 'sg35028-'),
   },
   {
-    id: 'switch-24p', name: 'RS-SG2424 24-Port Switch',
-    manufacturer: 'Rack Slicer', model: 'RS-SG2424',
-    category: 'switch', heightUnits: 1, color: '#1a1a20', icon: '🔀',
-    ports: switchPorts(24, 4, 2, 'sw24-'),
+    id: 'sw-cisco-sg350-52',
+    name: 'Cisco SG350-52',
+    manufacturer: 'Cisco',
+    model: 'SG350-52',
+    category: 'switch',
+    heightUnits: 1,
+    color: '#1a1e21',
+    icon: '🔀',
+    ports: switchPorts(48, 4, 2, 'sg35052-'),
   },
   {
-    id: 'switch-48p', name: 'RS-6300M 48-Port Switch',
-    manufacturer: 'Rack Slicer', model: 'RS-6300M-48',
-    category: 'switch', heightUnits: 1, color: '#1a1a20', icon: '🔀',
-    ports: switchPorts(48, 4, 2, 'sw48-'),
-  },
-  {
-    id: 'switch-sfp12', name: 'RS-4112F 12×SFP Switch',
-    manufacturer: 'Rack Slicer', model: 'RS-4112F',
-    category: 'switch', heightUnits: 1, color: '#1a1a20', icon: '🔀',
-    ports: switchPorts(0, 12, 2, 'sw4112-'),
+    id: 'sw-cisco-c9200-24',
+    name: 'Cisco Catalyst 9200-24',
+    manufacturer: 'Cisco',
+    model: 'Catalyst 9200-24',
+    category: 'switch',
+    heightUnits: 1,
+    color: '#1a1e21',
+    icon: '🔀',
+    ports: switchPorts(24, 4, 2, 'c920024-'),
   },
 
   // ─── ROUTERS ────────────────────────────────────────────────────────────────

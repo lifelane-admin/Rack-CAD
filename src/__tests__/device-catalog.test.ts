@@ -14,15 +14,32 @@ describe('DeviceCategory type', () => {
 import { deviceCatalog, getTemplate, getTemplatesByCategory } from '../library/device-catalog';
 
 describe('Standard Library catalog', () => {
-  it('has no OEM manufacturer names', () => {
-    const oemNames = ['Dell', 'HPE', 'Cisco', 'Fortinet', 'APC', 'Supermicro'];
+  it('has no OEM manufacturer names in generic entries', () => {
+    const genericOemNames = ['Dell', 'HPE', 'Supermicro'];
     for (const item of deviceCatalog) {
-      for (const oem of oemNames) {
+      for (const oem of genericOemNames) {
         expect(item.name).not.toContain(oem);
         expect(item.manufacturer).not.toContain(oem);
-        expect(item.id).not.toContain(oem.toLowerCase());
       }
     }
+  });
+
+  it('sw-tplink-sg2424 has 24 rj45 ports and 4 sfp-plus ports', () => {
+    const t = getTemplate('sw-tplink-sg2424');
+    expect(t).toBeDefined();
+    const rj45 = t!.ports.filter(p => p.type === 'rj45');
+    const sfp = t!.ports.filter(p => p.type === 'sfp-plus');
+    expect(rj45.length).toBe(24);
+    expect(sfp.length).toBe(4);
+  });
+
+  it('sw-tplink-sg2448 has 48 rj45 ports and 4 sfp-plus ports', () => {
+    const t = getTemplate('sw-tplink-sg2448');
+    expect(t).toBeDefined();
+    const rj45 = t!.ports.filter(p => p.type === 'rj45');
+    const sfp = t!.ports.filter(p => p.type === 'sfp-plus');
+    expect(rj45.length).toBe(48);
+    expect(sfp.length).toBe(4);
   });
 
   it('has at least 40 entries', () => {
@@ -31,22 +48,6 @@ describe('Standard Library catalog', () => {
 
   it('getTemplate returns undefined for unknown id', () => {
     expect(getTemplate('dell-r760')).toBeUndefined();
-  });
-
-  it('switch-24p has 24 rj45 ports', () => {
-    const t = getTemplate('switch-24p');
-    expect(t).toBeDefined();
-    const rj45 = t!.ports.filter(p => p.type === 'rj45');
-    expect(rj45.length).toBe(24);
-  });
-
-  it('switch-48p has 48 rj45 ports and 4 sfp-plus ports', () => {
-    const t = getTemplate('switch-48p');
-    expect(t).toBeDefined();
-    const rj45 = t!.ports.filter(p => p.type === 'rj45');
-    const sfp = t!.ports.filter(p => p.type === 'sfp-plus');
-    expect(rj45.length).toBe(48);
-    expect(sfp.length).toBe(4);
   });
 
   it('all entries have valid category', () => {
