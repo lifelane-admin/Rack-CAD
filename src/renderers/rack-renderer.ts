@@ -205,13 +205,12 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
   }
 
   // === 4. VERTICAL INTELLIGENT PDUS ===
-  const showPDUs = state.cabinetViewMode === 'rear';
   const pduWidth = 18;
   const pduHeight = innerHeight - 20;
   const pduY = innerY + 10;
-  
-  // Left PDU
-  if (rack.showPduLeft !== false && showPDUs) {
+
+  // Left PDU — only shown when explicitly placed (showPduLeft === true)
+  if (rack.showPduLeft === true) {
     const leftPduGroup = createGroup('rack-' + rack.id + '-pdu-left', 'pdu-element');
     
     // Chassis
@@ -264,8 +263,8 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
     rackGroup.appendChild(leftPduGroup);
   }
 
-  // Right PDU
-  if (rack.showPduRight !== false && showPDUs) {
+  // Right PDU — only shown when explicitly placed (showPduRight === true)
+  if (rack.showPduRight === true) {
     const rightPduGroup = createGroup('rack-' + rack.id + '-pdu-right', 'pdu-element');
     const pduX = RACK_CONSTANTS.RACK_OUTER_WIDTH - pduWidth - 3;
     

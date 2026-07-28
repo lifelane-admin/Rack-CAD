@@ -1484,6 +1484,33 @@ export class App {
           return;
         }
 
+        // Special handling for Vertical PDUs
+        if (template.id === 'pdu-vertical-16' || template.id === 'pdu-vertical-24') {
+          let closestRack: RackData | null = null;
+          let minDist = Infinity;
+          for (const rack of s.racks) {
+            const rx = rack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH / 2;
+            const ry = rack.y + (rack.units * RACK_CONSTANTS.RU_HEIGHT) / 2;
+            const dist = Math.sqrt(Math.pow(worldPos.x - rx, 2) + Math.pow(worldPos.y - ry, 2));
+            if (dist < minDist) { minDist = dist; closestRack = rack; }
+          }
+          if (closestRack) {
+            const isLeft = worldPos.x < closestRack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH / 2;
+            const updatedRacks = s.racks.map(r =>
+              r.id === closestRack!.id
+                ? { ...r, ...(isLeft ? { showPduLeft: true } : { showPduRight: true }) }
+                : r,
+            );
+            stateManager.setState({ racks: updatedRacks });
+            eventBus.emit('notification', {
+              message: `Attached ${template.name} to ${isLeft ? 'left' : 'right'} side of ${closestRack.name}`,
+              type: 'success',
+            });
+            this.renderAll();
+          }
+          return;
+        }
+
         // Find which rack was dropped on
         let targetRack: RackData | null = null;
 
