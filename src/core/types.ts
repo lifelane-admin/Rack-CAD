@@ -70,6 +70,7 @@ export interface DeviceData {
   locked?: boolean;
   ports: PortData[];
   frontPanelImage?: string;
+  deviceConfig?: Record<string, unknown>;  // PDU configurator state
 }
 
 export type CableType = 'idrac' | 'vm-network' | 'ceph-primary' | 'ceph-secondary' | 'live-migration' | 'backup' | 'general' | 'general-a' | 'general-b' | 'power' | 'cat6' | 'cat6a' | 'cat8' | 'om4' | 'om5' | 'dac-twinax' | 'qsfp28' | 'c13-power' | 'c19-power' | 'console' | 'custom';
