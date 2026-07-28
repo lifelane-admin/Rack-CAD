@@ -5,7 +5,7 @@ import { RuleEngine } from './rule-engine';
 const LS_KEY = 'rackcad_anthropic_key';
 const MODEL = 'claude-opus-4-7';
 
-const SYSTEM_PROMPT = `You are an expert datacenter engineer assistant embedded in RackCAD, a professional rack design tool.
+const SYSTEM_PROMPT = `You are an expert datacenter engineer assistant embedded in Rack Slicer, a professional rack design tool.
 You receive the current rack layout as JSON and a user request.
 
 ALWAYS respond with valid JSON matching exactly this schema:

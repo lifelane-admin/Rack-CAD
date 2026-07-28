@@ -188,17 +188,21 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
       const dx = target.x - start.x;
       const dy = target.y - start.y;
       
-      if (isHorizontalDevice) {
-        // Servers always plug in horizontally (left or right)
+      if (isEarPort) {
+        // Ear ports: horizontal connector, direction from relativeX not dx
+        // (cable now routes vertically so dx=0; relativeX tells us which side)
+        return port.relativeX > 175 ? 'right' : 'left';
+      } else if (isHorizontalDevice) {
+        // Servers plug in horizontally, direction follows cable flow
         return dx >= 0 ? 'right' : 'left';
       } else {
-        // Switches always plug in vertically (up or down)
-        return dy >= 0 ? 'up' : 'down'; // 'up' = extends downward, exits downward; 'down' = extends upward, exits upward
+        // Switch data ports plug in vertically (up or down)
+        return dy >= 0 ? 'up' : 'down';
       }
     }
 
     // Static fallback if points list is empty
-    if (isHorizontalDevice) {
+    if (isHorizontalDevice || isEarPort) {
       return port.relativeX > 175 ? 'right' : 'left';
     }
     // Switch/patch panels / other network devices:
@@ -216,12 +220,23 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   const isFiber = ['om3', 'om4', 'om5', 'fiber', 'lc', 'sc'].some(t => cableType.includes(t));
   const isPower = ['power', 'pwr', 'c13', 'c14', 'c19', 'c13-power', 'c19-power'].some(t => cableType.includes(t));
 
+  // Compact connector mode: switch ports have tiny 9px sockets — full-size connectors float above them
+  const srcPortObj  = cable.sourcePortId ? stateManager.getPort(cable.sourcePortId) : null;
+  const srcDevObj   = srcPortObj ? stateManager.getDevice(srcPortObj.deviceId) : null;
+  const srcTpl      = srcDevObj ? getTemplate(srcDevObj.templateId) : null;
+  const srcCompact  = srcTpl?.category === 'switch';
+
+  const dstPortObj  = cable.destPortId ? stateManager.getPort(cable.destPortId) : null;
+  const dstDevObj   = dstPortObj ? stateManager.getDevice(dstPortObj.deviceId) : null;
+  const dstTpl      = dstDevObj ? getTemplate(dstDevObj.templateId) : null;
+  const dstCompact  = dstTpl?.category === 'switch';
+
   // Source connector
-  group.appendChild(createConnector(sourcePos, cable.color, srcOrient, isFiber, isPower, isSFP));
+  group.appendChild(createConnector(sourcePos, cable.color, srcOrient, isFiber, isPower, isSFP, srcCompact));
 
   // Dest connector / draggable handle
   if (cable.destPortId) {
-    group.appendChild(createConnector(destPos, cable.color, destOrient, isFiber, isPower, isSFP));
+    group.appendChild(createConnector(destPos, cable.color, destOrient, isFiber, isPower, isSFP, dstCompact));
   }
 
   // Render tip drag handles (both Source & Destination tip handles) when selected or floating
@@ -276,15 +291,23 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     });
     group.appendChild(anchorConnLine);
 
-    const handlePoints = (cable.anchorsLocked && cable.anchorPoints && cable.anchorPoints.length > 0)
-      ? anchors
-      : get3DefaultAnchors(anchors);
+    // Always show exactly 3 handles (first, middle, last of anchor array).
+    // Store real index into the anchor array so drag can update the right point.
+    const realIdxA2 = Math.floor(anchors.length / 2);
+    const handleDefs = [
+      { pt: anchors[0],               realIdx: 0,                   label: 'A1' },
+      { pt: anchors[realIdxA2],       realIdx: realIdxA2,           label: 'A2' },
+      { pt: anchors[anchors.length - 1], realIdx: anchors.length - 1, label: 'A3' },
+    ];
 
-    handlePoints.forEach((pt, idx) => {
+    handleDefs.forEach(({ pt, realIdx }, displayIdx) => {
+      if (!pt) return;
+      const idx = displayIdx;
       const anchorGroup = createGroup(`cable-anchor-${cable.id}-${idx}`, 'cable-anchor-handle');
       setAttributes(anchorGroup, {
         'data-cable-id': cable.id,
         'data-anchor-index': String(idx),
+        'data-anchor-real-index': String(realIdx),
         transform: `translate(${pt.x}, ${pt.y})`,
         style: 'cursor: grab;'
       });
@@ -401,7 +424,7 @@ export function renderCableInProgress(sourcePos: Point, currentPos: Point, cable
  * inner clamp collar, molded strain-relief boot with center recess box,
  * 2 flex collar ridges, and cylindrical wire jacket.
  */
-function createEthernetConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right'): SVGGElement {
+function createEthernetConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right', compact = false): SVGGElement {
   const g = createGroup();
 
   let rot = 0;
@@ -410,19 +433,24 @@ function createEthernetConnector(pos: Point, color: string, orientation: 'up' | 
   else if (orientation === 'right') rot = -90;
   else if (orientation === 'left')  rot = 90;
 
-  // Offset so the connector TAIL (boot end at native y=38, scaled to 10.64px) aligns with pos
-  // (the cable path start), not the head. This puts the plug face inside the port socket
-  // and the visible boot + cable exit at the port face edge.
-  const TAIL_OFFSET = 38 * 0.28; // ≈ 10.64px
+  // compact=true (switch 1U ports ~9px): scale 0.14.  compact=false (servers): scale 0.28.
+  const S = compact ? 0.14 : 0.28;
+  const TAIL_Y = 38;     // native y of boot end (cable exit point)
+  const CRYSTAL_Y = 17;  // native y of crystal/boot junction
+
   let ax = pos.x;
   let ay = pos.y;
+
+  // Compact (switch) ports: anchor the crystal/boot junction at the port center — crystal
+  // sits inside the drawn socket rectangle, boot visible outside toward the cable.
+  // Server ports: anchor the boot tail at port center so cable exits from the boot end.
+  const TAIL_OFFSET = compact ? CRYSTAL_Y * S : TAIL_Y * S;
   if (orientation === 'right') ax -= TAIL_OFFSET;
   else if (orientation === 'left')  ax += TAIL_OFFSET;
-  else if (orientation === 'up')    ay -= TAIL_OFFSET; // 'up' exits downward in SVG coords
-  else if (orientation === 'down')  ay += TAIL_OFFSET; // 'down' exits upward in SVG coords
+  else if (orientation === 'up')    ay -= TAIL_OFFSET;
+  else if (orientation === 'down')  ay += TAIL_OFFSET;
 
-  // Slim scale: 0.28 (was 0.48) — much thinner, precision look
-  setAttributes(g, { transform: `translate(${ax}, ${ay}) rotate(${rot}) scale(0.28) translate(-14, 0)`, opacity: '0.92' });
+  setAttributes(g, { transform: `translate(${ax}, ${ay}) rotate(${rot}) scale(${S}) translate(-14, 0)`, opacity: '0.92' });
 
   const mainColor = color || '#7b2fbe';
   const glassWhite = 'rgba(220, 240, 255, 0.82)';
@@ -638,11 +666,11 @@ function createPowerConnector(pos: Point, color: string, orientation: 'up' | 'do
 /**
  * Route to correct connector renderer.
  */
-function createConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right', isFiber: boolean, isPower: boolean, isSFP: boolean): SVGGElement {
+function createConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right', isFiber: boolean, isPower: boolean, isSFP: boolean, compact = false): SVGGElement {
   if (isSFP) return createSFPConnector(pos, color, orientation);
   if (isFiber) return createFiberConnector(pos, color, orientation);
   if (isPower) return createPowerConnector(pos, color, orientation);
-  return createEthernetConnector(pos, color, orientation);
+  return createEthernetConnector(pos, color, orientation, compact);
 }
 
 /**

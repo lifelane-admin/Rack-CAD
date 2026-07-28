@@ -363,7 +363,7 @@ export function exportPDF(options?: ExportOptions): void {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Export Rack Design PDF</title>
+      <title>Export Rack Slicer PDF</title>
       <style>
         @page {
           size: ${pageSize} ${orientation};
@@ -411,7 +411,7 @@ export function exportJSON(): string {
   const s = stateManager.getState();
   const project = {
     version: '1.0.0',
-    name: 'RackCAD Project',
+    name: 'Rack Slicer Project',
     created: new Date().toISOString(),
     racks: s.racks,
     devices: s.devices,
@@ -479,7 +479,7 @@ export function initExportHandlers(): void {
     showExportOptionsModal('svg', (options) => {
       try {
         const svgContent = exportSVG(options);
-        downloadFile(svgContent, 'rack-design.svg', 'image/svg+xml');
+        downloadFile(svgContent, 'rack-slicer.svg', 'image/svg+xml');
         eventBus.emit('notification', { message: 'SVG exported successfully', type: 'success' });
       } catch (err) {
         eventBus.emit('notification', { message: `SVG export failed: ${err}`, type: 'error' });
@@ -491,7 +491,7 @@ export function initExportHandlers(): void {
     showExportOptionsModal('png', async (options) => {
       try {
         const pngBlob = await exportPNG(options);
-        downloadFile(pngBlob, 'rack-design.png');
+        downloadFile(pngBlob, 'rack-slicer.png');
         eventBus.emit('notification', { message: 'PNG exported successfully', type: 'success' });
       } catch (err) {
         eventBus.emit('notification', { message: `PNG export failed: ${err}`, type: 'error' });
@@ -503,7 +503,7 @@ export function initExportHandlers(): void {
     showExportOptionsModal('jpeg', async (options) => {
       try {
         const jpgBlob = await exportJPEG(options);
-        downloadFile(jpgBlob, 'rack-design.jpg');
+        downloadFile(jpgBlob, 'rack-slicer.jpg');
         eventBus.emit('notification', { message: 'JPEG exported successfully', type: 'success' });
       } catch (err) {
         eventBus.emit('notification', { message: `JPEG export failed: ${err}`, type: 'error' });
@@ -525,7 +525,7 @@ export function initExportHandlers(): void {
   eventBus.on('export:json', () => {
     try {
       const jsonContent = exportJSON();
-      downloadFile(jsonContent, 'rack-design.json', 'application/json');
+      downloadFile(jsonContent, 'rack-slicer.json', 'application/json');
       eventBus.emit('notification', { message: 'Project saved successfully', type: 'success' });
     } catch (err) {
       eventBus.emit('notification', { message: `JSON export failed: ${err}`, type: 'error' });

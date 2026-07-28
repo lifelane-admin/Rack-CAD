@@ -32,6 +32,8 @@ export interface PortData {
   connected: boolean;
   cableId: string | null;
   description?: string;
+  portW?: number;  // scaled overlay width for switch ports (device coords)
+  portH?: number;  // scaled overlay height for switch ports (device coords)
 }
 
 // === Devices ===

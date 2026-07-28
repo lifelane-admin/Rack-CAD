@@ -1,6 +1,5 @@
-import { CableData, Point, RACK_CONSTANTS } from '../core/types';
+import { CableData, Point } from '../core/types';
 import { stateManager } from '../core/state';
-import { getMaterialProfile } from '../core/cable-materials';
 import { getTemplate } from '../library/device-catalog';
 
 /**
@@ -111,127 +110,19 @@ export function computeSmartRouting(
   sourcePos: Point,
   destPos: Point
 ): Point[] {
-  const s = stateManager.getState();
-  const sourcePort = stateManager.getPort(cable.sourcePortId);
-  const destPort   = cable.destPortId ? stateManager.getPort(cable.destPortId) : null;
-
-  if (!sourcePort) return [sourcePos, destPos];
-
-  const sourceDevice = stateManager.getDevice(sourcePort.deviceId);
-  const destDevice   = destPort ? stateManager.getDevice(destPort.deviceId) : null;
-
-  const sourceRack = sourceDevice ? stateManager.getRack(sourceDevice.rackId) : null;
-  const destRack   = destDevice   ? stateManager.getRack(destDevice.rackId)   : null;
-
-  // ── Geometry constants (match rack-renderer.ts exactly) ──────────────────
-  const INNER_X      = (RACK_CONSTANTS.RACK_OUTER_WIDTH - RACK_CONSTANTS.RACK_INNER_WIDTH) / 2; // 25
-  const RIGHT_RAIL_X = INNER_X + RACK_CONSTANTS.RACK_INNER_WIDTH - RACK_CONSTANTS.RAIL_WIDTH;   // 400
-  const LEFT_RAIL_X  = INNER_X;                                                                  // 25
-
-  // Exact hole X on inner face of each rail post (matches rack-renderer.ts lines 116-117)
-  const RIGHT_HOLE_X_LOCAL = RIGHT_RAIL_X + 6;  // 406 relative to rack.x
-  const LEFT_HOLE_X_LOCAL  = LEFT_RAIL_X + RACK_CONSTANTS.RAIL_WIDTH - 6; // 44 relative to rack.x
-
-  // ── Side preference ───────────────────────────────────────────────────────
-  const sideSrc: 'left' | 'right' =
-    cable.sidePreference ?? (sourcePort.relativeX > 175 ? 'right' : 'left');
-  const sideDest: 'left' | 'right' =
-    cable.sidePreference ?? (destPort ? (destPort.relativeX > 175 ? 'right' : 'left') : sideSrc);
-
-  // ── World-space hole X ────────────────────────────────────────────────────
-  const holeXSrc  = sourceRack
-    ? (sideSrc  === 'right' ? sourceRack.x + RIGHT_HOLE_X_LOCAL : sourceRack.x + LEFT_HOLE_X_LOCAL)
-    : sourcePos.x;
-
-  const holeXDest = destRack
-    ? (sideDest === 'right' ? destRack.x + RIGHT_HOLE_X_LOCAL   : destRack.x + LEFT_HOLE_X_LOCAL)
-    : destPos.x;
-
-  // ── Lane staggering (deterministic rack-channel routing) ─────────────────
-  const laneSrc = sourceRack ? getDeterministicLaneIndex(cable.id, sourceRack.id, sideSrc) : 0;
-  const laneDest = destRack ? getDeterministicLaneIndex(cable.id, destRack.id, sideDest) : 0;
-  const LANE_STEP = 3; // px
-
-  const getLaneX = (holeX: number, side: 'left' | 'right', lane: number) =>
-    side === 'right' ? holeX + lane * LANE_STEP : holeX - lane * LANE_STEP;
-
-  const laneXSrc  = getLaneX(holeXSrc,  sideSrc, laneSrc);
-  const laneXDest = getLaneX(holeXDest, sideDest, laneDest);
-
-  // ── Connector exits ───────────────────────────────────────────────────────
-  const srcOrient = getPortOrientation(cable, 'source');
+  const srcOrient  = getPortOrientation(cable, 'source');
   const destOrient = getPortOrientation(cable, 'dest');
-  const exitOffset = cable.exitStraightOffset ?? 15; // px
+  const exitOffset = cable.exitStraightOffset ?? 15;
 
-  const srcExit = getExitPoint(sourcePos, srcOrient, exitOffset);
-  const destExit = getExitPoint(destPos, destOrient, exitOffset);
+  const srcExit  = getExitPoint(sourcePos, srcOrient,  exitOffset);
+  const destExit = getExitPoint(destPos,   destOrient, exitOffset);
 
-  // ── Smart Routing Logic & Obstacle Avoidance ──────────────────────────────
-  
-  // Case 1: Floating or Dragging cable end (no destination rack yet)
-  if (!sourceRack || !destRack) {
-    const A1: Point = { x: laneXSrc,  y: srcExit.y };
-    const A2: Point = { x: laneXDest, y: destExit.y   };
-    return [srcExit, A1, A2, destExit];
-  }
+  const mid: Point = {
+    x: (srcExit.x + destExit.x) / 2,
+    y: (srcExit.y + destExit.y) / 2,
+  };
 
-  // Case 2: Cross-Rack Cabling (Overhead vs Underfloor routing)
-  if (sourceRack.id !== destRack.id) {
-    const s = stateManager.getState();
-    const isUnderfloor = s.cableRoutingTrayMode === 'underfloor';
-    
-    if (isUnderfloor) {
-      const hSrc = RACK_CONSTANTS.RACK_PADDING_TOP + sourceRack.units * RACK_CONSTANTS.RU_HEIGHT + RACK_CONSTANTS.RACK_PADDING_BOTTOM;
-      const hDest = RACK_CONSTANTS.RACK_PADDING_TOP + destRack.units * RACK_CONSTANTS.RU_HEIGHT + RACK_CONSTANTS.RACK_PADDING_BOTTOM;
-      const maxBottomY = Math.max(sourceRack.y + hSrc, destRack.y + hDest);
-      const trayY = maxBottomY + 45; // Underfloor tray 45px below the cabinets
-
-      const A1: Point = { x: laneXSrc, y: srcExit.y };
-      const A1_bottom: Point = { x: laneXSrc, y: sourceRack.y + hSrc - 10 };
-      const A1_tray: Point = { x: laneXSrc, y: trayY };
-
-      const A2_tray: Point = { x: laneXDest, y: trayY };
-      const A2_bottom: Point = { x: laneXDest, y: destRack.y + hDest - 10 };
-      const A2: Point = { x: laneXDest, y: destExit.y };
-
-      return [srcExit, A1, A1_bottom, A1_tray, A2_tray, A2_bottom, A2, destExit];
-    } else {
-      const minRackY = Math.min(sourceRack.y, destRack.y);
-      const trayY = minRackY - 45; // Overhead runway 45px above the cabinets
-
-      const A1: Point = { x: laneXSrc, y: srcExit.y };
-      const A1_top: Point = { x: laneXSrc, y: sourceRack.y + 10 };
-      const A1_tray: Point = { x: laneXSrc, y: trayY };
-
-      const A2_tray: Point = { x: laneXDest, y: trayY };
-      const A2_top: Point = { x: laneXDest, y: destRack.y + 10 };
-      const A2: Point = { x: laneXDest, y: destExit.y };
-
-      return [srcExit, A1, A1_top, A1_tray, A2_tray, A2_top, A2, destExit];
-    }
-  }
-
-  // Case 3: Same Rack Routing
-  // Case 3a: Same side gutter run
-  if (sideSrc === sideDest) {
-    const A1: Point = { x: laneXSrc,  y: srcExit.y };
-    const A2: Point = { x: laneXDest, y: destExit.y   };
-    return [srcExit, A1, A2, destExit];
-  }
-
-  // Case 3b: Cross-side run within the same rack (opposite side gutters)
-  const rackTopY = sourceRack.y + 10;
-  const rackBottomY = sourceRack.y + RACK_CONSTANTS.RACK_PADDING_TOP + sourceRack.units * RACK_CONSTANTS.RU_HEIGHT + 15;
-  
-  const avgY = (srcExit.y + destExit.y) / 2;
-  const crossY = Math.abs(avgY - rackTopY) < Math.abs(avgY - rackBottomY) ? rackTopY : rackBottomY;
-
-  const A1: Point = { x: laneXSrc, y: srcExit.y };
-  const A1_cross: Point = { x: laneXSrc, y: crossY };
-  const A2_cross: Point = { x: laneXDest, y: crossY };
-  const A2: Point = { x: laneXDest, y: destExit.y };
-
-  return [srcExit, A1, A1_cross, A2_cross, A2, destExit];
+  return [srcExit, mid, destExit];
 }
 
 /**

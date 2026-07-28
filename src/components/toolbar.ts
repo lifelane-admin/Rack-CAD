@@ -21,7 +21,7 @@ export class Toolbar {
     // Logo
     const logo = document.createElement('div');
     logo.className = 'toolbar-logo';
-    logo.innerHTML = '<strong>RackCAD</strong>';
+    logo.innerHTML = '<strong>Rack Slicer</strong>';
     inner.appendChild(logo);
 
     // Groups

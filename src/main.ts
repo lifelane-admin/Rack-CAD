@@ -1,6 +1,11 @@
 /**
- * Entry Point — Enterprise Datacenter Rack Designer (RackCAD)
+ * Entry Point — Rack Slicer
  */
+import '@fontsource/inter/300.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
 import './styles/index.css';
 import './styles/layout.css';
 import './styles/toolbar.css';

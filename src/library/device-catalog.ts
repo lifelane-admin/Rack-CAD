@@ -48,13 +48,15 @@ function switchPorts(
       jy = rjTop + row*(RJH+RRGP);
     }
     out.push({ id:`${idPfx}p${n}`, name:`Port ${n}`, type:'rj45', speed:'1 Gbps',
-      relativeX: Math.round((jx + RJW/2) * sx), relativeY: Math.round((jy + RJH/2) * sy) });
+      relativeX: Math.round((jx + RJW/2) * sx), relativeY: Math.round((jy + RJH/2) * sy),
+      portW: Math.round(RJW * sx), portH: Math.round(RJH * sy) });
   }
 
   for (let n = 1; n <= sfp; n++) {
     const jx = sfpX + (n-1) * (SFPW + SFGG);
     out.push({ id:`${idPfx}sfp${n}`, name:`SFP ${n}`, type:'sfp-plus', speed:'10 Gbps',
-      relativeX: Math.round((jx + SFPW/2) * sx), relativeY: Math.round((sfpTop + SFPH/2) * sy) });
+      relativeX: Math.round((jx + SFPW/2) * sx), relativeY: Math.round((sfpTop + SFPH/2) * sy),
+      portW: Math.round(SFPW * sx), portH: Math.round(SFPH * sy) });
   }
 
   return out;

@@ -15,7 +15,7 @@ export class SelfTestRunner {
 
   async runAllTests(): Promise<TestResult[]> {
     this.results = [];
-    console.group('%c🚀 Running RackCAD Automated Self-Tests...', 'color: #38bdf8; font-weight: bold; font-size: 14px;');
+    console.group('%c🚀 Running Rack Slicer Automated Self-Tests...', 'color: #38bdf8; font-weight: bold; font-size: 14px;');
 
     // Store original state to restore after testing
     const originalState = JSON.parse(JSON.stringify(stateManager.getState()));

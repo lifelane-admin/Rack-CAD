@@ -74,6 +74,7 @@ export class App {
   private isDraggingAnchor = false;
   private draggedAnchorCableId: string | null = null;
   private draggedAnchorIndex: number = -1;
+  private draggedAnchorRealIndex: number = -1;
 
   // History tracking states for atomic drag undo
   private dragStartDevicesState: DeviceData[] | null = null;
@@ -298,7 +299,7 @@ export class App {
     // Set dark theme on body
     document.body.setAttribute('data-theme', stateManager.getState().theme);
 
-    console.log('RackCAD initialized');
+    console.log('Rack Slicer initialized');
   }
 
   /**
@@ -587,12 +588,14 @@ export class App {
         if (targetCable) {
           const sourcePos = targetCable.floatingSource || stateManager.getPortWorldPosition(targetCable.sourcePortId) || { x: 0, y: 0 };
           const destPos = (targetCable.destPortId ? stateManager.getPortWorldPosition(targetCable.destPortId) : targetCable.floatingDest) || { x: 0, y: 0 };
-          const baseAnchors = (targetCable.anchorPoints && targetCable.anchorPoints.length > 0)
+          // Use the full route (all waypoints) so dragging one handle doesn't collapse a
+          // cross-rack 8-point route into a 3-point route and destroy the cable path.
+          const fullRoute = (targetCable.anchorPoints && targetCable.anchorPoints.length > 0)
             ? targetCable.anchorPoints
-            : get3DefaultAnchors(computeSmartRouting(targetCable, sourcePos, destPos));
-          
-          const updatedAnchors = baseAnchors.map((p: Point, i: number) =>
-            i === idx ? { ...this.mouseWorldPos } : p
+            : computeSmartRouting(targetCable, sourcePos, destPos);
+          const realIdx = this.draggedAnchorRealIndex >= 0 ? this.draggedAnchorRealIndex : idx;
+          const updatedAnchors = fullRoute.map((p: Point, i: number) =>
+            i === realIdx ? { ...this.mouseWorldPos } : p
           );
 
           const cables = sState.cables.map(c =>
@@ -725,6 +728,7 @@ export class App {
         this.isDraggingAnchor = true;
         this.draggedAnchorCableId = cableId;
         this.draggedAnchorIndex = anchorIdx;
+        this.draggedAnchorRealIndex = parseInt(anchorEl.getAttribute('data-anchor-real-index') || String(anchorIdx), 10);
         this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
         this.dragStartCablesState = JSON.parse(JSON.stringify(stateManager.getState().cables));
         svgEl.classList.add('dragging-active');
@@ -865,6 +869,7 @@ export class App {
         this.isDraggingAnchor = false;
         this.draggedAnchorCableId = null;
         this.draggedAnchorIndex = -1;
+        this.draggedAnchorRealIndex = -1;
         svgEl.classList.remove('dragging-active');
 
         // Restore start state silently and commit final state normally to push a single history frame

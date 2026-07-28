@@ -179,7 +179,7 @@ function renderSwitchPanel(template: DeviceTemplate | null, W: number, H: number
   // scaled to W×H via viewBox — no geometry changes, just uniform scale.
   const ns = el('svg', { width: W, height: H });
   ns.setAttribute('viewBox', `0 0 ${totW} ${JU}`);
-  ns.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  ns.setAttribute('preserveAspectRatio', 'none');
 
   // ── Defs ──────────────────────────────────────────────────────────────────
   const defs = el('defs');

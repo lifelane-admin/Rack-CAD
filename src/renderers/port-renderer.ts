@@ -44,6 +44,11 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement): SVGGElemen
   const isConnected = port.connected;
   let color = isConnected ? '#2e7d32' : '#3a3a3e';
 
+  // Switch ports: JSX panel already renders port visuals; overlays must be transparent hit-targets only
+  const _dev = stateManager.getDevice(port.deviceId);
+  const _tpl = _dev ? getTemplate(_dev.templateId) : null;
+  const isSwitch = _tpl?.category === 'switch';
+
   let w = 12;
   let h = 10;
   let label = '';
@@ -121,41 +126,85 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement): SVGGElemen
     portGroup.appendChild(glowRing);
 
   } else {
-    // Front-panel rectangular ports (switches, patch panels, firewalls)
-    const hitTarget = createRect(-w/2 - 3, -h/2 - 3, w + 6, h + 6, {
-      fill: 'transparent',
-      'class': 'port-hover-target'
-    });
-    portGroup.appendChild(hitTarget);
+    if (isSwitch) {
+      // Switch ports: JSX panel already renders all port visuals.
+      // We add only: transparent hit-target + JSX-style blue hover highlight + neon ring for cable drag.
+      const pw = port.portW ?? 9;
+      const ph = port.portH ?? 9;
 
-    const rect = createRect(-w/2, -h/2, w, h, {
-      fill: color,
-      stroke: isConnected ? '#4caf50' : '#111',
-      'stroke-width': isConnected ? 1.5 : 1,
-      rx: 1,
-      ry: 1
-    });
-    portGroup.appendChild(rect);
+      // Transparent hit-target — exact port size, no padding (adjacent ports ~9.6px apart; padding causes overlap)
+      const hitTarget = createRect(-pw / 2, -ph / 2, pw, ph, {
+        fill: 'transparent',
+        'class': 'port-hover-target',
+      });
+      portGroup.appendChild(hitTarget);
 
-    if (port.type === 'rj45' || port.type === 'management' || port.type === 'console') {
-      const inner = createRect(-w/2 + 2, -h/2 + 2, w - 4, h - 4, { fill: '#111' });
-      portGroup.appendChild(inner);
+      // Blue fill highlight matching JSX .hov behavior (#37b6ff at 14% opacity on hover)
+      const blueHl = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      blueHl.setAttribute('x', String(-pw / 2));
+      blueHl.setAttribute('y', String(-ph / 2));
+      blueHl.setAttribute('width', String(pw));
+      blueHl.setAttribute('height', String(ph));
+      blueHl.setAttribute('rx', '2.5');
+      blueHl.setAttribute('fill', '#37b6ff');
+      blueHl.setAttribute('opacity', '0');
+      blueHl.setAttribute('pointer-events', 'none');
+      blueHl.style.transition = 'opacity 0.12s ease';
+      portGroup.appendChild(blueHl);
+
+      // Neon ring for cable-drag snap visual feedback
+      const glowRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      glowRect.setAttribute('x', String(-pw / 2 - 1.5));
+      glowRect.setAttribute('y', String(-ph / 2 - 1.5));
+      glowRect.setAttribute('width', String(pw + 3));
+      glowRect.setAttribute('height', String(ph + 3));
+      glowRect.setAttribute('fill', 'none');
+      glowRect.setAttribute('stroke', '#00e5ff');
+      glowRect.setAttribute('stroke-width', '1');
+      glowRect.setAttribute('rx', '3');
+      glowRect.setAttribute('opacity', '0');
+      glowRect.setAttribute('class', 'port-neon-ring');
+      portGroup.appendChild(glowRect);
+
+      portGroup.addEventListener('mouseenter', () => blueHl.setAttribute('opacity', '0.14'));
+      portGroup.addEventListener('mouseleave', () => blueHl.setAttribute('opacity', '0'));
+
+    } else {
+      // Non-switch front-panel ports (firewalls, routers, patch panels, KVM, etc.)
+      const hitTarget = createRect(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6, {
+        fill: 'transparent',
+        'class': 'port-hover-target',
+      });
+      portGroup.appendChild(hitTarget);
+
+      const rect = createRect(-w / 2, -h / 2, w, h, {
+        fill: color,
+        stroke: isConnected ? '#4caf50' : '#111',
+        'stroke-width': isConnected ? 1.5 : 1,
+        rx: 1,
+        ry: 1,
+      });
+      portGroup.appendChild(rect);
+
+      if (port.type === 'rj45' || port.type === 'management' || port.type === 'console') {
+        const inner = createRect(-w / 2 + 2, -h / 2 + 2, w - 4, h - 4, { fill: '#111' });
+        portGroup.appendChild(inner);
+      }
+
+      const isPower = port.type === 'power';
+      const glowRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      glowRect.setAttribute('x', String(-w / 2 - 2));
+      glowRect.setAttribute('y', String(-h / 2 - 2));
+      glowRect.setAttribute('width', String(w + 4));
+      glowRect.setAttribute('height', String(h + 4));
+      glowRect.setAttribute('fill', 'none');
+      glowRect.setAttribute('stroke', isPower ? '#ff1744' : '#00e5ff');
+      glowRect.setAttribute('stroke-width', '1.2');
+      glowRect.setAttribute('rx', '2');
+      glowRect.setAttribute('opacity', '0');
+      glowRect.setAttribute('class', 'port-neon-ring');
+      portGroup.appendChild(glowRect);
     }
-
-    // Neon glow overlay for front-panel ports (shown via CSS on hover/snap)
-    const isPower = port.type === 'power';
-    const glowRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    glowRect.setAttribute('x', String(-w/2 - 2));
-    glowRect.setAttribute('y', String(-h/2 - 2));
-    glowRect.setAttribute('width', String(w + 4));
-    glowRect.setAttribute('height', String(h + 4));
-    glowRect.setAttribute('fill', 'none');
-    glowRect.setAttribute('stroke', isPower ? '#ff1744' : '#00e5ff');
-    glowRect.setAttribute('stroke-width', '1.8');
-    glowRect.setAttribute('rx', '2');
-    glowRect.setAttribute('opacity', '0');
-    glowRect.setAttribute('class', 'port-neon-ring');
-    portGroup.appendChild(glowRect);
   }
 
   if (label) {
