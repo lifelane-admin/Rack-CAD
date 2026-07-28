@@ -1,6 +1,7 @@
-import { DeviceCategory, DeviceTemplate } from '../core/types';
+import type { DeviceCategory, DeviceTemplate, DeviceData } from '../core/types';
 import { renderSwitchPanel } from './switch-renderer';
 import { renderFortiGatePanel } from './fortigate-renderer';
+import { renderPduPanel } from './pdu-renderer';
 
 // ─── Port geometry constants ─────────────────────────────────────────────────
 const PORT_W = 18;
@@ -241,39 +242,6 @@ function renderPatchPanel(template: DeviceTemplate | null, W: number, H: number)
   return group;
 }
 
-function renderPduPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
-  const group = g('pdu-panel');
-  const chY = 2;
-  const chH = H - 4;
-  group.appendChild(el('rect', { x: 0, y: chY, width: W, height: chH, rx: 2, fill: '#1a1a1e', stroke: '#111', 'stroke-width': 1 }));
-
-  drawLcdPanel(group, 8, chY + 4, 50, chH - 8, '0.0 A');
-  group.appendChild(el('circle', { cx: 67, cy: chY + chH / 2, r: 6, fill: '#c62828', stroke: '#111', 'stroke-width': 1 }));
-
-  const ports = template?.ports ?? [];
-  const c13Ports = ports.filter(p => p.type === 'power');
-  const outletW = 20;
-  const outletH = chH - 10;
-  const outletY = chY + 5;
-  const startX = 85;
-
-  c13Ports.forEach((_, i) => {
-    const ax = startX + i * (outletW + 4);
-    group.appendChild(el('rect', { x: ax, y: outletY, width: outletW, height: outletH, rx: 2, fill: '#0a0a0f', stroke: '#333', 'stroke-width': 0.7 }));
-    const contactY = outletY + outletH - 8;
-    [ax + 4, ax + 8.5, ax + 13].forEach(cx => {
-      group.appendChild(el('rect', { x: cx, y: contactY, width: 3, height: 4, rx: 0.8, fill: '#050508' }));
-    });
-    const numTxt = el('text', { x: ax + outletW / 2, y: outletY + outletH + 8, 'text-anchor': 'middle', 'font-size': '6', fill: '#666', 'font-family': 'monospace' });
-    numTxt.textContent = String(i + 1);
-    group.appendChild(numTxt);
-  });
-
-  group.appendChild(el('rect', { x: W - 30, y: chY + 4, width: 22, height: chH - 8, rx: 2, fill: '#0a0a0f', stroke: '#555', 'stroke-width': 0.8 }));
-
-  return group;
-}
-
 function renderUpsPanel(_template: DeviceTemplate | null, W: number, H: number): SVGGElement {
   const group = g('ups-panel');
   const chY = 2;
@@ -439,6 +407,7 @@ function renderCableManagerPanel(template: DeviceTemplate | null, W: number, H: 
 export function renderFrontPanel(
   category: DeviceCategory,
   template: DeviceTemplate | null,
+  deviceData: DeviceData | null,
   deviceWidth: number,
   deviceHeight: number,
 ): SVGGElement {
@@ -451,7 +420,7 @@ export function renderFrontPanel(
         : renderFirewallPanel(template, deviceWidth, deviceHeight);
     case 'router':        return renderRouterPanel(template, deviceWidth, deviceHeight);
     case 'patch-panel':   return renderPatchPanel(template, deviceWidth, deviceHeight);
-    case 'pdu':           return renderPduPanel(template, deviceWidth, deviceHeight);
+    case 'pdu': return renderPduPanel(template, deviceData, deviceWidth, deviceHeight);
     case 'ups':           return renderUpsPanel(template, deviceWidth, deviceHeight);
     case 'storage':       return renderStoragePanel(template, deviceWidth, deviceHeight);
     case 'console':       return renderKvmPanel(template, deviceWidth, deviceHeight);

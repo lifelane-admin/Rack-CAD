@@ -203,7 +203,7 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
     deviceGroup.appendChild(overlay);
   } else {
     // High-fidelity SVG panel renderer
-    const panel = renderFrontPanel(category, template ?? null, deviceWidth, deviceHeight);
+    const panel = renderFrontPanel(category, template ?? null, device, deviceWidth, deviceHeight);
     deviceGroup.appendChild(panel);
   }
 
