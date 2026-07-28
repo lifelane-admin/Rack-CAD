@@ -50,6 +50,7 @@ export interface DeviceTemplate {
   ports: Omit<PortData, 'deviceId' | 'connected' | 'cableId'>[];
   icon: string;  // emoji or text label for sidebar
   frontPanelImage?: string;
+  deviceConfig?: Record<string, unknown>;  // PDU configurator state
   isCustom?: boolean;
   basedOnTemplateId?: string;
   customDescription?: string;
