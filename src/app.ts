@@ -25,7 +25,7 @@ import { renderRack } from './renderers/rack-renderer';
 import { renderDevice } from './renderers/device-renderer';
 import { renderCable, renderCableInProgress, resetPreviewDirection } from './renderers/cable-renderer';
 import { renderDashboardWidgets } from './renderers/dashboard-renderer';
-import { getTemplate } from './library/device-catalog';
+import { deviceCatalog, getTemplate } from './library/device-catalog';
 import { generateId, distToSegment } from './utils/geometry';
 import { initExportHandlers } from './utils/export';
 import { computeSmartRouting, get3DefaultAnchors } from './utils/routing';
@@ -1147,6 +1147,26 @@ export class App {
       const target = e.target as SVGElement;
       const s = stateManager.getState();
 
+      // PDU "+" add handle click
+      const addHandleEl = (e.target as Element)?.closest?.('[data-pdu-add-side]');
+      if (addHandleEl) {
+        const side = addHandleEl.getAttribute('data-pdu-add-side') as 'left' | 'right';
+        const rackId = addHandleEl.getAttribute('data-rack-id') ?? '';
+        this.showPduPickerModal(rackId, side);
+        return;
+      }
+
+      // Existing side PDU click → select it
+      const pduEl = (e.target as Element)?.closest?.('[data-pdu-side]');
+      if (pduEl) {
+        const deviceId = pduEl.getAttribute('data-pdu-device-id') ?? '';
+        if (deviceId) {
+          stateManager.setState({ selection: [{ type: 'device', id: deviceId }] });
+          this.renderAll();
+        }
+        return;
+      }
+
       // Cable creation mode
       if (s.tool === 'cable') {
         // Primary: detect port via SVG hit-testing
@@ -1484,8 +1504,8 @@ export class App {
           return;
         }
 
-        // Special handling for Vertical PDUs
-        if (template.id === 'pdu-vertical-16' || template.id === 'pdu-vertical-24') {
+        // Handle side-mount devices (vertical PDUs)
+        if (template.mountType === 'side') {
           let closestRack: RackData | null = null;
           let minDist = Infinity;
           for (const rack of s.racks) {
@@ -1494,20 +1514,52 @@ export class App {
             const dist = Math.sqrt(Math.pow(worldPos.x - rx, 2) + Math.pow(worldPos.y - ry, 2));
             if (dist < minDist) { minDist = dist; closestRack = rack; }
           }
-          if (closestRack) {
-            const isLeft = worldPos.x < closestRack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH / 2;
-            const updatedRacks = s.racks.map(r =>
-              r.id === closestRack!.id
-                ? { ...r, ...(isLeft ? { showPduLeft: true } : { showPduRight: true }) }
-                : r,
-            );
-            stateManager.setState({ racks: updatedRacks });
-            eventBus.emit('notification', {
-              message: `Attached ${template.name} to ${isLeft ? 'left' : 'right'} side of ${closestRack.name}`,
-              type: 'success',
-            });
-            this.renderAll();
+          if (!closestRack) return;
+
+          const isLeft = worldPos.x < closestRack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH / 2;
+          const side: 'left' | 'right' = isLeft ? 'left' : 'right';
+
+          // Block if slot already occupied
+          if (side === 'left' && closestRack.leftPduId) {
+            eventBus.emit('notification', { message: 'A PDU is already mounted on the left side', type: 'warning' });
+            return;
           }
+          if (side === 'right' && closestRack.rightPduId) {
+            eventBus.emit('notification', { message: 'A PDU is already mounted on the right side', type: 'warning' });
+            return;
+          }
+
+          // Create DeviceData for this side-mount PDU
+          const deviceId = generateId();
+          const newDevice: DeviceData = {
+            id: deviceId,
+            templateId: template.id,
+            rackId: closestRack.id,
+            startUnit: 0,
+            name: template.name,
+            hostname: '',
+            managementIp: '',
+            serialNumber: '',
+            description: '',
+            ports: [],
+            sideMountPosition: side,
+          };
+
+          stateManager.addDevice(newDevice);
+
+          // Update rack with PDU reference
+          const updatedRacks = s.racks.map(r =>
+            r.id === closestRack!.id
+              ? { ...r, ...(side === 'left' ? { leftPduId: deviceId } : { rightPduId: deviceId }) }
+              : r,
+          );
+          stateManager.setState({ racks: updatedRacks });
+
+          eventBus.emit('notification', {
+            message: `${template.name} mounted on ${side} wall of ${closestRack.name}`,
+            type: 'success',
+          });
+          this.renderAll();
           return;
         }
 
@@ -2143,10 +2195,106 @@ export class App {
   }
 
   /**
+   * Show a modal to pick a vertical PDU and mount it on the given rack side.
+   */
+  private showPduPickerModal(rackId: string, side: 'left' | 'right'): void {
+    const s = stateManager.getState();
+    const rack = s.racks.find(r => r.id === rackId);
+    if (!rack) return;
+
+    // Check not already occupied
+    const existingId = side === 'left' ? rack.leftPduId : rack.rightPduId;
+    if (existingId) {
+      eventBus.emit('notification', { message: 'A PDU is already mounted on this side', type: 'warning' });
+      return;
+    }
+
+    // Get vertical PDU templates from catalog
+    const vpduTemplates = deviceCatalog.filter(t => t.mountType === 'side');
+
+    // Build modal
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background:#12171c;border:1px solid #23303b;border-radius:6px;padding:20px;min-width:320px;max-width:400px;';
+    modal.innerHTML = `
+      <h3 style="margin:0 0 12px;color:#37b6ff;font-size:13px;letter-spacing:1px;">SELECT PDU — ${side.toUpperCase()} WALL</h3>
+      <div id="pdu-picker-list" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;"></div>
+      <button id="pdu-picker-cancel" style="margin-top:14px;width:100%;padding:8px;background:#1a1f24;border:1px solid #30363d;color:#8b949e;cursor:pointer;border-radius:3px;font-size:12px;">Cancel</button>
+    `;
+
+    const list = modal.querySelector('#pdu-picker-list')!;
+    vpduTemplates.forEach(t => {
+      const btn = document.createElement('button');
+      const outletCount = t.outletConfig?.reduce((sum, r) => sum + r.count, 0) ?? 0;
+      const socketSummary = t.outletConfig?.map(r => `${r.count}\xd7${r.socketType}`).join(' + ') ?? '';
+      btn.style.cssText = 'text-align:left;padding:10px 12px;background:#171d24;border:1px solid #23303b;color:#e6ecf2;cursor:pointer;border-radius:3px;font-size:12px;width:100%;';
+      btn.innerHTML = `<strong>${t.name}</strong><br><span style="color:#8b939a;font-size:11px;">${socketSummary} \xb7 ${outletCount} outlets</span>`;
+      btn.onmouseover = () => { btn.style.borderColor = '#37b6ff'; };
+      btn.onmouseout = () => { btn.style.borderColor = '#23303b'; };
+      btn.onclick = () => {
+        document.body.removeChild(overlay);
+        // Mount the PDU
+        const s2 = stateManager.getState();
+        const rack2 = s2.racks.find(r => r.id === rackId);
+        if (!rack2) return;
+        const alreadyMounted = side === 'left' ? rack2.leftPduId : rack2.rightPduId;
+        if (alreadyMounted) return;
+
+        const deviceId = generateId();
+        const newDevice: DeviceData = {
+          id: deviceId, templateId: t.id, rackId, startUnit: 0,
+          name: t.name, hostname: '', managementIp: '', serialNumber: '', description: '',
+          ports: [], sideMountPosition: side,
+        };
+        stateManager.addDevice(newDevice);
+        const updatedRacks = s2.racks.map(r =>
+          r.id === rackId ? { ...r, ...(side === 'left' ? { leftPduId: deviceId } : { rightPduId: deviceId }) } : r,
+        );
+        stateManager.setState({ racks: updatedRacks });
+        eventBus.emit('notification', { message: `${t.name} mounted on ${side} wall`, type: 'success' });
+        this.renderAll();
+      };
+      list.appendChild(btn);
+    });
+
+    modal.querySelector('#pdu-picker-cancel')!.addEventListener('click', () => document.body.removeChild(overlay));
+    overlay.addEventListener('click', (ev) => { if (ev.target === overlay) document.body.removeChild(overlay); });
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  }
+
+  /**
    * Delete currently selected elements.
    */
   private deleteSelection() {
     const s = stateManager.getState();
+
+    // Check if selected device is a side-mount PDU — handle it specially
+    if (s.selection.length === 1 && s.selection[0].type === 'device') {
+      const devId = s.selection[0].id;
+      const dev = stateManager.getDevice(devId);
+      const tmpl = dev ? getTemplate(dev.templateId) : null;
+      if (dev && tmpl?.mountType === 'side') {
+        const s2 = stateManager.getState();
+        // Clear leftPduId or rightPduId from rack
+        const updatedRacks = s2.racks.map(r => {
+          if (r.leftPduId === devId) return { ...r, leftPduId: undefined };
+          if (r.rightPduId === devId) return { ...r, rightPduId: undefined };
+          return r;
+        });
+        // Remove power cables connected to this PDU's outlets
+        const updatedCables = s2.cables.filter(c =>
+          !(c.sourcePortId.startsWith(`outlet-${devId}`) || (c.destPortId ?? '').startsWith(`outlet-${devId}`))
+        );
+        stateManager.setState({ racks: updatedRacks, cables: updatedCables, selection: [] });
+        stateManager.removeDevice(devId);
+        this.renderAll();
+        return;
+      }
+    }
+
     for (const item of s.selection) {
       if (item.type === 'device') {
         const dev = stateManager.getDevice(item.id);
