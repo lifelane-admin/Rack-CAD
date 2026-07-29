@@ -17,9 +17,9 @@ export function renderPorts(ports: PortData[], deviceGroup: SVGGElement): void {
 
     if (isEarPort) {
       shouldRender = !isRearView;
-    } else if (category === 'server' || category === 'firewall' || category === 'storage' || category === 'ups' || category === 'pdu') {
+    } else if (category === 'server' || category === 'storage' || category === 'ups' || category === 'pdu') {
       shouldRender = isRearView;
-    } else if (category === 'switch' || category === 'patch-panel') {
+    } else if (category === 'switch' || category === 'patch-panel' || category === 'router' || category === 'firewall' || category === 'console') {
       if (port.type === 'power') {
         shouldRender = isRearView;
       } else {
@@ -45,10 +45,12 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
   const isConnected = port.connected;
   let color = isConnected ? '#2e7d32' : '#3a3a3e';
 
-  // Switch ports: JSX panel already renders port visuals; overlays must be transparent hit-targets only
+  // Switch/router/firewall/console/patch-panel ports: the panel renderer already draws
+  // full port graphics for these categories; overlays must be transparent hit-targets only.
   const _dev = stateManager.getDevice(port.deviceId);
   const _tpl = _dev ? getTemplate(_dev.templateId) : null;
-  const isSwitch = _tpl?.category === 'switch';
+  const _cat = _tpl?.category;
+  const hasCustomPanel = _cat === 'switch' || _cat === 'router' || _cat === 'firewall' || _cat === 'console' || _cat === 'patch-panel';
 
   let w = 12;
   let h = 10;
@@ -127,8 +129,8 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
     portGroup.appendChild(glowRing);
 
   } else {
-    if (isSwitch) {
-      // Switch ports: JSX panel already renders all port visuals.
+    if (hasCustomPanel) {
+      // These categories' panel renderer already draws all port visuals.
       // We add only: transparent hit-target + JSX-style blue hover highlight + neon ring for cable drag.
       const pw = port.portW ?? 9;
       const ph = port.portH ?? 9;
@@ -171,7 +173,7 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
       portGroup.addEventListener('mouseleave', () => blueHl.setAttribute('opacity', '0'));
 
     } else {
-      // Non-switch front-panel ports (firewalls, routers, patch panels, KVM, etc.)
+      // Remaining categories without a dedicated panel renderer (server, storage, ups, pdu, etc.)
       const hitTarget = createRect(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6, {
         fill: 'transparent',
         'class': 'port-hover-target',

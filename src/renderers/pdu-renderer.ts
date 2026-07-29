@@ -1,6 +1,15 @@
 // src/renderers/pdu-renderer.ts
-import { el, g } from './rack-kit';
+import { el, g, drawLed } from './rack-kit';
 import type { DeviceTemplate, DeviceData, SocketType } from '../core/types';
+
+type PduTier = 'basic' | 'metered' | 'smart';
+
+function inferTier(template: DeviceTemplate | null): PduTier {
+  const text = `${template?.name ?? ''} ${template?.model ?? ''}`.toLowerCase();
+  if (text.includes('smart')) return 'smart';
+  if (text.includes('metered')) return 'metered';
+  return 'basic';
+}
 
 interface FinishPreset { hi: string; mid: string; lo: string; text: string; texture?: boolean; }
 
@@ -36,7 +45,36 @@ function makePduDefs(ns: SVGSVGElement, uid: string, finish: FinishPreset): void
   fDS.setAttribute('flood-color', '#000'); fDS.setAttribute('flood-opacity', '0.55');
   fSS.appendChild(fDS); defs.appendChild(fSS);
 
+  const fGlow = el('filter', { id: `${uid}gw`, x: '-120%', y: '-120%', width: '340%', height: '340%' });
+  fGlow.appendChild(el('feGaussianBlur', { stdDeviation: '1.1', result: 'b' }));
+  const fMrg = el('feMerge');
+  fMrg.appendChild(el('feMergeNode', { in: 'b' })); fMrg.appendChild(el('feMergeNode', { in: 'SourceGraphic' }));
+  fGlow.appendChild(fMrg); defs.appendChild(fGlow);
+
   ns.appendChild(defs);
+}
+
+/** Compact brand block (PWR LED + "RACK SLICER" wordmark + model) reused by both PDU layouts. */
+function drawPduBrand(parent: SVGElement, uid: string, x: number, cy: number, textColor: string, model: string): number {
+  drawLed(parent, uid, x + 4, cy, '#39ff8a', true, 2.2);
+  const brandTxt = el('text', { x: x + 11, y: cy - 3, 'font-size': 6.5, 'font-weight': 700, fill: '#37b6ff', 'letter-spacing': 0.6 });
+  brandTxt.textContent = 'RACK SLICER';
+  parent.appendChild(brandTxt);
+  const modelTxt = el('text', { x: x + 11, y: cy + 7, 'font-size': 6, fill: textColor, opacity: 0.7, 'letter-spacing': 0.4 });
+  modelTxt.textContent = model;
+  parent.appendChild(modelTxt);
+  return x + 11 + Math.max(model.length, 11) * 4.4;
+}
+
+/** Compact digital meter readout for metered/smart PDUs; returns false if there isn't room to draw it. */
+function drawPduMeter(parent: SVGElement, uid: string, x: number, cy: number, w: number, h: number): boolean {
+  if (w < 34) return false;
+  parent.appendChild(el('rect', { x, y: cy - h / 2, width: w, height: h, rx: 2, fill: '#020a06', stroke: '#0a2016', 'stroke-width': 1 }));
+  const txt = el('text', { x: x + w / 2, y: cy + 3, 'text-anchor': 'middle', 'font-size': Math.min(h * 0.5, 11), 'font-weight': 700, fill: '#39ff5a', 'font-family': 'monospace' });
+  txt.setAttribute('filter', `url(#${uid}gw)`);
+  txt.textContent = '9.3A';
+  parent.appendChild(txt);
+  return true;
 }
 
 function drawC13(parent: SVGElement, uid: string, cx: number, cy: number): void {
@@ -103,6 +141,7 @@ function renderConfiguredPdu(
   const finishKey = (config.finish as string) ?? 'ral9005-texture';
   const finish = FINISH[finishKey] ?? FINISH['ral9005-texture'];
   const rows = (config.rows as Array<{ count: number; socketType: string }>) ?? [{ count: 8, socketType: 'C13' }];
+  const tier = inferTier(template);
 
   const ns = el('svg', { width: W, height: H });
   ns.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -112,18 +151,21 @@ function renderConfiguredPdu(
   ns.appendChild(el('rect', { x: 0, y: 1, width: W, height: H - 2, rx: 3, fill: `url(#${uid}pf)`, stroke: finish.lo, 'stroke-width': 1 }));
   ns.appendChild(el('rect', { x: 2, y: 2.5, width: W - 4, height: 1.5, rx: 0.75, fill: finish.hi, opacity: 0.4 }));
 
-  const ledR = Math.min(3.5, H / 6);
-  const ledX = 10 + ledR, ledY = H / 2;
-  ns.appendChild(el('circle', { cx: ledX, cy: ledY, r: ledR + 1.5, fill: '#37e07a', opacity: 0.15 }));
-  ns.appendChild(el('circle', { cx: ledX, cy: ledY, r: ledR, fill: '#37e07a', stroke: '#000', 'stroke-width': 0.4 }));
-  ns.appendChild(el('circle', { cx: ledX - ledR * 0.3, cy: ledY - ledR * 0.3, r: ledR * 0.35, fill: '#fff', opacity: 0.75 }));
+  const cy = H / 2;
+  const brandEndX = drawPduBrand(ns, uid, 4, cy, finish.text, template?.model ?? 'PDU');
 
   const allSockets: { type: string }[] = rows.flatMap(row =>
     Array.from({ length: row.count }, () => ({ type: row.socketType })),
   );
-  const socketArea = W - 24 - 8;
-  const startX = 24;
   const totalSocketW = allSockets.reduce((sum, s) => sum + socketWidth(s.type), 0);
+
+  const startX = brandEndX + 8;
+  const meterW = tier !== 'basic' ? 46 : 0;
+  const meterGap = meterW ? 10 : 0;
+  const minSocketArea = totalSocketW + Math.max(allSockets.length - 1, 0) * 2;
+  const showMeter = meterW > 0 && (W - startX - meterGap - meterW - 8) >= minSocketArea;
+  const socketArea = (showMeter ? W - meterW - meterGap : W) - startX - 8;
+
   const spacing = allSockets.length > 1
     ? Math.min(6, (socketArea - totalSocketW) / (allSockets.length - 1))
     : 0;
@@ -131,14 +173,12 @@ function renderConfiguredPdu(
   let cx = startX + socketWidth(allSockets[0]?.type ?? 'C13') / 2;
   allSockets.forEach(s => {
     const sw = socketWidth(s.type);
-    drawSocket(ns, uid, s.type, cx, H / 2);
+    drawSocket(ns, uid, s.type, cx, cy);
     cx += sw + spacing;
   });
 
-  if (template?.model) {
-    const lbl = el('text', { x: W - 6, y: H / 2 + 3, 'text-anchor': 'end', 'font-size': 7, fill: finish.text, 'font-family': 'monospace', opacity: 0.6, 'letter-spacing': 0.8 });
-    lbl.textContent = template.model;
-    ns.appendChild(lbl);
+  if (showMeter) {
+    drawPduMeter(ns, uid, W - meterW - 6, cy, meterW, Math.min(H - 8, 20));
   }
 
   group.appendChild(ns);
@@ -147,16 +187,31 @@ function renderConfiguredPdu(
 
 function renderGenericPdu(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
   const group = g('pdu-panel');
-  const chY = 2, chH = H - 4;
+  const uid = `gpdu${Math.random().toString(36).slice(2, 7)}_`;
+  const chY = 2, chH = H - 4, cy = chY + chH / 2;
+  const tier = inferTier(template);
+
+  const defs = el('defs');
+  const fGlow = el('filter', { id: `${uid}gw`, x: '-120%', y: '-120%', width: '340%', height: '340%' });
+  fGlow.appendChild(el('feGaussianBlur', { stdDeviation: '1.1', result: 'b' }));
+  const fMrg = el('feMerge');
+  fMrg.appendChild(el('feMergeNode', { in: 'b' })); fMrg.appendChild(el('feMergeNode', { in: 'SourceGraphic' }));
+  fGlow.appendChild(fMrg); defs.appendChild(fGlow);
+  group.appendChild(defs);
+
   group.appendChild(el('rect', { x: 0, y: chY, width: W, height: chH, rx: 2, fill: '#1a1a1e', stroke: '#111', 'stroke-width': 1 }));
-  group.appendChild(el('rect', { x: 8, y: chY + 4, width: 50, height: chH - 8, rx: 2, fill: '#050910', stroke: '#30363d', 'stroke-width': 0.8 }));
-  group.appendChild(el('rect', { x: 10, y: chY + 6, width: 46, height: chH - 12, rx: 1, fill: '#0a1520', opacity: 0.9 }));
-  const lcd = el('text', { x: 33, y: chY + chH / 2 + 3, 'text-anchor': 'middle', 'font-size': 7, fill: '#00e5ff', 'font-family': 'monospace', opacity: 0.8 });
-  lcd.textContent = '0.0 A'; group.appendChild(lcd);
-  group.appendChild(el('circle', { cx: 67, cy: chY + chH / 2, r: 6, fill: '#c62828', stroke: '#111', 'stroke-width': 1 }));
+
+  const brandEndX = drawPduBrand(group, uid, 4, cy, '#e8eaec', template?.model ?? 'PDU');
+  const startX = brandEndX + 8;
+
+  const meterW = tier !== 'basic' ? 46 : 0;
   const ports = template?.ports ?? [];
   const c13Ports = ports.filter(p => p.type === 'power');
-  const outletW = 20, outletH = chH - 10, outletY = chY + 5, startX = 85;
+  const outletW = 20, outletH = chH - 10, outletY = chY + 5;
+  const outletsW = c13Ports.length * (outletW + 4);
+  const showMeter = meterW > 0 && (W - startX - 8 - meterW - 10) >= outletsW;
+  const meterX = W - meterW - 6;
+
   c13Ports.forEach((_, i) => {
     const ax = startX + i * (outletW + 4);
     group.appendChild(el('rect', { x: ax, y: outletY, width: outletW, height: outletH, rx: 2, fill: '#0a0a0f', stroke: '#333', 'stroke-width': 0.7 }));
@@ -165,7 +220,9 @@ function renderGenericPdu(template: DeviceTemplate | null, W: number, H: number)
       group.appendChild(el('rect', { x: cxPos, y: contactY, width: 3, height: 4, rx: 0.8, fill: '#050508' }));
     });
   });
-  group.appendChild(el('rect', { x: W - 30, y: chY + 4, width: 22, height: chH - 8, rx: 2, fill: '#0a0a0f', stroke: '#555', 'stroke-width': 0.8 }));
+
+  if (showMeter) drawPduMeter(group, uid, meterX, cy, meterW, Math.min(chH - 4, 20));
+
   return group;
 }
 

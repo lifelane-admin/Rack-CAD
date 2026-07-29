@@ -67,21 +67,6 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
   });
   deviceGroup.appendChild(rightEar);
 
-  // Screw heads on ears (skip for servers to avoid overlapping ear ports)
-  if (category !== 'server') {
-    for (let u = 0; u < heightUnits; u++) {
-      const screwY1 = u * RACK_CONSTANTS.RU_HEIGHT + RACK_CONSTANTS.RU_HEIGHT / 4;
-      const screwY2 = u * RACK_CONSTANTS.RU_HEIGHT + 3 * RACK_CONSTANTS.RU_HEIGHT / 4;
-      
-      // Left Screws
-      deviceGroup.appendChild(createCircle(-railW + 8, screwY1, 3, { fill: isSkeleton ? 'none' : '#111', stroke: isSkeleton ? '#38bdf8' : '#555', 'stroke-width': 0.5 }));
-      deviceGroup.appendChild(createCircle(-railW + 8, screwY2, 3, { fill: isSkeleton ? 'none' : '#111', stroke: isSkeleton ? '#38bdf8' : '#555', 'stroke-width': 0.5 }));
-      // Right Screws
-      deviceGroup.appendChild(createCircle(deviceWidth + 8, screwY1, 3, { fill: isSkeleton ? 'none' : '#111', stroke: isSkeleton ? '#38bdf8' : '#555', 'stroke-width': 0.5 }));
-      deviceGroup.appendChild(createCircle(deviceWidth + 8, screwY2, 3, { fill: isSkeleton ? 'none' : '#111', stroke: isSkeleton ? '#38bdf8' : '#555', 'stroke-width': 0.5 }));
-    }
-  }
-
   // === RENDER MAIN PANEL BODY ===
   const hasCustomImage = !!(device.frontPanelImage || template?.frontPanelImage);
   
@@ -204,17 +189,20 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
   } else {
     // High-fidelity SVG panel renderer
     const connectedPortIndices = new Set<number>();
-    if (category === 'switch' && device) {
+    const connectedPortIds = new Set<string>();
+    const usesConnectionState = category === 'switch' || category === 'router' || category === 'firewall' || category === 'console' || category === 'patch-panel';
+    if (usesConnectionState && device) {
       const cables = stateManager.getState().cables;
       for (const cable of cables) {
         const port = device.ports.find(p => p.id === cable.sourcePortId || p.id === cable.destPortId);
         if (port) {
           const idx = device.ports.indexOf(port);
           if (idx >= 0) connectedPortIndices.add(idx);
+          connectedPortIds.add(port.id);
         }
       }
     }
-    const panel = renderFrontPanel(category, template ?? null, device, deviceWidth, deviceHeight, connectedPortIndices);
+    const panel = renderFrontPanel(category, template ?? null, device, deviceWidth, deviceHeight, connectedPortIndices, connectedPortIds);
     deviceGroup.appendChild(panel);
   }
 

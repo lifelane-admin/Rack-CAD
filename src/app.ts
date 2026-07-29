@@ -1739,13 +1739,15 @@ export class App {
 
         // Create device from template
         const deviceId = generateId();
-        const ports: PortData[] = template.ports.map((p, i) => ({
-          ...p,
-          id: `${deviceId}-port-${i}`,
-          deviceId,
-          connected: false,
-          cableId: null,
-        }));
+        const ports: PortData[] = template.ports
+          .filter(p => !p.id.includes('-ear-'))
+          .map((p, i) => ({
+            ...p,
+            id: `${deviceId}-port-${i}`,
+            deviceId,
+            connected: false,
+            cableId: null,
+          }));
 
         const newDevice: DeviceData = {
           id: deviceId,

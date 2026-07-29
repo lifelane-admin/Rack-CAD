@@ -50,6 +50,7 @@ export interface PortData {
   description?: string;
   portW?: number;  // scaled overlay width for switch ports (device coords)
   portH?: number;  // scaled overlay height for switch ports (device coords)
+  group?: string;  // functional group label (e.g. WAN/LAN/DMZ/HA) for grouped-port panels
 }
 
 // === Devices ===

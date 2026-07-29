@@ -2,15 +2,10 @@ import type { DeviceCategory, DeviceTemplate, DeviceData } from '../core/types';
 import { renderSwitchPanel } from './switch-renderer';
 import { renderFortiGatePanel } from './fortigate-renderer';
 import { renderPduPanel } from './pdu-renderer';
+import { makeConnectorDefs, drawSfpPort } from './rack-kit';
+import { renderNetworkingPanel } from './networking-renderer';
 
 // ─── Port geometry constants ─────────────────────────────────────────────────
-const PORT_W = 18;
-const PORT_H = 15;
-const PORT_PITCH = 21;
-const SFP_W = 36;
-const SFP_PITCH = 40;
-const LED_H = 2.5;
-const LED_GAP = 2;
 const STATUS_END = 48;
 
 function el<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number> = {}): SVGElementTagNameMap[K] {
@@ -41,44 +36,6 @@ function makeChassisGradient(id: string, parent: SVGDefsElement): void {
   parent.appendChild(grad);
 }
 
-function drawRJ45(parent: SVGGElement, ax: number, portTopY: number, label: string, ledOn: boolean): void {
-  const ledY = portTopY - LED_GAP - LED_H;
-  parent.appendChild(el('rect', { x: ax + 1, y: ledY, width: PORT_W - 2, height: LED_H, rx: 1, fill: ledOn ? '#00e676' : '#1a2a1a' }));
-  parent.appendChild(el('rect', { x: ax, y: portTopY, width: PORT_W, height: PORT_H, rx: 1.5, fill: '#0a0a0f', stroke: '#3a3a3f', 'stroke-width': 0.8 }));
-  parent.appendChild(el('rect', { x: ax + 2, y: portTopY + 2, width: PORT_W - 4, height: PORT_H - 4, rx: 1, fill: '#050508' }));
-  for (let c = 0; c < 3; c++) {
-    parent.appendChild(el('rect', { x: ax + 4 + c * 3.5, y: portTopY + PORT_H - 5, width: 2.5, height: 3, fill: '#c0c0a0', rx: 0.5 }));
-  }
-  const txt = el('text', { x: ax + PORT_W / 2, y: portTopY + PORT_H + 8, 'text-anchor': 'middle', 'font-size': '6', fill: '#888', 'font-family': 'monospace' });
-  txt.textContent = label;
-  parent.appendChild(txt);
-}
-
-function drawSFPCage(parent: SVGGElement, ax: number, chY: number, chH: number, label: string, hasModule: boolean): void {
-  const cageH = chH - 8;
-  const cageY = chY + 4;
-  parent.appendChild(el('rect', { x: ax, y: cageY, width: SFP_W, height: cageH, rx: 2, fill: '#0d0d12', stroke: '#444', 'stroke-width': 0.8 }));
-  if (hasModule) {
-    parent.appendChild(el('rect', { x: ax + 2, y: cageY + 2, width: SFP_W - 4, height: cageH - 4, rx: 1, fill: '#1a2030' }));
-    parent.appendChild(el('rect', { x: ax + 4, y: cageY + cageH - 6, width: SFP_W - 8, height: 4, rx: 1, fill: '#00e5ff', opacity: 0.6 }));
-  }
-  const txt = el('text', { x: ax + SFP_W / 2, y: chY + chH + 8, 'text-anchor': 'middle', 'font-size': '6', fill: '#888', 'font-family': 'monospace' });
-  txt.textContent = label;
-  parent.appendChild(txt);
-}
-
-function drawQSFPCage(parent: SVGGElement, ax: number, chY: number, chH: number, label: string): void {
-  const w = 44;
-  const cageH = chH - 8;
-  const cageY = chY + 4;
-  parent.appendChild(el('rect', { x: ax, y: cageY, width: w, height: cageH, rx: 2, fill: '#0d0d12', stroke: '#555', 'stroke-width': 0.8 }));
-  parent.appendChild(el('rect', { x: ax + 2, y: cageY + 2, width: w - 4, height: cageH - 4, rx: 1, fill: '#1a2030' }));
-  parent.appendChild(el('rect', { x: ax + 4, y: cageY + cageH - 6, width: w - 8, height: 4, rx: 1, fill: '#00e5ff', opacity: 0.8 }));
-  const txt = el('text', { x: ax + w / 2, y: chY + chH + 8, 'text-anchor': 'middle', 'font-size': '6', fill: '#888', 'font-family': 'monospace' });
-  txt.textContent = label;
-  parent.appendChild(txt);
-}
-
 function drawStatusBlock(parent: SVGGElement, chY: number, chH: number): void {
   const midY = chY + chH / 2;
   parent.appendChild(el('circle', { cx: 12, cy: midY - 10, r: 3, fill: '#00e676', filter: 'drop-shadow(0 0 2px #00e676)' }));
@@ -103,13 +60,6 @@ function drawLcdPanel(parent: SVGGElement, ax: number, ay: number, w: number, h:
   const txt = el('text', { x: ax + w / 2, y: ay + h / 2 + 3, 'text-anchor': 'middle', 'font-size': '7', fill: '#00e5ff', 'font-family': 'monospace', opacity: 0.8 });
   txt.textContent = text;
   parent.appendChild(txt);
-}
-
-function drawVentSlots(parent: SVGGElement, startX: number, chY: number, chH: number): void {
-  const count = Math.floor((350 - startX - 10) / 4);
-  for (let i = 0; i < count; i++) {
-    parent.appendChild(el('rect', { x: startX + i * 4, y: chY + 4, width: 2, height: chH - 8, rx: 0.5, fill: '#111114' }));
-  }
 }
 
 function renderServerPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
@@ -151,51 +101,16 @@ function renderServerPanel(template: DeviceTemplate | null, W: number, H: number
   return group;
 }
 
-function renderFirewallPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
-  const group = g('firewall-panel');
-  const defs = el('defs');
-  const gradId = `fw-grad-${Math.random().toString(36).slice(2)}`;
-  makeChassisGradient(gradId, defs);
-  group.appendChild(defs);
-
-  const chY = 2;
-  const chH = H - 4;
-
-  group.appendChild(el('rect', { x: 0, y: chY, width: W, height: chH, rx: 2, fill: `url(#${gradId})`, stroke: '#111', 'stroke-width': 1 }));
-  drawStatusBlock(group, chY, chH);
-
-  const ports = template?.ports ?? [];
-  const sfpPorts = ports.filter(p => p.type === 'sfp-plus');
-  const rj45Ports = ports.filter(p => p.type === 'rj45');
-  const allDataPorts = [...rj45Ports, ...sfpPorts];
-
-  const portTopY = chY + Math.round((chH - (PORT_H + LED_H + LED_GAP)) / 2);
-
-  const ZONE_COLORS = ['#e53935', '#fb8c00', '#43a047'] as const;
-  allDataPorts.forEach((p, i) => {
-    const ax = STATUS_END + 6 + i * PORT_PITCH;
-    if (p.type === 'sfp-plus') {
-      drawSFPCage(group, ax, chY, chH, `${i + 1}`, true);
-    } else {
-      drawRJ45(group, ax, portTopY, `${i + 1}`, false);
-    }
-    const zoneIdx = i === 0 ? 0 : i <= 2 ? 1 : 2;
-    const zoneTxt = el('text', { x: ax + PORT_W / 2, y: chY + 5, 'text-anchor': 'middle', 'font-size': '5', fill: ZONE_COLORS[zoneIdx], 'font-family': 'monospace' });
-    zoneTxt.textContent = i === 0 ? 'WAN' : i <= 2 ? 'DMZ' : 'LAN';
-    group.appendChild(zoneTxt);
-  });
-
-  drawVentSlots(group, STATUS_END + 6 + allDataPorts.length * PORT_PITCH + 8, chY, chH);
-
-  return group;
-}
-
-function renderRouterPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
+// Legacy fallback for router-core (2U, 8× QSFP28 + MGMT + CON) — the reference
+// catalog's WAN/LAN/DMZ/HA group system doesn't model high-speed QSFP core routers.
+function renderCoreRouterPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
   const group = g('router-panel');
   const defs = el('defs');
   const gradId = `rtr-grad-${Math.random().toString(36).slice(2)}`;
   makeChassisGradient(gradId, defs);
   group.appendChild(defs);
+  const uid = `rtp${Math.random().toString(36).slice(2, 7)}`;
+  makeConnectorDefs(group, uid);
 
   const chY = 2;
   const chH = H - 4;
@@ -204,65 +119,90 @@ function renderRouterPanel(template: DeviceTemplate | null, W: number, H: number
   drawStatusBlock(group, chY, chH);
   drawLcdPanel(group, STATUS_END + 6, chY + 4, 50, chH - 8, 'READY');
 
-  const ports = template?.ports ?? [];
-  const qsfp = ports.filter(p => p.type === 'qsfp28');
-  const sfp = ports.filter(p => p.type === 'sfp-plus');
-  let portX = STATUS_END + 64;
-  qsfp.forEach((_, i) => { drawQSFPCage(group, portX + i * 52, chY, chH, `Q${i + 1}`); });
-  portX += qsfp.length * 52 + (qsfp.length ? 8 : 0);
-  sfp.forEach((_, i) => { drawSFPCage(group, portX + i * SFP_PITCH, chY, chH, `SFP${i + 1}`, true); });
+  const qsfp = (template?.ports ?? []).filter(p => p.type === 'qsfp28');
+  const sfpH = Math.min(chH - 6, 26);
+  const sfpTopY = chY + Math.round((chH - sfpH) / 2);
+  const portX = STATUS_END + 64;
+  qsfp.forEach((_, i) => { drawSfpPort(group, uid, portX + i * 52, sfpTopY, { w: 44, h: sfpH, label: `Q${i + 1}` }); });
 
   return group;
 }
 
-function renderPatchPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
-  const group = g('patch-panel');
-  const chY = 2;
-  const chH = H - 4;
-  group.appendChild(el('rect', { x: 0, y: chY, width: W, height: chH, rx: 1, fill: '#1a1224', stroke: '#111', 'stroke-width': 1 }));
-
-  const ports = template?.ports ?? [];
-  const isFiber = ports.some(p => p.type === 'sfp' || p.type === 'sfp-plus');
-  const portCount = ports.length || 24;
-  const pitch = Math.min(14, (W - 20) / portCount);
-  const portTopY = chY + Math.round((chH - (isFiber ? 8 : PORT_H)) / 2);
-
-  for (let i = 0; i < portCount; i++) {
-    const ax = 10 + i * pitch;
-    if (isFiber) {
-      group.appendChild(el('circle', { cx: ax + 3, cy: portTopY + 4, r: 3, fill: '#0a0a10', stroke: '#444', 'stroke-width': 0.8 }));
-      group.appendChild(el('circle', { cx: ax + 9, cy: portTopY + 4, r: 3, fill: '#0a0a10', stroke: '#444', 'stroke-width': 0.8 }));
-    } else {
-      drawRJ45(group, ax, portTopY, String(i + 1), false);
-    }
-  }
-
-  group.appendChild(el('rect', { x: 5, y: chY + chH - 6, width: W - 10, height: 4, rx: 1, fill: '#111', stroke: '#333', 'stroke-width': 0.5 }));
-
-  return group;
-}
-
-function renderUpsPanel(_template: DeviceTemplate | null, W: number, H: number): SVGGElement {
+function renderUpsPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
   const group = g('ups-panel');
-  const chY = 2;
-  const chH = H - 4;
+  const uid = `ups${Math.random().toString(36).slice(2, 7)}`;
+  const chY = 2, chH = H - 4, cy = chY + chH / 2;
+
+  const defs = el('defs');
+  const fGlow = el('filter', { id: `${uid}gw`, x: '-120%', y: '-120%', width: '340%', height: '340%' });
+  fGlow.appendChild(el('feGaussianBlur', { stdDeviation: '1.1', result: 'b' }));
+  const fMrg = el('feMerge');
+  fMrg.appendChild(el('feMergeNode', { in: 'b' })); fMrg.appendChild(el('feMergeNode', { in: 'SourceGraphic' }));
+  fGlow.appendChild(fMrg); defs.appendChild(fGlow);
+  group.appendChild(defs);
+
   group.appendChild(el('rect', { x: 0, y: chY, width: W, height: chH, rx: 2, fill: '#1a1c29', stroke: '#111', 'stroke-width': 1 }));
 
-  drawLcdPanel(group, 10, chY + 4, 120, chH - 8, 'ON BATTERY');
+  const vaMatch = template?.name.match(/(\d+)\s*VA/i);
+  const va = vaMatch ? parseInt(vaMatch[1], 10) : 750;
+  const model = template?.model ?? 'UPS';
+  const loadPct = Math.min(0.85, va / 8000);
 
-  for (let s = 0; s < 5; s++) {
-    const segColor = s < 3 ? '#43a047' : s === 3 ? '#fb8c00' : '#e53935';
-    group.appendChild(el('rect', { x: 140 + s * 20, y: chY + chH / 2 - 5, width: 16, height: 10, rx: 1, fill: s < 4 ? segColor : '#111', stroke: '#333', 'stroke-width': 0.5 }));
-  }
-
-  ['IN', 'OUT', 'BAT'].forEach((lbl, i) => {
-    group.appendChild(el('circle', { cx: 250 + i * 20, cy: chY + chH / 2 - 4, r: 3, fill: i === 0 ? '#00e676' : '#fb8c00' }));
-    const t = el('text', { x: 250 + i * 20, y: chY + chH / 2 + 8, 'text-anchor': 'middle', 'font-size': '5', fill: '#666', 'font-family': 'monospace' });
+  // ── Brand block + status LEDs (left) ─────────────────────────────────────
+  const brandW = Math.min(92, W * 0.27);
+  const ledLbls: [string, string][] = [['LINE', 'green'], ['BATT', 'off'], ['FAULT', 'off'], ['LOAD', 'amber']];
+  const ledColor: Record<string, string> = { green: '#39ff8a', amber: '#ffb020', off: '#20262b' };
+  const rowGap = Math.min(13, (chH - 12) / ledLbls.length);
+  ledLbls.forEach(([lbl, state], i) => {
+    const ly = chY + 8 + i * rowGap;
+    const on = state !== 'off';
+    const dot = el('circle', { cx: 8, cy: ly, r: 2.2, fill: ledColor[state] });
+    if (on) dot.setAttribute('filter', `url(#${uid}gw)`);
+    group.appendChild(el('circle', { cx: 8, cy: ly, r: 3, fill: '#04060a', stroke: '#2a3036', 'stroke-width': 0.4 }));
+    group.appendChild(dot);
+    const t = el('text', { x: 15, y: ly + 2.5, 'font-size': 6, fill: '#aeb6bd', 'letter-spacing': 0.4 });
     t.textContent = lbl;
     group.appendChild(t);
   });
+  const brandTxt = el('text', { x: 42, y: chY + 10, 'font-size': 7, 'font-weight': 700, fill: '#ff8a3f', 'letter-spacing': 0.6 });
+  brandTxt.textContent = 'RACK SLICER'; group.appendChild(brandTxt);
+  const modelTxt = el('text', { x: 42, y: chY + 20, 'font-size': 6.5, fill: '#8b939a' });
+  modelTxt.textContent = model; group.appendChild(modelTxt);
 
-  drawVentSlots(group, 320, chY, chH);
+  // ── LCD (center): VA, voltage, runtime ───────────────────────────────────
+  const lcdX = brandW + 6;
+  const lcdW = Math.max(70, Math.min(120, W * 0.32));
+  const lcdH = Math.min(chH - 6, 34);
+  const lcdY = cy - lcdH / 2;
+  group.appendChild(el('rect', { x: lcdX, y: lcdY, width: lcdW, height: lcdH, rx: 3, fill: '#04120a', stroke: '#0a1f14', 'stroke-width': 1.2 }));
+  const vaTxt = el('text', { x: lcdX + 6, y: lcdY + lcdH * 0.45, 'font-size': Math.min(lcdH * 0.4, 13), 'font-weight': 700, fill: '#39ff5a', 'font-family': 'monospace' });
+  vaTxt.setAttribute('filter', `url(#${uid}gw)`);
+  vaTxt.textContent = `${va} VA`; group.appendChild(vaTxt);
+  if (lcdH > 24) {
+    const ioTxt = el('text', { x: lcdX + 6, y: lcdY + lcdH - 6, 'font-size': 6, fill: '#2a8a5a', 'font-family': 'monospace' });
+    ioTxt.textContent = `RUNTIME ${Math.round(8 + va / 300)}m`;
+    group.appendChild(ioTxt);
+  }
+
+  // ── LOAD / BATTERY segmented bars (right) ────────────────────────────────
+  const barsX = lcdX + lcdW + 10;
+  const barsW = W - barsX - 6;
+  if (barsW > 40) {
+    const segCount = 10;
+    const segGap = 1.5;
+    const segW = (barsW - (segCount - 1) * segGap) / segCount;
+    const barH = Math.min((chH - 12) / 2 - 3, 10);
+    const rowLoadY = cy - barH - 2;
+    const rowBatY = cy + 2;
+    for (let i = 0; i < segCount; i++) {
+      const active = i / segCount < loadPct;
+      const col = i < 6 ? '#39ff5a' : i < 8 ? '#ffb020' : '#ff4d4d';
+      group.appendChild(el('rect', { x: barsX + i * (segW + segGap), y: rowLoadY, width: segW, height: barH, rx: 1, fill: active ? col : '#1a1f24', opacity: active ? 0.95 : 0.5 }));
+    }
+    for (let i = 0; i < segCount; i++) {
+      group.appendChild(el('rect', { x: barsX + i * (segW + segGap), y: rowBatY, width: segW, height: barH, rx: 1, fill: i < 9 ? '#39ff5a' : '#1a1f24', opacity: i < 9 ? 0.95 : 0.5 }));
+    }
+  }
 
   return group;
 }
@@ -287,36 +227,6 @@ function renderStoragePanel(template: DeviceTemplate | null, W: number, H: numbe
 
   const portX = bayStartX + cols * (bayW + 3) + 8;
   drawLcdPanel(group, portX, chY + 4, 50, chH - 8, 'ONLINE');
-
-  return group;
-}
-
-function renderKvmPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
-  const group = g('kvm-panel');
-  const chY = 2;
-  const chH = H - 4;
-  group.appendChild(el('rect', { x: 0, y: chY, width: W, height: chH, rx: 2, fill: '#1e1a1a', stroke: '#111', 'stroke-width': 1 }));
-
-  drawStatusBlock(group, chY, chH);
-  drawLcdPanel(group, STATUS_END + 6, chY + 4, 40, chH - 8, 'KVM');
-
-  const ports = template?.ports ?? [];
-  const consolePorts = ports.filter(p => p.type === 'console');
-  const portTopY = chY + Math.round((chH - (PORT_H + LED_H + LED_GAP)) / 2);
-
-  consolePorts.forEach((_, i) => {
-    const ax = STATUS_END + 54 + i * PORT_PITCH;
-    group.appendChild(el('rect', { x: ax, y: portTopY, width: 20, height: PORT_H, rx: 1.5, fill: '#0a0a0f', stroke: '#3a3a3f', 'stroke-width': 0.8 }));
-    for (let p = 0; p < 9; p++) {
-      const row = p < 5 ? 0 : 1;
-      const col = p < 5 ? p : p - 5;
-      const offset = p >= 5 ? 1.5 : 0;
-      group.appendChild(el('circle', { cx: ax + 2 + col * 3.5 + offset, cy: portTopY + 4 + row * 5, r: 0.8, fill: '#c0c0a0' }));
-    }
-    const numTxt = el('text', { x: ax + 10, y: portTopY + PORT_H + 8, 'text-anchor': 'middle', 'font-size': '6', fill: '#888', 'font-family': 'monospace' });
-    numTxt.textContent = String(i + 1);
-    group.appendChild(numTxt);
-  });
 
   return group;
 }
@@ -411,20 +321,36 @@ export function renderFrontPanel(
   deviceWidth: number,
   deviceHeight: number,
   connectedPortIndices: Set<number> = new Set(),
+  connectedPortIds: Set<string> = new Set(),
 ): SVGGElement {
   switch (category) {
     case 'switch':        return renderSwitchPanel(template, deviceWidth, deviceHeight, connectedPortIndices);
     case 'server':        return renderServerPanel(template, deviceWidth, deviceHeight);
-    case 'firewall':
-      return template?.id === 'fw-fortigate-400f'
-        ? renderFortiGatePanel(template, deviceWidth, deviceHeight)
-        : renderFirewallPanel(template, deviceWidth, deviceHeight);
-    case 'router':        return renderRouterPanel(template, deviceWidth, deviceHeight);
-    case 'patch-panel':   return renderPatchPanel(template, deviceWidth, deviceHeight);
+    case 'firewall': {
+      if (template?.id === 'fw-fortigate-400f') return renderFortiGatePanel(template, deviceWidth, deviceHeight);
+      const portCount = template?.ports.length ?? 6;
+      const variant = template?.id === 'fw-4p' ? 'appliance' : 'ngfw';
+      return renderNetworkingPanel('firewall', portCount, variant, template?.model ?? 'Firewall', deviceWidth, deviceHeight, deviceData?.ports ?? [], connectedPortIds);
+    }
+    case 'router': {
+      const hasQsfp = template?.ports.some(p => p.type === 'qsfp28') ?? false;
+      if (hasQsfp) return renderCoreRouterPanel(template, deviceWidth, deviceHeight);
+      const portCount = template?.ports.length ?? 4;
+      return renderNetworkingPanel('router', portCount, undefined, template?.model ?? 'Router', deviceWidth, deviceHeight, deviceData?.ports ?? [], connectedPortIds);
+    }
+    case 'patch-panel': {
+      const isFiber = template?.ports.some(p => p.type === 'sfp' || p.type === 'sfp-plus') ?? false;
+      const portCount = template?.ports.length ?? 24;
+      return renderNetworkingPanel(isFiber ? 'patch-fiber' : 'patch-cat6', portCount, undefined, template?.model ?? 'Patch Panel', deviceWidth, deviceHeight, deviceData?.ports ?? [], connectedPortIds);
+    }
     case 'pdu': return renderPduPanel(template, deviceData, deviceWidth, deviceHeight);
     case 'ups':           return renderUpsPanel(template, deviceWidth, deviceHeight);
     case 'storage':       return renderStoragePanel(template, deviceWidth, deviceHeight);
-    case 'console':       return renderKvmPanel(template, deviceWidth, deviceHeight);
+    case 'console': {
+      const isKvm = template?.id.startsWith('kvm') ?? false;
+      const portCount = template?.ports.length ?? 8;
+      return renderNetworkingPanel(isKvm ? 'kvm' : 'console', portCount, undefined, template?.model ?? 'Console', deviceWidth, deviceHeight, deviceData?.ports ?? [], connectedPortIds);
+    }
     case 'blank-panel':   return renderBlankPanel(deviceWidth, deviceHeight);
     case 'cooling':       return renderCoolingPanel(template, deviceWidth, deviceHeight);
     case 'cable-manager': return renderCableManagerPanel(template, deviceWidth, deviceHeight);

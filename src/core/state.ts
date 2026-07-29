@@ -78,7 +78,7 @@ class StateManager {
         managementIp: ip,
         serialNumber: serial,
         description: desc,
-        ports: tmpl.ports.map((p, i) => ({ ...p, id: `${id}-port-${i}`, deviceId: id, connected: false, cableId: null })),
+        ports: tmpl.ports.filter(p => !p.id.includes('-ear-')).map((p, i) => ({ ...p, id: `${id}-port-${i}`, deviceId: id, connected: false, cableId: null })),
       };
     };
 
@@ -141,13 +141,11 @@ class StateManager {
   private prepareDevices(devices: DeviceData[]): DeviceData[] {
     return devices.map(d => {
       const template = getTemplate(d.templateId);
-      if (template && template.category === 'server') {
-        return {
-          ...d,
-          ports: injectEarPorts(d.id, 'server', template.heightUnits, d.ports)
-        };
-      }
-      return d;
+      if (!template) return d;
+      return {
+        ...d,
+        ports: injectEarPorts(d.id, template.category, template.heightUnits, d.ports)
+      };
     });
   }
 
@@ -431,8 +429,10 @@ class StateManager {
   }
 }
 
+const EAR_HOLE_CATEGORIES = new Set(['server', 'switch', 'router', 'firewall', 'ups', 'storage', 'console']);
+
 export function injectEarPorts(deviceId: string, category: string, heightUnits: number, basePorts: PortData[]): PortData[] {
-  if (category !== 'server') return basePorts;
+  if (!EAR_HOLE_CATEGORIES.has(category)) return basePorts;
 
   // Prevent duplicate injection
   const filtered = basePorts.filter(p => !p.id.includes('-ear-'));
@@ -442,7 +442,7 @@ export function injectEarPorts(deviceId: string, category: string, heightUnits: 
   const rightX = 350 + 12.5;
 
   const earPorts: PortData[] = [];
-  const numHoles = heightUnits === 2 ? 5 : (heightUnits === 1 ? 4 : heightUnits * 2);
+  const numHoles = heightUnits * 2;
   const dy = height / (numHoles + 1);
 
   for (let i = 1; i <= numHoles; i++) {

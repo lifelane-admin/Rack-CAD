@@ -1,6 +1,7 @@
 import { DeviceTemplate, DeviceCategory } from '../core/types';
 import { switchPorts } from '../renderers/switch-renderer';
 import { fortigatePorts } from '../renderers/fortigate-renderer';
+import { networkingPorts } from '../renderers/networking-renderer';
 
 export const deviceCatalog: DeviceTemplate[] = [
 
@@ -16,6 +17,8 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '🖥️',
     powerWatts: 200,
     ports: [
+      { id: 's1u-ear-psu1', name: 'PSU 1', type: 'power' as const, relativeX: -12, relativeY: 15 },
+      { id: 's1u-ear-psu2', name: 'PSU 2', type: 'power' as const, relativeX: 362, relativeY: 15 },
       { id: 's1u-nic1', name: 'NIC 1', type: 'rj45', relativeX: 320, relativeY: 8, speed: '1 Gbps' },
       { id: 's1u-nic2', name: 'NIC 2', type: 'rj45', relativeX: 332, relativeY: 8, speed: '1 Gbps' },
       { id: 's1u-mgmt', name: 'MGMT', type: 'management', relativeX: 344, relativeY: 8, speed: '1 Gbps' },
@@ -32,6 +35,8 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '🖥️',
     powerWatts: 350,
     ports: [
+      { id: 's2u-ear-psu1', name: 'PSU 1', type: 'power' as const, relativeX: -12, relativeY: 30 },
+      { id: 's2u-ear-psu2', name: 'PSU 2', type: 'power' as const, relativeX: 362, relativeY: 30 },
       { id: 's2u-nic1', name: 'NIC 1', type: 'rj45', relativeX: 320, relativeY: 15, speed: '1 Gbps' },
       { id: 's2u-nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 332, relativeY: 15, speed: '10 Gbps' },
       { id: 's2u-nic3', name: 'NIC 3', type: 'sfp-plus', relativeX: 332, relativeY: 27, speed: '10 Gbps' },
@@ -50,6 +55,8 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '🖥️',
     powerWatts: 350,
     ports: [
+      { id: 's2uhd-ear-psu1', name: 'PSU 1', type: 'power' as const, relativeX: -12, relativeY: 30 },
+      { id: 's2uhd-ear-psu2', name: 'PSU 2', type: 'power' as const, relativeX: 362, relativeY: 30 },
       { id: 's2uhd-nic1', name: 'NIC 1', type: 'sfp-plus', relativeX: 315, relativeY: 10, speed: '10 Gbps' },
       { id: 's2uhd-nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 327, relativeY: 10, speed: '10 Gbps' },
       { id: 's2uhd-nic3', name: 'NIC 3', type: 'sfp-plus', relativeX: 315, relativeY: 25, speed: '10 Gbps' },
@@ -69,6 +76,8 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '🖥️',
     powerWatts: 600,
     ports: [
+      { id: 's4u-ear-psu1', name: 'PSU 1', type: 'power' as const, relativeX: -12, relativeY: 60 },
+      { id: 's4u-ear-psu2', name: 'PSU 2', type: 'power' as const, relativeX: 362, relativeY: 60 },
       { id: 's4u-nic1', name: 'NIC 1', type: 'rj45', relativeX: 315, relativeY: 20, speed: '1 Gbps' },
       { id: 's4u-nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 327, relativeY: 20, speed: '10 Gbps' },
       { id: 's4u-nic3', name: 'NIC 3', type: 'sfp-plus', relativeX: 315, relativeY: 40, speed: '10 Gbps' },
@@ -87,6 +96,8 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '🖥️',
     powerWatts: 200,
     ports: [
+      { id: 'stow-ear-psu1', name: 'PSU 1', type: 'power' as const, relativeX: -12, relativeY: 60 },
+      { id: 'stow-ear-psu2', name: 'PSU 2', type: 'power' as const, relativeX: 362, relativeY: 60 },
       { id: 'stow-nic1', name: 'NIC 1', type: 'rj45', relativeX: 315, relativeY: 25, speed: '1 Gbps' },
       { id: 'stow-nic2', name: 'NIC 2', type: 'rj45', relativeX: 327, relativeY: 25, speed: '1 Gbps' },
       { id: 'stow-mgmt', name: 'MGMT', type: 'management', relativeX: 339, relativeY: 25, speed: '1 Gbps' },
@@ -184,59 +195,25 @@ export const deviceCatalog: DeviceTemplate[] = [
     id: 'router-4p',
     name: '4-Port Enterprise Router',
     manufacturer: '',
-    model: '4-Port Enterprise Router',
+    model: 'RS-R4',
     category: 'router',
     heightUnits: 1,
     color: '#1a1f2e',
     icon: '🌐',
     powerWatts: 45,
-    ports: [
-      ...Array.from({ length: 4 }, (_, i) => ({
-        id: `rtr4-rj${i + 1}`,
-        name: `WAN/LAN ${i + 1}`,
-        type: 'rj45' as const,
-        relativeX: 60 + i * 21,
-        relativeY: 15,
-        speed: '1 Gbps',
-      })),
-      ...Array.from({ length: 2 }, (_, i) => ({
-        id: `rtr4-sfp${i + 1}`,
-        name: `SFP ${i + 1}`,
-        type: 'sfp-plus' as const,
-        relativeX: 175 + i * 21,
-        relativeY: 15,
-        speed: '10 Gbps',
-      })),
-    ],
+    ports: networkingPorts('router', 4, 'rtr4-'),
   },
   {
     id: 'router-8p',
     name: '8-Port Enterprise Router',
     manufacturer: '',
-    model: '8-Port Enterprise Router',
+    model: 'RS-R8',
     category: 'router',
     heightUnits: 1,
     color: '#1a1f2e',
     icon: '🌐',
     powerWatts: 45,
-    ports: [
-      ...Array.from({ length: 8 }, (_, i) => ({
-        id: `rtr8-rj${i + 1}`,
-        name: `WAN/LAN ${i + 1}`,
-        type: 'rj45' as const,
-        relativeX: 60 + i * 21,
-        relativeY: 15,
-        speed: '1 Gbps',
-      })),
-      ...Array.from({ length: 4 }, (_, i) => ({
-        id: `rtr8-sfp${i + 1}`,
-        name: `SFP ${i + 1}`,
-        type: 'sfp-plus' as const,
-        relativeX: 240 + i * 21,
-        relativeY: 15,
-        speed: '10 Gbps',
-      })),
-    ],
+    ports: networkingPorts('router', 8, 'rtr8-'),
   },
   {
     id: 'router-core',
@@ -265,103 +242,51 @@ export const deviceCatalog: DeviceTemplate[] = [
   // ─── FIREWALLS ──────────────────────────────────────────────────────────────
   {
     id: 'fw-4p',
-    name: 'Firewall Appliance 4-Port',
+    name: 'Firewall Appliance 6-Port',
     manufacturer: '',
-    model: 'Firewall 4-Port',
+    model: 'RS-FW4',
     category: 'firewall',
     heightUnits: 1,
     color: '#1f1a1a',
     icon: '🛡️',
     powerWatts: 65,
-    ports: [
-      { id: 'fw4-con', name: 'CON', type: 'console' as const, relativeX: 20, relativeY: 15, speed: '115.2 Kbps' },
-      { id: 'fw4-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 42, relativeY: 15, speed: '1 Gbps' },
-      ...Array.from({ length: 4 }, (_, i) => ({
-        id: `fw4-p${i + 1}`,
-        name: `Port ${i + 1}`,
-        type: 'rj45' as const,
-        relativeX: 80 + i * 21,
-        relativeY: 15,
-        speed: '1 Gbps',
-      })),
-    ],
+    ports: networkingPorts('firewall', 6, 'fw4-', 'appliance'),
   },
   {
     id: 'fw-6p',
-    name: 'NGFW 6-Port',
+    name: 'NGFW 8-Port',
     manufacturer: '',
-    model: 'NGFW 6-Port',
+    model: 'RS-NG6',
     category: 'firewall',
     heightUnits: 1,
     color: '#1f1a1a',
     icon: '🛡️',
     powerWatts: 65,
-    ports: [
-      { id: 'fw6-con', name: 'CON', type: 'console' as const, relativeX: 20, relativeY: 15 },
-      { id: 'fw6-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 42, relativeY: 15, speed: '1 Gbps' },
-      ...Array.from({ length: 6 }, (_, i) => ({
-        id: `fw6-sfp${i + 1}`,
-        name: `SFP ${i + 1}`,
-        type: 'sfp-plus' as const,
-        relativeX: 80 + i * 21,
-        relativeY: 15,
-        speed: '10 Gbps',
-      })),
-    ],
+    ports: networkingPorts('firewall', 8, 'fw6-', 'ngfw'),
   },
   {
     id: 'fw-8p',
-    name: 'NGFW 8-Port',
+    name: 'NGFW 10-Port',
     manufacturer: '',
-    model: 'NGFW 8-Port',
+    model: 'RS-NG8',
     category: 'firewall',
     heightUnits: 1,
     color: '#1f1a1a',
     icon: '🛡️',
     powerWatts: 65,
-    ports: [
-      { id: 'fw8-con', name: 'CON', type: 'console' as const, relativeX: 20, relativeY: 15 },
-      { id: 'fw8-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 42, relativeY: 15, speed: '1 Gbps' },
-      ...Array.from({ length: 8 }, (_, i) => ({
-        id: `fw8-sfp${i + 1}`,
-        name: `SFP ${i + 1}`,
-        type: 'sfp-plus' as const,
-        relativeX: 80 + i * 21,
-        relativeY: 15,
-        speed: '10 Gbps',
-      })),
-    ],
+    ports: networkingPorts('firewall', 10, 'fw8-', 'ngfw'),
   },
   {
     id: 'fw-12p',
-    name: 'NGFW 12-Port',
+    name: 'NGFW 13-Port',
     manufacturer: '',
-    model: 'NGFW 12-Port',
+    model: 'RS-NG12',
     category: 'firewall',
     heightUnits: 1,
     color: '#1f1a1a',
     icon: '🛡️',
     powerWatts: 65,
-    ports: [
-      { id: 'fw12-con', name: 'CON', type: 'console' as const, relativeX: 20, relativeY: 15 },
-      { id: 'fw12-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 42, relativeY: 15, speed: '1 Gbps' },
-      ...Array.from({ length: 12 }, (_, i) => ({
-        id: `fw12-sfp${i + 1}`,
-        name: `SFP ${i + 1}`,
-        type: 'sfp-plus' as const,
-        relativeX: 80 + i * 16,
-        relativeY: 15,
-        speed: '10 Gbps',
-      })),
-      ...Array.from({ length: 2 }, (_, i) => ({
-        id: `fw12-q${i + 1}`,
-        name: `QSFP ${i + 1}`,
-        type: 'qsfp28' as const,
-        relativeX: 278 + i * 21,
-        relativeY: 15,
-        speed: '100 Gbps',
-      })),
-    ],
+    ports: networkingPorts('firewall', 16, 'fw12-', 'ngfw'),
   },
   {
     id: 'fw-fortigate-400f',
@@ -387,13 +312,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#1e1824',
     icon: '🔲',
     powerWatts: 0,
-    ports: Array.from({ length: 12 }, (_, i) => ({
-      id: `pp12-p${i + 1}`,
-      name: `P${i + 1}`,
-      type: 'rj45' as const,
-      relativeX: 40 + i * 22,
-      relativeY: 15,
-    })),
+    ports: networkingPorts('patch-cat6', 12, 'pp12-'),
   },
   {
     id: 'pp-24-cat6',
@@ -405,13 +324,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#1e1824',
     icon: '🔲',
     powerWatts: 0,
-    ports: Array.from({ length: 24 }, (_, i) => ({
-      id: `pp24-p${i + 1}`,
-      name: `P${i + 1}`,
-      type: 'rj45' as const,
-      relativeX: 15 + i * 14,
-      relativeY: 15,
-    })),
+    ports: networkingPorts('patch-cat6', 24, 'pp24-'),
   },
   {
     id: 'pp-48-cat6',
@@ -423,13 +336,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#1e1824',
     icon: '🔲',
     powerWatts: 0,
-    ports: Array.from({ length: 48 }, (_, i) => ({
-      id: `pp48-p${i + 1}`,
-      name: `P${i + 1}`,
-      type: 'rj45' as const,
-      relativeX: 6 + i * 7,
-      relativeY: 15,
-    })),
+    ports: networkingPorts('patch-cat6', 48, 'pp48-'),
   },
   {
     id: 'pp-24-fiber',
@@ -441,13 +348,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#1e1824',
     icon: '🔲',
     powerWatts: 0,
-    ports: Array.from({ length: 24 }, (_, i) => ({
-      id: `ppf24-p${i + 1}`,
-      name: `F${i + 1}`,
-      type: 'sfp' as const,
-      relativeX: 15 + i * 14,
-      relativeY: 15,
-    })),
+    ports: networkingPorts('patch-fiber', 24, 'ppf24-'),
   },
   {
     id: 'pp-48-fiber',
@@ -459,13 +360,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#1e1824',
     icon: '🔲',
     powerWatts: 0,
-    ports: Array.from({ length: 48 }, (_, i) => ({
-      id: `ppf48-p${i + 1}`,
-      name: `F${i + 1}`,
-      type: 'sfp' as const,
-      relativeX: 6 + i * 7,
-      relativeY: 15,
-    })),
+    ports: networkingPorts('patch-fiber', 48, 'ppf48-'),
   },
 
   // ─── PDU ────────────────────────────────────────────────────────────────────
@@ -880,16 +775,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#2e2828',
     icon: '📟',
     powerWatts: 18,
-    ports: [
-      ...Array.from({ length: 8 }, (_, i) => ({
-        id: `kvm8-p${i + 1}`,
-        name: `KVM ${i + 1}`,
-        type: 'console' as const,
-        relativeX: 60 + i * 27,
-        relativeY: 15,
-      })),
-      { id: 'kvm8-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 330, relativeY: 15, speed: '1 Gbps' },
-    ],
+    ports: networkingPorts('kvm', 8, 'kvm8-'),
   },
   {
     id: 'kvm-16p',
@@ -901,16 +787,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#2e2828',
     icon: '📟',
     powerWatts: 18,
-    ports: [
-      ...Array.from({ length: 16 }, (_, i) => ({
-        id: `kvm16-p${i + 1}`,
-        name: `KVM ${i + 1}`,
-        type: 'console' as const,
-        relativeX: 30 + i * 18,
-        relativeY: 15,
-      })),
-      { id: 'kvm16-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 330, relativeY: 15, speed: '1 Gbps' },
-    ],
+    ports: networkingPorts('kvm', 16, 'kvm16-'),
   },
   {
     id: 'console-8p',
@@ -922,16 +799,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#2e2828',
     icon: '📟',
     powerWatts: 18,
-    ports: [
-      ...Array.from({ length: 8 }, (_, i) => ({
-        id: `cs8-p${i + 1}`,
-        name: `Serial ${i + 1}`,
-        type: 'console' as const,
-        relativeX: 60 + i * 27,
-        relativeY: 15,
-      })),
-      { id: 'cs8-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 330, relativeY: 15, speed: '1 Gbps' },
-    ],
+    ports: networkingPorts('console', 8, 'cs8-'),
   },
   {
     id: 'console-16p',
@@ -943,16 +811,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#2e2828',
     icon: '📟',
     powerWatts: 18,
-    ports: [
-      ...Array.from({ length: 16 }, (_, i) => ({
-        id: `cs16-p${i + 1}`,
-        name: `Serial ${i + 1}`,
-        type: 'console' as const,
-        relativeX: 30 + i * 18,
-        relativeY: 15,
-      })),
-      { id: 'cs16-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 330, relativeY: 15, speed: '1 Gbps' },
-    ],
+    ports: networkingPorts('console', 16, 'cs16-'),
   },
 
   // ─── CABLE MANAGERS ─────────────────────────────────────────────────────────
