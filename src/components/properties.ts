@@ -3,7 +3,7 @@ import EventBus from '../core/event-bus';
 import { eventBus } from '../core/event-bus';
 import State from '../core/state';
 import { stateManager } from '../core/state';
-import { SelectableItem, CableType, CABLE_COLORS } from '../core/types';
+import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate } from '../core/types';
 import { getTemplate } from '../library/device-catalog';
 import { CustomAssetModal } from './custom-asset-modal';
 
@@ -187,6 +187,11 @@ export class PropertiesPanel {
     if (!device) return;
 
     const template = getTemplate(device.templateId);
+
+    if (template?.mountType === 'side') {
+      this.renderVerticalPduProperties(device, template, container);
+      return;
+    }
     const racks = state.racks || [];
     const rackOptions = racks.map((r: any) => `<option value="${r.id}" ${r.id === device.rackId ? 'selected' : ''}>${r.name}</option>`).join('');
 
@@ -403,6 +408,291 @@ export class PropertiesPanel {
       input?.addEventListener('change', (e: any) => {
         EventBus.emit('device:update', { id, data: { [field]: e.target.value } });
       });
+    });
+  }
+
+  private renderVerticalPduProperties(device: DeviceData, template: DeviceTemplate, container: HTMLElement): void {
+    const cfg = (device.deviceConfig as Record<string, unknown> | undefined) ?? {};
+    const elec = (cfg.electrical as Record<string, unknown> | undefined) ?? {};
+    const enc = (cfg.enclosure as Record<string, unknown> | undefined) ?? {};
+
+    container.innerHTML = `
+      <div style="padding:10px 12px;font-family:monospace;font-size:11px;color:#e6ecf2;overflow-y:auto;max-height:100%;">
+        <!-- Header -->
+        <div style="color:#37b6ff;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;border-bottom:1px solid #23303b;padding-bottom:6px;">
+          &#x26A1; ${template.name}<br>
+          <span style="color:#5b636a;font-size:9px;">${device.sideMountPosition?.toUpperCase() ?? ''} WALL — ${template.outletConfig?.map(r=>r.count+'×'+r.socketType).join(' + ') ?? ''}</span>
+        </div>
+
+        <!-- Category -->
+        <label class="pdu-lbl">Category</label>
+        <select id="pdu-cat" class="pdu-sel">
+          ${['basic','metered','switched','managed','intelligent'].map(v=>`<option value="${v}" ${(cfg.category??'switched')===v?'selected':''}>${v.charAt(0).toUpperCase()+v.slice(1)}</option>`).join('')}
+        </select>
+
+        <!-- Electrical -->
+        <label class="pdu-lbl" style="margin-top:10px;">Electrical</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+          <div>
+            <div class="pdu-sub">Phase</div>
+            <select id="pdu-phase" class="pdu-sel">
+              <option value="single" ${(elec.phase??'single')==='single'?'selected':''}>Single Phase</option>
+              <option value="three" ${elec.phase==='three'?'selected':''}>Three Phase</option>
+            </select>
+          </div>
+          <div>
+            <div class="pdu-sub">Voltage (V)</div>
+            <select id="pdu-voltage" class="pdu-sel">
+              ${[110,120,208,220,230,240].map(v=>`<option value="${v}" ${(elec.voltage??230)===v||String(elec.voltage??230)===String(v)?'selected':''}>${v}V</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:5px;">
+          <div class="pdu-sub">Max Current (A)</div>
+          <input type="number" id="pdu-current" class="pdu-inp" value="${elec.currentA??32}" min="6" max="63"/>
+        </div>
+
+        <!-- Input Supply -->
+        <label class="pdu-lbl" style="margin-top:10px;">Input Supply</label>
+        <div>
+          <div class="pdu-sub">Input Plug</div>
+          <select id="pdu-inputplug" class="pdu-sel">
+            <option value="iec60309-32a" ${(cfg.inputPlug??'iec60309-32a')==='iec60309-32a'?'selected':''}>IEC 60309 32A (Blue)</option>
+            <option value="iec60309-16a" ${cfg.inputPlug==='iec60309-16a'?'selected':''}>IEC 60309 16A (Blue)</option>
+            <option value="iec60309-32a-3ph" ${cfg.inputPlug==='iec60309-32a-3ph'?'selected':''}>IEC 60309 32A 3-Phase (Red)</option>
+            <option value="bs1363" ${cfg.inputPlug==='bs1363'?'selected':''}>UK BS 1363 13A</option>
+            <option value="nema515" ${cfg.inputPlug==='nema515'?'selected':''}>NEMA 5-15P (US)</option>
+            <option value="is1293" ${cfg.inputPlug==='is1293'?'selected':''}>India IS 1293</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px;">
+          <div>
+            <div class="pdu-sub">Cord Length (m)</div>
+            <input type="number" id="pdu-cordlen" class="pdu-inp" value="${cfg.cordLen??3}" min="1" max="10"/>
+          </div>
+          <div>
+            <div class="pdu-sub">Cord CSA (mm&#xB2;)</div>
+            <select id="pdu-csa" class="pdu-sel">
+              ${[1.5,2.5,4,6,10].map(v=>`<option value="${v}" ${(cfg.cordCsa??6)==v?'selected':''}>${v}mm&#xB2;</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:5px;display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="pdu-frls" ${cfg.frls!==false?'checked':''}/>
+          <label for="pdu-frls" style="font-size:10px;color:#8b939a;cursor:pointer;">FRLS Cable (Fire Resistant Low Smoke)</label>
+        </div>
+
+        <!-- Outlet Composition -->
+        <label class="pdu-lbl" style="margin-top:10px;">Outlet Composition</label>
+        <div id="pdu-outlet-rows" style="display:flex;flex-direction:column;gap:4px;"></div>
+        <button id="pdu-add-row" style="width:100%;margin-top:5px;padding:5px;background:#0f2a1e;color:#00e0a4;border:1px dashed #1e5040;font-size:10px;cursor:pointer;border-radius:2px;">+ Add Outlet Group</button>
+
+        <!-- Protection -->
+        <label class="pdu-lbl" style="margin-top:10px;">Protection / Breaker</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+          <div>
+            <div class="pdu-sub">Breaker Type</div>
+            <select id="pdu-breaker" class="pdu-sel">
+              <option value="none" ${cfg.breaker==='none'?'selected':''}>None</option>
+              <option value="mcb" ${cfg.breaker==='mcb'?'selected':''}>MCB</option>
+              <option value="mcb-guarded" ${(cfg.breaker??'mcb-guarded')==='mcb-guarded'?'selected':''}>MCB + Guard</option>
+              <option value="hydraulic" ${cfg.breaker==='hydraulic'?'selected':''}>Hydraulic</option>
+              <option value="electronic" ${cfg.breaker==='electronic'?'selected':''}>Electronic</option>
+            </select>
+          </div>
+          <div>
+            <div class="pdu-sub">MCB Curve</div>
+            <select id="pdu-mcbcurve" class="pdu-sel">
+              <option value="B" ${(cfg.mcbCurve??'D')==='B'?'selected':''}>B-Curve</option>
+              <option value="C" ${cfg.mcbCurve==='C'?'selected':''}>C-Curve</option>
+              <option value="D" ${(cfg.mcbCurve??'D')==='D'?'selected':''}>D-Curve</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Smart Features -->
+        <label class="pdu-lbl" style="margin-top:10px;">Smart Features</label>
+        <div id="pdu-features" style="display:flex;flex-wrap:wrap;gap:3px;"></div>
+
+        <!-- LEDs -->
+        <label class="pdu-lbl" style="margin-top:8px;">Status LEDs</label>
+        <div id="pdu-leds" style="display:flex;flex-wrap:wrap;gap:3px;"></div>
+
+        <!-- Enclosure -->
+        <label class="pdu-lbl" style="margin-top:10px;">Enclosure</label>
+        <div>
+          <div class="pdu-sub">Finish</div>
+          <select id="pdu-finish" class="pdu-sel">
+            <option value="ral9005-texture" ${(enc.finish??'ral9005-texture')==='ral9005-texture'?'selected':''}>RAL 9005 Texture (Jet Black)</option>
+            <option value="black" ${enc.finish==='black'?'selected':''}>Smooth Black</option>
+            <option value="darkGrey" ${enc.finish==='darkGrey'?'selected':''}>Dark Grey</option>
+            <option value="brushedAluminium" ${enc.finish==='brushedAluminium'?'selected':''}>Brushed Aluminium</option>
+            <option value="white" ${enc.finish==='white'?'selected':''}>White</option>
+          </select>
+        </div>
+        <div style="margin-top:5px;">
+          <div class="pdu-sub">Outlet Face Colour</div>
+          <select id="pdu-outletface" class="pdu-sel">
+            ${['white','black','grey'].map(v=>`<option value="${v}" ${(enc.outletFace??'white')===v?'selected':''}>${v.charAt(0).toUpperCase()+v.slice(1)}</option>`).join('')}
+          </select>
+        </div>
+
+        <!-- Branding / Labels -->
+        <label class="pdu-lbl" style="margin-top:10px;">Branding &amp; Labels</label>
+        <div>
+          <div class="pdu-sub">Branding</div>
+          <select id="pdu-branding" class="pdu-sel">
+            ${['manufacturer','custom','none'].map(v=>`<option value="${v}" ${(cfg.branding??'manufacturer')===v?'selected':''}>${v.charAt(0).toUpperCase()+v.slice(1)}</option>`).join('')}
+          </select>
+        </div>
+        <div id="pdu-labels" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:5px;"></div>
+      </div>
+
+      <style>
+        .pdu-lbl{display:block;font-size:9px;color:#8b939a;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+        .pdu-sub{font-size:9px;color:#5b636a;margin-bottom:2px}
+        .pdu-sel{width:100%;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:4px;font-size:10px;border-radius:2px;font-family:monospace}
+        .pdu-inp{width:100%;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:4px;font-size:10px;border-radius:2px;font-family:monospace;box-sizing:border-box}
+        .pdu-chip{padding:3px 6px;border-radius:2px;font-size:9.5px;cursor:pointer;border:1px solid #23303b;font-family:monospace;user-select:none}
+        .pdu-chip.on{background:#37b6ff;color:#000;border-color:#37b6ff}
+        .pdu-chip.off{background:#171d24;color:#8b939a}
+      </style>
+    `;
+
+    // Outlet composition rows
+    const outletRows: Array<{type: string; count: number}> =
+      Array.isArray(cfg.composition) ? (cfg.composition as Array<{type:string;count:number}>) :
+      (template.outletConfig?.map(r => ({ type: r.socketType.toLowerCase().replace(/-/g,''), count: r.count })) ?? [{ type: 'iec-c13', count: 20 }]);
+
+    // Declare save before it's used in renderPduOutletRows
+    let save: () => void;
+
+    this.renderPduOutletRows(container, device.id, outletRows, () => save());
+
+    // Smart feature chips
+    const SMART_FEATURES = ['powerMeter','lcd','oled','currentMon','voltageMon','powerFactor','energyMeter','snmp','redfish','modbus'];
+    const SMART_LABELS: Record<string,string> = {
+      powerMeter:'Power Meter',lcd:'LCD',oled:'OLED',currentMon:'Current Mon.',
+      voltageMon:'Voltage Mon.',powerFactor:'Power Factor',energyMeter:'Energy Meter',
+      snmp:'SNMP',redfish:'Redfish',modbus:'Modbus'
+    };
+    const activeFeatures = new Set<string>(Array.isArray(cfg.smartFeatures) ? cfg.smartFeatures as string[] : []);
+    const featEl = container.querySelector('#pdu-features')!;
+    SMART_FEATURES.forEach(f => {
+      const chip = document.createElement('span');
+      chip.className = `pdu-chip ${activeFeatures.has(f)?'on':'off'}`;
+      chip.textContent = SMART_LABELS[f] ?? f;
+      chip.onclick = () => {
+        activeFeatures.has(f) ? activeFeatures.delete(f) : activeFeatures.add(f);
+        chip.className = `pdu-chip ${activeFeatures.has(f)?'on':'off'}`;
+        save();
+      };
+      featEl.appendChild(chip);
+    });
+
+    // LED chips
+    const LED_OPTS = ['power','network','alarm','outlet','rgb'];
+    const activeLeds = new Set<string>(Array.isArray(cfg.leds) ? cfg.leds as string[] : ['power']);
+    const ledsEl = container.querySelector('#pdu-leds')!;
+    LED_OPTS.forEach(l => {
+      const chip = document.createElement('span');
+      chip.className = `pdu-chip ${activeLeds.has(l)?'on':'off'}`;
+      chip.textContent = l.charAt(0).toUpperCase()+l.slice(1);
+      chip.onclick = () => {
+        activeLeds.has(l) ? activeLeds.delete(l) : activeLeds.add(l);
+        chip.className = `pdu-chip ${activeLeds.has(l)?'on':'off'}`;
+        save();
+      };
+      ledsEl.appendChild(chip);
+    });
+
+    // Label chips
+    const LABEL_OPTS = ['model','voltage','current','serial','qr','asset','warning'];
+    const activeLabels = new Set<string>(Array.isArray(cfg.labels) ? cfg.labels as string[] : ['model','voltage','current']);
+    const labelsEl = container.querySelector('#pdu-labels')!;
+    LABEL_OPTS.forEach(l => {
+      const chip = document.createElement('span');
+      chip.className = `pdu-chip ${activeLabels.has(l)?'on':'off'}`;
+      chip.textContent = l.charAt(0).toUpperCase()+l.slice(1);
+      chip.onclick = () => {
+        activeLabels.has(l) ? activeLabels.delete(l) : activeLabels.add(l);
+        chip.className = `pdu-chip ${activeLabels.has(l)?'on':'off'}`;
+        save();
+      };
+      labelsEl.appendChild(chip);
+    });
+
+    // Save function — reads all controls and emits device:update
+    save = () => {
+      const newConfig: Record<string, unknown> = {
+        category: (container.querySelector('#pdu-cat') as HTMLSelectElement)?.value ?? 'switched',
+        electrical: {
+          phase: (container.querySelector('#pdu-phase') as HTMLSelectElement)?.value ?? 'single',
+          voltage: Number((container.querySelector('#pdu-voltage') as HTMLSelectElement)?.value ?? 230),
+          currentA: Number((container.querySelector('#pdu-current') as HTMLInputElement)?.value ?? 32),
+        },
+        inputPlug: (container.querySelector('#pdu-inputplug') as HTMLSelectElement)?.value ?? 'iec60309-32a',
+        cordLen: Number((container.querySelector('#pdu-cordlen') as HTMLInputElement)?.value ?? 3),
+        cordCsa: Number((container.querySelector('#pdu-csa') as HTMLSelectElement)?.value ?? 6),
+        frls: (container.querySelector('#pdu-frls') as HTMLInputElement)?.checked ?? true,
+        composition: outletRows,
+        breaker: (container.querySelector('#pdu-breaker') as HTMLSelectElement)?.value ?? 'mcb-guarded',
+        mcbCurve: (container.querySelector('#pdu-mcbcurve') as HTMLSelectElement)?.value ?? 'D',
+        smartFeatures: Array.from(activeFeatures),
+        leds: Array.from(activeLeds),
+        enclosure: {
+          finish: (container.querySelector('#pdu-finish') as HTMLSelectElement)?.value ?? 'ral9005-texture',
+          outletFace: (container.querySelector('#pdu-outletface') as HTMLSelectElement)?.value ?? 'white',
+        },
+        branding: (container.querySelector('#pdu-branding') as HTMLSelectElement)?.value ?? 'manufacturer',
+        labels: Array.from(activeLabels),
+      };
+      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig } });
+    };
+
+    // Wire up select/input change handlers
+    container.querySelectorAll('select, input[type="number"]').forEach(el =>
+      el.addEventListener('change', save)
+    );
+    container.querySelector('#pdu-frls')?.addEventListener('change', save);
+
+    // Add outlet row button
+    container.querySelector('#pdu-add-row')?.addEventListener('click', () => {
+      outletRows.push({ type: 'iec-c13', count: 8 });
+      this.renderPduOutletRows(container, device.id, outletRows, () => save());
+      save();
+    });
+  }
+
+  private renderPduOutletRows(container: HTMLElement, _deviceId: string, rows: Array<{type:string;count:number}>, onSave: () => void): void {
+    const rowsEl = container.querySelector('#pdu-outlet-rows');
+    if (!rowsEl) return;
+    rowsEl.innerHTML = '';
+
+    const SOCKET_TYPES = [
+      ['iec-c13','IEC C13'],['iec-c19','IEC C19'],['iec-c15','IEC C15 (Hi-Temp)'],
+      ['is6538-5a','IS 6538 5A (India D)'],['is6538-15a','IS 6538 15A (India M)'],
+      ['is1293-6a','IS 1293 6A (India 2+E)'],['nema-5-15','NEMA 5-15 (US 15A)'],
+      ['nema-5-20','NEMA 5-20 (US 20A)'],['bs1363','BS 1363 (UK 13A)'],['schuko','Schuko (EU)'],
+    ];
+
+    rows.forEach((row, idx) => {
+      const rowEl = document.createElement('div');
+      rowEl.style.cssText = 'display:grid;grid-template-columns:2fr 0.8fr 22px;gap:4px;align-items:center;';
+      rowEl.innerHTML = `
+        <select style="background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:3px;font-size:10px;border-radius:2px;font-family:monospace;">
+          ${SOCKET_TYPES.map(([v,l])=>`<option value="${v}" ${row.type===v?'selected':''}>${l}</option>`).join('')}
+        </select>
+        <input type="number" value="${row.count}" min="1" max="48" style="background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:3px;font-size:10px;border-radius:2px;font-family:monospace;"/>
+        <button title="Remove" style="background:#2a1416;color:#ff8080;border:1px solid #4a2020;cursor:pointer;border-radius:2px;height:24px;font-size:13px;padding:0;">&#xD7;</button>
+      `;
+
+      const [selEl, numEl, delBtn] = rowEl.querySelectorAll('select, input, button');
+      selEl.addEventListener('change', () => { rows[idx].type = (selEl as HTMLSelectElement).value; onSave(); });
+      numEl.addEventListener('change', () => { rows[idx].count = Number((numEl as HTMLInputElement).value); onSave(); });
+      delBtn.addEventListener('click', () => { rows.splice(idx, 1); this.renderPduOutletRows(container, _deviceId, rows, onSave); onSave(); });
+
+      rowsEl.appendChild(rowEl);
     });
   }
 
