@@ -249,7 +249,7 @@ export class Sidebar {
           <div class="item-icon">${item.icon}</div>
           <div class="item-details">
             <div class="item-name">${item.name}</div>
-            <div class="item-meta">${item.heightUnits}U • ${item.ports.length} ports</div>
+            <div class="item-meta">${item.mountType === 'side' ? '0U · Side-Mount' : item.heightUnits + 'U'} • ${item.ports.length > 0 ? item.ports.length + ' ports' : item.outletConfig ? item.outletConfig.reduce((s, r) => s + r.count, 0) + ' outlets' : 'no ports'}</div>
           </div>
         `;
         
