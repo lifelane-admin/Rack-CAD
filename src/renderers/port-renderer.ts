@@ -1,4 +1,4 @@
-import { PortData } from '../core/types';
+import { PortData, DeviceData } from '../core/types';
 import { createGroup, createRect, createText, setAttributes } from '../utils/svg-helpers';
 import { stateManager } from '../core/state';
 import { getTemplate } from '../library/device-catalog';
@@ -7,7 +7,7 @@ export function renderPorts(ports: PortData[], deviceGroup: SVGGElement): void {
   const state = stateManager.getState();
   const isRearView = state.cabinetViewMode === 'rear';
 
-  ports.forEach(port => {
+  ports.forEach((port, portIndex) => {
     const device = stateManager.getDevice(port.deviceId);
     const template = device ? getTemplate(device.templateId) : null;
     const category = template?.category || 'server';
@@ -28,12 +28,12 @@ export function renderPorts(ports: PortData[], deviceGroup: SVGGElement): void {
     }
 
     if (shouldRender) {
-      deviceGroup.appendChild(renderPort(port, deviceGroup));
+      deviceGroup.appendChild(renderPort(port, deviceGroup, portIndex, device ?? undefined));
     }
   });
 }
 
-export function renderPort(port: PortData, deviceGroup: SVGGElement): SVGGElement {
+export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?: number, device?: DeviceData): SVGGElement {
   const portGroup = createGroup('port-' + port.id, 'port-element');
   setAttributes(portGroup, {
     transform: `translate(${port.relativeX}, ${port.relativeY})`,
@@ -177,33 +177,91 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement): SVGGElemen
       });
       portGroup.appendChild(hitTarget);
 
-      const rect = createRect(-w / 2, -h / 2, w, h, {
-        fill: color,
-        stroke: isConnected ? '#4caf50' : '#111',
-        'stroke-width': isConnected ? 1.5 : 1,
-        rx: 1,
-        ry: 1,
-      });
-      portGroup.appendChild(rect);
+      // Check for per-port type override: render C14 inlet if set to 'power'
+      const portTypeOverride = (portIndex !== undefined && device?.portTypes) ? device.portTypes[portIndex] : undefined;
+      const isPowerPortOverride = portTypeOverride === 'power';
 
-      if (port.type === 'rj45' || port.type === 'management' || port.type === 'console') {
-        const inner = createRect(-w / 2 + 2, -h / 2 + 2, w - 4, h - 4, { fill: '#111' });
-        portGroup.appendChild(inner);
+      if (isPowerPortOverride) {
+        // C14 power inlet: dark face plate with purple border + 3 oval IEC contact holes
+        // Port center is at (0, 0); face plate size matches w×h
+        const faceRect = createRect(-w / 2, -h / 2, w, h, {
+          fill: '#1a0a20',
+          stroke: '#cc44ff',
+          'stroke-width': '1.5',
+          rx: 1,
+          ry: 1,
+        });
+        portGroup.appendChild(faceRect);
+
+        // Hole 1: bottom-left
+        const hole1 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+        hole1.setAttribute('cx', String(-3.5));
+        hole1.setAttribute('cy', String(2));
+        hole1.setAttribute('rx', '1.5');
+        hole1.setAttribute('ry', '2.5');
+        hole1.setAttribute('fill', '#050506');
+        portGroup.appendChild(hole1);
+
+        // Hole 2: top-center
+        const hole2 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+        hole2.setAttribute('cx', '0');
+        hole2.setAttribute('cy', String(-2));
+        hole2.setAttribute('rx', '1.5');
+        hole2.setAttribute('ry', '2.5');
+        hole2.setAttribute('fill', '#050506');
+        portGroup.appendChild(hole2);
+
+        // Hole 3: bottom-right
+        const hole3 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+        hole3.setAttribute('cx', String(3.5));
+        hole3.setAttribute('cy', String(2));
+        hole3.setAttribute('rx', '1.5');
+        hole3.setAttribute('ry', '2.5');
+        hole3.setAttribute('fill', '#050506');
+        portGroup.appendChild(hole3);
+
+        // Neon glow ring for cable-drag snap feedback
+        const glowRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        glowRect.setAttribute('x', String(-w / 2 - 2));
+        glowRect.setAttribute('y', String(-h / 2 - 2));
+        glowRect.setAttribute('width', String(w + 4));
+        glowRect.setAttribute('height', String(h + 4));
+        glowRect.setAttribute('fill', 'none');
+        glowRect.setAttribute('stroke', '#cc44ff');
+        glowRect.setAttribute('stroke-width', '1.2');
+        glowRect.setAttribute('rx', '2');
+        glowRect.setAttribute('opacity', '0');
+        glowRect.setAttribute('class', 'port-neon-ring');
+        portGroup.appendChild(glowRect);
+      } else {
+        const rect = createRect(-w / 2, -h / 2, w, h, {
+          fill: color,
+          stroke: isConnected ? '#4caf50' : '#111',
+          'stroke-width': isConnected ? 1.5 : 1,
+          rx: 1,
+          ry: 1,
+        });
+        portGroup.appendChild(rect);
+
+        if (port.type === 'rj45' || port.type === 'management' || port.type === 'console') {
+          const inner = createRect(-w / 2 + 2, -h / 2 + 2, w - 4, h - 4, { fill: '#111' });
+          portGroup.appendChild(inner);
+        }
+
+        const isPower = port.type === 'power';
+        const glowRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        glowRect.setAttribute('x', String(-w / 2 - 2));
+        glowRect.setAttribute('y', String(-h / 2 - 2));
+        glowRect.setAttribute('width', String(w + 4));
+        glowRect.setAttribute('height', String(h + 4));
+        glowRect.setAttribute('fill', 'none');
+        glowRect.setAttribute('stroke', isPower ? '#ff1744' : '#00e5ff');
+        glowRect.setAttribute('stroke-width', '1.2');
+        glowRect.setAttribute('rx', '2');
+        glowRect.setAttribute('opacity', '0');
+        glowRect.setAttribute('class', 'port-neon-ring');
+        portGroup.appendChild(glowRect);
       }
-
-      const isPower = port.type === 'power';
-      const glowRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      glowRect.setAttribute('x', String(-w / 2 - 2));
-      glowRect.setAttribute('y', String(-h / 2 - 2));
-      glowRect.setAttribute('width', String(w + 4));
-      glowRect.setAttribute('height', String(h + 4));
-      glowRect.setAttribute('fill', 'none');
-      glowRect.setAttribute('stroke', isPower ? '#ff1744' : '#00e5ff');
-      glowRect.setAttribute('stroke-width', '1.2');
-      glowRect.setAttribute('rx', '2');
-      glowRect.setAttribute('opacity', '0');
-      glowRect.setAttribute('class', 'port-neon-ring');
-      portGroup.appendChild(glowRect);
     }
   }
 

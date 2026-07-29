@@ -2005,6 +2005,11 @@ export class App {
         const port = stateManager.getPort(portId);
         if (port) {
           const connectedCable = port.cableId ? stateManager.getCable(port.cableId) : null;
+          // Determine current port type override
+          const portDevice = stateManager.getDevice(port.deviceId);
+          const portIdx = portDevice ? portDevice.ports.findIndex(p => p.id === portId) : -1;
+          const currentPortType: 'data' | 'power' = (portDevice && portIdx >= 0 && portDevice.portTypes?.[portIdx]) ? portDevice.portTypes[portIdx] : 'data';
+
           const items: MenuItem[] = [
             { label: `Port: ${port.name}`, icon: '🔌', disabled: true },
             { separator: true, label: '' },
@@ -2049,6 +2054,31 @@ export class App {
                 }
               }
             );
+          }
+
+          // Port type toggle (only for devices where portTypes override is meaningful)
+          if (portDevice && portIdx >= 0) {
+            items.push({ separator: true, label: '' });
+            items.push({
+              label: '📡 Set as Data port',
+              icon: '',
+              disabled: currentPortType === 'data',
+              action: () => {
+                const portTypes = { ...(portDevice.portTypes ?? {}), [portIdx]: 'data' as const };
+                eventBus.emit('device:update', { id: portDevice.id, data: { portTypes } } as any);
+                this.renderAll();
+              }
+            });
+            items.push({
+              label: '⚡ Set as Power port',
+              icon: '',
+              disabled: currentPortType === 'power',
+              action: () => {
+                const portTypes = { ...(portDevice.portTypes ?? {}), [portIdx]: 'power' as const };
+                eventBus.emit('device:update', { id: portDevice.id, data: { portTypes } } as any);
+                this.renderAll();
+              }
+            });
           }
 
           this.contextMenu.show(screenPos.x, screenPos.y, items);
