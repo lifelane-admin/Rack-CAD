@@ -38,7 +38,8 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
   setAttributes(portGroup, {
     transform: `translate(${port.relativeX}, ${port.relativeY})`,
     'data-port-id': port.id,
-    'data-port-type': port.type
+    'data-port-type': port.type,
+    ...(device ? { 'data-device-id': device.id } : {}),
   });
 
   const isConnected = port.connected;
