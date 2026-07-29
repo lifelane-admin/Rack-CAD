@@ -1,6 +1,6 @@
 // src/renderers/pdu-renderer.ts
 import { el, g } from './rack-kit';
-import type { DeviceTemplate, DeviceData } from '../core/types';
+import type { DeviceTemplate, DeviceData, SocketType } from '../core/types';
 
 interface FinishPreset { hi: string; mid: string; lo: string; text: string; texture?: boolean; }
 
@@ -178,4 +178,100 @@ export function renderPduPanel(
   const config = deviceData?.deviceConfig;
   if (config?.rows) return renderConfiguredPdu(template, config, W, H);
   return renderGenericPdu(template, W, H);
+}
+
+export function renderSidePdu(
+  template: DeviceTemplate,
+  pduWidth: number,
+  stripH: number,
+  side: 'left' | 'right',
+  connectedOutlets: Set<number> = new Set(),
+): SVGGElement {
+  const group = g('side-pdu');
+
+  const uid = `spdu${Math.random().toString(36).slice(2, 7)}_`;
+  const finishKey = 'ral9005-texture';
+  const finish = FINISH[finishKey];
+
+  // Create inner SVG element using el()
+  const ns = el('svg', { width: pduWidth, height: stripH });
+  ns.setAttribute('viewBox', `0 0 ${pduWidth} ${stripH}`);
+  ns.setAttribute('preserveAspectRatio', 'none');
+  makePduDefs(ns as unknown as SVGSVGElement, uid, finish);
+
+  // Chassis background
+  ns.appendChild(el('rect', { x: 0, y: 0, width: pduWidth, height: stripH, rx: 2, fill: `url(#${uid}ps)`, stroke: finish.lo, 'stroke-width': 1 }));
+  ns.appendChild(el('rect', { x: 1, y: 1, width: pduWidth - 2, height: stripH - 2, rx: 1.5, fill: 'none', stroke: '#3a4147', 'stroke-width': 0.5, opacity: 0.4 }));
+
+  // LCD panel at top
+  const lcdH = 28;
+  ns.appendChild(el('rect', { x: 3, y: 6, width: pduWidth - 6, height: lcdH, rx: 2, fill: '#005f73' }));
+
+  const lcdTxt = el('text', { x: pduWidth / 2, y: 16, 'text-anchor': 'middle', 'font-size': 5, fill: '#a2d2ff', 'font-family': 'monospace', 'font-weight': 'bold' });
+  lcdTxt.textContent = template.model ?? 'PDU';
+  ns.appendChild(lcdTxt);
+
+  const lcdA = el('text', { x: pduWidth / 2, y: 25, 'text-anchor': 'middle', 'font-size': 4.5, fill: '#7ab8d4', 'font-family': 'monospace' });
+  lcdA.textContent = '0.0A / 0W';
+  ns.appendChild(lcdA);
+
+  // Outlets
+  const outletConfig = template.outletConfig ?? [{ count: 20, socketType: 'C13' as SocketType }];
+  const allOutlets: SocketType[] = outletConfig.flatMap(row =>
+    Array.from({ length: row.count }, () => row.socketType),
+  );
+
+  const outletAreaTop = lcdH + 14;
+  const outletAreaH = stripH - outletAreaTop - 8;
+  const outletSpacing = outletAreaH / Math.max(allOutlets.length, 1);
+  const outletCx = pduWidth / 2;
+
+  allOutlets.forEach((sockType, i) => {
+    const oy = outletAreaTop + i * outletSpacing + outletSpacing / 2;
+    const isConnected = connectedOutlets.has(i);
+    const ow = Math.min(pduWidth - 6, sockType === 'C19' ? 22 : 18);
+    const oh = Math.min(outletSpacing - 2, 14);
+
+    // Outlet face plate
+    ns.appendChild(el('rect', {
+      x: outletCx - ow / 2, y: oy - oh / 2,
+      width: ow, height: oh, rx: 1.5,
+      fill: '#141618',
+      stroke: isConnected ? '#37e07a' : '#2a3036',
+      'stroke-width': isConnected ? 1.2 : 0.6,
+    }));
+
+    // Socket type label
+    const lbl = el('text', {
+      x: outletCx, y: oy + 1.5,
+      'text-anchor': 'middle', 'font-size': 3.5,
+      fill: isConnected ? '#37e07a' : '#5b636a',
+      'font-family': 'monospace', 'pointer-events': 'none',
+    });
+    lbl.textContent = sockType;
+    ns.appendChild(lbl);
+
+    // Hit target for power cable connection
+    const hitTarget = el('rect', {
+      x: outletCx - ow / 2 - 2, y: oy - oh / 2 - 2,
+      width: ow + 4, height: oh + 4,
+      fill: 'transparent',
+    });
+    hitTarget.setAttribute('class', 'pdu-outlet-hit');
+    hitTarget.setAttribute('data-outlet-idx', String(i));
+    ns.appendChild(hitTarget);
+  });
+
+  // Vertical label
+  const vtxt = el('text', {
+    'font-size': 4, fill: '#3a4147',
+    'font-family': 'monospace',
+    transform: `translate(${side === 'left' ? pduWidth - 3 : 3}, ${stripH / 2}) rotate(${side === 'left' ? -90 : 90})`,
+    'text-anchor': 'middle', 'pointer-events': 'none',
+  });
+  vtxt.textContent = side === 'left' ? `PDU-A · ${template.model}` : `PDU-B · ${template.model}`;
+  ns.appendChild(vtxt);
+
+  group.appendChild(ns);
+  return group;
 }
