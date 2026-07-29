@@ -616,43 +616,6 @@ export const deviceCatalog: DeviceTemplate[] = [
       { id: 'pdu20s-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 340, relativeY: 45, speed: '1 Gbps' },
     ],
   },
-  {
-    id: 'pdu-vertical-16',
-    name: 'Vertical PDU 16-Outlet',
-    manufacturer: '',
-    model: 'Vertical PDU 16-Outlet',
-    category: 'pdu',
-    heightUnits: 2,
-    color: '#37474f',
-    icon: '🔌',
-    powerWatts: 5,
-    ports: Array.from({ length: 16 }, (_, i) => ({
-      id: `pduv16-c13-${i + 1}`,
-      name: `C13-${i + 1}`,
-      type: 'power' as const,
-      relativeX: 40,
-      relativeY: 8 + i * 14,
-    })),
-  },
-  {
-    id: 'pdu-vertical-24',
-    name: 'Vertical PDU 24-Outlet',
-    manufacturer: '',
-    model: 'Vertical PDU 24-Outlet',
-    category: 'pdu',
-    heightUnits: 2,
-    color: '#37474f',
-    icon: '🔌',
-    powerWatts: 5,
-    ports: Array.from({ length: 24 }, (_, i) => ({
-      id: `pduv24-c13-${i + 1}`,
-      name: `C13-${i + 1}`,
-      type: 'power' as const,
-      relativeX: 40,
-      relativeY: 5 + i * 10,
-    })),
-  },
-
   // ─── VERTICAL PDUs (Side-Mount) ────────────────────────────────────────────
   {
     id: 'vpdu-apc-ap8858',
