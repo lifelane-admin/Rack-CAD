@@ -18,8 +18,8 @@ class StateManager {
       snapEnabled: true,
       rulersVisible: true,
       racks: [
-        { id: 'rack-1', name: 'Rack 1', units: 42, x: 200, y: 100, showPduLeft: true, showPduRight: true, leftCableManagerWidth: 'none', rightCableManagerWidth: 'none' },
-        { id: 'rack-2', name: 'Rack 2', units: 42, x: 700, y: 100, showPduLeft: true, showPduRight: true, leftCableManagerWidth: 'none', rightCableManagerWidth: 'none' }
+        { id: 'rack-1', name: 'Rack 1', units: 42, x: 200, y: 100, leftCableManagerWidth: 'none', rightCableManagerWidth: 'none' },
+        { id: 'rack-2', name: 'Rack 2', units: 42, x: 700, y: 100, leftCableManagerWidth: 'none', rightCableManagerWidth: 'none' }
       ],
       devices: [],
       cables: [],
@@ -60,7 +60,7 @@ class StateManager {
   loadDemoProject(): void {
     const rackId = 'rack-demo';
     const racks: RackData[] = [
-      { id: rackId, name: 'Enterprise Cluster Rack', units: 42, x: 250, y: 80, showPduLeft: true, showPduRight: true, leftCableManagerWidth: '4-inch', rightCableManagerWidth: '4-inch' }
+      { id: rackId, name: 'Enterprise Cluster Rack', units: 42, x: 250, y: 80, leftCableManagerWidth: '4-inch', rightCableManagerWidth: '4-inch' }
     ];
 
     const devices: DeviceData[] = [];

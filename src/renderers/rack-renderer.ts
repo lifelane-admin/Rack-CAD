@@ -1,6 +1,8 @@
 import { RackData, RACK_CONSTANTS, AppState } from '../core/types';
 import { createGroup, createRect, createCircle, createText, createLinearGradient, createFilter, createSVGElement, setAttributes } from '../utils/svg-helpers';
 import { stateManager } from '../core/state';
+import { renderSidePdu } from './pdu-renderer';
+import { getTemplate } from '../library/device-catalog';
 
 export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverride?: Partial<AppState>): SVGGElement {
   const rackGroup = createGroup('rack-' + rack.id, 'rack');
@@ -57,6 +59,17 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
   const isIso = state.isometricMode;
   const OUTER_W = RACK_CONSTANTS.RACK_OUTER_WIDTH;
 
+  // PDU width computation from attached side-mount devices
+  const allDevices = stateManager.getState().devices;
+  const leftPduDevice = rack.leftPduId ? allDevices.find(d => d.id === rack.leftPduId) : null;
+  const rightPduDevice = rack.rightPduId ? allDevices.find(d => d.id === rack.rightPduId) : null;
+  const leftPduTemplate = leftPduDevice ? getTemplate(leftPduDevice.templateId) : null;
+  const rightPduTemplate = rightPduDevice ? getTemplate(rightPduDevice.templateId) : null;
+  const leftPduW = leftPduTemplate?.pduWidth ?? 0;
+  const rightPduW = rightPduTemplate?.pduWidth ?? 0;
+  const OUTER_W_TOTAL = RACK_CONSTANTS.RACK_OUTER_WIDTH + leftPduW + rightPduW;
+  const pduOffset = leftPduW;
+
   // === 3D ISOMETRIC / PERSPECTIVE WALL DRAWINGS ===
   if (isIso) {
     const dx = 35;
@@ -112,7 +125,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
   }
 
   // === 1. CABINET OUTER CABINET FRAME ===
-  const outerFrame = createRect(0, 0, RACK_CONSTANTS.RACK_OUTER_WIDTH, totalHeight, {
+  const outerFrame = createRect(-pduOffset, 0, OUTER_W_TOTAL, totalHeight, {
     fill: isSkel ? 'rgba(56, 189, 248, 0.05)' : `url(#rack-gradient-${rack.id})`,
     stroke: isSkel ? '#38bdf8' : 'none',
     'stroke-width': isSkel ? 1.5 : 0,
@@ -204,118 +217,87 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
     rackGroup.appendChild(hitTarget);
   }
 
-  // === 4. VERTICAL INTELLIGENT PDUS ===
-  const pduWidth = 18;
-  const pduHeight = innerHeight - 20;
-  const pduY = innerY + 10;
+  // === 4. SIDE-MOUNT PDU ZONES OR "+" HANDLES ===
+  const PDU_HANDLE_W = 20;
 
-  // Left PDU — only shown when explicitly placed (showPduLeft === true)
-  if (rack.showPduLeft === true) {
-    const leftPduGroup = createGroup('rack-' + rack.id + '-pdu-left', 'pdu-element');
-    
-    // Chassis
-    const pduChassis = createRect(3, pduY, pduWidth, pduHeight, {
-      fill: isSkel ? 'rgba(56, 189, 248, 0.05)' : `url(#pdu-grad-${rack.id})`,
-      stroke: isSkel ? '#38bdf8' : '#0e1012',
-      'stroke-width': 1,
-      rx: 2,
-      ry: 2
+  // === LEFT PDU ZONE OR "+" HANDLE ===
+  if (leftPduTemplate && leftPduDevice) {
+    const leftPduGrp = renderSidePdu(leftPduTemplate, leftPduW, innerHeight, 'left');
+    leftPduGrp.setAttribute('transform', `translate(${-leftPduW}, ${innerY})`);
+    leftPduGrp.setAttribute('data-pdu-side', 'left');
+    leftPduGrp.setAttribute('data-rack-id', rack.id);
+    leftPduGrp.setAttribute('data-pdu-device-id', rack.leftPduId ?? '');
+    leftPduGrp.setAttribute('style', 'cursor:pointer');
+    rackGroup.appendChild(leftPduGrp);
+  } else {
+    // "+" add handle — dashed strip on left side
+    const addHandle = createGroup('rack-' + rack.id + '-pdu-add-left', 'pdu-add-left');
+    addHandle.setAttribute('data-pdu-add-side', 'left');
+    addHandle.setAttribute('data-rack-id', rack.id);
+    addHandle.setAttribute('style', 'cursor:pointer');
+
+    const handleRect = createRect(-PDU_HANDLE_W, innerY, PDU_HANDLE_W, innerHeight, {
+      fill: 'none',
+      stroke: '#2a5a3a',
+      'stroke-width': 1.2,
+      'stroke-dasharray': '5,4',
+      rx: 2
     });
-    leftPduGroup.appendChild(pduChassis);
+    addHandle.appendChild(handleRect);
 
-    // LCD display at the top
-    const lcd = createRect(5, pduY + 10, pduWidth - 4, 14, { fill: isSkel ? 'none' : '#005f73', stroke: isSkel ? '#38bdf8' : 'none', 'stroke-width': isSkel ? 0.8 : 0, rx: 1 });
-    const lcdTxt = createText(6, pduY + 20, '12.4A', {
-      fill: isSkel ? '#38bdf8' : '#a2d2ff',
-      'font-size': 4.5,
+    const plusTxt = createText(-PDU_HANDLE_W / 2, innerY + innerHeight / 2 + 5, '+', {
+      'text-anchor': 'middle',
+      'font-size': 14,
       'font-weight': 'bold',
-      'font-family': 'monospace'
+      fill: '#2aaa5a'
     });
-    leftPduGroup.appendChild(lcd);
-    leftPduGroup.appendChild(lcdTxt);
+    addHandle.appendChild(plusTxt);
 
-    // Dynamic Outlets
-    const outletCount = 20;
-    const outletSpacing = (pduHeight - 60) / outletCount;
-    for (let i = 0; i < outletCount; i++) {
-      const outletY = pduY + 40 + i * outletSpacing;
-      const socket = createCircle(12, outletY, 3, {
-        fill: isSkel ? 'none' : '#151719',
-        stroke: isSkel ? '#38bdf8' : (i % 2 === 0 ? '#1b4332' : '#0f3057'),
-        'stroke-width': 0.8
-      });
-      const pin = createCircle(12, outletY, 1, { fill: isSkel ? '#38bdf8' : '#000' });
-      
-      leftPduGroup.appendChild(socket);
-      leftPduGroup.appendChild(pin);
-    }
-
-    // PDU Vertical Text label
-    const label = createText(9, pduY + pduHeight - 20, 'VERTICAL INTELLIGENT PDU - A', {
-      fill: isSkel ? '#38bdf8' : '#8b949e',
+    const tipTxt = createText(-PDU_HANDLE_W / 2, innerY + innerHeight / 2 + 14, 'Add PDU', {
+      'text-anchor': 'middle',
       'font-size': 4.5,
-      'font-family': 'Inter, sans-serif',
-      'font-weight': 'bold',
-      transform: `rotate(-90, 9, ${pduY + pduHeight - 20})`
+      fill: '#1a6a3a'
     });
-    leftPduGroup.appendChild(label);
+    addHandle.appendChild(tipTxt);
 
-    rackGroup.appendChild(leftPduGroup);
+    rackGroup.appendChild(addHandle);
   }
 
-  // Right PDU — only shown when explicitly placed (showPduRight === true)
-  if (rack.showPduRight === true) {
-    const rightPduGroup = createGroup('rack-' + rack.id + '-pdu-right', 'pdu-element');
-    const pduX = RACK_CONSTANTS.RACK_OUTER_WIDTH - pduWidth - 3;
-    
-    // Chassis
-    const pduChassis = createRect(pduX, pduY, pduWidth, pduHeight, {
-      fill: isSkel ? 'rgba(56, 189, 248, 0.05)' : `url(#pdu-grad-${rack.id})`,
-      stroke: isSkel ? '#38bdf8' : '#0e1012',
-      'stroke-width': 1,
-      rx: 2,
-      ry: 2
-    });
-    rightPduGroup.appendChild(pduChassis);
+  // === RIGHT PDU ZONE OR "+" HANDLE ===
+  const rightPduX = RACK_CONSTANTS.RACK_OUTER_WIDTH;
+  if (rightPduTemplate && rightPduDevice) {
+    const rightPduGrp = renderSidePdu(rightPduTemplate, rightPduW, innerHeight, 'right');
+    rightPduGrp.setAttribute('transform', `translate(${rightPduX}, ${innerY})`);
+    rightPduGrp.setAttribute('data-pdu-side', 'right');
+    rightPduGrp.setAttribute('data-rack-id', rack.id);
+    rightPduGrp.setAttribute('data-pdu-device-id', rack.rightPduId ?? '');
+    rightPduGrp.setAttribute('style', 'cursor:pointer');
+    rackGroup.appendChild(rightPduGrp);
+  } else {
+    // "+" add handle — dashed strip on right side
+    const addHandleR = createGroup('rack-' + rack.id + '-pdu-add-right', 'pdu-add-right');
+    addHandleR.setAttribute('data-pdu-add-side', 'right');
+    addHandleR.setAttribute('data-rack-id', rack.id);
+    addHandleR.setAttribute('style', 'cursor:pointer');
 
-    // LCD display at the top
-    const lcd = createRect(pduX + 2, pduY + 10, pduWidth - 4, 14, { fill: isSkel ? 'none' : '#005f73', stroke: isSkel ? '#38bdf8' : 'none', 'stroke-width': isSkel ? 0.8 : 0, rx: 1 });
-    const lcdTxt = createText(pduX + 3, pduY + 20, '11.8A', {
-      fill: isSkel ? '#38bdf8' : '#a2d2ff',
-      'font-size': 4.5,
+    const handleRectR = createRect(rightPduX, innerY, PDU_HANDLE_W, innerHeight, {
+      fill: 'none',
+      stroke: '#2a5a3a',
+      'stroke-width': 1.2,
+      'stroke-dasharray': '5,4',
+      rx: 2
+    });
+    addHandleR.appendChild(handleRectR);
+
+    const plusTxtR = createText(rightPduX + PDU_HANDLE_W / 2, innerY + innerHeight / 2 + 5, '+', {
+      'text-anchor': 'middle',
+      'font-size': 14,
       'font-weight': 'bold',
-      'font-family': 'monospace'
+      fill: '#2aaa5a'
     });
-    rightPduGroup.appendChild(lcd);
-    rightPduGroup.appendChild(lcdTxt);
+    addHandleR.appendChild(plusTxtR);
 
-    // Dynamic Outlets
-    const outletCount = 20;
-    const outletSpacing = (pduHeight - 60) / outletCount;
-    for (let i = 0; i < outletCount; i++) {
-      const outletY = pduY + 40 + i * outletSpacing;
-      const socket = createCircle(pduX + 6, outletY, 3, {
-        fill: isSkel ? 'none' : '#151719',
-        stroke: isSkel ? '#38bdf8' : (i % 2 === 0 ? '#1b4332' : '#0f3057'),
-        'stroke-width': 0.8
-      });
-      const pin = createCircle(pduX + 6, outletY, 1, { fill: isSkel ? '#38bdf8' : '#000' });
-      
-      rightPduGroup.appendChild(socket);
-      rightPduGroup.appendChild(pin);
-    }
-
-    // PDU Vertical Text label
-    const label = createText(pduX + 12, pduY + pduHeight - 20, 'VERTICAL INTELLIGENT PDU - B', {
-      fill: isSkel ? '#38bdf8' : '#8b949e',
-      'font-size': 4.5,
-      'font-family': 'Inter, sans-serif',
-      'font-weight': 'bold',
-      transform: `rotate(-90, ${pduX + 12}, ${pduY + pduHeight - 20})`
-    });
-    rightPduGroup.appendChild(label);
-
-    rackGroup.appendChild(rightPduGroup);
+    rackGroup.appendChild(addHandleR);
   }
 
   // === 5. CABINET NAME HEADER ===
