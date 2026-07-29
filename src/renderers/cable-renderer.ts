@@ -76,11 +76,16 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     group.appendChild(underlayGlow);
   }
 
+  // Detect power cable override
+  const isPowerCable = cable.powerCableType === 'power';
+  const powerStrokeColor = cable.color && cable.color !== '#212529' ? cable.color : '#ff4422';
+  const effectiveThickness = isPowerCable ? 3 : (cable.thickness || mat.renderThicknessPx || 3);
+
   // Cable Outer Jacket Shadow (Soft drop-shadow for 3D depth)
   const shadowPath = createPath(pathData, {
     fill: 'none',
     stroke: 'rgba(0, 0, 0, 0.45)',
-    'stroke-width': (cable.thickness || mat.renderThicknessPx || 3) + 1.5,
+    'stroke-width': effectiveThickness + 1.5,
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
     style: 'transform: translate(1px, 2px); pointer-events: none;'
@@ -90,12 +95,30 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   // Main cable jacket path (solid PBR core)
   const path = createPath(pathData, {
     fill: 'none',
-    stroke: cable.color || mat.defaultColor,
-    'stroke-width': cable.thickness || mat.renderThicknessPx || 3,
+    stroke: isPowerCable ? powerStrokeColor : (cable.color || mat.defaultColor),
+    'stroke-width': effectiveThickness,
     'stroke-linecap': 'round',
-    'stroke-linejoin': 'round'
+    'stroke-linejoin': 'round',
+    ...(isPowerCable ? { 'stroke-dasharray': '6 3' } : {})
   });
   group.appendChild(path);
+
+  // Power cable: plug-type label at cable midpoint
+  if (isPowerCable && cable.plugType) {
+    const midX = (sourcePos.x + destPos.x) / 2;
+    const midY = (sourcePos.y + destPos.y) / 2;
+    const plugLabel = createSVGEl('text', {
+      x: midX,
+      y: midY - 5,
+      'font-size': '7',
+      'font-family': 'monospace',
+      fill: powerStrokeColor,
+      'text-anchor': 'middle',
+      'pointer-events': 'none'
+    });
+    plugLabel.textContent = String(cable.plugType);
+    group.appendChild(plugLabel);
+  }
 
   // Preview highlight: yellow glow if cable is in previewDiff
   const previewDiff = stateManager.getState().previewDiff;

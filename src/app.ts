@@ -32,7 +32,7 @@ import { computeSmartRouting, get3DefaultAnchors } from './utils/routing';
 import { cloneDevice } from './utils/clone';
 import {
   RackData, DeviceData, PortData, CableData, LegendItem,
-  RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode
+  RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode, SocketType
 } from './core/types';
 
 export class App {
@@ -1176,6 +1176,21 @@ export class App {
           this.handleCablePortClick(portId);
           return;
         }
+
+        // PDU outlet hit target detection — .pdu-outlet-hit has data-outlet-idx but no data-port-id
+        const outletEl = target.closest('.pdu-outlet-hit') as SVGElement;
+        if (outletEl) {
+          const outletIdx = outletEl.getAttribute('data-outlet-idx') ?? '0';
+          // Walk up to find the PDU group which has data-pdu-device-id
+          const pduGroupEl = outletEl.closest('[data-pdu-device-id]') as SVGElement;
+          const pduDeviceId = pduGroupEl?.getAttribute('data-pdu-device-id') ?? '';
+          if (pduDeviceId) {
+            const outletPortId = `outlet-${pduDeviceId}-${outletIdx}`;
+            this.handleCablePortClick(outletPortId);
+            return;
+          }
+        }
+
         // Fallback: proximity snap — find nearest port within 40px world units
         // (handles cases where the neon ring / gutter area was clicked instead of the port circle)
         if (s.cableInProgress || s.tool === 'cable') {
@@ -1291,82 +1306,183 @@ export class App {
       const sourcePortId = s.cableInProgress.sourcePortId;
       if (sourcePortId === portId) return; // Can't connect to self
 
+      // Determine if source/dest are PDU outlets (virtual ports, not in device.ports)
+      const isSrcOutlet = sourcePortId.startsWith('outlet-');
+      const isDestOutlet = portId.startsWith('outlet-');
+
       const sourcePort = stateManager.getPort(sourcePortId);
       const destPort = stateManager.getPort(portId);
-      if (!sourcePort || !destPort) return;
 
-      // Validation: permissive — ear ports accept any network cable; only block cross-media (fiber↔ethernet, power↔other)
+      // PDU outlet virtual ports are not in stateManager — they're always valid power endpoints
+      // For regular ports, both must exist
+      if (!sourcePort && !isSrcOutlet) return;
+      if (!destPort && !isDestOutlet) return;
+
+      // Determine if source/dest are power ports via portTypes override
+      const isFiberPort = (type: string) => ['sfp', 'qsfp', 'lc', 'sc', 'fiber', 'optical'].some(t => type.toLowerCase().includes(t));
+      const isPowerPortType = (type: string) => ['power', 'pwr', 'c13', 'c14', 'c19', 'c20', 'inlet', 'outlet', 'plug'].some(t => type.toLowerCase().includes(t));
+
+      // Check portTypes override for device ports
+      const srcDevice = sourcePort ? stateManager.getDevice(sourcePort.deviceId) : null;
+      const srcPortIdx = srcDevice ? srcDevice.ports.findIndex(p => p.id === sourcePortId) : -1;
+      const isSrcPowerByType = srcDevice && srcPortIdx >= 0 && srcDevice.portTypes?.[srcPortIdx] === 'power';
+      const isSrcPowerByPortName = sourcePort ? isPowerPortType(sourcePort.type) : false;
+      const isSrcPower = isSrcOutlet || isSrcPowerByType || isSrcPowerByPortName;
+
+      const destDevice = destPort ? stateManager.getDevice(destPort.deviceId) : null;
+      const destPortIdx = destDevice ? destDevice.ports.findIndex(p => p.id === portId) : -1;
+      const isDestPowerByType = destDevice && destPortIdx >= 0 && destDevice.portTypes?.[destPortIdx] === 'power';
+      const isDestPowerByPortName = destPort ? isPowerPortType(destPort.type) : false;
+      const isDestPower = isDestOutlet || isDestPowerByType || isDestPowerByPortName;
+
+      // Validation: ear ports accept any cable; block fiber↔ethernet and power↔data mismatches
       const isSrcEar = sourcePortId.includes('-ear-');
       const isDestEar = portId.includes('-ear-');
-      const isFiberPort = (type: string) => ['sfp', 'qsfp', 'lc', 'sc', 'fiber', 'optical'].some(t => type.toLowerCase().includes(t));
-      const isPowerPort = (type: string) => ['power', 'pwr', 'c13', 'c14', 'c19', 'c20', 'inlet', 'outlet', 'plug'].some(t => type.toLowerCase().includes(t));
 
       if (!isSrcEar && !isDestEar) {
-        if (isFiberPort(sourcePort.type) && !isFiberPort(destPort.type)) {
-          eventBus.emit('notification', { message: 'Termination Mismatch: Fiber cable cannot terminate in a non-fiber port!', type: 'error' });
+        if (sourcePort && destPort) {
+          if (isFiberPort(sourcePort.type) && !isFiberPort(destPort.type)) {
+            eventBus.emit('notification', { message: 'Termination Mismatch: Fiber cable cannot terminate in a non-fiber port!', type: 'error' });
+            return;
+          }
+        }
+        if (isSrcPower && !isDestPower) {
+          eventBus.emit('notification', { message: 'Power port can only connect to PDU outlets or other power ports', type: 'warning' });
           return;
         }
-        if (isPowerPort(sourcePort.type) && !isPowerPort(destPort.type)) {
-          eventBus.emit('notification', { message: 'Termination Mismatch: Power cable cannot terminate in a non-power port!', type: 'error' });
-          return;
-        }
-        if (isPowerPort(destPort.type) && !isPowerPort(sourcePort.type)) {
-          eventBus.emit('notification', { message: 'Termination Mismatch: Cannot connect a non-power cable to a power port!', type: 'error' });
-          return;
-        }
-      } else {
-        if (isPowerPort(sourcePort.type) && !isPowerPort(destPort.type)) {
-          eventBus.emit('notification', { message: 'Termination Mismatch: Power cable cannot terminate in a non-power port!', type: 'error' });
-          return;
-        }
-        if (isPowerPort(destPort.type) && !isPowerPort(sourcePort.type)) {
-          eventBus.emit('notification', { message: 'Termination Mismatch: Cannot connect a non-power cable to a power port!', type: 'error' });
+        if (isDestPower && !isSrcPower) {
+          eventBus.emit('notification', { message: 'Connect a power port to PDU outlets or other power ports', type: 'warning' });
           return;
         }
       }
 
-      const color = s.selectedCableType === 'custom' 
-        ? (s.selectedCableColor || '#78909c') 
+      const color = s.selectedCableType === 'custom'
+        ? (s.selectedCableColor || '#78909c')
         : (CABLE_COLORS[s.cableInProgress.cableType] || CABLE_COLORS.general);
 
-      const newCable: CableData = {
-        id: generateId(),
-        name: `Cable ${stateManager.getState().cables.length + 1}`,
-        type: s.cableInProgress.cableType,
-        color,
-        sourcePortId,
-        destPortId: portId,
-        bendPoints: [...s.cableInProgress.bendPoints],
-        thickness: RACK_CONSTANTS.CABLE_THICKNESS,
-        bendRadius: s.selectedCableBend !== undefined ? s.selectedCableBend : RACK_CONSTANTS.CABLE_BEND_RADIUS,
-        sourceTermination: s.selectedCableTermination || 'RJ45 Ethernet',
-        destTermination: s.selectedCableTermination || 'RJ45 Ethernet',
-        bundleId: null,
-        notes: '',
-        anchorPoints: [],
-        anchorsLocked: false
+      const cableInProgressSnapshot = s.cableInProgress;
+
+      const commitCable = (extraFields: Partial<CableData> = {}) => {
+        const currentS = stateManager.getState();
+        const newCable: CableData = {
+          id: generateId(),
+          name: `Cable ${currentS.cables.length + 1}`,
+          type: cableInProgressSnapshot.cableType,
+          color,
+          sourcePortId,
+          destPortId: portId,
+          bendPoints: [...cableInProgressSnapshot.bendPoints],
+          thickness: RACK_CONSTANTS.CABLE_THICKNESS,
+          bendRadius: s.selectedCableBend !== undefined ? s.selectedCableBend : RACK_CONSTANTS.CABLE_BEND_RADIUS,
+          sourceTermination: s.selectedCableTermination || 'RJ45 Ethernet',
+          destTermination: s.selectedCableTermination || 'RJ45 Ethernet',
+          bundleId: null,
+          notes: '',
+          anchorPoints: [],
+          anchorsLocked: false,
+          ...extraFields
+        };
+
+        // Mark regular ports as connected (outlet ports are virtual)
+        if (sourcePort) { sourcePort.connected = true; sourcePort.cableId = newCable.id; }
+        if (destPort) { destPort.connected = true; destPort.cableId = newCable.id; }
+
+        resetPreviewDirection();
+        stateManager.setState({
+          cables: [...stateManager.getState().cables, newCable],
+          cableInProgress: null
+        });
+        eventBus.emit('cable:added', newCable);
+
+        // Clear preview + cable-laying mode
+        const interactionLayer = this.canvas.getLayer('interaction-layer');
+        if (interactionLayer) interactionLayer.innerHTML = '';
+        const svgCanvasEl = document.getElementById('canvas') as unknown as SVGSVGElement;
+        if (svgCanvasEl) svgCanvasEl.classList.remove('cable-laying');
+        this.clearSnapTargets();
+        this.renderAll();
       };
 
-      // Mark ports as connected
-      sourcePort.connected = true;
-      sourcePort.cableId = newCable.id;
-      destPort.connected = true;
-      destPort.cableId = newCable.id;
+      // Power cable: show plug-type modal before committing
+      if (isSrcPower || isDestPower) {
+        // Clear cableInProgress immediately so UI doesn't show stale preview
+        stateManager.setState({ cableInProgress: null });
+        const interactionLayer = this.canvas.getLayer('interaction-layer');
+        if (interactionLayer) interactionLayer.innerHTML = '';
+        resetPreviewDirection();
 
-      resetPreviewDirection();
-      stateManager.setState({
-        cables: [...stateManager.getState().cables, newCable],
-        cableInProgress: null
-      });
-      eventBus.emit('cable:added', newCable);
+        this.showPlugTypeModal((plugType) => {
+          if (!plugType) return; // cancelled — cable discarded
+          // Determine cable color: blue for B-feed (right PDU), red for A-feed (left PDU)
+          let cableColor = '#ff4422'; // default red (A-feed / left PDU)
+          const outletPortId = isDestOutlet ? portId : (isSrcOutlet ? sourcePortId : null);
+          if (outletPortId) {
+            // outlet-<deviceId>-<idx> — extract deviceId
+            const parts = outletPortId.split('-');
+            // format: outlet-<uuid>-<idx> where uuid may contain dashes
+            const outletDeviceId = parts.slice(1, -1).join('-');
+            const allRacks = stateManager.getState().racks;
+            const isRightPdu = allRacks.some(r => r.rightPduId === outletDeviceId);
+            if (isRightPdu) cableColor = '#3399ff'; // blue for B-feed
+          }
+          commitCable({ powerCableType: 'power', plugType, color: cableColor });
+        });
+        return; // handled async
+      }
 
-      // Clear preview + cable-laying mode
-      const interactionLayer = this.canvas.getLayer('interaction-layer');
-      if (interactionLayer) interactionLayer.innerHTML = '';
-      const svgCanvasEl = document.getElementById('canvas') as unknown as SVGSVGElement;
-      if (svgCanvasEl) svgCanvasEl.classList.remove('cable-laying');
-      this.clearSnapTargets();
+      // Non-power cable — commit immediately
+      commitCable();
     }
+  }
+
+  /**
+   * Show a modal to select the power plug type when connecting a power cable.
+   * Calls callback with the selected SocketType, or null if cancelled.
+   */
+  private showPlugTypeModal(callback: (plugType: SocketType | null) => void): void {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background:#12171c;border:1px solid #23303b;border-radius:6px;padding:20px;min-width:340px;';
+    modal.innerHTML = `
+      <h3 style="margin:0 0 12px;color:#37b6ff;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;">Select Power Plug Type</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;" id="plug-grid"></div>
+      <div style="margin-top:12px;">
+        <button id="plug-cancel" style="width:100%;padding:8px;background:#1a1f24;border:1px solid #30363d;color:#8b949e;cursor:pointer;border-radius:3px;font-size:12px;">Cancel</button>
+      </div>
+    `;
+
+    const PLUGS: Array<{ type: SocketType; label: string; region: string }> = [
+      { type: 'C13',        label: 'C13',       region: 'IEC 10A' },
+      { type: 'C19',        label: 'C19',       region: 'IEC 16A' },
+      { type: 'C15',        label: 'C15',       region: 'IEC Hi-Temp' },
+      { type: 'NEMA-5-15',  label: 'NEMA 5-15', region: 'US 15A' },
+      { type: 'NEMA-5-20',  label: 'NEMA 5-20', region: 'US 20A' },
+      { type: 'IS6538-5A',  label: 'IS6538 5A', region: 'India Type D' },
+      { type: 'IS6538-15A', label: 'IS6538 15A',region: 'India Type M' },
+      { type: 'IS1293-6A',  label: 'IS1293 6A', region: 'India 2+E' },
+      { type: 'BS1363',     label: 'BS 1363',   region: 'UK 13A' },
+      { type: 'Schuko',     label: 'Schuko',    region: 'EU 16A' },
+    ];
+
+    const grid = modal.querySelector('#plug-grid')!;
+    PLUGS.forEach(p => {
+      const btn = document.createElement('button');
+      btn.style.cssText = 'padding:8px 4px;background:#171d24;border:1px solid #23303b;color:#e6ecf2;cursor:pointer;border-radius:3px;font-size:11px;text-align:center;';
+      btn.innerHTML = `<strong>${p.label}</strong><br><span style="color:#8b939a;font-size:9px;">${p.region}</span>`;
+      btn.onmouseover = () => { btn.style.borderColor = '#37b6ff'; btn.style.color = '#37b6ff'; };
+      btn.onmouseout = () => { btn.style.borderColor = '#23303b'; btn.style.color = '#e6ecf2'; };
+      btn.onclick = () => { document.body.removeChild(overlay); callback(p.type); };
+      grid.appendChild(btn);
+    });
+
+    modal.querySelector('#plug-cancel')!.addEventListener('click', () => {
+      document.body.removeChild(overlay);
+      callback(null);
+    });
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
   }
 
   /**
