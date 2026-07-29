@@ -19,10 +19,23 @@ export interface RackData {
   powerCircuitA?: string[];   // device IDs on circuit A
   powerCircuitB?: string[];   // device IDs on circuit B
   pduCapacityWatts?: number;  // max watts per circuit; default 3600
+  leftPduId?: string;    // deviceId of PDU on left wall
+  rightPduId?: string;   // deviceId of PDU on right wall
 }
 
 // === Ports ===
 export type PortType = 'rj45' | 'sfp' | 'sfp-plus' | 'sfp28' | 'qsfp' | 'qsfp28' | 'management' | 'console' | 'power';
+
+export type SocketType =
+  | 'C13' | 'C19' | 'C15' | 'C5'
+  | 'NEMA-5-15' | 'NEMA-5-20' | 'NEMA-L5-30' | 'NEMA-L6-20'
+  | 'BS1363' | 'Schuko'
+  | 'IS6538-5A' | 'IS6538-15A' | 'IS1293-6A' | 'IS1293-16A';
+
+export interface OutletConfig {
+  count: number;
+  socketType: SocketType;
+}
 
 export interface PortData {
   id: string;
@@ -59,6 +72,9 @@ export interface DeviceTemplate {
   customDescription?: string;
   createdAt?: string;
   powerWatts?: number;  // nameplate watts; 0 for passive devices
+  mountType?: 'rack' | 'side';   // 'rack' is default
+  pduWidth?: number;              // px width when side-mounted (e.g. 42)
+  outletConfig?: OutletConfig[];  // for side PDUs
 }
 
 export interface DeviceData {
@@ -76,6 +92,8 @@ export interface DeviceData {
   frontPanelImage?: string;
   deviceConfig?: Record<string, unknown>;  // PDU configurator state
   powerWatts?: number;  // per-instance override; falls back to template.powerWatts
+  sideMountPosition?: 'left' | 'right';  // only for mountType:'side' devices
+  portTypes?: Record<number, 'data' | 'power'>;  // port index → type; absent = 'data'
 }
 
 export type CableType = 'idrac' | 'vm-network' | 'ceph-primary' | 'ceph-secondary' | 'live-migration' | 'backup' | 'general' | 'general-a' | 'general-b' | 'power' | 'cat6' | 'cat6a' | 'cat8' | 'om4' | 'om5' | 'dac-twinax' | 'qsfp28' | 'c13-power' | 'c19-power' | 'console' | 'custom';
@@ -157,6 +175,8 @@ export interface CableData {
   diameter?: number;       // physical diameter in mm
   tags?: string[];
   animatedFlow?: boolean;   // Packet flow animation toggle
+  powerCableType?: 'data' | 'power';   // 'data' is default
+  plugType?: SocketType;               // set when powerCableType === 'power'
   flowSpeed?: number;      // Animation speed factor
   exitStraightOffset?: number; // Straight exit distance before first bend (default 18px)
 }
