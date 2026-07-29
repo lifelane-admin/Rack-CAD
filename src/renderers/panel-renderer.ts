@@ -410,9 +410,10 @@ export function renderFrontPanel(
   deviceData: DeviceData | null,
   deviceWidth: number,
   deviceHeight: number,
+  connectedPortIndices: Set<number> = new Set(),
 ): SVGGElement {
   switch (category) {
-    case 'switch':        return renderSwitchPanel(template, deviceWidth, deviceHeight);
+    case 'switch':        return renderSwitchPanel(template, deviceWidth, deviceHeight, connectedPortIndices);
     case 'server':        return renderServerPanel(template, deviceWidth, deviceHeight);
     case 'firewall':
       return template?.id === 'fw-fortigate-400f'

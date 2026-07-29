@@ -203,7 +203,18 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
     deviceGroup.appendChild(overlay);
   } else {
     // High-fidelity SVG panel renderer
-    const panel = renderFrontPanel(category, template ?? null, device, deviceWidth, deviceHeight);
+    const connectedPortIndices = new Set<number>();
+    if (category === 'switch' && device) {
+      const cables = stateManager.getState().cables;
+      for (const cable of cables) {
+        const port = device.ports.find(p => p.id === cable.sourcePortId || p.id === cable.destPortId);
+        if (port) {
+          const idx = device.ports.indexOf(port);
+          if (idx >= 0) connectedPortIndices.add(idx);
+        }
+      }
+    }
+    const panel = renderFrontPanel(category, template ?? null, device, deviceWidth, deviceHeight, connectedPortIndices);
     deviceGroup.appendChild(panel);
   }
 

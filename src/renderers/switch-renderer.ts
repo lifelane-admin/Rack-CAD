@@ -102,7 +102,12 @@ function switchLed(
   parent.appendChild(grp);
 }
 
-export function renderSwitchPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
+export function renderSwitchPanel(
+  template: DeviceTemplate | null,
+  W: number,
+  H: number,
+  connectedPortIndices: Set<number> = new Set(),
+): SVGGElement {
   const group = g('switch-panel');
 
   const ports = template?.ports ?? [];
@@ -365,7 +370,7 @@ export function renderSwitchPanel(template: DeviceTemplate | null, W: number, H:
   // ── RJ45 ports ─────────────────────────────────────────────────────────
   for (let n = 1; n <= rj45Count; n++) {
     const { x, y, row, single } = rjPos(n);
-    const connected = n % 3 !== 0;
+    const connected = connectedPortIndices.has(n - 1);  // n is 1-based; port indices are 0-based
     const linkState = connected ? 'green' : 'off';
     const actState = connected ? 'greenBlink' : 'off';
     const symId = (single || row === 0) ? `rj45up-${uid}` : `rj45dn-${uid}`;
