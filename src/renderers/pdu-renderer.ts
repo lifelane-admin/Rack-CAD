@@ -180,6 +180,120 @@ export function renderPduPanel(
   return renderGenericPdu(template, W, H);
 }
 
+function drawSocketFacePlate(
+  parent: SVGElement,
+  cx: number,
+  cy: number,
+  ow: number,
+  oh: number,
+  sockType: SocketType,
+  isConnected: boolean,
+): void {
+  const strokeColor = isConnected ? '#37e07a' : '#2a3036';
+  const strokeW = isConnected ? 1.2 : 0.6;
+  const halfW = ow / 2;
+  const halfH = oh / 2;
+
+  // Face plate background (shared by all types)
+  const face = el('rect', {
+    x: cx - halfW, y: cy - halfH,
+    width: ow, height: oh,
+    rx: 1.5,
+    fill: '#141618',
+    stroke: strokeColor,
+    'stroke-width': strokeW,
+  });
+  parent.appendChild(face);
+
+  // Inner socket graphic — distinct per type
+  if (sockType === 'C13') {
+    // IEC C13: 3 ovals in triangular pattern — bottom-left, top-center, bottom-right
+    const hRx = 1.4, hRy = 2.2;
+    parent.appendChild(el('ellipse', { cx: cx - 2.8, cy: cy + 1.5, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    parent.appendChild(el('ellipse', { cx: cx,       cy: cy - 2,   rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    parent.appendChild(el('ellipse', { cx: cx + 2.8, cy: cy + 1.5, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+
+  } else if (sockType === 'C19') {
+    // IEC C19: like C13 but wider, 3 ovals more spread
+    const hRx = 1.6, hRy = 2.5;
+    parent.appendChild(el('ellipse', { cx: cx - 3.5, cy: cy + 1.8, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    parent.appendChild(el('ellipse', { cx: cx,       cy: cy - 2.2, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    parent.appendChild(el('ellipse', { cx: cx + 3.5, cy: cy + 1.8, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+
+  } else if (sockType === 'C15') {
+    // IEC C15: same as C13 but with a notch at bottom (hot equipment)
+    const hRx = 1.4, hRy = 2.2;
+    parent.appendChild(el('ellipse', { cx: cx - 2.8, cy: cy + 1.5, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    parent.appendChild(el('ellipse', { cx: cx,       cy: cy - 2,   rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    parent.appendChild(el('ellipse', { cx: cx + 2.8, cy: cy + 1.5, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    // Notch (bottom edge)
+    parent.appendChild(el('rect', { x: cx - 1, y: cy + halfH - 2.5, width: 2, height: 2, fill: '#030304' }));
+
+  } else if (sockType === 'NEMA-5-15' || sockType === 'NEMA-5-20') {
+    // NEMA: 2 vertical blade slots + D-shaped ground hole below
+    const bW = 1.2, bH = 3.5;
+    parent.appendChild(el('rect', { x: cx - 3.5 - bW / 2, y: cy - bH / 2 - 0.5, width: bW, height: bH, rx: 0.4, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    // NEMA-5-20 has one horizontal blade
+    if (sockType === 'NEMA-5-20') {
+      parent.appendChild(el('rect', { x: cx + 2.0, y: cy - bW / 2 - 0.5, width: bH, height: bW, rx: 0.4, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    } else {
+      parent.appendChild(el('rect', { x: cx + 3.5 - bW / 2, y: cy - bH / 2 - 0.5, width: bW, height: bH, rx: 0.4, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    }
+    // D-shaped ground (half circle below)
+    parent.appendChild(el('ellipse', { cx: cx, cy: cy + 2.5, rx: 1.3, ry: 1.3, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+
+  } else if (sockType === 'NEMA-L5-30' || sockType === 'NEMA-L6-20') {
+    // NEMA Locking: two curved slots + ground — distinctive circular keyway
+    parent.appendChild(el('circle', { cx, cy, r: 3.5, fill: 'none', stroke: '#2a2a36', 'stroke-width': 0.5 }));
+    parent.appendChild(el('ellipse', { cx: cx - 2.5, cy: cy - 1, rx: 0.9, ry: 2.2, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3, transform: `rotate(-30,${cx - 2.5},${cy - 1})` }));
+    parent.appendChild(el('ellipse', { cx: cx + 2.5, cy: cy - 1, rx: 0.9, ry: 2.2, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3, transform: `rotate(30,${cx + 2.5},${cy - 1})` }));
+    parent.appendChild(el('ellipse', { cx, cy: cy + 2.5, rx: 1.0, ry: 1.0, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+
+  } else if (sockType === 'BS1363') {
+    // UK BS1363: 3 rectangular slots in triangular pattern (live=top-right, neutral=top-left, earth=bottom-center larger)
+    parent.appendChild(el('rect', { x: cx - 3.8, y: cy - 3.5, width: 3, height: 1.2, rx: 0.3, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 })); // neutral (left)
+    parent.appendChild(el('rect', { x: cx + 0.8, y: cy - 3.5, width: 3, height: 1.2, rx: 0.3, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 })); // live (right)
+    parent.appendChild(el('rect', { x: cx - 2,   y: cy + 0.5, width: 4, height: 1.5, rx: 0.3, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 })); // earth (bottom, wider)
+
+  } else if (sockType === 'Schuko') {
+    // Schuko (EU): 2 round holes + earth contacts on sides
+    parent.appendChild(el('circle', { cx: cx - 2.8, cy, r: 1.3, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    parent.appendChild(el('circle', { cx: cx + 2.8, cy, r: 1.3, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    // Earth contacts (side strips)
+    parent.appendChild(el('rect', { x: cx - halfW + 0.5, y: cy - 1, width: 1.5, height: 2, rx: 0.4, fill: '#3a3a4a', stroke: '#2a2a36', 'stroke-width': 0.3 }));
+    parent.appendChild(el('rect', { x: cx + halfW - 2,   y: cy - 1, width: 1.5, height: 2, rx: 0.4, fill: '#3a3a4a', stroke: '#2a2a36', 'stroke-width': 0.3 }));
+
+  } else if (sockType === 'IS6538-5A' || sockType === 'IS6538-15A') {
+    // India IS6538 (Type D/M): 3 round pins in triangular arrangement (larger for 15A)
+    const r = sockType === 'IS6538-15A' ? 1.5 : 1.2;
+    parent.appendChild(el('circle', { cx: cx - 2.5, cy: cy + 1.8, r, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    parent.appendChild(el('circle', { cx: cx,       cy: cy - 2.2, r, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    parent.appendChild(el('circle', { cx: cx + 2.5, cy: cy + 1.8, r, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+
+  } else if (sockType === 'IS1293-6A' || sockType === 'IS1293-16A') {
+    // India IS1293 (2+E): 2 round holes + earth — flat rectangular body
+    const r = sockType === 'IS1293-16A' ? 1.4 : 1.1;
+    parent.appendChild(el('circle', { cx: cx - 2.2, cy: cy + 1,   r, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 })); // live
+    parent.appendChild(el('circle', { cx: cx + 2.2, cy: cy + 1,   r, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 })); // neutral
+    parent.appendChild(el('circle', { cx: cx,       cy: cy - 2.2, r: r * 0.9, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 })); // earth
+
+  } else {
+    // Fallback: generic 2 holes
+    parent.appendChild(el('circle', { cx: cx - 2, cy, r: 1.2, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    parent.appendChild(el('circle', { cx: cx + 2, cy, r: 1.2, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+  }
+
+  // Socket type label below the outlet
+  const lbl = el('text', {
+    x: cx, y: cy + halfH + 3,
+    'text-anchor': 'middle', 'font-size': 2.8,
+    fill: isConnected ? '#37e07a' : '#5b636a',
+    'font-family': 'monospace', 'pointer-events': 'none',
+  });
+  lbl.textContent = sockType;
+  parent.appendChild(lbl);
+}
+
 export function renderSidePdu(
   template: DeviceTemplate,
   pduWidth: number,
@@ -232,24 +346,8 @@ export function renderSidePdu(
     const ow = Math.min(pduWidth - 6, sockType === 'C19' ? 22 : 18);
     const oh = Math.min(outletSpacing - 2, 14);
 
-    // Outlet face plate
-    ns.appendChild(el('rect', {
-      x: outletCx - ow / 2, y: oy - oh / 2,
-      width: ow, height: oh, rx: 1.5,
-      fill: '#141618',
-      stroke: isConnected ? '#37e07a' : '#2a3036',
-      'stroke-width': isConnected ? 1.2 : 0.6,
-    }));
-
-    // Socket type label
-    const lbl = el('text', {
-      x: outletCx, y: oy + 1.5,
-      'text-anchor': 'middle', 'font-size': 3.5,
-      fill: isConnected ? '#37e07a' : '#5b636a',
-      'font-family': 'monospace', 'pointer-events': 'none',
-    });
-    lbl.textContent = sockType;
-    ns.appendChild(lbl);
+    // Outlet face plate with distinct socket graphic per type
+    drawSocketFacePlate(ns as unknown as SVGElement, outletCx, oy, ow, oh, sockType, isConnected);
 
     // Hit target for power cable connection
     const hitTarget = el('rect', {
