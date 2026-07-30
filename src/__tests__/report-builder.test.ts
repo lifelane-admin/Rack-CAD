@@ -81,7 +81,7 @@ describe('buildReport', () => {
       racks: [{ id: 'r1', name: 'Rack', units: 42, x: 0, y: 0, showPduLeft: true, showPduRight: false }],
       devices: [{
         id: 'd1', rackId: 'r1', startUnit: 1, name: 'Srv', hostname: '', managementIp: '',
-        serialNumber: '', description: '3600W', templateId: 'server-2u', ports: [],
+        serialNumber: '', description: '3600W', powerWatts: 3600, templateId: 'server-2u', ports: [],
       }],
     });
     const html = buildReport(state, makeMeta());
@@ -96,7 +96,7 @@ describe('buildReport', () => {
       racks: [{ id: 'r1', name: 'Rack', units: 42, x: 0, y: 0, showPduLeft: true, showPduRight: false }],
       devices: [{
         id: 'd1', rackId: 'r1', startUnit: 1, name: 'Srv', hostname: '', managementIp: '',
-        serialNumber: '', description: '7000W', templateId: 'server-2u', ports: [],
+        serialNumber: '', description: '7000W', powerWatts: 7000, templateId: 'server-2u', ports: [],
       }],
     });
     const html = buildReport(state, makeMeta());

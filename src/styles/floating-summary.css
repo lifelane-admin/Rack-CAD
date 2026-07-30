@@ -1,0 +1,137 @@
+.floating-summary-panel {
+  position: absolute;
+  width: 270px;
+  z-index: 85;
+  background: rgba(22, 27, 34, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #e6edf3;
+  user-select: none;
+}
+
+.fsp-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fsp-drag-handle {
+  cursor: grab;
+  color: #8b949e;
+  font-weight: bold;
+  font-size: 12px;
+  padding: 0 2px;
+}
+.fsp-drag-handle:active {
+  cursor: grabbing;
+  color: #fb8c00;
+}
+
+.fsp-title {
+  flex: 1;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: #fb8c00;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fsp-rack-select {
+  max-width: 90px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  border-radius: 3px;
+  font-size: 10px;
+  padding: 2px 4px;
+}
+
+.fsp-collapse {
+  background: none;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.fsp-collapse:hover {
+  color: #e6edf3;
+}
+
+.fsp-body {
+  padding: 10px 12px 12px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.fsp-bullet {
+  font-size: 11px;
+  color: #c9d1d9;
+  line-height: 1.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fsp-empty {
+  font-size: 11px;
+  color: #8b949e;
+  text-align: center;
+  padding: 10px 0;
+}
+
+.fsp-gauge {
+  margin-top: 8px;
+}
+.fsp-gauge-label {
+  font-size: 10.5px;
+  color: #c9d1d9;
+  margin-bottom: 4px;
+}
+.fsp-gauge-track {
+  width: 100%;
+  height: 7px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.fsp-gauge-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
+.fsp-cable-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 11px;
+}
+.fsp-swatch {
+  width: 20px;
+  height: 3.5px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.fsp-cable-label {
+  flex: 1;
+  color: #c9d1d9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fsp-cable-count {
+  color: #8b949e;
+  flex-shrink: 0;
+}

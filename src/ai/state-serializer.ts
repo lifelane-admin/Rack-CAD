@@ -2,6 +2,7 @@ import { AppState } from '../core/types';
 import { RackContext } from './types';
 import { getTemplate } from '../library/device-catalog';
 import type { DeviceCategory, PortType } from '../core/types';
+import { PDU_WATTS_PER_UNIT } from '../utils/power';
 
 function getPortSide(category: DeviceCategory | undefined, portType: PortType): 'front' | 'rear' {
   const rearCategories = new Set(['server', 'firewall', 'storage', 'ups', 'pdu', 'cooling']);
@@ -43,8 +44,8 @@ export function serializeState(state: AppState): RackContext {
     });
 
     const pdus: { side: string; watts: number }[] = [];
-    if (rack.showPduLeft) pdus.push({ side: 'left', watts: 7200 });
-    if (rack.showPduRight) pdus.push({ side: 'right', watts: 7200 });
+    if (rack.showPduLeft) pdus.push({ side: 'left', watts: PDU_WATTS_PER_UNIT });
+    if (rack.showPduRight) pdus.push({ side: 'right', watts: PDU_WATTS_PER_UNIT });
 
     return { id: rack.id, name: rack.name, units: rack.units, devices, pdus };
   });

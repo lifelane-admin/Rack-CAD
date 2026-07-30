@@ -238,6 +238,20 @@ export interface LegendItem {
   color: string;
 }
 
+/** A single point-in-time snapshot in the rolling auto-save/version-control history. Payload
+ *  mirrors what autoSave()/loadAutoSave() already persist (racks/devices/cables/bundles) so
+ *  restoring a version reuses the exact same load path as the "latest" autosave. */
+export interface ProjectVersion {
+  id: string;
+  timestamp: string;      // ISO 8601
+  label: string;           // e.g. "Auto-save" or a user-supplied checkpoint name
+  manual: boolean;         // true if explicitly checkpointed by the user, vs a routine auto-save
+  racks: RackData[];
+  devices: DeviceData[];
+  cables: CableData[];
+  bundles: CableBundle[];
+}
+
 export interface AppState {
   theme: Theme;
   tool: ToolMode;
@@ -328,8 +342,12 @@ export interface AppEvents {
   'project:load': string;
   'file:new': void;
   'file:save': void;
+  'file:save-as': void;
   'file:open': File;
   'file:demo': void;
+  'versions:open': void;
+  'versions:changed': void;
+  'versions:restored': void;
   'view:zoom-in': void;
   'view:zoom-out': void;
   'edit:undo': void;

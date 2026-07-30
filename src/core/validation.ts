@@ -1,5 +1,6 @@
 import { RackData, DeviceData, CableData, ValidationAlert, PortData } from './types';
 import { generateId } from '../utils/geometry';
+import { getRackPowerCapacityWatts, getRackPowerUsedWatts } from '../utils/power';
 
 /**
  * Runs continuous background validation on the current rack configuration.
@@ -208,18 +209,12 @@ export function runValidationAlerts(
   }
 
   // Power draw validation per rack
-  const PDU_WATTS = 7200;
   for (const rack of racks) {
-    const rackDevices = devices.filter(d => d.rackId === rack.id);
-    const pduCount = (rack.showPduLeft ? 1 : 0) + (rack.showPduRight ? 1 : 0);
-    const totalCapacity = pduCount * PDU_WATTS;
+    const totalCapacity = getRackPowerCapacityWatts(rack);
 
     if (totalCapacity === 0) continue;
 
-    const usedWatts = rackDevices.reduce((sum, d) => {
-      const match = d.description.match(/(\d+)\s*[wW](?:atts?)?/);
-      return sum + (match ? parseInt(match[1], 10) : 0);
-    }, 0);
+    const usedWatts = getRackPowerUsedWatts(rack, devices);
 
     const ratio = usedWatts / totalCapacity;
 

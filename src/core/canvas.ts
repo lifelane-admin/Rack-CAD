@@ -101,6 +101,12 @@ export class CanvasManager {
   }
 
   private onMouseDown(e: MouseEvent) {
+    // The export-area tool owns mousedown/mousemove/mouseup entirely itself (app.ts draws the
+    // drag rectangle) — clicking to start that drag on empty canvas background otherwise looks
+    // exactly like "click background to pan", so without this guard the canvas would pan out
+    // from under the user's drag instead of a selection rectangle appearing.
+    if (stateManager.getState().tool === 'export-area') return;
+
     const isPanTool = stateManager.getState().tool === 'pan';
     const isInteractiveTarget = (e.target as Element).closest('.rack') || 
                                  (e.target as Element).closest('.device') || 

@@ -1,19 +1,30 @@
-import { AppState, RackData, DeviceData, PortData, CableData, CableType, SelectableItem, Transform, RACK_CONSTANTS, CableBundle, ValidationAlert, PduConfig, KvmConfig, DeviceTemplate } from './types';
+import { AppState, RackData, DeviceData, PortData, CableData, CableType, SelectableItem, Transform, RACK_CONSTANTS, CableBundle, ValidationAlert, PduConfig, KvmConfig, DeviceTemplate, ProjectVersion } from './types';
 import { eventBus } from './event-bus';
 import { getTemplate } from '../library/device-catalog';
 import { runValidationAlerts } from './validation';
 import { loadCustomTemplates, saveAllCustomTemplates } from '../library/custom-catalog';
 import { computeConfiguredPduLayout, computeGenericPduLayout, computeSidePduOutletPositions, sidePduOffsetX, normalizeComposition } from '../renderers/pdu-layout';
 import { networkingPorts } from '../renderers/networking-renderer';
+import { generateId } from '../utils/geometry';
 
 function asPduConfig(config: unknown): PduConfig {
   return (config && typeof config === 'object') ? (config as PduConfig) : {};
 }
 
+const AUTOSAVE_KEY = 'rack_design_autosave';
+const VERSIONS_KEY = 'rack_design_versions';
+const MAX_VERSIONS = 30;
+// Routine auto-saves only roll a new version into history at most this often — every state
+// change already writes the "latest" snapshot (autoSave's original behavior, unchanged), but
+// checkpointing a distinct history entry on every keystroke/drag would flood storage with
+// near-duplicate versions.
+const MIN_AUTO_VERSION_INTERVAL_MS = 2 * 60 * 1000;
+
 class StateManager {
   private state: AppState;
   private undoStack: string[] = [];
   private redoStack: string[] = [];
+  private lastVersionSnapshotAt = 0;
 
   constructor() {
     this.state = {
@@ -24,8 +35,7 @@ class StateManager {
       snapEnabled: true,
       rulersVisible: true,
       racks: [
-        { id: 'rack-1', name: 'Rack 1', units: 42, x: 200, y: 100, leftCableManagerWidth: 'none', rightCableManagerWidth: 'none' },
-        { id: 'rack-2', name: 'Rack 2', units: 42, x: 700, y: 100, leftCableManagerWidth: 'none', rightCableManagerWidth: 'none' }
+        { id: 'rack-1', name: 'Rack 1', units: 42, x: 300, y: 100, leftCableManagerWidth: 'none', rightCableManagerWidth: 'none' },
       ],
       devices: [],
       cables: [],
@@ -35,7 +45,7 @@ class StateManager {
       cableInProgress: null,
       sidebarCollapsed: false,
       propertiesCollapsed: false,
-      showLegends: false,
+      showLegends: true,
       selectedCableType: 'general',
       selectedCableColor: '#78909c',
       selectedCableBend: 10,
@@ -279,17 +289,25 @@ class StateManager {
         cables: this.state.cables,
         bundles: this.state.bundles
       });
-      localStorage.setItem('rack_design_autosave', data);
+      localStorage.setItem(AUTOSAVE_KEY, data);
     } catch (err) {
       console.error('Autosave failed', err);
+    }
+
+    // Version control: roll a routine checkpoint into history at most every
+    // MIN_AUTO_VERSION_INTERVAL_MS, independent of the "latest" snapshot above (which is
+    // always kept current so a page reload resumes exactly where you left off).
+    const now = Date.now();
+    if (now - this.lastVersionSnapshotAt >= MIN_AUTO_VERSION_INTERVAL_MS) {
+      this.saveVersion('Auto-save', false);
     }
   }
 
   loadAutoSave(): boolean {
     try {
-      const data = localStorage.getItem('rack_design_autosave');
+      const data = localStorage.getItem(AUTOSAVE_KEY);
       if (!data) return false;
-      
+
       const parsed = JSON.parse(data);
       if (parsed.racks && parsed.devices && parsed.cables) {
         this.state.racks = parsed.racks;
@@ -302,6 +320,91 @@ class StateManager {
       console.error('Load autosave failed', err);
     }
     return false;
+  }
+
+  /**
+   * Records a named checkpoint into the rolling version-control history (capped at
+   * MAX_VERSIONS, oldest dropped first). `manual` distinguishes an explicit user checkpoint
+   * (e.g. "Save Project") from a routine timed auto-save, purely for display in the version
+   * history UI — both restore identically.
+   */
+  saveVersion(label = 'Checkpoint', manual = true): void {
+    this.lastVersionSnapshotAt = Date.now();
+    const version: ProjectVersion = {
+      id: generateId(),
+      timestamp: new Date().toISOString(),
+      label,
+      manual,
+      racks: this.state.racks,
+      devices: this.state.devices,
+      cables: this.state.cables,
+      bundles: this.state.bundles,
+    };
+    const versions = this.readVersions();
+    versions.push(version);
+    while (versions.length > MAX_VERSIONS) versions.shift();
+    this.writeVersions(versions);
+    eventBus.emit('versions:changed', undefined);
+  }
+
+  /** Newest-first list of saved versions, for the version-history UI. */
+  listVersions(): ProjectVersion[] {
+    return this.readVersions().slice().reverse();
+  }
+
+  /** Restores a prior version as the current working state (destructive to unsaved changes,
+   *  same as loading a project file). Returns false if the version id no longer exists. */
+  restoreVersion(id: string): boolean {
+    const version = this.readVersions().find(v => v.id === id);
+    if (!version) return false;
+
+    this.state.racks = version.racks;
+    this.state.devices = this.prepareDevices(version.devices);
+    this.state.cables = version.cables;
+    this.state.bundles = version.bundles || [];
+    this.state.selection = [];
+    eventBus.emit('state:changed', {
+      racks: this.state.racks, devices: this.state.devices,
+      cables: this.state.cables, bundles: this.state.bundles, selection: [],
+    });
+    this.autoSave();
+    return true;
+  }
+
+  deleteVersion(id: string): void {
+    this.writeVersions(this.readVersions().filter(v => v.id !== id));
+    eventBus.emit('versions:changed', undefined);
+  }
+
+  private readVersions(): ProjectVersion[] {
+    try {
+      const raw = localStorage.getItem(VERSIONS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (err) {
+      console.error('Read version history failed', err);
+      return [];
+    }
+  }
+
+  private writeVersions(versions: ProjectVersion[]): void {
+    try {
+      localStorage.setItem(VERSIONS_KEY, JSON.stringify(versions));
+    } catch (err) {
+      // Most likely a quota error — drop the oldest half of the history and retry once rather
+      // than losing the newest checkpoint outright.
+      if (versions.length > 2) {
+        const trimmed = versions.slice(Math.floor(versions.length / 2));
+        try {
+          localStorage.setItem(VERSIONS_KEY, JSON.stringify(trimmed));
+        } catch (err2) {
+          console.error('Save version history failed even after trimming', err2);
+        }
+      } else {
+        console.error('Save version history failed', err);
+      }
+    }
   }
 
   getRack(id: string): RackData | undefined {
@@ -578,7 +681,7 @@ export function injectEarPorts(deviceId: string, category: string, heightUnits: 
     earPorts.push({
       id: `${deviceId}-ear-left-nic${i}`,
       deviceId,
-      name: `${deviceId} Left Ear ${isLast ? 'Hybrid' : 'Network'} ${i} (${label})`,
+      name: `Left Ear ${isLast ? 'Hybrid' : 'Network'} ${i} (${label})`,
       type: portType,
       relativeX: leftX,
       relativeY: yVal,
@@ -589,7 +692,7 @@ export function injectEarPorts(deviceId: string, category: string, heightUnits: 
     earPorts.push({
       id: `${deviceId}-ear-right-nic${i}`,
       deviceId,
-      name: `${deviceId} Right Ear ${isLast ? 'Hybrid' : 'Network'} ${i} (${label})`,
+      name: `Right Ear ${isLast ? 'Hybrid' : 'Network'} ${i} (${label})`,
       type: portType,
       relativeX: rightX,
       relativeY: yVal,

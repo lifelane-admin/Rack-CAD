@@ -4,6 +4,15 @@ import { buildReport, ReportMetadata } from '../export/report-builder';
 import { DeviceTemplate, RACK_CONSTANTS } from '../core/types';
 import canvasCss from '../styles/canvas.css?raw';
 import reportsCss from '../styles/reports.css?raw';
+import { appendExportSummaryOverlay, Rect } from '../renderers/export-summary-overlay';
+
+function unionRect(a: Rect, b: Rect): Rect {
+  const x0 = Math.min(a.x, b.x);
+  const y0 = Math.min(a.y, b.y);
+  const x1 = Math.max(a.x + a.width, b.x + b.width);
+  const y1 = Math.max(a.y + a.height, b.y + b.height);
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+}
 
 export interface ExportOptions {
   area: 'full' | 'viewport' | 'rack' | 'custom';
@@ -195,6 +204,15 @@ export function exportSVG(options?: ExportOptions): string {
   const clone = svgEl.cloneNode(true) as SVGSVGElement;
   const vpGroup = clone.querySelector('#viewport-group') as SVGGElement;
 
+  // Bake the floating Rack Load Summary / Cable Types panels into the export clone — they're
+  // real HTML overlays outside this SVG entirely (components/floating-summary-panels.ts), so
+  // without this every export format (they all funnel through here) would silently drop them.
+  // Respects the same "Toggle Legends" visibility flag the floating panels themselves use.
+  const s0 = stateManager.getState();
+  const overlayRects = (s0.showLegends && vpGroup)
+    ? appendExportSummaryOverlay(vpGroup, s0.racks, s0.devices, s0.cables, s0.customLegendItems)
+    : [];
+
   // Set Viewbox based on selection area
   let bbox = { x: 0, y: 0, width: 1920, height: 1080 };
   let appliedBox = false;
@@ -203,7 +221,7 @@ export function exportSVG(options?: ExportOptions): string {
     const transform = stateManager.getState().transform;
     const clientWidth = svgEl.clientWidth || 1920;
     const clientHeight = svgEl.clientHeight || 1080;
-    
+
     bbox.x = -transform.x / transform.scale;
     bbox.y = -transform.y / transform.scale;
     bbox.width = clientWidth / transform.scale;
@@ -218,6 +236,12 @@ export function exportSVG(options?: ExportOptions): string {
       bbox.width = RACK_CONSTANTS.RACK_OUTER_WIDTH + 80;
       bbox.height = rackHeight + 80;
       appliedBox = true;
+      // Extend to include this rack's own summary cards — appendExportSummaryOverlay() pushes
+      // exactly one rect per rack, in the same order as s0.racks, so index lookup is exact
+      // (no geometric guessing needed to match a card back to "its" rack).
+      const rackIdx = s0.racks.findIndex(r => r.id === rack.id);
+      const ownRect = rackIdx >= 0 ? overlayRects[rackIdx] : undefined;
+      if (ownRect) bbox = unionRect(bbox, { x: ownRect.x - 20, y: ownRect.y - 20, width: ownRect.width + 40, height: ownRect.height + 40 });
     }
   } else if (options && options.area === 'custom' && options.customRect) {
     bbox = { ...options.customRect };
@@ -226,6 +250,10 @@ export function exportSVG(options?: ExportOptions): string {
 
   if (!appliedBox && vpGroup) {
     try {
+      // getBBox() only reflects elements attached to a rendered document, so it's measured on
+      // the ORIGINAL live viewport-group, not the (detached) clone — the summary cards just
+      // appended above exist only in the clone, hence the explicit unionRect() below using
+      // their analytically-known extents rather than relying on getBBox to see them.
       const origViewport = svgEl.querySelector('#viewport-group') as SVGGElement;
       const b = origViewport.getBBox();
       const padding = 40;
@@ -233,6 +261,9 @@ export function exportSVG(options?: ExportOptions): string {
       bbox.y = b.y - padding;
       bbox.width = b.width + padding * 2;
       bbox.height = b.height + padding * 2;
+      overlayRects.forEach(r => { bbox = unionRect(bbox, r); });
+      bbox.width += padding;
+      bbox.height += padding;
     } catch {
       bbox = { x: 100, y: 50, width: 1200, height: 1500 };
     }
@@ -373,13 +404,8 @@ export function exportPDF(options?: ExportOptions): void {
   const svgContent = exportSVG(options);
   const pageSize = options?.pageSize || 'a4';
   const orientation = options?.orientation || 'landscape';
-  
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    throw new Error('Popup blocked! Please allow popups to export PDF.');
-  }
-  
-  printWindow.document.write(`
+
+  const html = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -420,7 +446,22 @@ export function exportPDF(options?: ExportOptions): void {
       </script>
     </body>
     </html>
-  `);
+  `;
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    // Popup blocked (common under strict corporate/managed-browser policies) — fall back to a
+    // downloadable HTML file the user can open and print (Ctrl+P → Save as PDF) themselves,
+    // instead of just failing with no usable result.
+    downloadFile(html, 'rack-slicer-print.html', 'text/html');
+    eventBus.emit('notification', {
+      message: 'Popup blocked — downloaded a printable HTML file instead. Open it and use Ctrl+P → Save as PDF.',
+      type: 'warning',
+    });
+    return;
+  }
+
+  printWindow.document.write(html);
   printWindow.document.close();
 }
 
@@ -503,20 +544,32 @@ export function importJSON(jsonString: string): void {
  * Trigger a file download in the browser.
  */
 export function downloadFile(content: string | Blob, filename: string, mimeType?: string): void {
-  let blob: Blob;
-  if (typeof content === 'string') {
-    blob = new Blob([content], { type: mimeType || 'text/plain' });
-  } else {
-    blob = content;
-  }
-  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
   a.download = filename;
+
+  if (typeof content === 'string') {
+    // Text payloads (JSON/SVG/HTML) go out as a data: URI rather than a Blob + object URL.
+    // A data: URI embeds the payload directly in the href, so there is no separate object
+    // whose lifetime can be cut short — this sidesteps the empty/truncated-download class of
+    // bug entirely (a Blob object URL revoked even a few seconds early, which can happen under
+    // corporate download-scanning/"keep or discard" policies, yanks the data out from under a
+    // deferred read). Fine for project-file-sized JSON/SVG/HTML; not used for binary images.
+    const type = mimeType || 'text/plain';
+    a.href = `data:${type};charset=utf-8,${encodeURIComponent(content)}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return;
+  }
+
+  const url = URL.createObjectURL(content);
+  a.href = url;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Binary (PNG/JPEG) blobs still need an object URL — revoke is deferred for the same reason
+  // as above, since it can't be avoided entirely for binary data this way.
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 // Wire up export events
@@ -595,7 +648,8 @@ export function initExportHandlers(): void {
     try {
       const jsonContent = exportJSON();
       downloadFile(jsonContent, 'rack-slicer.json', 'application/json');
-      eventBus.emit('notification', { message: 'Project saved successfully', type: 'success' });
+      stateManager.saveVersion('Manual save (.json export)', true);
+      eventBus.emit('notification', { message: 'Project saved successfully — rack-slicer.json downloaded', type: 'success' });
     } catch (err) {
       eventBus.emit('notification', { message: `JSON export failed: ${err}`, type: 'error' });
     }
@@ -635,7 +689,9 @@ export function initExportHandlers(): void {
         const html = buildReport(stateManager.getState(), meta);
         const win = window.open('', '_blank');
         if (!win) {
-          eventBus.emit('notification', { message: 'Popup blocked — please allow popups to generate report', type: 'error' });
+          // Same popup-blocked fallback as PDF export — always leave the user with something.
+          downloadFile(html, 'rack-slicer-report.html', 'text/html');
+          eventBus.emit('notification', { message: 'Popup blocked — downloaded the report as an HTML file instead', type: 'warning' });
           return;
         }
         win.document.write(html);

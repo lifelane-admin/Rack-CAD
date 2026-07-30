@@ -20,6 +20,7 @@ describe('runValidationAlerts - power', () => {
         id: 'd1', templateId: 't1', rackId: 'r1', startUnit: 1,
         name: 'Server 1', hostname: '', managementIp: '', serialNumber: '',
         description: '9000W server',
+        powerWatts: 9000,
         ports: [],
       },
     ];
@@ -35,6 +36,7 @@ describe('runValidationAlerts - power', () => {
         id: 'd1', templateId: 't1', rackId: 'r1', startUnit: 1,
         name: 'Server 1', hostname: '', managementIp: '', serialNumber: '',
         description: '12240W server',
+        powerWatts: 12240,
         ports: [],
       },
     ];
@@ -53,6 +55,7 @@ describe('runValidationAlerts - power', () => {
         id: 'd1', templateId: 't1', rackId: 'r1', startUnit: 1,
         name: 'Server 1', hostname: '', managementIp: '', serialNumber: '',
         description: '13824W server',
+        powerWatts: 13824,
         ports: [],
       },
     ];
@@ -73,6 +76,7 @@ describe('runValidationAlerts - power', () => {
         id: 'd2', templateId: 't1', rackId: 'r2', startUnit: 1,
         name: 'Server 2', hostname: '', managementIp: '', serialNumber: '',
         description: '9999W server',
+        powerWatts: 9999,
         ports: [],
       },
     ];
@@ -88,6 +92,7 @@ describe('runValidationAlerts - power', () => {
         id: 'd1', templateId: 't1', rackId: 'r1', startUnit: 1,
         name: 'Server 1', hostname: '', managementIp: '', serialNumber: '',
         description: '12240W server',
+        powerWatts: 12240,
         ports: [],
       },
     ];

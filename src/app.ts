@@ -19,15 +19,18 @@ import { StatusBar } from './components/statusbar';
 import { ContextMenu, MenuItem } from './components/context-menu';
 import { ReportsPanel } from './components/reports-panel';
 import { FloatingToolbar } from './components/floating-toolbar';
+import { NotificationCenter } from './components/notifications';
+import { VersionHistoryModal } from './components/version-history';
+import { FloatingRackSummaryPanel, FloatingCableSummaryPanel } from './components/floating-summary-panels';
+import './styles/floating-summary.css';
 import { AIPanel } from './components/ai-panel';
 import { runSelfTests } from './utils/self-test';
 import { renderRack } from './renderers/rack-renderer';
 import { renderDevice } from './renderers/device-renderer';
 import { renderCable, renderCableInProgress, resetPreviewDirection } from './renderers/cable-renderer';
-import { renderDashboardWidgets } from './renderers/dashboard-renderer';
 import { deviceCatalog, getTemplate } from './library/device-catalog';
 import { generateId, distToSegment } from './utils/geometry';
-import { initExportHandlers } from './utils/export';
+import { initExportHandlers, downloadFile, exportJSON } from './utils/export';
 import { computeSmartRouting, get3DefaultAnchors } from './utils/routing';
 import { cloneDevice } from './utils/clone';
 import { socketTypeAtOutletIndex } from './renderers/pdu-layout';
@@ -126,6 +129,20 @@ export class App {
 
     // Initialize Presenter Mode Dashboard
     this.presenterDashboard = new PresenterDashboard();
+
+    // Initialize toast notifications — every export/save/undo/redo/etc. success or failure is
+    // emitted as a 'notification' event; without this listener they all resolved into silence.
+    new NotificationCenter();
+
+    // Initialize the version-history modal (rolling auto-save/checkpoint browser)
+    new VersionHistoryModal();
+    eventBus.on('versions:restored', () => this.renderAll());
+
+    // Initialize the floating, draggable Rack Load Summary + Cable Types panels (screen-space
+    // overlays on the canvas viewport — independent of pan/zoom, unlike the old on-canvas
+    // per-rack SVG dashboard they replace).
+    new FloatingRackSummaryPanel();
+    new FloatingCableSummaryPanel();
 
     // Render UI
     this.toolbar.render();
@@ -332,27 +349,58 @@ export class App {
 
     // File operations
     (eventBus as any).on('file:new', () => {
-      if (confirm('Create a new project? All unsaved changes will be lost.')) {
+      const current = stateManager.getState();
+      const stakes = `${current.devices.length} device${current.devices.length === 1 ? '' : 's'} and ${current.cables.length} cable${current.cables.length === 1 ? '' : 's'}`;
+      if (confirm(`Start a new project? This will clear ${stakes} from the canvas.\n\nA checkpoint of your current work will be saved to Version History first, so you can restore it from there if needed.`)) {
+        // Auto-checkpoint before the destructive reset — a New Workspace click confirmed by
+        // reflex (easy to do on a native browser dialog) previously meant permanent data loss;
+        // now it's always recoverable via the Version History panel.
+        if (current.devices.length > 0 || current.cables.length > 0) {
+          stateManager.saveVersion('Before New Workspace', true);
+        }
         stateManager.setState({
           racks: [
-            { id: generateId(), name: 'Rack 1', units: 42, x: 200, y: 100, showPduLeft: true, showPduRight: true },
-            { id: generateId(), name: 'Rack 2', units: 42, x: 700, y: 100, showPduLeft: true, showPduRight: true }
+            { id: generateId(), name: 'Rack 1', units: 42, x: 300, y: 100, showPduLeft: true, showPduRight: true },
           ],
           devices: [],
           cables: [],
           selection: [],
+          showLegends: true,
         });
         this.renderAll();
+        eventBus.emit('notification', { message: 'New project started — your previous work was checkpointed in Version History', type: 'info' });
       }
     });
 
     (eventBus as any).on('file:demo', () => {
-      stateManager.loadDemoProject();
+      const current = stateManager.getState();
+      const stakes = `${current.devices.length} device${current.devices.length === 1 ? '' : 's'} and ${current.cables.length} cable${current.cables.length === 1 ? '' : 's'}`;
+      if (!confirm(`Load the demo cluster? This will replace ${stakes} currently on the canvas.\n\nA checkpoint of your current work will be saved to Version History first, so you can restore it from there if needed.`)) {
+        return;
+      }
+      if (current.devices.length > 0 || current.cables.length > 0) {
+        stateManager.saveVersion('Before Load Demo Cluster', true);
+      }
+      stateManager.loadDemoProject(); // emits its own 'Loaded demo project!' notification
       this.renderAll();
     });
 
     (eventBus as any).on('file:save', () => {
       eventBus.emit('export:json', undefined as any);
+    });
+
+    (eventBus as any).on('file:save-as', () => {
+      const stamp = new Date().toISOString().slice(0, 10);
+      const name = prompt('Save project as:', `rack-slicer-${stamp}.json`);
+      if (!name) return; // cancelled
+      const filename = name.toLowerCase().endsWith('.json') ? name : `${name}.json`;
+      try {
+        downloadFile(exportJSON(), filename, 'application/json');
+        stateManager.saveVersion(`Manual save as "${filename}"`, true);
+        eventBus.emit('notification', { message: `Project saved as ${filename}`, type: 'success' });
+      } catch (err) {
+        eventBus.emit('notification', { message: `Save As failed: ${err}`, type: 'error' });
+      }
     });
 
     (eventBus as any).on('file:open', (file: File) => {
@@ -1407,13 +1455,16 @@ export class App {
     const s = stateManager.getState();
 
     if (!s.cableInProgress) {
-      // Start cable
+      // Start cable — the floating toolbar's Power tool means "draw a power cable" by itself,
+      // regardless of the clicked port's own type/override, so the live preview (and the
+      // committed cable's `type`, used for material/thickness) shows as a power cord right
+      // away instead of whatever plain cable type was last selected.
       stateManager.setState({
         cableInProgress: {
           sourcePortId: portId,
           currentPoint: this.mouseWorldPos,
           bendPoints: [],
-          cableType: s.selectedCableType || 'general'
+          cableType: s.tool === 'power' ? 'power' : (s.selectedCableType || 'general')
         }
       });
     } else {
@@ -1437,18 +1488,24 @@ export class App {
       const isFiberPort = (type: string) => ['sfp', 'qsfp', 'lc', 'sc', 'fiber', 'optical'].some(t => type.toLowerCase().includes(t));
       const isPowerPortType = (type: string) => ['power', 'pwr', 'c13', 'c14', 'c19', 'c20', 'inlet', 'outlet', 'plug'].some(t => type.toLowerCase().includes(t));
 
+      // The floating toolbar's Power tool ("Draw Power Cable to PDU") is itself sufficient
+      // intent — it shouldn't also require the user to have separately right-clicked a port
+      // and chosen "Set as Power port" first. Without this, starting from the Power tool but
+      // clicking an ordinary (not pre-marked) device port fell through to a plain data cable.
+      const wasPowerTool = s.cableInProgress.cableType === 'power';
+
       // Check portTypes override for device ports
       const srcDevice = sourcePort ? stateManager.getDevice(sourcePort.deviceId) : null;
       const srcPortIdx = srcDevice ? srcDevice.ports.findIndex(p => p.id === sourcePortId) : -1;
       const isSrcPowerByType = srcDevice && srcPortIdx >= 0 && srcDevice.portTypes?.[srcPortIdx] === 'power';
       const isSrcPowerByPortName = sourcePort ? isPowerPortType(sourcePort.type) : false;
-      const isSrcPower = isSrcOutlet || isSrcPowerByType || isSrcPowerByPortName;
+      const isSrcPower = isSrcOutlet || isSrcPowerByType || isSrcPowerByPortName || wasPowerTool;
 
       const destDevice = destPort ? stateManager.getDevice(destPort.deviceId) : null;
       const destPortIdx = destDevice ? destDevice.ports.findIndex(p => p.id === portId) : -1;
       const isDestPowerByType = destDevice && destPortIdx >= 0 && destDevice.portTypes?.[destPortIdx] === 'power';
       const isDestPowerByPortName = destPort ? isPowerPortType(destPort.type) : false;
-      const isDestPower = isDestOutlet || isDestPowerByType || isDestPowerByPortName;
+      const isDestPower = isDestOutlet || isDestPowerByType || isDestPowerByPortName || wasPowerTool;
 
       // Validation: ear ports accept any cable; block fiber↔ethernet and power↔data mismatches
       const isSrcEar = sourcePortId.includes('-ear-');
@@ -2768,15 +2825,6 @@ export class App {
       }
     }
 
-    // Render dashboard widgets
-    try {
-      if (labelLayer && s.racks.length > 0 && s.showLegends) {
-        const firstRack = s.racks[0];
-        renderDashboardWidgets(firstRack, s.devices, s.cables, labelLayer);
-      }
-    } catch (err) {
-      console.error('renderAll: failed to render dashboard widgets — skipping', err);
-    }
   }
 
   /**
