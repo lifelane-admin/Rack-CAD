@@ -183,7 +183,7 @@ export interface CableData {
 }
 
 // === Application State ===
-export type ToolMode = 'select' | 'pan' | 'cable' | 'zoom-in' | 'zoom-out';
+export type ToolMode = 'select' | 'pan' | 'cable' | 'zoom-in' | 'zoom-out' | 'export-area';
 export type Theme = 'dark' | 'light';
 
 export type SelectableItem = 
@@ -279,7 +279,11 @@ export interface AppEvents {
   'export:png': void;
   'export:jpeg': void;
   'export:pdf': void;
+  'export:html': void;
   'export:json': void;
+  'export:request-area-selection': void;
+  'export:area-selected': { x: number; y: number; width: number; height: number };
+  'export:area-selection-cancelled': void;
   'cable:batch-generate': { deviceId: string; side: 'left' | 'right'; type: CableType; color: string; count: number };
   'project:save': void;
   'project:load': string;

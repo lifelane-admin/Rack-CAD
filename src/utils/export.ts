@@ -1,22 +1,28 @@
 import { eventBus } from '../core/event-bus';
 import { stateManager } from '../core/state';
 import { buildReport, ReportMetadata } from '../export/report-builder';
-import { DeviceTemplate } from '../core/types';
+import { DeviceTemplate, RACK_CONSTANTS } from '../core/types';
+import canvasCss from '../styles/canvas.css?raw';
+import reportsCss from '../styles/reports.css?raw';
 
 export interface ExportOptions {
-  area: 'full' | 'viewport' | 'rack';
+  area: 'full' | 'viewport' | 'rack' | 'custom';
   rackId?: string;
+  customRect?: { x: number; y: number; width: number; height: number };
   includeGrid?: boolean;
   scale?: number;
   pageSize?: 'letter' | 'a4' | 'a3' | 'tabloid';
   orientation?: 'landscape' | 'portrait';
 }
 
+/** Pending format-specific export awaiting a canvas area selection. */
+let pendingAreaExport: { onConfirm: (options: ExportOptions) => void; baseOptions: ExportOptions } | null = null;
+
 /**
  * Show modern export settings dialog modal.
  */
 export function showExportOptionsModal(
-  format: 'svg' | 'png' | 'jpeg' | 'pdf',
+  format: 'svg' | 'png' | 'jpeg' | 'pdf' | 'html',
   onConfirm: (options: ExportOptions) => void
 ) {
   const existing = document.getElementById('export-settings-modal');
@@ -63,6 +69,9 @@ export function showExportOptionsModal(
             <select id="export-rack-select" style="margin-left: 20px; padding: 5px 8px; background: #0d1117; border: 1px solid #30363d; color: #fff; border-radius: 4px; font-size: 12px; display: none;">
               ${racksList || '<option value="">No racks in design</option>'}
             </select>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+              <input type="radio" name="export-area" value="custom" /> 🖱️ Draw Custom Area on Canvas
+            </label>
           </div>
         </div>
 
@@ -164,6 +173,14 @@ export function showExportOptionsModal(
     }
 
     closeModal();
+
+    if (selectedArea === 'custom') {
+      pendingAreaExport = { onConfirm, baseOptions: options };
+      eventBus.emit('export:request-area-selection', undefined);
+      eventBus.emit('notification', { message: 'Drag a rectangle on the canvas to select the export area — Esc to cancel', type: 'info' });
+      return;
+    }
+
     onConfirm(options);
   });
 }
@@ -195,13 +212,16 @@ export function exportSVG(options?: ExportOptions): string {
   } else if (options && options.area === 'rack' && options.rackId) {
     const rack = stateManager.getRack(options.rackId);
     if (rack) {
-      const rackHeight = rack.units * 30 + 100;
+      const rackHeight = rack.units * RACK_CONSTANTS.RU_HEIGHT + RACK_CONSTANTS.RACK_PADDING_TOP + RACK_CONSTANTS.RACK_PADDING_BOTTOM;
       bbox.x = rack.x - 40;
       bbox.y = rack.y - 40;
-      bbox.width = 500 + 80;
+      bbox.width = RACK_CONSTANTS.RACK_OUTER_WIDTH + 80;
       bbox.height = rackHeight + 80;
       appliedBox = true;
     }
+  } else if (options && options.area === 'custom' && options.customRect) {
+    bbox = { ...options.customRect };
+    appliedBox = true;
   }
 
   if (!appliedBox && vpGroup) {
@@ -405,6 +425,32 @@ export function exportPDF(options?: ExportOptions): void {
 }
 
 /**
+ * Export the canvas as a standalone, self-contained animated HTML document.
+ * Reuses exportSVG's DOM-clone capture (not a re-render from state) so that
+ * live animation classes/inline styles (cable packet-flow, port glow pulses,
+ * switch LED blink) already present on the cloned nodes travel with it.
+ */
+export function exportHTML(options?: ExportOptions): string {
+  const svgContent = exportSVG(options);
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Rack Slicer — Animated Export</title>
+<style>
+${canvasCss}
+${reportsCss}
+body { margin: 0; background: #0d1117; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+svg { max-width: 100%; height: auto; }
+</style>
+</head>
+<body>
+${svgContent.replace(/<\?xml.*?\?>/, '')}
+</body>
+</html>`;
+}
+
+/**
  * Export the project as a JSON object.
  */
 export function exportJSON(): string {
@@ -520,6 +566,29 @@ export function initExportHandlers(): void {
         eventBus.emit('notification', { message: `PDF export failed: ${err}`, type: 'error' });
       }
     });
+  });
+
+  eventBus.on('export:html', () => {
+    showExportOptionsModal('html', (options) => {
+      try {
+        const html = exportHTML(options);
+        downloadFile(html, 'rack-slicer-animated.html', 'text/html');
+        eventBus.emit('notification', { message: 'Animated HTML exported successfully', type: 'success' });
+      } catch (err) {
+        eventBus.emit('notification', { message: `HTML export failed: ${err}`, type: 'error' });
+      }
+    });
+  });
+
+  eventBus.on('export:area-selected', (rect) => {
+    if (pendingAreaExport) {
+      pendingAreaExport.onConfirm({ ...pendingAreaExport.baseOptions, area: 'custom', customRect: rect });
+      pendingAreaExport = null;
+    }
+  });
+
+  eventBus.on('export:area-selection-cancelled', () => {
+    pendingAreaExport = null;
   });
 
   eventBus.on('export:json', () => {

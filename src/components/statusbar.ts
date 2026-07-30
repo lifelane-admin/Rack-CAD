@@ -84,7 +84,8 @@ export class StatusBar {
       'pan': '✋',
       'cable': '🔗',
       'zoom-in': '🔍+',
-      'zoom-out': '🔍-'
+      'zoom-out': '🔍-',
+      'export-area': '📐'
     };
 
     if (toolEl) {

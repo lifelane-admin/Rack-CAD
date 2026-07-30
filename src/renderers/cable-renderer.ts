@@ -255,11 +255,11 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   const dstCompact  = dstTpl?.category === 'switch';
 
   // Source connector
-  group.appendChild(createConnector(sourcePos, cable.color, srcOrient, isFiber, isPower, isSFP, srcCompact));
+  group.appendChild(createConnector(sourcePos, cable.color, srcOrient, isFiber, isPower, isSFP, srcCompact, cable.plugType));
 
   // Dest connector / draggable handle
   if (cable.destPortId) {
-    group.appendChild(createConnector(destPos, cable.color, destOrient, isFiber, isPower, isSFP, dstCompact));
+    group.appendChild(createConnector(destPos, cable.color, destOrient, isFiber, isPower, isSFP, dstCompact, cable.plugType));
   }
 
   // Render tip drag handles (both Source & Destination tip handles) when selected or floating
@@ -653,7 +653,7 @@ function createSFPConnector(pos: Point, color: string, orientation: 'up' | 'down
 /**
  * IEC C13/C14 & C19 Power Connector
  */
-function createPowerConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right'): SVGGElement {
+function createPowerConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right', plugType?: string): SVGGElement {
   const g = createGroup();
   let rot = 0;
   if (orientation === 'up') rot = 0;
@@ -662,26 +662,37 @@ function createPowerConnector(pos: Point, color: string, orientation: 'up' | 'do
   else if (orientation === 'left') rot = 90;
   setAttributes(g, { transform: `translate(${pos.x}, ${pos.y}) rotate(${rot}) scale(0.38) translate(-15, -10)` });
 
-  // Trapezoidal IEC body
-  const body = createRect(6, 10, 18, 20, {
-    fill: '#263238',
-    stroke: '#102027',
-    'stroke-width': 1.2,
-    rx: 2
-  });
-  g.appendChild(body);
+  const pt = (plugType ?? '').toUpperCase();
+  const isC19 = pt.includes('C19');
+  const isNEMA = pt.includes('NEMA') || pt.includes('IS') || pt.includes('BS') || pt.includes('SCHUKO');
 
-  // Pin Slots
-  const slotL = createRect(8, 14, 3, 6, { fill: '#000', rx: 0.5 });
-  const slotR = createRect(19, 14, 3, 6, { fill: '#000', rx: 0.5 });
-  const slotG = createRect(13.5, 20, 3, 6, { fill: '#000', rx: 0.5 });
-  g.appendChild(slotL);
-  g.appendChild(slotR);
-  g.appendChild(slotG);
+  // IEC body shape: C19 uses rect, C13/C14/C15 uses rect with cut corners, NEMA uses rounded
+  if (isC19) {
+    // C19 body — wider rect
+    g.appendChild(createRect(4, 8, 22, 22, { fill: '#1b2a32', stroke: '#0a1a22', 'stroke-width': 1.2, rx: 2 }));
+    // Horizontal slots (L, N, Earth)
+    g.appendChild(createRect(7,  15, 6, 2, { fill: '#000', rx: 0.4 }));
+    g.appendChild(createRect(17, 15, 6, 2, { fill: '#000', rx: 0.4 }));
+    g.appendChild(createRect(12, 22, 6, 2, { fill: '#000', rx: 0.4 }));
+  } else if (isNEMA) {
+    // NEMA/Schuko/BS — rounded rect
+    g.appendChild(createRect(5, 8, 20, 22, { fill: '#1b2a32', stroke: '#0a1a22', 'stroke-width': 1.2, rx: 6 }));
+    // Blade slots (vertical)
+    g.appendChild(createRect(8,  14, 3, 7, { fill: '#000', rx: 0.4 }));
+    g.appendChild(createRect(19, 14, 3, 7, { fill: '#000', rx: 0.4 }));
+    // Ground hole (center)
+    g.appendChild(createSVGEl('circle', { cx: 15, cy: 25, r: 2, fill: '#000' }));
+  } else {
+    // Default C13/C14/C15 — trapezoidal IEC body with vertical slots
+    g.appendChild(createRect(6, 10, 18, 20, { fill: '#1b2a32', stroke: '#0a1a22', 'stroke-width': 1.2, rx: 2 }));
+    // Vertical slots (L, N, Earth)
+    g.appendChild(createRect(8,   14, 3, 6, { fill: '#000', rx: 0.4 }));
+    g.appendChild(createRect(19,  14, 3, 6, { fill: '#000', rx: 0.4 }));
+    g.appendChild(createRect(13.5, 21, 3, 5, { fill: '#000', rx: 0.4 }));
+  }
 
-  // Rubber Boot
-  const boot = createRect(8, 30, 14, 16, { fill: color || '#212529', stroke: '#000', 'stroke-width': 0.8, rx: 2 });
-  g.appendChild(boot);
+  // Rubber boot / cable strain relief
+  g.appendChild(createRect(8, 30, 14, 14, { fill: color || '#212529', stroke: '#000', 'stroke-width': 0.8, rx: 2 }));
 
   return g;
 }
@@ -689,10 +700,10 @@ function createPowerConnector(pos: Point, color: string, orientation: 'up' | 'do
 /**
  * Route to correct connector renderer.
  */
-function createConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right', isFiber: boolean, isPower: boolean, isSFP: boolean, compact = false): SVGGElement {
+function createConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right', isFiber: boolean, isPower: boolean, isSFP: boolean, compact = false, plugType?: string): SVGGElement {
   if (isSFP) return createSFPConnector(pos, color, orientation);
   if (isFiber) return createFiberConnector(pos, color, orientation);
-  if (isPower) return createPowerConnector(pos, color, orientation);
+  if (isPower) return createPowerConnector(pos, color, orientation, plugType);
   return createEthernetConnector(pos, color, orientation, compact);
 }
 

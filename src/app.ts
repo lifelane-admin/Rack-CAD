@@ -95,6 +95,11 @@ export class App {
   private rubberBandStart: Point = { x: 0, y: 0 };
   private rubberBandEl: SVGRectElement | null = null;
 
+  private isDrawingExportArea = false;
+  private exportAreaStart: Point = { x: 0, y: 0 };
+  private exportAreaStartScreen: { x: number; y: number } = { x: 0, y: 0 };
+  private exportAreaEl: SVGRectElement | null = null;
+
   init() {
     // Initialize canvas
     this.canvas = new CanvasManager('canvas-viewport', 'canvas');
@@ -308,8 +313,20 @@ export class App {
   private setupToolbarBridge() {
     // Tool changes
     eventBus.on('tool:changed', (mode: ToolMode) => {
+      const prevTool = stateManager.getState().tool;
+      if (prevTool === 'export-area' && mode !== 'export-area' && this.isDrawingExportArea) {
+        this.exportAreaEl?.remove();
+        this.isDrawingExportArea = false;
+        this.exportAreaEl = null;
+        eventBus.emit('export:area-selection-cancelled', undefined);
+      }
       stateManager.setState({ tool: mode });
       this.updateCanvasCursor(mode);
+    });
+
+    // Export flow requests the user draw a custom area on the canvas
+    eventBus.on('export:request-area-selection', () => {
+      eventBus.emit('tool:changed', 'export-area');
     });
 
     // File operations
@@ -713,12 +730,46 @@ export class App {
         this.rubberBandEl.setAttribute('width', String(w));
         this.rubberBandEl.setAttribute('height', String(h));
       }
+
+      // Export-area rect update
+      if (this.isDrawingExportArea && this.exportAreaEl) {
+        const x = Math.min(this.mouseWorldPos.x, this.exportAreaStart.x);
+        const y = Math.min(this.mouseWorldPos.y, this.exportAreaStart.y);
+        const w = Math.abs(this.mouseWorldPos.x - this.exportAreaStart.x);
+        const h = Math.abs(this.mouseWorldPos.y - this.exportAreaStart.y);
+        this.exportAreaEl.setAttribute('x', String(x));
+        this.exportAreaEl.setAttribute('y', String(y));
+        this.exportAreaEl.setAttribute('width', String(w));
+        this.exportAreaEl.setAttribute('height', String(h));
+      }
     });
 
     svgEl.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       const target = e.target as SVGElement;
       const s = stateManager.getState();
+
+      // Export-area drawing takes absolute priority — no hit-testing against
+      // cables/devices/racks while picking an export rectangle.
+      if (s.tool === 'export-area') {
+        this.exportAreaStart = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+        this.exportAreaStartScreen = { x: e.clientX, y: e.clientY };
+        const layer = this.canvas.getLayer('interaction-layer');
+        if (layer) {
+          const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          rect.id = 'export-area-rect';
+          rect.setAttribute('fill', 'rgba(251,140,0,0.08)');
+          rect.setAttribute('stroke', '#fb8c00');
+          rect.setAttribute('stroke-width', '1');
+          rect.setAttribute('stroke-dasharray', '4,2');
+          rect.setAttribute('pointer-events', 'none');
+          layer.appendChild(rect);
+          this.exportAreaEl = rect;
+          this.isDrawingExportArea = true;
+        }
+        e.stopPropagation();
+        return;
+      }
 
       // Check for anchor handle drag first (before cable-end handle)
       const anchorEl = target.closest('.cable-anchor-handle') as SVGElement;
@@ -1139,6 +1190,28 @@ export class App {
         const newSelection = e.shiftKey ? [...state.selection, ...deduped] : selected;
         stateManager.setState({ selection: newSelection });
         eventBus.emit('selection:changed', newSelection);
+      }
+
+      // 5. Export-area drawing completion
+      if (this.isDrawingExportArea) {
+        this.isDrawingExportArea = false;
+        this.exportAreaEl?.remove();
+        this.exportAreaEl = null;
+
+        const worldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+        const selX = Math.min(worldPos.x, this.exportAreaStart.x);
+        const selY = Math.min(worldPos.y, this.exportAreaStart.y);
+        const selW = Math.abs(worldPos.x - this.exportAreaStart.x);
+        const selH = Math.abs(worldPos.y - this.exportAreaStart.y);
+
+        const screenDx = Math.abs(e.clientX - this.exportAreaStartScreen.x);
+        const screenDy = Math.abs(e.clientY - this.exportAreaStartScreen.y);
+        const draggedEnough = screenDx > 4 || screenDy > 4;
+
+        eventBus.emit('tool:changed', 'select');
+        if (draggedEnough) {
+          eventBus.emit('export:area-selected', { x: selX, y: selY, width: selW, height: selH });
+        }
       }
     });
 
@@ -1830,12 +1903,15 @@ export class App {
         eventBus.emit('export:json', undefined as any);
       }
 
-      // Escape = Deselect / Cancel cable / Cancel rubber-band
+      // Escape = Deselect / Cancel cable / Cancel rubber-band / Cancel export-area draw
       if (e.key === 'Escape') {
         if (this.isRubberBanding) {
           this.isRubberBanding = false;
           this.rubberBandEl?.remove();
           this.rubberBandEl = null;
+        }
+        if (stateManager.getState().tool === 'export-area') {
+          eventBus.emit('tool:changed', 'select');
         }
         resetPreviewDirection();
         stateManager.setState({ selection: [], cableInProgress: null });
@@ -2637,7 +2713,8 @@ export class App {
       'pan': 'grab',
       'cable': 'crosshair',
       'zoom-in': 'zoom-in',
-      'zoom-out': 'zoom-out'
+      'zoom-out': 'zoom-out',
+      'export-area': 'crosshair'
     };
     viewport.style.cursor = cursorMap[mode] || 'default';
   }
