@@ -7,7 +7,6 @@ const RW = 1240;
 const MIN_BLADE_W = 34;
 const EAR_W = 26;
 const PANEL_PAD = 22;
-const CONSOLE_W = 250;
 const RJ_W = 30;
 const RJ_H = 40;
 const RJ_COL_GAP = 4;
@@ -18,11 +17,23 @@ const SFP_H = 42.5;
 const SFP_GAP_X = 9;
 const SECTION_GAP = 26;
 const CPB = 4;
+// Branding/identity block is a fixed ~20% of the ports area's width (25% of the ports width,
+// since 20/80 as a ratio of the total is 0.25 of the ports side) instead of a flat 250px
+// constant — a flat console block next to a small (e.g. 8-port) switch's ports row was 40%+ of
+// the panel. Clamped so the block never gets too narrow for the brand text to stay legible.
+const MIN_CONSOLE_W = 170, MAX_CONSOLE_W = 250;
+// Below this width the USB-C + console jack + reset button cluster would crowd the brand text.
+const CONSOLE_ICONS_MIN_W = 195;
 
-export function switchPorts(
-  rj45: number, sfp: number, rows: number, idPfx: string,
-): DeviceTemplate['ports'] {
-  const W = 350, H = 30;
+interface SwitchLayout {
+  totRjW: number; sfpRowW: number; consoleW: number; showConsoleIcons: boolean;
+  chassisW: number; bladeW: number; totW: number;
+  rjX: number; sfpX: number; rjTop: number; sfpTop: number; blkW: number;
+}
+
+/** Single source of truth for switchPorts() (catalog port positions) and renderSwitchPanel()
+ *  (actual drawing) — computed once so the two can never drift out of sync. */
+function computeSwitchLayout(rj45: number, sfp: number, rows: number): SwitchLayout {
   const units = rows === 1 ? rj45 : Math.ceil(rj45 / 2);
   const blks = units > 0 ? Math.ceil(units / CPB) : 0;
   const blkW = CPB * RJ_W + (CPB - 1) * RJ_COL_GAP;
@@ -31,18 +42,32 @@ export function switchPorts(
     : 0;
   totRjW = Math.max(0, totRjW);
   const sfpRowW = sfp > 0 ? sfp * SFP_W + (sfp - 1) * SFP_GAP_X : 0;
-  const chassisW = EAR_W * 2 + PANEL_PAD * 2 + CONSOLE_W + SECTION_GAP + totRjW +
-    (sfp > 0 ? SECTION_GAP + sfpRowW : 0);
+  const portsRowW = totRjW + (sfp > 0 ? SECTION_GAP + sfpRowW : 0);
+
+  const consoleW = Math.max(MIN_CONSOLE_W, Math.min(portsRowW * 0.25, MAX_CONSOLE_W));
+  const showConsoleIcons = consoleW >= CONSOLE_ICONS_MIN_W;
+
+  const chassisW = EAR_W * 2 + PANEL_PAD * 2 + consoleW + SECTION_GAP + portsRowW;
   let bladeW = (RW - chassisW) / 2;
   let totW = RW;
   if (bladeW < MIN_BLADE_W) { bladeW = MIN_BLADE_W; totW = chassisW + bladeW * 2; }
 
-  const sx = W / totW;
-  const sy = H / U1;
-  const rjX = bladeW + EAR_W + PANEL_PAD + CONSOLE_W + SECTION_GAP;
+  const rjX = bladeW + EAR_W + PANEL_PAD + consoleW + SECTION_GAP;
   const sfpX = rjX + totRjW + (sfp > 0 ? SECTION_GAP : 0);
   const rjTop = (U1 - (rows === 1 ? RJ_H : RJ_H * 2 + RJ_ROW_GAP)) / 2;
   const sfpTop = (U1 - SFP_H) / 2;
+
+  return { totRjW, sfpRowW, consoleW, showConsoleIcons, chassisW, bladeW, totW, rjX, sfpX, rjTop, sfpTop, blkW };
+}
+
+export function switchPorts(
+  rj45: number, sfp: number, rows: number, idPfx: string,
+): DeviceTemplate['ports'] {
+  const W = 350, H = 30;
+  const { blkW, totW, rjX, sfpX, rjTop, sfpTop } = computeSwitchLayout(rj45, sfp, rows);
+
+  const sx = W / totW;
+  const sy = H / U1;
 
   type PortEntry = Omit<PortData, 'deviceId' | 'connected' | 'cableId'>;
   const out: PortEntry[] = [];
@@ -119,28 +144,11 @@ export function renderSwitchPanel(
   const model = template?.model ?? 'RS-2400M';
   const rjRows = rj45Count <= 8 ? 1 : 2;
 
-  const units = rjRows === 1 ? rj45Count : Math.ceil(rj45Count / 2);
-  const blks = units > 0 ? Math.ceil(units / CPB) : 0;
-  const blkW = CPB * RJ_W + (CPB - 1) * RJ_COL_GAP;
-  let totRjW = units > 0
-    ? blks * blkW + (blks - 1) * BLOCK_GAP - (blks * CPB - units) * (RJ_W + RJ_COL_GAP)
-    : 0;
-  totRjW = Math.max(0, totRjW);
-
-  const sfpRowW = sfpCount > 0 ? sfpCount * SFP_W + (sfpCount - 1) * SFP_GAP_X : 0;
-  const chassisW = EAR_W * 2 + PANEL_PAD * 2 + CONSOLE_W + SECTION_GAP + totRjW +
-    (sfpCount > 0 ? SECTION_GAP + sfpRowW : 0);
-
-  let bladeW = (RW - chassisW) / 2;
-  let totW = RW;
-  if (bladeW < MIN_BLADE_W) { bladeW = MIN_BLADE_W; totW = chassisW + bladeW * 2; }
+  const { blkW, consoleW, showConsoleIcons, chassisW, bladeW, totW, rjX, sfpX, rjTop, sfpTop } =
+    computeSwitchLayout(rj45Count, sfpCount, rjRows);
 
   const chassisX = bladeW;
   const consX = bladeW + EAR_W + PANEL_PAD;
-  const rjX = consX + CONSOLE_W + SECTION_GAP;
-  const sfpX = rjX + totRjW + (sfpCount > 0 ? SECTION_GAP : 0);
-  const rjTop = (U1 - (rjRows === 1 ? RJ_H : RJ_H * 2 + RJ_ROW_GAP)) / 2;
-  const sfpTop = (U1 - SFP_H) / 2;
 
   function rjPos(n: number) {
     if (rjRows === 1) {
@@ -335,35 +343,46 @@ export function renderSwitchPanel(
     t.textContent = lbl; con.appendChild(t);
   }
 
-  const tw = el('text', { x: 62, y: cy - 12, 'font-size': 17, 'font-weight': 700, fill: '#37b6ff', 'letter-spacing': 1.5 });
+  // Text column shrinks to fit whatever width is left of the LED column instead of assuming a
+  // fixed 112px+ — a narrow (small port-count) console block would otherwise overflow past its
+  // own right edge into the ports area.
+  const textAvailW = Math.max(consoleW - 62 - 6, 40);
+  const brandFontSize = Math.max(10, Math.min(17, textAvailW / (11 * 0.62)));
+  const tw = el('text', { x: 62, y: cy - 12, 'font-size': brandFontSize, 'font-weight': 700, fill: '#37b6ff', 'letter-spacing': 1.5 });
   tw.textContent = 'RACK SLICER'; con.appendChild(tw);
+  const modelMaxChars = Math.max(4, Math.floor(textAvailW / (9 * 0.58)));
   const tm = el('text', { x: 62, y: cy + 5, 'font-size': 9, fill: '#8b939a', 'letter-spacing': 1.2 });
-  tm.textContent = model; con.appendChild(tm);
-  con.appendChild(el('rect', { x: 62, y: cy + 12, width: 112, height: 1, fill: '#3a4147' }));
+  tm.textContent = model.length > modelMaxChars ? model.slice(0, modelMaxChars - 1) + '…' : model;
+  con.appendChild(tm);
+  con.appendChild(el('rect', { x: 62, y: cy + 12, width: textAvailW, height: 1, fill: '#3a4147' }));
   const tp = el('text', { x: 62, y: cy + 25, 'font-size': 7, fill: '#5b636a', 'letter-spacing': 1.2 });
   tp.textContent = `${rj45Count ? rj45Count + '× RJ45' : ''}${sfpCount ? (rj45Count ? ' + ' : '') + sfpCount + '× SFP' : ''} • 1U`;
   con.appendChild(tp);
 
-  const usbG = g(); usbG.setAttribute('transform', `translate(${CONSOLE_W - 110} ${cy + 6})`);
-  usbG.appendChild(el('rect', { x: 0, y: 0, width: 24, height: 9, rx: 4.5, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.8 }));
-  usbG.appendChild(el('rect', { x: 3, y: 2.9, width: 18, height: 3.2, rx: 1.6, fill: '#2a3036' }));
-  const usbT = el('text', { x: 12, y: 18, 'font-size': 6, 'text-anchor': 'middle', fill: '#7b838a', 'letter-spacing': 0.6 });
-  usbT.textContent = 'USB-C'; usbG.appendChild(usbT); con.appendChild(usbG);
+  // USB-C + console jack + reset button — dropped entirely below CONSOLE_ICONS_MIN_W rather
+  // than overlapping the brand text, matching how the PDU rail drops its own extras when tight.
+  if (showConsoleIcons) {
+    const usbG = g(); usbG.setAttribute('transform', `translate(${consoleW - 110} ${cy + 6})`);
+    usbG.appendChild(el('rect', { x: 0, y: 0, width: 24, height: 9, rx: 4.5, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.8 }));
+    usbG.appendChild(el('rect', { x: 3, y: 2.9, width: 18, height: 3.2, rx: 1.6, fill: '#2a3036' }));
+    const usbT = el('text', { x: 12, y: 18, 'font-size': 6, 'text-anchor': 'middle', fill: '#7b838a', 'letter-spacing': 0.6 });
+    usbT.textContent = 'USB-C'; usbG.appendChild(usbT); con.appendChild(usbG);
 
-  const rjCG = g(); rjCG.setAttribute('transform', `translate(${CONSOLE_W - 72} ${cy + 4})`);
-  rjCG.appendChild(el('rect', { x: 0, y: 0, width: 26, height: 18, rx: 1.6, fill: `url(#cage-${uid})`, stroke: '#05070a', 'stroke-width': 0.9 }));
-  const rjCI = el('rect', { x: 2, y: 2, width: 22, height: 14, rx: 1, fill: `url(#cageInner-${uid})` });
-  rjCI.setAttribute('filter', `url(#innerShadow-${uid})`); rjCG.appendChild(rjCI);
-  rjCG.appendChild(el('path', { d: 'M9 2 h8 v4 h-2 v-2 h-4 v2 h-2 z', fill: '#04060a' }));
-  for (let i = 0; i < 8; i++) rjCG.appendChild(el('rect', { x: 4 + i * 2.3, y: 4.5, width: 1.3, height: 4, fill: '#c9a24b', opacity: 0.8 }));
-  const rjCT = el('text', { x: 13, y: 26, 'font-size': 6.5, 'text-anchor': 'middle', fill: '#7b838a', 'letter-spacing': 0.6 });
-  rjCT.textContent = 'CONSOLE'; rjCG.appendChild(rjCT); con.appendChild(rjCG);
+    const rjCG = g(); rjCG.setAttribute('transform', `translate(${consoleW - 72} ${cy + 4})`);
+    rjCG.appendChild(el('rect', { x: 0, y: 0, width: 26, height: 18, rx: 1.6, fill: `url(#cage-${uid})`, stroke: '#05070a', 'stroke-width': 0.9 }));
+    const rjCI = el('rect', { x: 2, y: 2, width: 22, height: 14, rx: 1, fill: `url(#cageInner-${uid})` });
+    rjCI.setAttribute('filter', `url(#innerShadow-${uid})`); rjCG.appendChild(rjCI);
+    rjCG.appendChild(el('path', { d: 'M9 2 h8 v4 h-2 v-2 h-4 v2 h-2 z', fill: '#04060a' }));
+    for (let i = 0; i < 8; i++) rjCG.appendChild(el('rect', { x: 4 + i * 2.3, y: 4.5, width: 1.3, height: 4, fill: '#c9a24b', opacity: 0.8 }));
+    const rjCT = el('text', { x: 13, y: 26, 'font-size': 6.5, 'text-anchor': 'middle', fill: '#7b838a', 'letter-spacing': 0.6 });
+    rjCT.textContent = 'CONSOLE'; rjCG.appendChild(rjCT); con.appendChild(rjCG);
 
-  const rstG = g(); rstG.setAttribute('transform', `translate(${CONSOLE_W - 22} ${cy + 11})`);
-  rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 3.4, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.8 }));
-  rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 1.1, fill: '#02040a' }));
-  const rstT = el('text', { x: 0, y: 14, 'font-size': 6, 'text-anchor': 'middle', fill: '#7b838a', 'letter-spacing': 0.6 });
-  rstT.textContent = 'RST'; rstG.appendChild(rstT); con.appendChild(rstG);
+    const rstG = g(); rstG.setAttribute('transform', `translate(${consoleW - 22} ${cy + 11})`);
+    rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 3.4, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.8 }));
+    rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 1.1, fill: '#02040a' }));
+    const rstT = el('text', { x: 0, y: 14, 'font-size': 6, 'text-anchor': 'middle', fill: '#7b838a', 'letter-spacing': 0.6 });
+    rstT.textContent = 'RST'; rstG.appendChild(rstT); con.appendChild(rstG);
+  }
 
   ns.appendChild(con);
 

@@ -1,8 +1,14 @@
-import { AppState, RackData, DeviceData, PortData, CableData, CableType, SelectableItem, Transform, RACK_CONSTANTS, CableBundle, ValidationAlert } from './types';
+import { AppState, RackData, DeviceData, PortData, CableData, CableType, SelectableItem, Transform, RACK_CONSTANTS, CableBundle, ValidationAlert, PduConfig, KvmConfig, DeviceTemplate } from './types';
 import { eventBus } from './event-bus';
 import { getTemplate } from '../library/device-catalog';
 import { runValidationAlerts } from './validation';
 import { loadCustomTemplates, saveAllCustomTemplates } from '../library/custom-catalog';
+import { computeConfiguredPduLayout, computeGenericPduLayout, computeSidePduOutletPositions, sidePduOffsetX, normalizeComposition } from '../renderers/pdu-layout';
+import { networkingPorts } from '../renderers/networking-renderer';
+
+function asPduConfig(config: unknown): PduConfig {
+  return (config && typeof config === 'object') ? (config as PduConfig) : {};
+}
 
 class StateManager {
   private state: AppState;
@@ -78,6 +84,8 @@ class StateManager {
         managementIp: ip,
         serialNumber: serial,
         description: desc,
+        // Strip any "ear hole" ports — injectEarPorts() regenerates the full PSU/network/hybrid
+        // sequence separately as one evenly-spaced grid (see injectEarPorts in this file).
         ports: tmpl.ports.filter(p => !p.id.includes('-ear-')).map((p, i) => ({ ...p, id: `${id}-port-${i}`, deviceId: id, connected: false, cableId: null })),
       };
     };
@@ -142,9 +150,10 @@ class StateManager {
     return devices.map(d => {
       const template = getTemplate(d.templateId);
       if (!template) return d;
+      const withLocalPorts = injectNetworkLocalPorts(d.id, template, d.deviceConfig, d.ports);
       return {
         ...d,
-        ports: injectEarPorts(d.id, template.category, template.heightUnits, d.ports)
+        ports: injectEarPorts(d.id, template.category, template.heightUnits, withLocalPorts)
       };
     });
   }
@@ -319,10 +328,76 @@ class StateManager {
     return this.state.devices.filter(d => d.rackId === rackId);
   }
 
+  /**
+   * Every synthetic `outlet-<deviceId>-<idx>` port id across every PDU currently in the design
+   * (both horizontal and vertical). PDU outlets aren't in any device's `ports` array, so proximity
+   * "snap to nearest port" logic (app.ts's cable-drawing click handler) must consult this
+   * separately or it can never snap to a PDU outlet, only exact `.pdu-outlet-hit` hits.
+   */
+  getAllPduOutletPortIds(): string[] {
+    const ids: string[] = [];
+    for (const device of this.state.devices) {
+      const template = getTemplate(device.templateId);
+      if (!template || template.category !== 'pdu') continue;
+      const config = asPduConfig(device.deviceConfig);
+      const composition = normalizeComposition(config, template.outletConfig);
+      const count = composition.reduce((sum, r) => sum + r.count, 0);
+      for (let i = 0; i < count; i++) ids.push(`outlet-${device.id}-${i}`);
+    }
+    return ids;
+  }
+
+  /**
+   * PDU outlets aren't real PortData entries — they're referenced by the convention
+   * `outlet-<pduDeviceId>-<outletIdx>` (see app.ts's `.pdu-outlet-hit` cable hit-testing).
+   * Resolve that convention here so power cables to either a horizontal (rack-mounted) or
+   * vertical (0U side-mount) PDU's outlets get a real world position instead of silently
+   * failing to render.
+   */
+  private getPduOutletWorldPosition(pduDeviceId: string, outletIdx: number): { x: number; y: number } | null {
+    const device = this.state.devices.find(d => d.id === pduDeviceId);
+    if (!device) return null;
+    const template = getTemplate(device.templateId);
+    if (!template) return null;
+    const rack = this.getRack(device.rackId);
+    if (!rack) return null;
+    const config = asPduConfig(device.deviceConfig);
+
+    if (device.sideMountPosition) {
+      const pduWidth = template.pduWidth ?? 0;
+      const stripH = rack.units * RACK_CONSTANTS.RU_HEIGHT;
+      const positions = computeSidePduOutletPositions(template, config, pduWidth, stripH);
+      const local = positions[outletIdx];
+      if (!local) return null;
+      const baseX = sidePduOffsetX(rack, device.sideMountPosition, pduWidth);
+      return { x: rack.x + baseX + local.x, y: rack.y + RACK_CONSTANTS.RACK_PADDING_TOP + local.y };
+    }
+
+    const heightUnits = template.heightUnits ?? 1;
+    const deviceWidth = RACK_CONSTANTS.RACK_INNER_WIDTH - 2 * RACK_CONSTANTS.RAIL_WIDTH;
+    const deviceHeight = heightUnits * RACK_CONSTANTS.RU_HEIGHT;
+    const innerX = (RACK_CONSTANTS.RACK_OUTER_WIDTH - RACK_CONSTANTS.RACK_INNER_WIDTH) / 2;
+    const deviceX = rack.x + innerX + RACK_CONSTANTS.RAIL_WIDTH;
+    const deviceY = rack.y + RACK_CONSTANTS.RACK_PADDING_TOP + (rack.units - device.startUnit - heightUnits + 1) * RACK_CONSTANTS.RU_HEIGHT;
+
+    const hasComposition = !!config.composition || !!(device.deviceConfig as any)?.rows;
+    const layout = hasComposition
+      ? computeConfiguredPduLayout(template, config, deviceWidth, deviceHeight)
+      : computeGenericPduLayout(template, config, deviceWidth, deviceHeight);
+    const local = layout.positions[outletIdx];
+    if (!local) return null;
+    return { x: deviceX + local.x, y: deviceY + local.y };
+  }
+
   getPortWorldPosition(portId: string): { x: number; y: number } | null {
+    const outletMatch = /^outlet-(.+)-(\d+)$/.exec(portId);
+    if (outletMatch) {
+      return this.getPduOutletWorldPosition(outletMatch[1], Number(outletMatch[2]));
+    }
+
     let targetPort: PortData | null = null;
     let targetDevice: DeviceData | null = null;
-    
+
     for (const device of this.state.devices) {
       const port = device.ports.find(p => p.id === portId);
       if (port) {
@@ -431,30 +506,80 @@ class StateManager {
   }
 }
 
+/**
+ * Regenerates a KVM or plain console-server device's customizable local-peripheral port group
+ * (see KvmConfig) from its live `deviceConfig`, leaving the target group (real connections out
+ * to managed servers/serial devices — labeled 'TARGETS' for KVM, 'SERIAL' for console servers)
+ * and any ear-hole ports untouched. Runs on every setState({devices}) via prepareDevices,
+ * exactly like injectEarPorts, so toggling a chip in the properties panel immediately
+ * regenerates the device's actual connectable ports — not just the cosmetic SVG.
+ */
+export function injectNetworkLocalPorts(deviceId: string, template: DeviceTemplate, deviceConfig: unknown, basePorts: PortData[]): PortData[] {
+  const isKvm = template.category === 'console' && template.id.startsWith('kvm');
+  const isConsoleServer = template.category === 'console' && !isKvm;
+  if (!isKvm && !isConsoleServer) return basePorts;
+
+  const netKind = isKvm ? 'kvm' : 'console';
+  const targetLabel = isKvm ? 'TARGETS' : 'SERIAL';
+
+  const earPorts = basePorts.filter(p => p.id.includes('-ear-'));
+  const targetPorts = basePorts.filter(p => p.group === targetLabel && !p.id.includes('-ear-'));
+  const oldLocalPorts = basePorts.filter(p => p.group !== targetLabel && !p.id.includes('-ear-'));
+  const targetsCount = targetPorts.length || template.ports.filter(p => p.group === targetLabel).length || 8;
+
+  const cfg = (deviceConfig && typeof deviceConfig === 'object') ? (deviceConfig as KvmConfig) : undefined;
+  const freshLocal = networkingPorts(netKind, targetsCount, `${deviceId}-local-`, undefined, cfg)
+    .filter(p => p.group !== targetLabel);
+
+  const mergedLocal: PortData[] = freshLocal.map(p => {
+    const existing = oldLocalPorts.find(op => op.id === p.id);
+    return { ...p, deviceId, connected: existing?.connected ?? false, cableId: existing?.cableId ?? null };
+  });
+
+  return [...targetPorts, ...mergedLocal, ...earPorts];
+}
+
 const EAR_HOLE_CATEGORIES = new Set(['server', 'switch', 'router', 'firewall', 'ups', 'storage', 'console']);
+
+// Standard ear-hole count per side for common chassis heights (4 for 1U, 6 for 2U, 8 for 4U) —
+// not a simple heightUnits*2 scaling; heights outside this table fall back to that formula.
+const STANDARD_EAR_HOLE_COUNTS: Record<number, number> = { 1: 4, 2: 6, 4: 8 };
 
 export function injectEarPorts(deviceId: string, category: string, heightUnits: number, basePorts: PortData[]): PortData[] {
   if (!EAR_HOLE_CATEGORIES.has(category)) return basePorts;
 
-  // Prevent duplicate injection
+  // Every ear-hole port (network + hybrid) is regenerated here as one single evenly-spaced
+  // sequence, never defined in device-catalog.ts.
   const filtered = basePorts.filter(p => !p.id.includes('-ear-'));
 
-  const height = heightUnits * RACK_CONSTANTS.RU_HEIGHT;
   const leftX = -12.5;
   const rightX = 350 + 12.5;
 
   const earPorts: PortData[] = [];
-  const numHoles = heightUnits * 2;
-  const dy = height / (numHoles + 1);
+  const numHoles = STANDARD_EAR_HOLE_COUNTS[heightUnits] ?? heightUnits * 2;
+  // Pitch is however much vertical space each hole gets when the device's own height is
+  // divided evenly into `numHoles` slots — it must scale with both height AND hole count (a
+  // fixed 15px pitch, correct for the old "2 holes per U" rule, would push a 1U's now-4 holes
+  // to y=52.5 — 22.5px past the bottom of a 30px-tall 1U panel). Left unrounded (SVG doesn't
+  // need integer coordinates) so every gap is exactly equal, not just approximately equal via
+  // independently-rounded positions.
+  const height = heightUnits * RACK_CONSTANTS.RU_HEIGHT;
+  const pitch = height / numHoles;
 
   for (let i = 1; i <= numHoles; i++) {
-    const yVal = Math.round(i * dy);
+    const yVal = (i - 0.5) * pitch;
+    // Every hole looks and behaves the same (plain network jack) except the very last one,
+    // which is the Hybrid port (same footprint, rendered as a distinct purple rounded-square
+    // in port-renderer.ts) — no separate PSU/power hole or special coloring.
+    const isLast = i === numHoles;
+    const portType = isLast ? 'hybrid' : 'rj45';
+    const label = isLast ? 'Hybrid' : 'RJ45';
     // Left ear port
     earPorts.push({
       id: `${deviceId}-ear-left-nic${i}`,
       deviceId,
-      name: `${deviceId} Left Ear Network ${i} (RJ45)`,
-      type: 'rj45',
+      name: `${deviceId} Left Ear ${isLast ? 'Hybrid' : 'Network'} ${i} (${label})`,
+      type: portType,
       relativeX: leftX,
       relativeY: yVal,
       connected: false,
@@ -464,8 +589,8 @@ export function injectEarPorts(deviceId: string, category: string, heightUnits: 
     earPorts.push({
       id: `${deviceId}-ear-right-nic${i}`,
       deviceId,
-      name: `${deviceId} Right Ear Network ${i} (RJ45)`,
-      type: 'rj45',
+      name: `${deviceId} Right Ear ${isLast ? 'Hybrid' : 'Network'} ${i} (${label})`,
+      type: portType,
       relativeX: rightX,
       relativeY: yVal,
       connected: false,

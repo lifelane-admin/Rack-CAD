@@ -17,8 +17,6 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '🖥️',
     powerWatts: 200,
     ports: [
-      { id: 's1u-ear-psu1', name: 'PSU 1', type: 'power' as const, relativeX: -12, relativeY: 15 },
-      { id: 's1u-ear-psu2', name: 'PSU 2', type: 'power' as const, relativeX: 362, relativeY: 15 },
       { id: 's1u-nic1', name: 'NIC 1', type: 'rj45', relativeX: 320, relativeY: 8, speed: '1 Gbps' },
       { id: 's1u-nic2', name: 'NIC 2', type: 'rj45', relativeX: 332, relativeY: 8, speed: '1 Gbps' },
       { id: 's1u-mgmt', name: 'MGMT', type: 'management', relativeX: 344, relativeY: 8, speed: '1 Gbps' },
@@ -35,8 +33,6 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '🖥️',
     powerWatts: 350,
     ports: [
-      { id: 's2u-ear-psu1', name: 'PSU 1', type: 'power' as const, relativeX: -12, relativeY: 30 },
-      { id: 's2u-ear-psu2', name: 'PSU 2', type: 'power' as const, relativeX: 362, relativeY: 30 },
       { id: 's2u-nic1', name: 'NIC 1', type: 'rj45', relativeX: 320, relativeY: 15, speed: '1 Gbps' },
       { id: 's2u-nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 332, relativeY: 15, speed: '10 Gbps' },
       { id: 's2u-nic3', name: 'NIC 3', type: 'sfp-plus', relativeX: 332, relativeY: 27, speed: '10 Gbps' },
@@ -55,8 +51,6 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '🖥️',
     powerWatts: 350,
     ports: [
-      { id: 's2uhd-ear-psu1', name: 'PSU 1', type: 'power' as const, relativeX: -12, relativeY: 30 },
-      { id: 's2uhd-ear-psu2', name: 'PSU 2', type: 'power' as const, relativeX: 362, relativeY: 30 },
       { id: 's2uhd-nic1', name: 'NIC 1', type: 'sfp-plus', relativeX: 315, relativeY: 10, speed: '10 Gbps' },
       { id: 's2uhd-nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 327, relativeY: 10, speed: '10 Gbps' },
       { id: 's2uhd-nic3', name: 'NIC 3', type: 'sfp-plus', relativeX: 315, relativeY: 25, speed: '10 Gbps' },
@@ -76,8 +70,6 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '🖥️',
     powerWatts: 600,
     ports: [
-      { id: 's4u-ear-psu1', name: 'PSU 1', type: 'power' as const, relativeX: -12, relativeY: 60 },
-      { id: 's4u-ear-psu2', name: 'PSU 2', type: 'power' as const, relativeX: 362, relativeY: 60 },
       { id: 's4u-nic1', name: 'NIC 1', type: 'rj45', relativeX: 315, relativeY: 20, speed: '1 Gbps' },
       { id: 's4u-nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 327, relativeY: 20, speed: '10 Gbps' },
       { id: 's4u-nic3', name: 'NIC 3', type: 'sfp-plus', relativeX: 315, relativeY: 40, speed: '10 Gbps' },
@@ -96,8 +88,6 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '🖥️',
     powerWatts: 200,
     ports: [
-      { id: 'stow-ear-psu1', name: 'PSU 1', type: 'power' as const, relativeX: -12, relativeY: 60 },
-      { id: 'stow-ear-psu2', name: 'PSU 2', type: 'power' as const, relativeX: 362, relativeY: 60 },
       { id: 'stow-nic1', name: 'NIC 1', type: 'rj45', relativeX: 315, relativeY: 25, speed: '1 Gbps' },
       { id: 'stow-nic2', name: 'NIC 2', type: 'rj45', relativeX: 327, relativeY: 25, speed: '1 Gbps' },
       { id: 'stow-mgmt', name: 'MGMT', type: 'management', relativeX: 339, relativeY: 25, speed: '1 Gbps' },
@@ -766,6 +756,18 @@ export const deviceCatalog: DeviceTemplate[] = [
 
   // ─── KVM / CONSOLE ──────────────────────────────────────────────────────────
   {
+    id: 'kvm-4p',
+    name: 'KVM Switch 4-Port',
+    manufacturer: '',
+    model: 'KVM Switch 4-Port',
+    category: 'console',
+    heightUnits: 1,
+    color: '#2e2828',
+    icon: '📟',
+    powerWatts: 15,
+    ports: networkingPorts('kvm', 4, 'kvm4-'),
+  },
+  {
     id: 'kvm-8p',
     name: 'KVM Switch 8-Port',
     manufacturer: '',
@@ -788,6 +790,18 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '📟',
     powerWatts: 18,
     ports: networkingPorts('kvm', 16, 'kvm16-'),
+  },
+  {
+    id: 'console-4p',
+    name: 'Console Server 4-Port',
+    manufacturer: '',
+    model: 'Console Server 4-Port',
+    category: 'console',
+    heightUnits: 1,
+    color: '#2e2828',
+    icon: '📟',
+    powerWatts: 12,
+    ports: networkingPorts('console', 4, 'cs4-'),
   },
   {
     id: 'console-8p',

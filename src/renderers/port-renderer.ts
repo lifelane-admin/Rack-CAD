@@ -70,13 +70,17 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
   const isEarPort = port.id.includes('-ear-');
   if (isEarPort) {
     const isPower = port.type === 'power';
+    const isHybrid = port.type === 'hybrid';
     // ── Ear ports use a smaller radius to match network-switch port scale ──
-    // Previous: radius = 2.5 (too large). Now: 1.8 for network, 2.2 for power.
+    // Previous: radius = 2.5 (too large). Now: 1.8 for network/hybrid, 2.2 for power.
+    // Hybrid keeps the exact same footprint as a regular network hole — only its shape
+    // (rounded square instead of circle) and color (purple) differ, so it reads as a
+    // distinct port type without disrupting the row's spacing or size.
     const radius = isPower ? 2.2 : 1.8;
     const bezelRadius = radius + 1.0;
 
-    let fill       = isConnected ? (isPower ? '#e53935' : '#00e676') : '#0d0d10';
-    let strokeColor = isConnected ? (isPower ? '#ff5252' : '#00e676') : '#3a3a42';
+    let fill        = isConnected ? (isPower ? '#e53935' : isHybrid ? '#c837ff' : '#00e676') : '#0d0d10';
+    let strokeColor = isConnected ? (isPower ? '#ff5252' : isHybrid ? '#e0a3ff' : '#00e676') : (isHybrid ? '#7b4a94' : '#3a3a42');
 
     // Neon glow hit target (invisible, larger — receives hover/click events)
     const hitTarget = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -87,43 +91,61 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
     hitTarget.setAttribute('class', 'port-hover-target');
     portGroup.appendChild(hitTarget);
 
-    // Outer metallic bezel ring
-    const bezel = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    bezel.setAttribute('cx', '0');
-    bezel.setAttribute('cy', '0');
-    bezel.setAttribute('r', bezelRadius.toString());
-    bezel.setAttribute('fill', '#1a1a1e');
-    bezel.setAttribute('stroke', '#555560');
-    bezel.setAttribute('stroke-width', '0.5');
-    portGroup.appendChild(bezel);
+    // Outer metallic bezel — rounded square for hybrid, circular ring for everything else
+    if (isHybrid) {
+      const bezel = createRect(-bezelRadius, -bezelRadius, bezelRadius * 2, bezelRadius * 2, {
+        fill: '#1a1a1e', stroke: '#555560', 'stroke-width': 0.5, rx: bezelRadius * 0.4,
+      });
+      portGroup.appendChild(bezel);
+    } else {
+      const bezel = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      bezel.setAttribute('cx', '0');
+      bezel.setAttribute('cy', '0');
+      bezel.setAttribute('r', bezelRadius.toString());
+      bezel.setAttribute('fill', '#1a1a1e');
+      bezel.setAttribute('stroke', '#555560');
+      bezel.setAttribute('stroke-width', '0.5');
+      portGroup.appendChild(bezel);
+    }
 
-    // Inner compact socket hole
-    const hole = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    hole.setAttribute('cx', '0');
-    hole.setAttribute('cy', '0');
-    hole.setAttribute('r', radius.toString());
-    hole.setAttribute('fill', fill);
-    hole.setAttribute('stroke', strokeColor);
-    hole.setAttribute('stroke-width', '0.6');
-    hole.setAttribute('class', isPower ? 'ear-port-hole power-port' : 'ear-port-hole network-port');
-    portGroup.appendChild(hole);
+    // Inner compact socket hole — same rounded-square-vs-circle split
+    if (isHybrid) {
+      const hole = createRect(-radius, -radius, radius * 2, radius * 2, {
+        fill, stroke: strokeColor, 'stroke-width': 0.6, rx: radius * 0.4,
+      });
+      hole.setAttribute('class', 'ear-port-hole hybrid-port');
+      portGroup.appendChild(hole);
+    } else {
+      const hole = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      hole.setAttribute('cx', '0');
+      hole.setAttribute('cy', '0');
+      hole.setAttribute('r', radius.toString());
+      hole.setAttribute('fill', fill);
+      hole.setAttribute('stroke', strokeColor);
+      hole.setAttribute('stroke-width', '0.6');
+      hole.setAttribute('class', isPower ? 'ear-port-hole power-port' : 'ear-port-hole network-port');
+      portGroup.appendChild(hole);
+    }
 
     // Center socket pin dot
     const pin = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     pin.setAttribute('cx', '0');
     pin.setAttribute('cy', '0');
     pin.setAttribute('r', '0.6');
-    pin.setAttribute('fill', isConnected ? '#ffffff' : '#ffb74d');
+    pin.setAttribute('fill', isConnected ? '#ffffff' : isHybrid ? '#d8a3ff' : '#ffb74d');
     portGroup.appendChild(pin);
 
-    // Neon glow overlay ring (shown via CSS when port is hovered during cable drag)
+    // Neon glow overlay ring (shown via CSS when port is hovered during cable drag). Hugs the
+    // bezel closely (radius == bezelRadius, thin stroke) rather than extending well past it —
+    // ear holes can sit as little as ~7.5px apart (e.g. a PSU port between two NIC holes), and
+    // a wider halo would visually bleed into the neighboring hole when highlighted.
     const glowRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     glowRing.setAttribute('cx', '0');
     glowRing.setAttribute('cy', '0');
-    glowRing.setAttribute('r', (bezelRadius + 1.5).toString());
+    glowRing.setAttribute('r', bezelRadius.toString());
     glowRing.setAttribute('fill', 'none');
-    glowRing.setAttribute('stroke', isPower ? '#ff1744' : '#00e5ff');
-    glowRing.setAttribute('stroke-width', '1.5');
+    glowRing.setAttribute('stroke', isPower ? '#ff1744' : isHybrid ? '#c837ff' : '#00e5ff');
+    glowRing.setAttribute('stroke-width', '1');
     glowRing.setAttribute('opacity', '0');
     glowRing.setAttribute('class', 'port-neon-ring');
     portGroup.appendChild(glowRing);
@@ -268,7 +290,11 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
     }
   }
 
-  if (label) {
+  // hasCustomPanel categories (switch/router/firewall/console/patch-panel) already draw their
+  // own port numbering/graphics in the SVG panel itself — this overlay must stay a transparent
+  // hit-target only. Drawing this label unconditionally smeared a "CON" caption over every
+  // console-type port (all 8/16 KVM target jacks), overlapping into unreadable garbled text.
+  if (label && !hasCustomPanel) {
     const text = createText(0, -h/2 - 2, label, {
       fill: '#aaa',
       'font-size': 6,

@@ -6,13 +6,46 @@
 // interactive hit-targets placed by port-renderer.ts always line up with the drawn symbols.
 
 import { el, g, fitToRack, U1 } from './rack-kit';
-import type { PortData, PortType, DeviceTemplate } from '../core/types';
+import type { PortData, PortType, DeviceTemplate, KvmConfig } from '../core/types';
 
 const RJ_W = 30, RJ_H = 40, RJ_GAP = 4;
 const GROUP_GAP = 20;
 const SFP_W = 46, SFP_H = 42.5;
 const LC_W = 40, LC_H = 30;
 const SEC_GAP = 24;
+// KVM local-console peripheral ports (customizable — see KvmConfig)
+const DVI_W = 34, DVI_H = 22;
+const DP_W = 22, DP_H = 13;
+const USB_W = 20, USB_H = 11;
+const VGA_W = 30, VGA_H = 20;
+const HDMI_W = 26, HDMI_H = 13;
+const JACK_W = 14, JACK_H = 14;
+const DB9_W = 26, DB9_H = 16;
+
+/** All possible KVM local ports, in the order they're drawn — the default set used when a KVM
+ *  device has no explicit KvmConfig yet. Mirrors a real 1U KVM's front panel: local console
+ *  ports (USB keyboard/mouse, video, audio), a management (LAN/IP) port, and a firmware/
+ *  diagnostics RS-232 serial port. */
+export const KVM_LOCAL_PORT_OPTIONS = [
+  'usb1', 'usb2', 'usb3', 'usb4', 'vga', 'hdmi', 'dvi', 'displayport', 'audio', 'mic', 'ethernet', 'serial',
+];
+
+/** Same idea as KVM_LOCAL_PORT_OPTIONS but for the plain serial console-server category — no
+ *  video/audio (it aggregates RS-232 out to devices, not a keyboard/video/mouse switch): a
+ *  couple of USB ports (modem/storage) and a primary + failover management LAN port. */
+export const CONSOLE_LOCAL_PORT_OPTIONS = ['usb1', 'usb2', 'ethernet', 'ethernet2'];
+
+/** Splits a port count into chunks of at most 8 — e.g. 16 -> [8, 8], 12 -> [8, 4], 4 -> [4]. */
+function chunk8(n: number): number[] {
+  const chunks: number[] = [];
+  let remaining = n;
+  while (remaining > 0) {
+    const c = Math.min(8, remaining);
+    chunks.push(c);
+    remaining -= c;
+  }
+  return chunks.length ? chunks : [0];
+}
 
 export type NetKind = 'router' | 'firewall' | 'kvm' | 'console' | 'patch-cat6' | 'patch-fiber';
 
@@ -25,10 +58,13 @@ const CATEGORY_LABEL: Record<NetKind, string> = {
   'patch-cat6': 'Patch Panel', 'patch-fiber': 'Patch Panel',
 };
 
-type GroupKind = 'rj45' | 'sfp' | 'lc';
+type GroupKind = 'rj45' | 'sfp' | 'lc' | 'dvi' | 'displayport' | 'usb' | 'vga' | 'hdmi' | 'audio' | 'mic' | 'db9';
+// Cell kinds that are purely decorative local-peripheral jacks — no per-port LED pair, no
+// network "speed" label (unlike rj45/sfp, which represent real switched network links).
+const NO_LINK_KINDS = new Set<GroupKind>(['lc', 'dvi', 'displayport', 'usb', 'vga', 'hdmi', 'audio', 'mic', 'db9']);
 interface GroupSpec { label: string; kind: GroupKind; fns: string[]; portType: PortType; }
 
-function buildGroups(kind: NetKind, ports: number, variant?: string): GroupSpec[] {
+function buildGroups(kind: NetKind, ports: number, variant?: string, kvmConfig?: KvmConfig): GroupSpec[] {
   if (kind === 'router') {
     if (ports <= 4) return [
       { label: 'WAN', kind: 'rj45', portType: 'rj45', fns: ['WAN1', 'WAN2'] },
@@ -69,8 +105,48 @@ function buildGroups(kind: NetKind, ports: number, variant?: string): GroupSpec[
     ];
   }
   if (kind === 'kvm' || kind === 'console') {
-    return [{ label: kind === 'kvm' ? 'TARGETS' : 'SERIAL', kind: 'rj45', portType: 'console',
-      fns: Array.from({ length: ports }, (_, i) => `${i + 1}`) }];
+    const groups: GroupSpec[] = [];
+    const targetLabel = kind === 'kvm' ? 'TARGETS' : 'SERIAL';
+    // Real KVM/console-server port blocks (Aten/Adder/Raritan/Opengear) are wired in banks of
+    // 8 with a physical divider between banks — split into 8-port chunks instead of one
+    // continuous row so a 16-port unit reads as two clearly-separated "1-8" / "9-16" blocks.
+    // Every chunk keeps the same label (networkingPorts() stamps this onto each port's `group`
+    // field — that's what state.ts/panel-renderer.ts use to tell target/serial ports apart from
+    // the customizable local group); renderNetworkingPanel separately suppresses the redundant
+    // per-chunk caption (portType 'console' groups get the amber frame + bottom bracket instead).
+    let base = 0;
+    for (const c of chunk8(ports)) {
+      groups.push({ label: targetLabel, kind: 'rj45', portType: 'console', fns: Array.from({ length: c }, (_, i) => `${base + i + 1}`) });
+      base += c;
+    }
+    if (kind === 'kvm') {
+      // Local peripheral ports — customizable per-device (see KvmConfig), mirroring a real 1U
+      // KVM's front panel (local console USB/video/audio + a management LAN port + a firmware/
+      // diagnostics RS-232 serial port). Separate from the TARGETS group above, which connects
+      // out to each managed server.
+      const local = new Set(kvmConfig?.localPorts ?? KVM_LOCAL_PORT_OPTIONS);
+      const usbFns = ['usb1', 'usb2', 'usb3', 'usb4'].filter(u => local.has(u)).map((_, i) => `USB${i + 1}`);
+      if (usbFns.length) groups.push({ label: 'USB (KB/MOUSE)', kind: 'usb', portType: 'usb', fns: usbFns });
+      if (local.has('vga')) groups.push({ label: 'VGA', kind: 'vga', portType: 'vga', fns: ['VGA'] });
+      if (local.has('hdmi')) groups.push({ label: 'HDMI', kind: 'hdmi', portType: 'hdmi', fns: ['HDMI'] });
+      if (local.has('dvi')) groups.push({ label: 'DVI', kind: 'dvi', portType: 'dvi', fns: ['DVI'] });
+      if (local.has('displayport')) groups.push({ label: 'DP', kind: 'displayport', portType: 'displayport', fns: ['DP'] });
+      if (local.has('audio')) groups.push({ label: 'AUDIO', kind: 'audio', portType: 'audio', fns: ['AUDIO'] });
+      if (local.has('mic')) groups.push({ label: 'MIC', kind: 'mic', portType: 'mic', fns: ['MIC'] });
+      if (local.has('ethernet')) groups.push({ label: 'MGMT', kind: 'rj45', portType: 'management', fns: ['ETH'] });
+      if (local.has('serial')) groups.push({ label: 'SERIAL', kind: 'db9', portType: 'serial', fns: ['RS232'] });
+    } else {
+      // Plain serial console server — no video/audio (it's a serial aggregator, not a KVM):
+      // just local USB (modem/storage) and primary + failover management LAN.
+      const local = new Set(kvmConfig?.localPorts ?? CONSOLE_LOCAL_PORT_OPTIONS);
+      const usbFns = ['usb1', 'usb2'].filter(u => local.has(u)).map((_, i) => `USB${i + 1}`);
+      if (usbFns.length) groups.push({ label: 'USB', kind: 'usb', portType: 'usb', fns: usbFns });
+      const lanFns: string[] = [];
+      if (local.has('ethernet')) lanFns.push('LAN1');
+      if (local.has('ethernet2')) lanFns.push('LAN2');
+      if (lanFns.length) groups.push({ label: 'MGMT', kind: 'rj45', portType: 'management', fns: lanFns });
+    }
+    return groups;
   }
   // patch panels
   return [{
@@ -82,17 +158,39 @@ function buildGroups(kind: NetKind, ports: number, variant?: string): GroupSpec[
 }
 
 function cellFor(kind: GroupKind): { w: number; h: number } {
-  return kind === 'sfp' ? { w: SFP_W, h: SFP_H } : kind === 'lc' ? { w: LC_W, h: LC_H } : { w: RJ_W, h: RJ_H };
+  switch (kind) {
+    case 'sfp': return { w: SFP_W, h: SFP_H };
+    case 'lc': return { w: LC_W, h: LC_H };
+    case 'dvi': return { w: DVI_W, h: DVI_H };
+    case 'displayport': return { w: DP_W, h: DP_H };
+    case 'usb': return { w: USB_W, h: USB_H };
+    case 'vga': return { w: VGA_W, h: VGA_H };
+    case 'hdmi': return { w: HDMI_W, h: HDMI_H };
+    case 'audio': case 'mic': return { w: JACK_W, h: JACK_H };
+    case 'db9': return { w: DB9_W, h: DB9_H };
+    default: return { w: RJ_W, h: RJ_H };
+  }
 }
 
 interface NetLayout {
   totalW: number; chassisX: number; chassisW: number; bladeW: number; contentX: number;
-  consoleW: number; portsX: number; portsTop: number;
-  groups: GroupSpec[]; groupX: number[]; groupW: number[];
+  consoleW: number; portsX: number; portsTop: number; tallest: number;
+  groups: GroupSpec[]; groupX: number[]; groupW: number[]; showConsoleIcons: boolean;
 }
 
-function computeLayout(kind: NetKind, portCount: number, variant?: string): NetLayout {
-  const groups = buildGroups(kind, portCount, variant);
+// Branding/identity block is a fixed ~20% of the ports area's width (25% of the ports width
+// itself, since 20/80 as a ratio of the total is 0.2/0.8 = 0.25 of the ports side) instead of a
+// flat constant — a flat 240px console block next to, say, an 8-port KVM's ports row (~268px)
+// was 45% of the panel, not 20%. Clamped so the identity block never gets so narrow the brand
+// text is unreadable, nor so wide it dominates a small device.
+const MIN_CONSOLE_W = 150, MAX_CONSOLE_W = 240;
+const MIN_PATCH_W = 110, MAX_PATCH_W = 170;
+// Below this width the USB console jack + reset button cluster (drawConsoleBlock's right-most
+// icons) would start crowding the brand text — they're simply omitted rather than overlapping.
+const CONSOLE_ICONS_MIN_W = 195;
+
+function computeLayout(kind: NetKind, portCount: number, variant?: string, kvmConfig?: KvmConfig): NetLayout {
+  const groups = buildGroups(kind, portCount, variant, kvmConfig);
   const isPatch = kind.startsWith('patch');
 
   const groupW = groups.map(gr => {
@@ -101,7 +199,10 @@ function computeLayout(kind: NetKind, portCount: number, variant?: string): NetL
   });
   const portsRowW = groupW.reduce((a, b) => a + b, 0) + (groups.length - 1) * GROUP_GAP;
 
-  const consoleW = isPatch ? 170 : 240;
+  const consoleW = isPatch
+    ? Math.max(MIN_PATCH_W, Math.min(portsRowW * 0.25, MAX_PATCH_W))
+    : Math.max(MIN_CONSOLE_W, Math.min(portsRowW * 0.25, MAX_CONSOLE_W));
+  const showConsoleIcons = !isPatch && consoleW >= CONSOLE_ICONS_MIN_W;
   const contentW = consoleW + SEC_GAP + portsRowW;
   const { totalW, chassisX, chassisW, bladeW, contentX } = fitToRack(contentW);
 
@@ -112,7 +213,7 @@ function computeLayout(kind: NetKind, portCount: number, variant?: string): NetL
   const groupX: number[] = [];
   { let acc = portsX; groups.forEach((_, i) => { groupX[i] = acc; acc += groupW[i] + GROUP_GAP; }); }
 
-  return { totalW, chassisX, chassisW, bladeW, contentX, consoleW, portsX, portsTop, groups, groupX, groupW };
+  return { totalW, chassisX, chassisW, bladeW, contentX, consoleW, portsX, portsTop, tallest, groups, groupX, groupW, showConsoleIcons };
 }
 
 /**
@@ -122,10 +223,10 @@ function computeLayout(kind: NetKind, portCount: number, variant?: string): NetL
  * renderNetworkingPanel() draws for the same (kind, portCount, variant).
  */
 export function networkingPorts(
-  kind: NetKind, portCount: number, idPfx: string, variant?: string,
+  kind: NetKind, portCount: number, idPfx: string, variant?: string, kvmConfig?: KvmConfig,
 ): DeviceTemplate['ports'] {
   const W = 350, H = 30;
-  const layout = computeLayout(kind, portCount, variant);
+  const layout = computeLayout(kind, portCount, variant, kvmConfig);
   const sx = W / layout.totalW;
   const sy = H / U1;
 
@@ -133,9 +234,11 @@ export function networkingPorts(
   layout.groups.forEach((gr, gi) => {
     const { w: cw, h: ch } = cellFor(gr.kind);
     const gx = layout.groupX[gi];
+    // Shorter cells (USB/DisplayPort next to full-height RJ45/DVI cells) are centered within
+    // the row's tallest cell height instead of sharing one top-aligned y for every group.
+    const y = layout.portsTop + (layout.tallest - ch) / 2;
     gr.fns.forEach((fn, pIdx) => {
       const x = gx + pIdx * (cw + RJ_GAP);
-      const y = layout.portsTop;
       out.push({
         id: `${idPfx}${fn.toLowerCase()}`,
         name: fn,
@@ -145,7 +248,9 @@ export function networkingPorts(
         portW: Math.round(cw * sx),
         portH: Math.round(ch * sy),
         group: gr.label,
-        speed: gr.kind === 'sfp' ? '10 Gbps' : gr.kind === 'lc' ? undefined : gr.portType === 'console' ? undefined : '1 Gbps',
+        speed: gr.kind === 'sfp' ? '10 Gbps'
+          : (NO_LINK_KINDS.has(gr.kind) || gr.portType === 'console') ? undefined
+          : '1 Gbps',
       });
     });
   });
@@ -279,6 +384,82 @@ function makeNetDefs(ns: SVGSVGElement, uid: string, accent: string): void {
   }
   defs.appendChild(lcSym);
 
+  // DVI-I symbol (video — simplified 6x3 pin grid + the characteristic flat ground blade)
+  const dviSym = el('symbol', { id: `${uid}dvi`, viewBox: `0 0 ${DVI_W} ${DVI_H}` });
+  dviSym.appendChild(el('rect', { x: 0.5, y: 0.5, width: DVI_W - 1, height: DVI_H - 1, rx: 2, fill: `url(#${uid}cg)`, stroke: '#05070a', 'stroke-width': 1 }));
+  dviSym.appendChild(el('rect', { x: 3, y: 3, width: DVI_W - 6, height: DVI_H - 6, rx: 1.5, fill: `url(#${uid}sb)`, stroke: '#1b2024', 'stroke-width': 0.6 }));
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 6; c++) {
+      dviSym.appendChild(el('circle', { cx: 6 + c * 3.8, cy: 6 + r * 5, r: 0.7, fill: '#0a0c0e' }));
+    }
+  }
+  dviSym.appendChild(el('rect', { x: DVI_W - 6, y: DVI_H / 2 - 3.5, width: 2, height: 7, rx: 0.5, fill: '#0a0c0e' }));
+  defs.appendChild(dviSym);
+
+  // DisplayPort symbol (video — distinctive asymmetric trapezoid shroud + pin row)
+  const dpSym = el('symbol', { id: `${uid}dp`, viewBox: `0 0 ${DP_W} ${DP_H}` });
+  dpSym.appendChild(el('path', {
+    d: `M1 1 H${DP_W - 4} L${DP_W - 1} ${DP_H / 2} L${DP_W - 4} ${DP_H - 1} H1 Z`,
+    fill: `url(#${uid}cg)`, stroke: '#05070a', 'stroke-width': 1,
+  }));
+  dpSym.appendChild(el('rect', { x: 3, y: 3, width: DP_W - 8, height: DP_H - 6, rx: 1, fill: '#0a0c0e' }));
+  for (let i = 0; i < 5; i++) {
+    dpSym.appendChild(el('rect', { x: 4.5 + i * 2.6, y: DP_H / 2 - 1, width: 1.4, height: 2, fill: `url(#${uid}go)` }));
+  }
+  defs.appendChild(dpSym);
+
+  // USB-A symbol (peripheral — simple rectangular receptacle, keyboard/mouse)
+  const usbSym = el('symbol', { id: `${uid}usb`, viewBox: `0 0 ${USB_W} ${USB_H}` });
+  usbSym.appendChild(el('rect', { x: 0.5, y: 0.5, width: USB_W - 1, height: USB_H - 1, rx: 1.5, fill: `url(#${uid}cg)`, stroke: '#05070a', 'stroke-width': 1 }));
+  usbSym.appendChild(el('rect', { x: 3, y: 2.5, width: USB_W - 6, height: USB_H - 5, rx: 0.8, fill: '#0a0c0e', stroke: '#2a2f34', 'stroke-width': 0.5 }));
+  usbSym.appendChild(el('rect', { x: 5, y: USB_H / 2 - 0.6, width: USB_W - 10, height: 1.2, fill: `url(#${uid}sb)`, opacity: 0.6 }));
+  defs.appendChild(usbSym);
+
+  // VGA symbol (video — blue-tinted trapezoid shroud, classic 3-row x5-col 15-pin D-sub grid)
+  const vgaSym = el('symbol', { id: `${uid}vga`, viewBox: `0 0 ${VGA_W} ${VGA_H}` });
+  vgaSym.appendChild(el('path', {
+    d: `M2 1 H${VGA_W - 2} L${VGA_W - 1} 4 V${VGA_H - 4} L${VGA_W - 2} ${VGA_H - 1} H2 L1 ${VGA_H - 4} V4 Z`,
+    fill: `url(#${uid}cg)`, stroke: '#1b3550', 'stroke-width': 1,
+  }));
+  vgaSym.appendChild(el('rect', { x: 4, y: 3.5, width: VGA_W - 8, height: VGA_H - 7, rx: 1, fill: '#12314a', opacity: 0.9 }));
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 5; c++) {
+      vgaSym.appendChild(el('circle', { cx: 6.5 + c * 4.2, cy: 5.5 + r * 4.5, r: 0.7, fill: '#0a0c0e' }));
+    }
+  }
+  defs.appendChild(vgaSym);
+
+  // HDMI symbol (video — dark trapezoid, one corner bevelled off per the real Type-A shape)
+  const hdmiSym = el('symbol', { id: `${uid}hdmi`, viewBox: `0 0 ${HDMI_W} ${HDMI_H}` });
+  hdmiSym.appendChild(el('path', {
+    d: `M1 1 H${HDMI_W - 4} L${HDMI_W - 1} 4 V${HDMI_H - 1} H1 Z`,
+    fill: `url(#${uid}cg)`, stroke: '#05070a', 'stroke-width': 1,
+  }));
+  hdmiSym.appendChild(el('rect', { x: 3, y: 3, width: HDMI_W - 8, height: HDMI_H - 6, rx: 0.8, fill: '#0a0c0e', stroke: '#2a2f34', 'stroke-width': 0.5 }));
+  defs.appendChild(hdmiSym);
+
+  // 3.5mm jack symbols (audio-out green, mic pink) — concentric rings around a dark barrel
+  function jackSym(id: string, ringColor: string) {
+    const sym = el('symbol', { id, viewBox: `0 0 ${JACK_W} ${JACK_H}` });
+    sym.appendChild(el('rect', { x: 0.5, y: 0.5, width: JACK_W - 1, height: JACK_H - 1, rx: 2, fill: `url(#${uid}cg)`, stroke: '#05070a', 'stroke-width': 1 }));
+    sym.appendChild(el('circle', { cx: JACK_W / 2, cy: JACK_H / 2, r: 4.6, fill: ringColor, opacity: 0.85 }));
+    sym.appendChild(el('circle', { cx: JACK_W / 2, cy: JACK_H / 2, r: 2.6, fill: `url(#${uid}bo)` }));
+    defs.appendChild(sym);
+  }
+  jackSym(`${uid}audio`, '#39ff8a');
+  jackSym(`${uid}mic`, '#ff6ec7');
+
+  // DB9 symbol (RS-232 serial — narrower trapezoid, 5-pin top row / 4-pin bottom row D-sub)
+  const db9Sym = el('symbol', { id: `${uid}db9`, viewBox: `0 0 ${DB9_W} ${DB9_H}` });
+  db9Sym.appendChild(el('path', {
+    d: `M2 1 H${DB9_W - 2} L${DB9_W - 1} 3.5 V${DB9_H - 3.5} L${DB9_W - 2} ${DB9_H - 1} H2 L1 ${DB9_H - 3.5} V3.5 Z`,
+    fill: `url(#${uid}cg)`, stroke: '#05070a', 'stroke-width': 1,
+  }));
+  db9Sym.appendChild(el('rect', { x: 3.5, y: 3, width: DB9_W - 7, height: DB9_H - 6, rx: 1, fill: `url(#${uid}sb)`, opacity: 0.9 }));
+  for (let c = 0; c < 5; c++) db9Sym.appendChild(el('circle', { cx: 5.5 + c * 3.8, cy: 6, r: 0.75, fill: '#0a0c0e' }));
+  for (let c = 0; c < 4; c++) db9Sym.appendChild(el('circle', { cx: 7.4 + c * 3.8, cy: DB9_H - 6, r: 0.75, fill: '#0a0c0e' }));
+  defs.appendChild(db9Sym);
+
   ns.appendChild(defs);
 }
 
@@ -309,15 +490,15 @@ function drawChassisWithBlades(ns: SVGSVGElement, uid: string, totalW: number, t
   });
 }
 
-function drawBrand(parent: SVGElement, x: number, y: number, accent: string): void {
-  const t1 = el('text', { x, y, 'font-size': 15, 'font-weight': 700, fill: accent, 'letter-spacing': 1.4 });
+function drawBrand(parent: SVGElement, x: number, y: number, accent: string, fontSize = 15): void {
+  const t1 = el('text', { x, y, 'font-size': fontSize, 'font-weight': 700, fill: accent, 'letter-spacing': 1.4 });
   t1.textContent = 'RACK SLICER';
   parent.appendChild(t1);
 }
 
 function drawConsoleBlock(
   ns: SVGSVGElement, uid: string, x: number, w: number, h: number, accent: string,
-  kind: NetKind, model: string, portCount: number, variant: string | undefined,
+  kind: NetKind, model: string, portCount: number, variant: string | undefined, showIcons: boolean,
 ): void {
   const cy = h / 2;
   const leds = kind === 'firewall'
@@ -335,32 +516,50 @@ function drawConsoleBlock(
     t.textContent = l; grp.appendChild(t);
   });
 
-  drawBrand(grp, 64, cy - 14, accent);
-  const catTxt = el('text', { x: 64, y: cy + 1, 'font-size': 10.5, 'font-weight': 600, fill: '#e7edf2', 'letter-spacing': 0.4 });
-  catTxt.textContent = category; grp.appendChild(catTxt);
-  const modelTxt = el('text', { x: 64, y: cy + 14, 'font-size': 8, fill: '#8b939a', 'letter-spacing': 1 });
-  modelTxt.textContent = model; grp.appendChild(modelTxt);
-  grp.appendChild(el('rect', { x: 64, y: cy + 20, width: 150, height: 1, fill: '#3a4147' }));
-  const specTxt = el('text', { x: 64, y: cy + 31, 'font-size': 7, fill: '#5b636a', 'letter-spacing': 1.2 });
+  // Text column shrinks to fit whatever width is left of the LED column instead of assuming
+  // a fixed 150px+ — a narrow (small port-count) console block would otherwise overflow past
+  // its own right edge into the ports area.
+  const textX = 64;
+  const availW = Math.max(w - textX - 6, 40);
+  const brandFontSize = Math.max(9, Math.min(15, availW / (11 * 0.62)));
+  drawBrand(grp, textX, cy - 14, accent, brandFontSize);
+
+  const catFontSize = Math.max(7, Math.min(10.5, availW / (category.length * 0.58)));
+  const catMaxChars = Math.max(4, Math.floor(availW / (catFontSize * 0.58)));
+  const catTxt = el('text', { x: textX, y: cy + 1, 'font-size': catFontSize, 'font-weight': 600, fill: '#e7edf2', 'letter-spacing': 0.4 });
+  catTxt.textContent = category.length > catMaxChars ? category.slice(0, catMaxChars - 1) + '…' : category;
+  grp.appendChild(catTxt);
+
+  const modelMaxChars = Math.max(4, Math.floor(availW / (8 * 0.58)));
+  const modelTxt = el('text', { x: textX, y: cy + 14, 'font-size': 8, fill: '#8b939a', 'letter-spacing': 1 });
+  modelTxt.textContent = model.length > modelMaxChars ? model.slice(0, modelMaxChars - 1) + '…' : model;
+  grp.appendChild(modelTxt);
+
+  grp.appendChild(el('rect', { x: textX, y: cy + 20, width: availW, height: 1, fill: '#3a4147' }));
+  const specTxt = el('text', { x: textX, y: cy + 31, 'font-size': 7, fill: '#5b636a', 'letter-spacing': 1.2 });
   specTxt.textContent = `${portCount} PORTS • 1U`;
   grp.appendChild(specTxt);
 
-  const usbG = el('g', { transform: `translate(${w - 84} ${cy + 2})` });
-  usbG.appendChild(el('rect', { x: 0, y: 0, width: 26, height: 18, rx: 1.6, fill: `url(#${uid}cg)`, stroke: '#05070a', 'stroke-width': 0.9 }));
-  const usbI = el('rect', { x: 2, y: 2, width: 22, height: 14, rx: 1, fill: `url(#${uid}ci)` });
-  usbI.setAttribute('filter', `url(#${uid}is)`); usbG.appendChild(usbI);
-  usbG.appendChild(el('path', { d: 'M9 2 h8 v4 h-2 v-2 h-4 v2 h-2 z', fill: '#04060a' }));
-  for (let i = 0; i < 8; i++) usbG.appendChild(el('rect', { x: 4 + i * 2.3, y: 4.5, width: 1.3, height: 4, fill: '#c9a24b', opacity: 0.8 }));
-  const usbT = el('text', { x: 13, y: 26, 'font-size': 6, 'text-anchor': 'middle', fill: '#7b838a', 'letter-spacing': 0.5 });
-  usbT.textContent = 'CONSOLE'; usbG.appendChild(usbT);
-  grp.appendChild(usbG);
+  // USB console jack + reset button — dropped entirely below CONSOLE_ICONS_MIN_W rather than
+  // overlapping the brand text, matching how the PDU rail drops its own extras when tight.
+  if (showIcons) {
+    const usbG = el('g', { transform: `translate(${w - 84} ${cy + 2})` });
+    usbG.appendChild(el('rect', { x: 0, y: 0, width: 26, height: 18, rx: 1.6, fill: `url(#${uid}cg)`, stroke: '#05070a', 'stroke-width': 0.9 }));
+    const usbI = el('rect', { x: 2, y: 2, width: 22, height: 14, rx: 1, fill: `url(#${uid}ci)` });
+    usbI.setAttribute('filter', `url(#${uid}is)`); usbG.appendChild(usbI);
+    usbG.appendChild(el('path', { d: 'M9 2 h8 v4 h-2 v-2 h-4 v2 h-2 z', fill: '#04060a' }));
+    for (let i = 0; i < 8; i++) usbG.appendChild(el('rect', { x: 4 + i * 2.3, y: 4.5, width: 1.3, height: 4, fill: '#c9a24b', opacity: 0.8 }));
+    const usbT = el('text', { x: 13, y: 26, 'font-size': 6, 'text-anchor': 'middle', fill: '#7b838a', 'letter-spacing': 0.5 });
+    usbT.textContent = 'CONSOLE'; usbG.appendChild(usbT);
+    grp.appendChild(usbG);
 
-  const rstG = el('g', { transform: `translate(${w - 16} ${cy + 6})` });
-  rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 3.2, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.8 }));
-  rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 1.1, fill: '#02040a' }));
-  const rstT = el('text', { x: 0, y: 14, 'font-size': 6, 'text-anchor': 'middle', fill: '#7b838a' });
-  rstT.textContent = 'RST'; rstG.appendChild(rstT);
-  grp.appendChild(rstG);
+    const rstG = el('g', { transform: `translate(${w - 16} ${cy + 6})` });
+    rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 3.2, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.8 }));
+    rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 1.1, fill: '#02040a' }));
+    const rstT = el('text', { x: 0, y: 14, 'font-size': 6, 'text-anchor': 'middle', fill: '#7b838a' });
+    rstT.textContent = 'RST'; rstG.appendChild(rstT);
+    grp.appendChild(rstG);
+  }
 
   ns.appendChild(grp);
 }
@@ -368,12 +567,17 @@ function drawConsoleBlock(
 function drawPatchLabel(ns: SVGSVGElement, x: number, w: number, h: number, accent: string, model: string, portCount: number, fiber: boolean): void {
   const cy = h / 2;
   const grp = el('g', { transform: `translate(${x} 0)` });
-  drawBrand(grp, 4, cy - 12, accent);
-  const catTxt = el('text', { x: 4, y: cy + 3, 'font-size': 10.5, 'font-weight': 600, fill: '#e7edf2', 'letter-spacing': 0.4 });
+  const availW = Math.max(w - 8, 40);
+  const brandFontSize = Math.max(9, Math.min(15, availW / (11 * 0.62)));
+  drawBrand(grp, 4, cy - 12, accent, brandFontSize);
+  const catFontSize = Math.max(7, Math.min(10.5, availW / ('Patch Panel'.length * 0.58)));
+  const catTxt = el('text', { x: 4, y: cy + 3, 'font-size': catFontSize, 'font-weight': 600, fill: '#e7edf2', 'letter-spacing': 0.4 });
   catTxt.textContent = 'Patch Panel'; grp.appendChild(catTxt);
+  const modelMaxChars = Math.max(4, Math.floor(availW / (8 * 0.58)));
   const modelTxt = el('text', { x: 4, y: cy + 16, 'font-size': 8, fill: '#8b939a', 'letter-spacing': 1 });
-  modelTxt.textContent = model; grp.appendChild(modelTxt);
-  grp.appendChild(el('rect', { x: 4, y: cy + 22, width: w - 24, height: 1, fill: '#3a4147' }));
+  modelTxt.textContent = model.length > modelMaxChars ? model.slice(0, modelMaxChars - 1) + '…' : model;
+  grp.appendChild(modelTxt);
+  grp.appendChild(el('rect', { x: 4, y: cy + 22, width: availW, height: 1, fill: '#3a4147' }));
   const specTxt = el('text', { x: 4, y: cy + 33, 'font-size': 7, fill: '#5b636a', 'letter-spacing': 1.2 });
   specTxt.textContent = `${portCount}× ${fiber ? 'LC FIBER' : 'CAT6'} • 1U`;
   grp.appendChild(specTxt);
@@ -394,13 +598,13 @@ function addKeyframeStyle(ns: SVGSVGElement, uid: string): void {
  */
 export function renderNetworkingPanel(
   kind: NetKind, portCount: number, variant: string | undefined, model: string,
-  W: number, H: number, ports: PortData[], connectedIds: Set<string>,
+  W: number, H: number, ports: PortData[], connectedIds: Set<string>, kvmConfig?: KvmConfig,
 ): SVGGElement {
   const group = g('net-panel');
   const uid = `np${Math.random().toString(36).slice(2, 7)}`;
   const accent = ACCENTS[kind];
-  const layout = computeLayout(kind, portCount, variant);
-  const { totalW, chassisX, chassisW, bladeW, contentX, consoleW, portsX, portsTop, groups, groupX, groupW } = layout;
+  const layout = computeLayout(kind, portCount, variant, kvmConfig);
+  const { totalW, chassisX, chassisW, bladeW, contentX, consoleW, portsX, portsTop, tallest, groups, groupX, groupW, showConsoleIcons } = layout;
 
   const ns = el('svg', { width: W, height: H });
   ns.setAttribute('viewBox', `0 0 ${totalW} ${U1}`);
@@ -415,7 +619,7 @@ export function renderNetworkingPanel(
   if (isPatch) {
     drawPatchLabel(ns, contentX, consoleW, U1, accent, model, portCount, kind === 'patch-fiber');
   } else {
-    drawConsoleBlock(ns, uid, contentX, consoleW, U1, accent, kind, model, portCount, variant);
+    drawConsoleBlock(ns, uid, contentX, consoleW, U1, accent, kind, model, portCount, variant, showConsoleIcons);
   }
 
   ns.appendChild(el('line', { x1: portsX - SEC_GAP / 2, y1: 18, x2: portsX - SEC_GAP / 2, y2: U1 - 18, stroke: '#3a4147', 'stroke-width': 1, opacity: 0.5 }));
@@ -425,23 +629,40 @@ export function renderNetworkingPanel(
     const { w: cw, h: ch } = cellFor(gr.kind);
     const gx = groupX[gi], gw = groupW[gi];
 
-    const labelEl = el('text', { x: gx + gw / 2, y: portsTop - 8, 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 700, fill: accent, 'letter-spacing': 1.1 });
-    labelEl.textContent = gr.label;
-    ns.appendChild(labelEl);
-    ns.appendChild(el('rect', { x: gx, y: portsTop - 5, width: gw, height: 1, fill: accent, opacity: 0.4 }));
+    // Target/serial (TARGETS/SERIAL) groups get their own amber frame + shared bottom bracket
+    // (drawn below, after this loop) instead of a per-chunk caption, for both KVM and plain
+    // console-server kinds — both are now chunked into 8-port banks by buildGroups.
+    const showCaption = gr.label && !((kind === 'kvm' || kind === 'console') && gr.portType === 'console');
+    if (showCaption) {
+      const labelEl = el('text', { x: gx + gw / 2, y: portsTop - 8, 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 700, fill: accent, 'letter-spacing': 1.1 });
+      labelEl.textContent = gr.label;
+      ns.appendChild(labelEl);
+      ns.appendChild(el('rect', { x: gx, y: portsTop - 5, width: gw, height: 1, fill: accent, opacity: 0.4 }));
+    }
 
+    const groupY = portsTop + (tallest - ch) / 2;
     gr.fns.forEach((fn, pIdx) => {
       const portData = ports[portIdx++];
       const x = gx + pIdx * (cw + RJ_GAP);
       const connected = portData ? connectedIds.has(portData.id) : false;
-      const sym = gr.kind === 'sfp' ? `${uid}sfp` : gr.kind === 'lc' ? `${uid}lc` : `${uid}rj`;
+      const sym = gr.kind === 'sfp' ? `${uid}sfp`
+        : gr.kind === 'lc' ? `${uid}lc`
+        : gr.kind === 'dvi' ? `${uid}dvi`
+        : gr.kind === 'displayport' ? `${uid}dp`
+        : gr.kind === 'usb' ? `${uid}usb`
+        : gr.kind === 'vga' ? `${uid}vga`
+        : gr.kind === 'hdmi' ? `${uid}hdmi`
+        : gr.kind === 'audio' ? `${uid}audio`
+        : gr.kind === 'mic' ? `${uid}mic`
+        : gr.kind === 'db9' ? `${uid}db9`
+        : `${uid}rj`;
 
-      const pg = el('g', { transform: `translate(${x} ${portsTop})` });
+      const pg = el('g', { transform: `translate(${x} ${groupY})` });
       pg.setAttribute('tabindex', '0'); pg.setAttribute('role', 'button'); pg.setAttribute('aria-label', fn);
       pg.setAttribute('style', 'cursor:pointer;outline:none');
       const u = el('use', { width: cw, height: ch }); u.setAttribute('href', `#${sym}`);
       pg.appendChild(u);
-      if (gr.kind !== 'lc') {
+      if (!NO_LINK_KINDS.has(gr.kind)) {
         drawLed(pg, uid, 6, 5, connected ? 'green' : 'off', 1.4);
         drawLed(pg, uid, cw - 6, 5, connected ? 'greenBlink' : 'off', 1.4);
       }
@@ -454,6 +675,57 @@ export function renderNetworkingPanel(
       ns.appendChild(pg);
     });
   });
+
+  // Section framing — dashed bounding boxes + a bottom bracket grouping the panel into the
+  // three zones a real KVM/console-server's silkscreen shows: local ports (blue), management
+  // (grey), and 8-port target/serial banks (amber) with a shared "Nx RJ45" bracket underneath.
+  // Only these two kinds have enough distinct customizable groups to make this framing useful.
+  if (kind === 'kvm' || kind === 'console') {
+    const LOCAL_KINDS = new Set<GroupKind>(['usb', 'vga', 'hdmi', 'dvi', 'displayport', 'audio', 'mic']);
+    const localIdx = groups.map((_, i) => i).filter(i => LOCAL_KINDS.has(groups[i].kind));
+    const mgmtIdx = groups.map((_, i) => i).filter(i => groups[i].portType === 'management' || groups[i].portType === 'serial');
+    const targetIdx = groups.map((_, i) => i).filter(i => groups[i].portType === 'console');
+
+    const boxY0 = portsTop - 16, boxY1 = portsTop + tallest + 16;
+    const frame = (idxs: number[], color: string, label?: string): { x0: number; x1: number } | undefined => {
+      if (!idxs.length) return undefined;
+      const x0 = Math.min(...idxs.map(i => groupX[i])) - 6;
+      const x1 = Math.max(...idxs.map(i => groupX[i] + groupW[i])) + 6;
+      ns.appendChild(el('rect', {
+        x: x0, y: boxY0, width: x1 - x0, height: boxY1 - boxY0, rx: 5,
+        fill: 'none', stroke: color, 'stroke-width': 1, 'stroke-dasharray': '3 2', opacity: 0.55,
+      }));
+      if (label) {
+        const t = el('text', { x: x0 + 4, y: boxY0 - 5, 'font-size': 7.5, 'font-weight': 700, fill: color, 'letter-spacing': 1 });
+        t.textContent = label;
+        ns.appendChild(t);
+      }
+      return { x0, x1 };
+    };
+
+    frame(localIdx, '#37b6ff', kind === 'kvm' ? 'LOCAL CONSOLE PORTS' : 'LOCAL PORTS');
+    frame(mgmtIdx, '#9aa3ab', 'MANAGEMENT');
+
+    // Each 8-port (or smaller final remainder) bank drawn in buildGroups gets its own amber
+    // frame — no per-frame label, the numbered jacks plus the shared bracket below say enough.
+    let targetsExtent: { x0: number; x1: number } | undefined;
+    targetIdx.forEach(i => {
+      const r = frame([i], '#e0a030');
+      if (r) targetsExtent = targetsExtent
+        ? { x0: Math.min(targetsExtent.x0, r.x0), x1: Math.max(targetsExtent.x1, r.x1) }
+        : r;
+    });
+    if (targetsExtent) {
+      const { x0, x1 } = targetsExtent;
+      const by = boxY1 + 4;
+      ns.appendChild(el('line', { x1: x0 + 4, y1: by, x2: x1 - 4, y2: by, stroke: '#e0a030', 'stroke-width': 1.2, opacity: 0.75 }));
+      ns.appendChild(el('line', { x1: x0 + 4, y1: by, x2: x0 + 4, y2: by + 4, stroke: '#e0a030', 'stroke-width': 1.2, opacity: 0.75 }));
+      ns.appendChild(el('line', { x1: x1 - 4, y1: by, x2: x1 - 4, y2: by + 4, stroke: '#e0a030', 'stroke-width': 1.2, opacity: 0.75 }));
+      const bt = el('text', { x: (x0 + x1) / 2, y: by + 11, 'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 700, fill: '#e0a030', 'letter-spacing': 0.8 });
+      bt.textContent = kind === 'kvm' ? `${portCount}× RJ45 SERVER PORTS` : `${portCount}× RJ45 SERIAL PORTS`;
+      ns.appendChild(bt);
+    }
+  }
 
   addKeyframeStyle(ns, uid);
   group.appendChild(ns);

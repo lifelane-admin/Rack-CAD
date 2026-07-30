@@ -3,10 +3,13 @@ import State from '../core/state';
 import { ToolMode, SelectableItem, CableData, Point } from '../core/types';
 import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
 
+const ORIENTATION_CYCLE: Array<'up' | 'right' | 'down' | 'left'> = ['up', 'right', 'down', 'left'];
+
 export class FloatingToolbar {
   private element: HTMLElement | null = null;
   private currentTool: ToolMode = 'select';
   private selectedCableId: string | null = null;
+  private activeCableEnd: 'source' | 'dest' = 'dest';
 
   // Toolbar position dragging states
   private toolbarX: number | null = null;
@@ -116,6 +119,7 @@ export class FloatingToolbar {
     const isSelect = this.currentTool === 'select';
     const isPan = this.currentTool === 'pan';
     const isCableMode = this.currentTool === 'cable';
+    const isPowerMode = this.currentTool === 'power';
     const isSnap = state.snapEnabled;
 
     const colors = [
@@ -131,10 +135,10 @@ export class FloatingToolbar {
     const activeColor = cable ? cable.color : state.selectedCableColor;
 
     this.element.innerHTML = `
-      <!-- Row 1: Drag handle, pointer tools, and quick actions -->
+      <!-- Row 1: Drag handle, pointer tools, edit actions, and anchor points -->
       <div class="ft-row" id="ft-row-1">
         <div class="ft-drag-handle" title="Drag to reposition toolbar">⋮⋮</div>
-        
+
         <!-- Selection & Pan Tools -->
         <div class="ft-section">
           <button class="ft-btn ${isSelect ? 'active' : ''}" id="ft-tool-select" title="Select Tool (V)">
@@ -150,25 +154,14 @@ export class FloatingToolbar {
 
         <!-- Quick actions -->
         <div class="ft-section">
-          <button class="ft-btn" id="ft-act-undo" title="Undo (Ctrl+Z)">↩️</button>
-          <button class="ft-btn" id="ft-act-redo" title="Redo (Ctrl+Y)">↪️</button>
-          <button class="ft-btn" id="ft-act-delete" ${!state.selection.length ? 'disabled' : ''} title="Delete Selected (Del)">🗑️</button>
-        </div>
-      </div>
-
-      <!-- Row 2: Ethernet cable mode, colors, and anchor points -->
-      <div class="ft-row" id="ft-row-2">
-        <div class="ft-drag-handle" style="visibility: hidden;">⋮⋮</div> <!-- Invisible spacing alignment -->
-
-        <!-- Cable Drawing Mode -->
-        <div class="ft-section">
-          <button class="ft-btn ${isCableMode ? 'active' : ''}" id="ft-tool-cable" title="Draw Ethernet Cable (C)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="9" y="3" width="6" height="6" rx="1"></rect>
-              <rect x="3" y="15" width="6" height="6" rx="1"></rect>
-              <rect x="15" y="15" width="6" height="6" rx="1"></rect>
-              <path d="M12 9v4M6 15v-2h12v2"></path>
-            </svg>
+          <button class="ft-btn ft-btn--accent" id="ft-act-undo" title="Undo (Ctrl+Z)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg>
+          </button>
+          <button class="ft-btn ft-btn--accent" id="ft-act-redo" title="Redo (Ctrl+Y)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/></svg>
+          </button>
+          <button class="ft-btn" id="ft-act-delete" ${!state.selection.length ? 'disabled' : ''} title="Delete Selected (Del)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
           </button>
         </div>
 
@@ -176,9 +169,48 @@ export class FloatingToolbar {
 
         <!-- Anchor Point Actions -->
         <div class="ft-section" id="ft-cable-anchors">
-          <button class="ft-btn" id="ft-cab-add-anchor" ${!cable ? 'disabled' : ''} title="Add Anchor Point">➕⚓</button>
-          <button class="ft-btn" id="ft-cab-rem-anchor" ${!cable || !cable.anchorPoints?.length ? 'disabled' : ''} title="Remove Last Anchor">🗑️⚓</button>
-          <button class="ft-btn" id="ft-cab-reset" ${!cable ? 'disabled' : ''} title="Recalculate Route">🔄</button>
+          <button class="ft-btn" id="ft-cab-add-anchor" ${!cable ? 'disabled' : ''} title="Add Anchor Point">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="2.5"/><line x1="9" y1="19" x2="9" y2="7"/><path d="M3 13a6 6 0 0012 0"/><line x1="18" y1="5" x2="18" y2="11"/><line x1="15" y1="8" x2="21" y2="8"/></svg>
+          </button>
+          <button class="ft-btn" id="ft-cab-rem-anchor" ${!cable || !cable.anchorPoints?.length ? 'disabled' : ''} title="Remove Last Anchor">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="2.5"/><line x1="9" y1="19" x2="9" y2="7"/><path d="M3 13a6 6 0 0012 0"/><line x1="15" y1="8" x2="21" y2="8"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Row 2: Routing/drawing modes and cable colors -->
+      <div class="ft-row" id="ft-row-2">
+        <div class="ft-drag-handle" style="visibility: hidden;">⋮⋮</div> <!-- Invisible spacing alignment -->
+
+        <!-- Cable End Direction (choose end, then rotate Up->Right->Down->Left) + Cable/Power Drawing Modes -->
+        <div class="ft-section" id="ft-cable-orient">
+          <div class="ft-end-toggle" title="Choose which cable end to rotate">
+            <button class="ft-end-btn ${this.activeCableEnd === 'source' ? 'active' : ''}" id="ft-end-source" ${!cable ? 'disabled' : ''} title="Target the Source end">S</button>
+            <button class="ft-end-btn ${this.activeCableEnd === 'dest' ? 'active' : ''}" id="ft-end-dest" ${!cable ? 'disabled' : ''} title="Target the Destination end">D</button>
+          </div>
+          <button class="ft-btn" id="ft-cab-rotate-end" ${!cable ? 'disabled' : ''} title="Rotate ${this.activeCableEnd === 'source' ? 'Source' : 'Destination'} End Direction (Up → Right → Down → Left)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 11-.57-8.38l6.13-5.19"/></svg>
+          </button>
+        </div>
+
+        <div class="ft-separator"></div>
+
+        <div class="ft-section">
+          <button class="ft-btn ft-btn--accent ${isCableMode ? 'active' : ''}" id="ft-tool-cable" title="Draw Ethernet Cable (C)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="3" width="6" height="6" rx="1"></rect>
+              <rect x="3" y="15" width="6" height="6" rx="1"></rect>
+              <rect x="15" y="15" width="6" height="6" rx="1"></rect>
+              <path d="M12 9v4M6 15v-2h12v2"></path>
+            </svg>
+          </button>
+          <button class="ft-btn ft-btn--accent ${isPowerMode ? 'active' : ''}" id="ft-tool-power" title="Draw Power Cable to PDU (P)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 2v4M15 2v4"/>
+              <path d="M7 6h10v4a5 5 0 01-10 0V6z"/>
+              <path d="M12 15v7"/>
+            </svg>
+          </button>
         </div>
 
         <div class="ft-separator"></div>
@@ -188,9 +220,9 @@ export class FloatingToolbar {
           <span class="ft-context-label">Colors:</span>
           <div class="ft-colors">
             ${colors.map(c => `
-              <div class="ft-swatch ${activeColor.toLowerCase() === c.hex.toLowerCase() ? 'active' : ''}" 
-                   style="background-color: ${c.hex}; color: ${c.hex};" 
-                   data-color="${c.hex}" 
+              <div class="ft-swatch ${activeColor.toLowerCase() === c.hex.toLowerCase() ? 'active' : ''}"
+                   style="background-color: ${c.hex}; color: ${c.hex};"
+                   data-color="${c.hex}"
                    title="${c.name}"></div>
             `).join('')}
           </div>
@@ -213,6 +245,9 @@ export class FloatingToolbar {
     });
     this.element.querySelector('#ft-tool-cable')?.addEventListener('click', () => {
       EventBus.emit('tool:changed', 'cable');
+    });
+    this.element.querySelector('#ft-tool-power')?.addEventListener('click', () => {
+      EventBus.emit('tool:changed', 'power');
     });
 
     this.element.querySelector('#ft-act-undo')?.addEventListener('click', () => {
@@ -251,12 +286,24 @@ export class FloatingToolbar {
           }
         });
 
-        this.element.querySelector('#ft-cab-reset')?.addEventListener('click', () => {
-          EventBus.emit('cable:update', { id: cableId, data: { anchorPoints: [], anchorsLocked: false } });
-          EventBus.emit('notification', { message: 'Reset custom routing paths for selected cable.', type: 'info' });
+        this.element.querySelector('#ft-cab-rotate-end')?.addEventListener('click', () => {
+          const field = this.activeCableEnd === 'source' ? 'sourceOrientation' : 'destOrientation';
+          const current = cable[field];
+          const idx = ORIENTATION_CYCLE.indexOf(current as any);
+          const next = ORIENTATION_CYCLE[(idx + 1) % ORIENTATION_CYCLE.length];
+          EventBus.emit('cable:update', { id: cableId, data: { [field]: next, anchorPoints: [], anchorsLocked: false } });
         });
       }
     }
+
+    this.element.querySelector('#ft-end-source')?.addEventListener('click', () => {
+      this.activeCableEnd = 'source';
+      this.render();
+    });
+    this.element.querySelector('#ft-end-dest')?.addEventListener('click', () => {
+      this.activeCableEnd = 'dest';
+      this.render();
+    });
 
     this.element.querySelectorAll('.ft-swatch').forEach(swatch => {
       swatch.addEventListener('click', (e: any) => {

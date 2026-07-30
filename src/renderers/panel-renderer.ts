@@ -1,4 +1,4 @@
-import type { DeviceCategory, DeviceTemplate, DeviceData } from '../core/types';
+import type { DeviceCategory, DeviceTemplate, DeviceData, KvmConfig } from '../core/types';
 import { renderSwitchPanel } from './switch-renderer';
 import { renderFortiGatePanel } from './fortigate-renderer';
 import { renderPduPanel } from './pdu-renderer';
@@ -149,7 +149,9 @@ function renderUpsPanel(template: DeviceTemplate | null, W: number, H: number): 
   const loadPct = Math.min(0.85, va / 8000);
 
   // ── Brand block + status LEDs (left) ─────────────────────────────────────
-  const brandW = Math.min(92, W * 0.27);
+  // Fixed ~20% of chassis width — the LCD (VA/voltage/runtime readout) and load/battery bars
+  // to the right get the remaining ~80%, matching the same split used for PDUs/switches/etc.
+  const brandW = Math.max(60, Math.min(75, W * 0.2));
   const ledLbls: [string, string][] = [['LINE', 'green'], ['BATT', 'off'], ['FAULT', 'off'], ['LOAD', 'amber']];
   const ledColor: Record<string, string> = { green: '#39ff8a', amber: '#ffb020', off: '#20262b' };
   const rowGap = Math.min(13, (chH - 12) / ledLbls.length);
@@ -164,10 +166,16 @@ function renderUpsPanel(template: DeviceTemplate | null, W: number, H: number): 
     t.textContent = lbl;
     group.appendChild(t);
   });
-  const brandTxt = el('text', { x: 42, y: chY + 10, 'font-size': 7, 'font-weight': 700, fill: '#ff8a3f', 'letter-spacing': 0.6 });
+  // Brand/model text shrink to fit brandW instead of assuming a fixed ~50px is always
+  // available — at the tightened 20% target that space is narrower than the old 27% gave.
+  const textAvailW = Math.max(brandW - 42 - 3, 20);
+  const brandFontSize = Math.max(4.5, Math.min(7, textAvailW / (11 * 0.62)));
+  const brandTxt = el('text', { x: 42, y: chY + 10, 'font-size': brandFontSize, 'font-weight': 700, fill: '#ff8a3f', 'letter-spacing': 0.6 });
   brandTxt.textContent = 'RACK SLICER'; group.appendChild(brandTxt);
+  const modelMaxChars = Math.max(3, Math.floor(textAvailW / (6.5 * 0.58)));
   const modelTxt = el('text', { x: 42, y: chY + 20, 'font-size': 6.5, fill: '#8b939a' });
-  modelTxt.textContent = model; group.appendChild(modelTxt);
+  modelTxt.textContent = model.length > modelMaxChars ? model.slice(0, modelMaxChars - 1) + '…' : model;
+  group.appendChild(modelTxt);
 
   // ── LCD (center): VA, voltage, runtime ───────────────────────────────────
   const lcdX = brandW + 6;
@@ -348,8 +356,15 @@ export function renderFrontPanel(
     case 'storage':       return renderStoragePanel(template, deviceWidth, deviceHeight);
     case 'console': {
       const isKvm = template?.id.startsWith('kvm') ?? false;
-      const portCount = template?.ports.length ?? 8;
-      return renderNetworkingPanel(isKvm ? 'kvm' : 'console', portCount, undefined, template?.model ?? 'Console', deviceWidth, deviceHeight, deviceData?.ports ?? [], connectedPortIds);
+      // Both KVM and plain console-server templates' `template.ports`/`deviceData.ports` also
+      // include the customizable local peripheral group (see KvmConfig) — only the
+      // TARGETS/SERIAL-group count belongs in `portCount` here, since buildGroups() derives the
+      // local group entirely from the config itself.
+      const targetGroupLabel = isKvm ? 'TARGETS' : 'SERIAL';
+      const targetsCount = deviceData?.ports?.filter(p => p.group === targetGroupLabel).length
+        || template?.ports.filter(p => p.group === targetGroupLabel).length || 8;
+      const localConfig = deviceData?.deviceConfig as KvmConfig | undefined;
+      return renderNetworkingPanel(isKvm ? 'kvm' : 'console', targetsCount, undefined, template?.model ?? 'Console', deviceWidth, deviceHeight, deviceData?.ports ?? [], connectedPortIds, localConfig);
     }
     case 'blank-panel':   return renderBlankPanel(deviceWidth, deviceHeight);
     case 'cooling':       return renderCoolingPanel(template, deviceWidth, deviceHeight);

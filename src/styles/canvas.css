@@ -214,6 +214,23 @@ svg path.cable-element.selected {
   filter: drop-shadow(0 0 10px #00f2fe) !important;
 }
 
+/* Ear-hole ports sit far closer together (as little as ~7.5px center-to-center — e.g. a PSU
+   port positioned between two NIC holes) than other port types, where the wide blur/drop-shadow
+   glow above is tuned for much more spread-out layouts and would visually bleed into the
+   neighboring hole. Ear ports get a crisp, unblurred ring highlight instead — no bleed risk
+   regardless of how close the next hole is. */
+.port-element[id*="-ear-"]:hover .port-neon-ring,
+.port-element[id*="-ear-"].port-snap-target .port-neon-ring {
+  opacity: 1 !important;
+  stroke-width: 1 !important;
+  filter: none !important;
+  animation: none !important;
+}
+.port-element[id*="-ear-"]:hover .ear-port-hole,
+.port-element[id*="-ear-"]:hover rect {
+  filter: none !important;
+}
+
 /* Cursor cues when hovering connectable ports */
 .port-element {
   cursor: pointer;

@@ -1,0 +1,754 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 268.8 2366.4" role="img"
+    aria-label="APC switched PDU, 30 outlets">
+<defs>
+    <linearGradient id="chassisFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a2a2a"/><stop offset="0.1" stop-color="#0f0f0f"/>
+      <stop offset="0.9" stop-color="#0f0f0f"/><stop offset="1" stop-color="#050505"/>
+    </linearGradient>
+    <linearGradient id="chassisSide" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#050505"/><stop offset="0.15" stop-color="#0f0f0f"/>
+      <stop offset="0.85" stop-color="#0f0f0f"/><stop offset="1" stop-color="#050505"/>
+    </linearGradient>
+    <linearGradient id="brushed" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#c9ccce"/><stop offset="0.5" stop-color="#e8eaec"/>
+      <stop offset="0.51" stop-color="#b9bdc0"/><stop offset="1" stop-color="#d4d7d9"/>
+    </linearGradient>
+    <radialGradient id="socketWellWhite" cx="0.5" cy="0.5" r="0.6">
+      <stop offset="0" stop-color="#f6f2e6"/><stop offset="0.75" stop-color="#e2ddce"/>
+      <stop offset="1" stop-color="#b8b3a3"/>
+    </radialGradient>
+    <radialGradient id="socketPitDark" cx="0.5" cy="0.4" r="0.75">
+      <stop offset="0" stop-color="#242527"/><stop offset="0.6" stop-color="#0a0b0c"/>
+      <stop offset="1" stop-color="#020203"/>
+    </radialGradient>
+    <linearGradient id="pinBrass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4e2a1"/><stop offset="1" stop-color="#a9871f"/>
+    </linearGradient>
+    <linearGradient id="guardPlastic" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f7fa" stop-opacity="0.85"/>
+      <stop offset="0.5" stop-color="#c8d4de" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#8ea0b0" stop-opacity="0.75"/>
+    </linearGradient>
+    <linearGradient id="mcbBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a3d40"/><stop offset="1" stop-color="#141516"/>
+    </linearGradient>
+    <linearGradient id="mcbToggle" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f5f5f5"/><stop offset="1" stop-color="#b8b8b8"/>
+    </linearGradient>
+    <linearGradient id="cordJacket" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a2a2a"/><stop offset="0.5" stop-color="#0f0f0f"/>
+      <stop offset="1" stop-color="#050505"/>
+    </linearGradient>
+    <linearGradient id="bankStrip" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c8362f"/><stop offset="1" stop-color="#8f2019"/>
+    </linearGradient>
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.6" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+    <filter id="ledGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="0.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="innerGlow">
+      <feGaussianBlur stdDeviation="0.5"/>
+      <feComposite in="SourceGraphic" operator="over"/>
+    </filter>
+    
+    <filter id="texture" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="1.8" numOctaves="1" seed="7"/>
+      <feColorMatrix values="0 0 0 0 0.06  0 0 0 0 0.06  0 0 0 0 0.06  0 0 0 0.35 0"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+      <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode/></feMerge>
+    </filter>
+    <symbol id="screw" viewBox="0 0 12 12">
+      <circle cx="6" cy="6" r="5.5" fill="#2a2c2e" stroke="#0c0d0e" stroke-width="0.6"/>
+      <circle cx="6" cy="6" r="5.5" fill="url(#chassisFace)" opacity="0.5"/>
+      <path d="M6 2.2 V9.8 M2.2 6 H9.8" stroke="#0a0b0c" stroke-width="1.1"/>
+      <circle cx="4.4" cy="4.4" r="1.4" fill="#fff" opacity="0.2"/>
+    </symbol>
+  </defs>
+<g transform="translate(72 72) scale(2.4)">
+<rect x="0" y="0" width="52" height="926" rx="3"
+    fill="url(#chassisFace)" stroke="#040506" stroke-width="0.8" filter="url(#softShadow)"/>
+<rect x="0" y="0" width="52" height="926" rx="3"
+      filter="url(#texture)" opacity="0.6" pointer-events="none"/>
+<rect x="0.6" y="0.6" width="50.8" height="1.5" rx="0.6" fill="#fff" opacity="0.12"/>
+<rect x="0" y="0" width="1.2" height="926" fill="url(#chassisSide)" opacity="0.6"/>
+<rect x="50.8" y="0" width="1.2" height="926" fill="url(#chassisSide)" opacity="0.6"/>
+<g filter="url(#softShadow)">
+      <rect x="18" y="-6" width="16" height="10" rx="2" fill="url(#chassisFace)" stroke="#0a0b0c" stroke-width="0.6"/>
+      <rect x="18" y="922" width="16" height="10" rx="2" fill="url(#chassisFace)" stroke="#0a0b0c" stroke-width="0.6"/>
+      <use href="#screw" x="24" y="-3" width="4" height="4"/><use href="#screw" x="24" y="925" width="4" height="4"/>
+    </g>
+<g transform="translate(26 27)" filter="url(#softShadow)">
+    <rect x="-9" y="-21" width="18" height="42" rx="1.2" fill="url(#mcbBody)" stroke="#000" stroke-width="0.5"/>
+    <rect x="-8.2" y="-20.2" width="16.4" height="6" rx="0.4" fill="#0a0b0c"/>
+    <text x="0" y="-15.6" text-anchor="middle" font-size="4" font-weight="700" font-family="sans-serif" fill="#e8e8e8">D32</text>
+    <rect x="-3.8" y="-10" width="7.6" height="17" rx="0.8" fill="#0a0b0c"/>
+    <rect x="-2.2" y="-8.5" width="4.4" height="7.5" rx="0.8" fill="url(#mcbToggle)" stroke="#000" stroke-width="0.3"/>
+    <text x="0" y="-3.8" text-anchor="middle" font-size="2.4" font-weight="700" font-family="sans-serif" fill="#000">I</text>
+    <text x="0" y="5.2" text-anchor="middle" font-size="2.2" font-weight="700" font-family="sans-serif" fill="#666">O</text>
+    <use href="#screw" x="-6.6" y="16.4" width="3.2" height="3.2"/><use href="#screw" x="3.4" y="16.4" width="3.2" height="3.2"/>
+    <use href="#screw" x="-6.6" y="-11.6" width="3.2" height="3.2"/><use href="#screw" x="3.4" y="-11.6" width="3.2" height="3.2"/>
+    
+      <g opacity="0.7">
+        <path d="M -10 -22 L 10 -22 L 10 22 L -10 22 Z"
+              fill="url(#guardPlastic)" stroke="#7893a8" stroke-width="0.3"/>
+        <line x1="-10" y1="-20" x2="10" y2="-20" stroke="#5a6a76" stroke-width="0.25"/>
+        <circle cx="-10" cy="-20" r="0.9" fill="#5a6a76"/>
+        <circle cx="10" cy="-20" r="0.9" fill="#5a6a76"/>
+        <circle cx="0" cy="18.5" r="1" fill="#0a0b0c"/>
+      </g>
+    
+  </g>
+<g filter="url(#softShadow)">
+    <!-- meter housing bezel (matte black plastic) -->
+    <rect x="-0.5" y="72.5" width="53" height="47" rx="3" fill="#0a0b0c" stroke="#000" stroke-width="0.5"/>
+    <rect x="-0.5" y="72.5" width="53" height="1.4" rx="0.7" fill="#fff" opacity="0.08"/>
+    <!-- inset dark screen -->
+    <rect x="1" y="74" width="50" height="44" rx="1.5" fill="#050707"/>
+    <rect x="1.4" y="74.4" width="49.2" height="0.8" rx="0.4" fill="#fff" opacity="0.04"/>
+    <!-- title strip -->
+    <text x="26" y="78.5" text-anchor="middle"
+          font-size="2.4" font-weight="600" font-family="'Share Tech Mono',monospace"
+          fill="#7dff9a" opacity="0.55">POWER CONSUMPTION</text>
+    <!-- big 4-digit power readout with glow -->
+    <g filter="url(#ledGlow)"><polygon points="5.84,82 6.68,81.3 9.120000000000001,81.3 9.96,82 9.120000000000001,82.7 6.68,82.7" fill="#7dff9a"/><polygon points="10.8,82.84 11.5,83.68 11.5,85.86 10.8,86.7 10.100000000000001,85.86 10.100000000000001,83.68" fill="#0a1e12"/><polygon points="10.8,87.3 11.5,88.14 11.5,90.32 10.8,91.16 10.100000000000001,90.32 10.100000000000001,88.14" fill="#7dff9a"/><polygon points="5.84,92 6.68,91.3 9.120000000000001,91.3 9.96,92 9.120000000000001,92.7 6.68,92.7" fill="#7dff9a"/><polygon points="5,87.3 5.7,88.14 5.7,90.32 5,91.16 4.3,90.32 4.3,88.14" fill="#0a1e12"/><polygon points="5,82.84 5.7,83.68 5.7,85.86 5,86.7 4.3,85.86 4.3,83.68" fill="#7dff9a"/><polygon points="5.84,87 6.68,86.3 9.120000000000001,86.3 9.96,87 9.120000000000001,87.7 6.68,87.7" fill="#7dff9a"/><polygon points="13.04,82 13.879999999999999,81.3 16.32,81.3 17.16,82 16.32,82.7 13.879999999999999,82.7" fill="#7dff9a"/><polygon points="18,82.84 18.7,83.68 18.7,85.86 18,86.7 17.3,85.86 17.3,83.68" fill="#7dff9a"/><polygon points="18,87.3 18.7,88.14 18.7,90.32 18,91.16 17.3,90.32 17.3,88.14" fill="#7dff9a"/><polygon points="13.04,92 13.879999999999999,91.3 16.32,91.3 17.16,92 16.32,92.7 13.879999999999999,92.7" fill="#7dff9a"/><polygon points="12.2,87.3 12.899999999999999,88.14 12.899999999999999,90.32 12.2,91.16 11.5,90.32 11.5,88.14" fill="#7dff9a"/><polygon points="12.2,82.84 12.899999999999999,83.68 12.899999999999999,85.86 12.2,86.7 11.5,85.86 11.5,83.68" fill="#7dff9a"/><polygon points="13.04,87 13.879999999999999,86.3 16.32,86.3 17.16,87 16.32,87.7 13.879999999999999,87.7" fill="#0a1e12"/><polygon points="20.24,82 21.08,81.3 23.52,81.3 24.36,82 23.52,82.7 21.08,82.7" fill="#7dff9a"/><polygon points="25.2,82.84 25.9,83.68 25.9,85.86 25.2,86.7 24.5,85.86 24.5,83.68" fill="#7dff9a"/><polygon points="25.2,87.3 25.9,88.14 25.9,90.32 25.2,91.16 24.5,90.32 24.5,88.14" fill="#7dff9a"/><polygon points="20.24,92 21.08,91.3 23.52,91.3 24.36,92 23.52,92.7 21.08,92.7" fill="#7dff9a"/><polygon points="19.4,87.3 20.099999999999998,88.14 20.099999999999998,90.32 19.4,91.16 18.7,90.32 18.7,88.14" fill="#7dff9a"/><polygon points="19.4,82.84 20.099999999999998,83.68 20.099999999999998,85.86 19.4,86.7 18.7,85.86 18.7,83.68" fill="#7dff9a"/><polygon points="20.24,87 21.08,86.3 23.52,86.3 24.36,87 23.52,87.7 21.08,87.7" fill="#0a1e12"/><polygon points="27.439999999999998,82 28.279999999999998,81.3 30.72,81.3 31.56,82 30.72,82.7 28.279999999999998,82.7" fill="#7dff9a"/><polygon points="32.4,82.84 33.1,83.68 33.1,85.86 32.4,86.7 31.7,85.86 31.7,83.68" fill="#0a1e12"/><polygon points="32.4,87.3 33.1,88.14 33.1,90.32 32.4,91.16 31.7,90.32 31.7,88.14" fill="#7dff9a"/><polygon points="27.439999999999998,92 28.279999999999998,91.3 30.72,91.3 31.56,92 30.72,92.7 28.279999999999998,92.7" fill="#7dff9a"/><polygon points="26.599999999999998,87.3 27.299999999999997,88.14 27.299999999999997,90.32 26.599999999999998,91.16 25.9,90.32 25.9,88.14" fill="#0a1e12"/><polygon points="26.599999999999998,82.84 27.299999999999997,83.68 27.299999999999997,85.86 26.599999999999998,86.7 25.9,85.86 25.9,83.68" fill="#7dff9a"/><polygon points="27.439999999999998,87 28.279999999999998,86.3 30.72,86.3 31.56,87 30.72,87.7 28.279999999999998,87.7" fill="#7dff9a"/></g>
+    <!-- unit label right of digits -->
+    <text x="35.4" y="90.5"
+          font-size="5" font-weight="700" font-family="'Share Tech Mono',monospace"
+          fill="#7dff9a" filter="url(#ledGlow)">W</text>
+    <!-- divider -->
+    <line x1="4" y1="95.5" x2="48" y2="95.5" stroke="#0a1e12" stroke-width="0.4"/>
+    <!-- small V reading -->
+    <g filter="url(#ledGlow)"><polygon points="5.378,100 5.756,99.685 6.853999999999999,99.685 7.231999999999999,100 6.853999999999999,100.315 5.756,100.315" fill="#7dff9a"/><polygon points="7.609999999999999,100.378 7.925,100.756 7.925,101.737 7.609999999999999,102.115 7.294999999999999,101.737 7.294999999999999,100.756" fill="#7dff9a"/><polygon points="7.609999999999999,102.385 7.925,102.763 7.925,103.744 7.609999999999999,104.122 7.294999999999999,103.744 7.294999999999999,102.763" fill="#0a1e12"/><polygon points="5.378,104.5 5.756,104.185 6.853999999999999,104.185 7.231999999999999,104.5 6.853999999999999,104.815 5.756,104.815" fill="#7dff9a"/><polygon points="5,102.385 5.315,102.763 5.315,103.744 5,104.122 4.685,103.744 4.685,102.763" fill="#7dff9a"/><polygon points="5,100.378 5.315,100.756 5.315,101.737 5,102.115 4.685,101.737 4.685,100.756" fill="#0a1e12"/><polygon points="5.378,102.25 5.756,101.935 6.853999999999999,101.935 7.231999999999999,102.25 6.853999999999999,102.565 5.756,102.565" fill="#7dff9a"/><polygon points="8.618,100 8.996,99.685 10.094,99.685 10.472,100 10.094,100.315 8.996,100.315" fill="#7dff9a"/><polygon points="10.85,100.378 11.165,100.756 11.165,101.737 10.85,102.115 10.535,101.737 10.535,100.756" fill="#7dff9a"/><polygon points="10.85,102.385 11.165,102.763 11.165,103.744 10.85,104.122 10.535,103.744 10.535,102.763" fill="#7dff9a"/><polygon points="8.618,104.5 8.996,104.185 10.094,104.185 10.472,104.5 10.094,104.815 8.996,104.815" fill="#7dff9a"/><polygon points="8.24,102.385 8.555,102.763 8.555,103.744 8.24,104.122 7.925,103.744 7.925,102.763" fill="#0a1e12"/><polygon points="8.24,100.378 8.555,100.756 8.555,101.737 8.24,102.115 7.925,101.737 7.925,100.756" fill="#0a1e12"/><polygon points="8.618,102.25 8.996,101.935 10.094,101.935 10.472,102.25 10.094,102.565 8.996,102.565" fill="#7dff9a"/><polygon points="11.858,100 12.236,99.685 13.334,99.685 13.712,100 13.334,100.315 12.236,100.315" fill="#7dff9a"/><polygon points="14.09,100.378 14.405,100.756 14.405,101.737 14.09,102.115 13.775,101.737 13.775,100.756" fill="#7dff9a"/><polygon points="14.09,102.385 14.405,102.763 14.405,103.744 14.09,104.122 13.775,103.744 13.775,102.763" fill="#7dff9a"/><polygon points="11.858,104.5 12.236,104.185 13.334,104.185 13.712,104.5 13.334,104.815 12.236,104.815" fill="#7dff9a"/><polygon points="11.48,102.385 11.795,102.763 11.795,103.744 11.48,104.122 11.165000000000001,103.744 11.165000000000001,102.763" fill="#7dff9a"/><polygon points="11.48,100.378 11.795,100.756 11.795,101.737 11.48,102.115 11.165000000000001,101.737 11.165000000000001,100.756" fill="#7dff9a"/><polygon points="11.858,102.25 12.236,101.935 13.334,101.935 13.712,102.25 13.334,102.565 12.236,102.565" fill="#0a1e12"/></g>
+    <text x="16.09" y="103.825"
+          font-size="2.6" font-weight="700" font-family="'Share Tech Mono',monospace"
+          fill="#7dff9a" opacity="0.85">V</text>
+    <!-- small A reading (derived from actual load) -->
+    <g filter="url(#ledGlow)"><polygon points="33.418,100 33.796,99.685 34.894,99.685 35.272,100 34.894,100.315 33.796,100.315" fill="#7dff9a"/><polygon points="35.65,100.378 35.964999999999996,100.756 35.964999999999996,101.737 35.65,102.115 35.335,101.737 35.335,100.756" fill="#7dff9a"/><polygon points="35.65,102.385 35.964999999999996,102.763 35.964999999999996,103.744 35.65,104.122 35.335,103.744 35.335,102.763" fill="#0a1e12"/><polygon points="33.418,104.5 33.796,104.185 34.894,104.185 35.272,104.5 34.894,104.815 33.796,104.815" fill="#7dff9a"/><polygon points="33.04,102.385 33.355,102.763 33.355,103.744 33.04,104.122 32.725,103.744 32.725,102.763" fill="#7dff9a"/><polygon points="33.04,100.378 33.355,100.756 33.355,101.737 33.04,102.115 32.725,101.737 32.725,100.756" fill="#0a1e12"/><polygon points="33.418,102.25 33.796,101.935 34.894,101.935 35.272,102.25 34.894,102.565 33.796,102.565" fill="#7dff9a"/><polygon points="36.658,100 37.036,99.685 38.134,99.685 38.512,100 38.134,100.315 37.036,100.315" fill="#0a1e12"/><polygon points="38.89,100.378 39.205,100.756 39.205,101.737 38.89,102.115 38.575,101.737 38.575,100.756" fill="#7dff9a"/><polygon points="38.89,102.385 39.205,102.763 39.205,103.744 38.89,104.122 38.575,103.744 38.575,102.763" fill="#7dff9a"/><polygon points="36.658,104.5 37.036,104.185 38.134,104.185 38.512,104.5 38.134,104.815 37.036,104.815" fill="#0a1e12"/><polygon points="36.28,102.385 36.595,102.763 36.595,103.744 36.28,104.122 35.965,103.744 35.965,102.763" fill="#0a1e12"/><polygon points="36.28,100.378 36.595,100.756 36.595,101.737 36.28,102.115 35.965,101.737 35.965,100.756" fill="#0a1e12"/><polygon points="36.658,102.25 37.036,101.935 38.134,101.935 38.512,102.25 38.134,102.565 37.036,102.565" fill="#0a1e12"/><circle cx="39.6325" cy="104.122" r="0.44100000000000006" fill="#7dff9a"/><polygon points="40.681000000000004,100 41.059000000000005,99.685 42.157000000000004,99.685 42.535000000000004,100 42.157000000000004,100.315 41.059000000000005,100.315" fill="#7dff9a"/><polygon points="42.913000000000004,100.378 43.228,100.756 43.228,101.737 42.913000000000004,102.115 42.598000000000006,101.737 42.598000000000006,100.756" fill="#7dff9a"/><polygon points="42.913000000000004,102.385 43.228,102.763 43.228,103.744 42.913000000000004,104.122 42.598000000000006,103.744 42.598000000000006,102.763" fill="#7dff9a"/><polygon points="40.681000000000004,104.5 41.059000000000005,104.185 42.157000000000004,104.185 42.535000000000004,104.5 42.157000000000004,104.815 41.059000000000005,104.815" fill="#7dff9a"/><polygon points="40.303000000000004,102.385 40.618,102.763 40.618,103.744 40.303000000000004,104.122 39.98800000000001,103.744 39.98800000000001,102.763" fill="#7dff9a"/><polygon points="40.303000000000004,100.378 40.618,100.756 40.618,101.737 40.303000000000004,102.115 39.98800000000001,101.737 39.98800000000001,100.756" fill="#7dff9a"/><polygon points="40.681000000000004,102.25 41.059000000000005,101.935 42.157000000000004,101.935 42.535000000000004,102.25 42.157000000000004,102.565 41.059000000000005,102.565" fill="#7dff9a"/></g>
+    <text x="48" y="103.825" text-anchor="end"
+          font-size="2.6" font-weight="700" font-family="'Share Tech Mono',monospace"
+          fill="#7dff9a" opacity="0.85">A</text>
+    <!-- load bar (turns red past 90%) -->
+    <rect x="4" y="112" width="44" height="2.6" rx="0.6" fill="#0a1e12"/>
+    <rect x="4" y="112" width="29.92" height="2.6" rx="0.6" fill="#7dff9a" filter="url(#ledGlow)" opacity="0.95"/>
+    <text x="26" y="116.7" text-anchor="middle"
+          font-size="2.2" font-weight="600" font-family="'Share Tech Mono',monospace"
+          fill="#7dff9a" opacity="0.7">LOAD 68%</text>
+    <!-- corner status pinlights -->
+    <circle cx="3.5" cy="76.5" r="0.7" fill="#37e07a"/>
+    <circle cx="48.5" cy="76.5" r="0.7" fill="#37b6ff"/>
+  </g>
+<g data-outlet="0" data-bank="0" data-type="iec-c19" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 159.5) rotate(0)" filter="url(#softShadow)">
+    <rect x="-11" y="-9" width="22" height="18" rx="2.2"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-9.2" y="-7.2" width="18.4" height="14.4" rx="1.5" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-5.5" y="-4.6" width="2.8" height="5" rx="0.5"/>
+      <rect x="2.7" y="-4.6" width="2.8" height="5" rx="0.5"/>
+      <rect x="-1.8" y="1.6" width="3.6" height="4" rx="0.5"/>
+    </g>
+    <rect x="-1.2" y="2.2" width="2.4" height="1.4" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -9.2 -7.7 L 6 -7.7 L 6 -6.4 L -9.2 -6.4 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<rect x="4" y="172" width="44" height="1.5"
+          fill="#040506" opacity="0.9"/>
+<g data-outlet="1" data-bank="1" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 186.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="2" data-bank="1" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 209.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="3" data-bank="1" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 232.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="4" data-bank="1" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 255.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<rect x="4" y="268" width="44" height="1.5"
+          fill="#040506" opacity="0.9"/>
+<g data-outlet="5" data-bank="2" data-type="iec-c19" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 282.5) rotate(0)" filter="url(#softShadow)">
+    <rect x="-11" y="-9" width="22" height="18" rx="2.2"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-9.2" y="-7.2" width="18.4" height="14.4" rx="1.5" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-5.5" y="-4.6" width="2.8" height="5" rx="0.5"/>
+      <rect x="2.7" y="-4.6" width="2.8" height="5" rx="0.5"/>
+      <rect x="-1.8" y="1.6" width="3.6" height="4" rx="0.5"/>
+    </g>
+    <rect x="-1.2" y="2.2" width="2.4" height="1.4" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -9.2 -7.7 L 6 -7.7 L 6 -6.4 L -9.2 -6.4 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<rect x="4" y="295" width="44" height="1.5"
+          fill="#040506" opacity="0.9"/>
+<g data-outlet="6" data-bank="3" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 309.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="7" data-bank="3" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 332.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="8" data-bank="3" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 355.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="9" data-bank="3" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 378.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<rect x="4" y="391" width="44" height="1.5"
+          fill="#040506" opacity="0.9"/>
+<g data-outlet="10" data-bank="4" data-type="iec-c19" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 405.5) rotate(0)" filter="url(#softShadow)">
+    <rect x="-11" y="-9" width="22" height="18" rx="2.2"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-9.2" y="-7.2" width="18.4" height="14.4" rx="1.5" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-5.5" y="-4.6" width="2.8" height="5" rx="0.5"/>
+      <rect x="2.7" y="-4.6" width="2.8" height="5" rx="0.5"/>
+      <rect x="-1.8" y="1.6" width="3.6" height="4" rx="0.5"/>
+    </g>
+    <rect x="-1.2" y="2.2" width="2.4" height="1.4" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -9.2 -7.7 L 6 -7.7 L 6 -6.4 L -9.2 -6.4 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<rect x="4" y="418" width="44" height="1.5"
+          fill="#040506" opacity="0.9"/>
+<g data-outlet="11" data-bank="5" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 432.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="12" data-bank="5" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 455.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="13" data-bank="5" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 478.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="14" data-bank="5" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 501.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<rect x="4" y="514" width="44" height="1.5"
+          fill="#040506" opacity="0.9"/>
+<g data-outlet="15" data-bank="6" data-type="iec-c19" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 528.5) rotate(0)" filter="url(#softShadow)">
+    <rect x="-11" y="-9" width="22" height="18" rx="2.2"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-9.2" y="-7.2" width="18.4" height="14.4" rx="1.5" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-5.5" y="-4.6" width="2.8" height="5" rx="0.5"/>
+      <rect x="2.7" y="-4.6" width="2.8" height="5" rx="0.5"/>
+      <rect x="-1.8" y="1.6" width="3.6" height="4" rx="0.5"/>
+    </g>
+    <rect x="-1.2" y="2.2" width="2.4" height="1.4" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -9.2 -7.7 L 6 -7.7 L 6 -6.4 L -9.2 -6.4 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<rect x="4" y="541" width="44" height="1.5"
+          fill="#040506" opacity="0.9"/>
+<g data-outlet="16" data-bank="7" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 555.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="17" data-bank="7" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 578.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="18" data-bank="7" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 601.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="19" data-bank="7" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 624.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<rect x="4" y="637" width="44" height="1.5"
+          fill="#040506" opacity="0.9"/>
+<g data-outlet="20" data-bank="8" data-type="iec-c19" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 651.5) rotate(0)" filter="url(#softShadow)">
+    <rect x="-11" y="-9" width="22" height="18" rx="2.2"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-9.2" y="-7.2" width="18.4" height="14.4" rx="1.5" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-5.5" y="-4.6" width="2.8" height="5" rx="0.5"/>
+      <rect x="2.7" y="-4.6" width="2.8" height="5" rx="0.5"/>
+      <rect x="-1.8" y="1.6" width="3.6" height="4" rx="0.5"/>
+    </g>
+    <rect x="-1.2" y="2.2" width="2.4" height="1.4" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -9.2 -7.7 L 6 -7.7 L 6 -6.4 L -9.2 -6.4 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<rect x="4" y="664" width="44" height="1.5"
+          fill="#040506" opacity="0.9"/>
+<g data-outlet="21" data-bank="9" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 678.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="22" data-bank="9" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 701.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="23" data-bank="9" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 724.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="24" data-bank="9" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 747.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<rect x="4" y="760" width="44" height="1.5"
+          fill="#040506" opacity="0.9"/>
+<g data-outlet="25" data-bank="10" data-type="iec-c19" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 774.5) rotate(0)" filter="url(#softShadow)">
+    <rect x="-11" y="-9" width="22" height="18" rx="2.2"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-9.2" y="-7.2" width="18.4" height="14.4" rx="1.5" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-5.5" y="-4.6" width="2.8" height="5" rx="0.5"/>
+      <rect x="2.7" y="-4.6" width="2.8" height="5" rx="0.5"/>
+      <rect x="-1.8" y="1.6" width="3.6" height="4" rx="0.5"/>
+    </g>
+    <rect x="-1.2" y="2.2" width="2.4" height="1.4" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -9.2 -7.7 L 6 -7.7 L 6 -6.4 L -9.2 -6.4 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<rect x="4" y="787" width="44" height="1.5"
+          fill="#040506" opacity="0.9"/>
+<g data-outlet="26" data-bank="11" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 801.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="27" data-bank="11" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 824.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="28" data-bank="11" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 847.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g data-outlet="29" data-bank="11" data-type="iec-c13" class="rs-outlet" style="cursor:pointer">
+<g transform="translate(26 870.5) rotate(0)" filter="url(#softShadow)">
+    <path d="M -8.5 -5.5 Q -8.5 -7.5 -6.5 -7.5
+             L 6.5 -7.5 Q 8.5 -7.5 8.5 -5.5
+             L 8.5 6.5 Q 8.5 7.5 7.5 7.5
+             L -7.5 7.5 Q -8.5 7.5 -8.5 6.5 Z"
+          fill="#efe9d8" stroke="#a89f88" stroke-width="0.3"/>
+    <rect x="-7.1" y="-6.1" width="14.2" height="12.2" rx="1.2" fill="url(#socketPitDark)"/>
+    <g fill="#050506" stroke="#000" stroke-width="0.25">
+      <rect x="-4.4" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="2.2" y="-4.1" width="2.2" height="3.9" rx="0.4"/>
+      <rect x="-1.3" y="1.1" width="2.6" height="3.4" rx="0.4"/>
+    </g>
+    <rect x="-0.9" y="1.5" width="1.8" height="1.1" fill="url(#pinBrass)" opacity="0.55"/>
+    <path d="M -7 -6.5 L 4.5 -6.5 L 4.5 -5.3 L -7 -5.3 Z"
+          fill="#fff" opacity="0.2"/>
+  </g>
+</g>
+<g filter="url(#softShadow)">
+    <rect x="6.5" y="52" width="11" height="9" rx="0.8" fill="#0e0f10" stroke="#000" stroke-width="0.5"/>
+    <rect x="7.5" y="52.8" width="9" height="7.4" rx="0.5" fill="#c8b060" opacity="0.9"/>
+    
+      <rect x="8" y="53.2" width="8" height="1.4" fill="#f4d060" opacity="0.4"/>
+      <rect x="10.8" y="51.6" width="2.4" height="1" fill="#0e0f10" stroke="#000" stroke-width="0.3"/>
+    
+    
+    
+      <circle cx="8.5" cy="63.5" r="0.9" fill="#37e07a"/>
+      <circle cx="15.5" cy="63.5" r="0.9" fill="#ffb040"/>
+    <text x="12" y="66.5" text-anchor="middle" font-size="2.8" font-weight="600" font-family="'Share Tech Mono',monospace" fill="#8b939a">ETH</text>
+  </g>
+<g filter="url(#softShadow)">
+    <rect x="20.5" y="52" width="9" height="4" rx="0.8" fill="#0e0f10" stroke="#000" stroke-width="0.5"/>
+    <rect x="21.5" y="52.8" width="7" height="2.4" rx="1.2" fill="#2a3540" opacity="0.9"/>
+    
+    <ellipse cx="25" cy="54" rx="3" ry="0.8" fill="#5a6570"/>
+    
+    
+    <text x="25" y="61.5" text-anchor="middle" font-size="2.8" font-weight="600" font-family="'Share Tech Mono',monospace" fill="#8b939a">USB-C</text>
+  </g>
+<g filter="url(#softShadow)">
+    <rect x="34.5" y="52" width="11" height="9" rx="0.8" fill="#0e0f10" stroke="#000" stroke-width="0.5"/>
+    <rect x="35.5" y="52.8" width="9" height="7.4" rx="0.5" fill="#c8b060" opacity="0.9"/>
+    
+    
+    
+    
+    <text x="40" y="66.5" text-anchor="middle" font-size="2.8" font-weight="600" font-family="'Share Tech Mono',monospace" fill="#8b939a">CON</text>
+  </g>
+<circle cx="10" cy="136" r="4.4" fill="#37e07a" opacity="0.22"/>
+    <circle cx="10" cy="136" r="2" fill="#37e07a" stroke="#000" stroke-width="0.4"/>
+    <circle cx="9.4" cy="135.4" r="0.7" fill="#fff" opacity="0.75"/>
+<circle cx="20" cy="136" r="4.4" fill="#37b6ff" opacity="0.22"/>
+    <circle cx="20" cy="136" r="2" fill="#37b6ff" stroke="#000" stroke-width="0.4"/>
+    <circle cx="19.4" cy="135.4" r="0.7" fill="#fff" opacity="0.75"/>
+<g transform="translate(26 0) rotate(-90)">
+    <!-- strain relief boot -->
+    <rect x="-1" y="-4" width="12" height="8" rx="2" fill="#141516" stroke="#000" stroke-width="0.4"/>
+    <!-- cord curving away -->
+    <path d="M 10 0 Q 23.200000000000003 -20.299999999999997 58 -17.4"
+          stroke="url(#cordJacket)" stroke-width="4.3" fill="none" stroke-linecap="round"/>
+    <path d="M 10 0 Q 23.200000000000003 -20.299999999999997 58 -17.4"
+          stroke="#fff" stroke-width="0.6" fill="none" opacity="0.08"/>
+    
+    <!-- plug at cord tip -->
+    <g transform="translate(58 -17.4)"><g transform="translate(0 0) rotate(-20)" filter="url(#softShadow)">
+      <rect x="-8" y="-11" width="30" height="22" rx="5" fill="#0a5fb0" stroke="#063a6e" stroke-width="0.8"/>
+      <rect x="-8" y="-11" width="30" height="9" rx="5" fill="#1f7fd0" opacity="0.7"/>
+      <ellipse cx="22" cy="0" rx="7" ry="11" fill="#084a8c" stroke="#052f5a" stroke-width="0.8"/>
+      <ellipse cx="22" cy="0" rx="4.2" ry="7.5" fill="#03203d"/>
+      <circle cx="22" cy="-3.5" r="1.4" fill="#f4e2a1"/><circle cx="19" cy="2.5" r="1.4" fill="#f4e2a1"/><circle cx="25" cy="2.5" r="1.4" fill="#f4e2a1"/>
+      <rect x="-16" y="-5" width="10" height="10" rx="2" fill="#1a1c1e"/>
+      <text x="7" y="17" text-anchor="middle" font-size="6" font-weight="600" font-family="monospace" fill="#cfe4f6">32A · 6h</text>
+    </g></g>
+  </g>
+<g transform="translate(6 908) scale(0.75)">
+    <rect x="0" y="0" width="42" height="12" rx="1.5" fill="#e2231a"/>
+    <text x="21" y="9.5" text-anchor="middle" font-size="9" font-weight="700" font-family="Arial,sans-serif" fill="#fff" letter-spacing="0.5">APC</text>
+  </g>
+<g font-family="'Share Tech Mono',monospace" font-weight="500" fill="#e8eaec" opacity="0.65">
+<text x="26" y="124" text-anchor="middle" font-size="3.5">RS-PDU-SWITCHED</text>
+<text x="26" y="130" text-anchor="middle" font-size="3">230V·32A·SØ</text>
+</g>
+</g></svg>

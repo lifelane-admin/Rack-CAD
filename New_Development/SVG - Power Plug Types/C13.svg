@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" width="100%" height="100%">
+  <defs>
+    <!-- Chassis / Frame Gradient -->
+    <linearGradient id="c13FrameGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2a2c30"/>
+      <stop offset="100%" stop-color="#141517"/>
+    </linearGradient>
+
+    <!-- Beveled Recess Gradient -->
+    <linearGradient id="c13BevelGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1c1d21"/>
+      <stop offset="100%" stop-color="#0b0c0d"/>
+    </linearGradient>
+
+    <!-- Inner Socket Hole Shadow -->
+    <filter id="c13SlotShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" result="blur"/>
+      <feOffset dx="0" dy="1.5"/>
+      <feComposite in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1" result="shadowDiff"/>
+      <feFlood flood-color="#000000" flood-opacity="0.95"/>
+      <feComposite in2="shadowDiff" operator="in"/>
+      <feComposite in2="SourceGraphic" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Outer Frame / Socket Housing -->
+  <rect x="10" y="10" width="180" height="140" rx="10" fill="url(#c13FrameGrad)" stroke="#0b0c0d" stroke-width="3"/>
+  <rect x="14" y="14" width="172" height="132" rx="8" fill="none" stroke="#4a4d54" stroke-width="1" opacity="0.5"/>
+
+  <!-- Outer Pentagonal Shroud Outline -->
+  <path d="M 50 28 L 150 28 A 12 12 0 0 1 162 40 L 162 90 L 134 124 L 66 124 L 38 90 L 38 40 A 12 12 0 0 1 50 28 Z" 
+        fill="#121315" stroke="#383b42" stroke-width="2"/>
+
+  <!-- Inner Recessed Pentagonal Face -->
+  <path d="M 54 34 L 146 34 A 8 8 0 0 1 154 42 L 154 87 L 128 118 L 72 118 L 46 87 L 46 42 A 8 8 0 0 1 54 34 Z" 
+        fill="url(#c13BevelGrad)" stroke="#050505" stroke-width="2"/>
+
+  <!-- Inner Highlight Rim -->
+  <path d="M 57 38 L 143 38 A 6 6 0 0 1 149 44 L 149 84 L 125 113 L 75 113 L 51 84 L 51 44 A 6 6 0 0 1 57 38 Z" 
+        fill="#080809" stroke="#1f2125" stroke-width="1"/>
+
+  <!-- ================= C13 FEMALE SLOTS (3 Vertical Receptacles) ================= -->
+
+  <!-- Left Line Slot (Vertical) -->
+  <g transform="translate(68, 50)">
+    <rect x="0" y="0" width="10" height="24" rx="2" fill="#000000" filter="url(#c13SlotShadow)" stroke="#222" stroke-width="0.5"/>
+    <!-- Terminal Contact Spring Detail -->
+    <rect x="3" y="3" width="4" height="18" fill="#111214" opacity="0.6"/>
+  </g>
+
+  <!-- Right Neutral Slot (Vertical) -->
+  <g transform="translate(122, 50)">
+    <rect x="0" y="0" width="10" height="24" rx="2" fill="#000000" filter="url(#c13SlotShadow)" stroke="#222" stroke-width="0.5"/>
+    <rect x="3" y="3" width="4" height="18" fill="#111214" opacity="0.6"/>
+  </g>
+
+  <!-- Top Center Ground Slot (Vertical) -->
+  <g transform="translate(95, 76)">
+    <rect x="0" y="0" width="10" height="24" rx="2" fill="#000000" filter="url(#c13SlotShadow)" stroke="#222" stroke-width="0.5"/>
+    <rect x="3" y="3" width="4" height="18" fill="#111214" opacity="0.6"/>
+  </g>
+</svg>

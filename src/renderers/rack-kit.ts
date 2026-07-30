@@ -6,6 +6,41 @@ export const MIN_BLADE_W = 34;
 export const EAR_W = 26;
 export const PANEL_PAD = 22;
 
+/**
+ * Outer housing outline shared by IEC C13 (female receptacle) and C14 (male plug) connectors —
+ * a flat-topped shield shape with straight sides and diagonally chamfered bottom corners, traced
+ * from the reference artwork at `New_Development/SVG - Power Plug Types/C13.svg` (whose shroud
+ * bounding box is 124x96) so every C13/C14 drawn in the app shares the same real-world silhouette.
+ */
+export function iecShroudPath(cx: number, cy: number, w: number, h: number): string {
+  const sx = w / 124, sy = h / 96;
+  const x0 = cx - w / 2, y0 = cy - h / 2;
+  const X = (x: number) => x0 + x * sx;
+  const Y = (y: number) => y0 + y * sy;
+  const rx = 12 * sx, ry = 12 * sy;
+  return [
+    `M ${X(12)} ${Y(0)}`,
+    `L ${X(112)} ${Y(0)}`,
+    `A ${rx} ${ry} 0 0 1 ${X(124)} ${Y(12)}`,
+    `L ${X(124)} ${Y(62)}`,
+    `L ${X(96)} ${Y(96)}`,
+    `L ${X(28)} ${Y(96)}`,
+    `L ${X(0)} ${Y(62)}`,
+    `L ${X(0)} ${Y(12)}`,
+    `A ${rx} ${ry} 0 0 1 ${X(12)} ${Y(0)}`,
+    'Z',
+  ].join(' ');
+}
+
+/** Center offsets (as fractions of the shroud's own w/h) for the Live/Neutral (top, side-by-side)
+ *  + Earth (bottom-center) contacts on an IEC C13/C14-family connector face — matches the
+ *  reference artwork's contact layout exactly. */
+export const IEC_CONTACTS = {
+  live:    { dx: -0.218, dy: -0.146 },
+  neutral: { dx: 0.218, dy: -0.146 },
+  earth:   { dx: 0, dy: 0.125 },
+} as const;
+
 export function el<K extends keyof SVGElementTagNameMap>(
   tag: K, attrs: Record<string, string | number> = {},
 ): SVGElementTagNameMap[K] {

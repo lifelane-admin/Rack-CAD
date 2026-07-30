@@ -1,35 +1,14 @@
 // src/renderers/pdu-renderer.ts
-import { el, g, drawLed } from './rack-kit';
+import { el, g, drawLed, iecShroudPath, IEC_CONTACTS } from './rack-kit';
 import type { DeviceTemplate, DeviceData, SocketType, PduConfig, PduOutletGroup } from '../core/types';
 import { stateManager } from '../core/state';
 import { getTemplate } from '../library/device-catalog';
-
-type PduTier = 'basic' | 'metered' | 'smart';
-
-/** Legacy fallback for devices with no explicit `config.category` set yet. */
-function inferTierFromName(template: DeviceTemplate | null): PduTier {
-  const text = `${template?.name ?? ''} ${template?.model ?? ''}`.toLowerCase();
-  if (text.includes('smart')) return 'smart';
-  if (text.includes('metered')) return 'metered';
-  return 'basic';
-}
-
-const TIER_BY_CATEGORY: Record<string, PduTier> = {
-  basic: 'basic',
-  metered: 'metered',
-  meteredOutlet: 'metered',
-  switched: 'metered',
-  managed: 'metered',
-  smart: 'smart',
-  intelligent: 'smart',
-  monitored: 'smart',
-  highDensity: 'smart',
-};
-
-function tierFor(config: PduConfig, template: DeviceTemplate | null): PduTier {
-  if (config.category && TIER_BY_CATEGORY[config.category]) return TIER_BY_CATEGORY[config.category];
-  return inferTierFromName(template);
-}
+import {
+  normalizeComposition, socketWidth, socketHeight, meterTierFor,
+  computeConfiguredPduLayout, computeGenericPduLayout,
+  computeSidePduHeaderBottom, computeSidePduOutletPositions,
+  DISPLAY_FEATURES,
+} from './pdu-layout';
 
 /** Safe cast + default for a device/template's untyped `deviceConfig` bag. */
 function asPduConfig(config: unknown): PduConfig {
@@ -140,14 +119,39 @@ function drawMcb(parent: SVGElement, x: number, y: number, curve: string, curren
   parent.appendChild(grp);
 }
 
-/** Small labeled connector box for a network-port chip (rj45/sfp/usb/usbC/serial/console/microUsb). */
+/** Real RJ45 jack shape (cage + keyed trapezoid mouth + gold pins) — same silhouette as the
+ *  switch/networking panel renderers' Ethernet ports, at PDU network-port-row scale, reusing
+ *  the `${uid}pit`/`${uid}brass` gradients already set up by makePduDefs(). Used for both the
+ *  'rj45' and 'console' network-port chips (real console ports are RJ45-shaped too). */
+function drawRj45Jack(parent: SVGElement, uid: string, x: number, y: number, label: string): void {
+  const w = 11, h = 9;
+  const grp = el('g', { transform: `translate(${x} ${y})` });
+  grp.appendChild(el('rect', { x: 0.3, y: 0.3, width: w - 0.6, height: h - 0.6, rx: 1.6, fill: '#15181b', stroke: '#05070a', 'stroke-width': 0.6 }));
+  grp.appendChild(el('rect', { x: 0.9, y: 0.9, width: w - 1.8, height: h - 1.8, rx: 1.2, fill: 'none', stroke: '#3a4147', 'stroke-width': 0.4, opacity: 0.8 }));
+  const mg = el('g', { transform: `translate(${w / 2} ${h / 2 + 1})` });
+  mg.appendChild(el('path', {
+    d: 'M-4 -3 h8 v4 h-1.6 v1.3 a0.8 0.8 0 0 1 -0.8 0.8 h-1.6 a0.8 0.8 0 0 1 -0.8 -0.8 v-1.3 h-1.6 z',
+    fill: `url(#${uid}pit)`, stroke: '#3a352a', 'stroke-width': 0.3,
+  }));
+  for (let i = 0; i < 8; i++) {
+    mg.appendChild(el('rect', { x: -3.1 + i * 0.8, y: -3, width: 0.5, height: 2.6, fill: `url(#${uid}brass)`, opacity: 0.9 }));
+  }
+  grp.appendChild(mg);
+  const t = el('text', { x: w / 2, y: h + 4.5, 'text-anchor': 'middle', 'font-size': 3, fill: '#7b838a' });
+  t.textContent = label;
+  grp.appendChild(t);
+  parent.appendChild(grp);
+}
+
+/** Small labeled connector box for a network-port chip (sfp/usb/usbC/serial/microUsb); rj45 and
+ *  console are handled by drawRj45Jack() instead, for the real jack shape. */
 function drawNetPort(parent: SVGElement, uid: string, x: number, y: number, kind: string): void {
+  if (kind === 'rj45') return drawRj45Jack(parent, uid, x, y, 'ETH');
+  if (kind === 'console') return drawRj45Jack(parent, uid, x, y, 'CON');
   const SPEC: Record<string, { w: number; h: number; label: string; pin: string }> = {
-    rj45:     { w: 11, h: 9, label: 'ETH', pin: '#c8b060' },
     sfp:      { w: 13, h: 9, label: 'SFP', pin: '#3a4d5c' },
     usb:      { w: 11, h: 5, label: 'USB', pin: '#0a0b0c' },
     usbC:     { w: 9,  h: 4, label: 'USB-C', pin: '#2a3540' },
-    console:  { w: 11, h: 9, label: 'CON', pin: '#c8b060' },
     serial:   { w: 13, h: 6, label: 'RS232', pin: '#3a4d5c' },
     microUsb: { w: 7,  h: 3, label: 'µUSB', pin: '#2a3540' },
   };
@@ -190,19 +194,25 @@ function drawWirelessIcon(parent: SVGElement, x: number, y: number, kind: string
   parent.appendChild(grp);
 }
 
-/** Compact trailing icon row for network ports (non-rj45)/env sensors/wireless — drawn on horizontal
+/** Compact trailing icon row for network ports/env sensors/wireless — drawn on horizontal
  *  PDUs only when the chassis is tall enough (2U+) to have spare room below the socket row. */
-function drawExtraFeatureRow(parent: SVGElement, uid: string, x: number, y: number, config: PduConfig): void {
+/** Trailing icon row for network ports/env sensors/wireless, confined to `maxX` (the left rail's
+ *  right edge) so it can never spill into the outlet area — items beyond that are simply dropped
+ *  rather than drawn over ports. */
+function drawExtraFeatureRow(parent: SVGElement, uid: string, x: number, y: number, config: PduConfig, maxX: number): void {
   let cx = x;
-  (config.networkPorts ?? []).filter(p => p !== 'rj45').forEach(p => {
+  (config.networkPorts ?? []).forEach(p => {
+    if (cx + 22 > maxX) return;
     drawNetPort(parent, uid, cx, y, p);
     cx += 22;
   });
   (config.envSensors ?? []).forEach(s => {
+    if (cx + 24 > maxX) return;
     drawEnvSensor(parent, cx, y + 2, s);
     cx += 24;
   });
   (config.wireless ?? []).forEach(w => {
+    if (cx + 20 > maxX) return;
     drawWirelessIcon(parent, cx + 4, y + 4, w);
     cx += 20;
   });
@@ -217,50 +227,6 @@ function drawLedStrip(parent: SVGElement, uid: string, x: number, y: number, led
     const cy = vertical ? y + i * 10 : y;
     drawLed(parent, uid, cx, cy, COLORS[l], true, 1.4);
   });
-}
-
-/** Draws the input plug shape at the cord tip, distinct per `inputPlug` selection. */
-function drawInputPlug(parent: SVGElement, inputPlug: string | undefined): void {
-  if (inputPlug === 'bs1363') {
-    parent.appendChild(el('rect', { x: -5, y: -5, width: 10, height: 10, rx: 1.2, fill: '#f4f4f4', stroke: '#8a8a8a', 'stroke-width': 0.5 }));
-    parent.appendChild(el('rect', { x: -1.5, y: -4, width: 3, height: 2.2, fill: '#e8b040' }));
-    parent.appendChild(el('rect', { x: -3.5, y: -0.5, width: 2.2, height: 3, fill: '#e8b040' }));
-    parent.appendChild(el('rect', { x: 1.3, y: -0.5, width: 2.2, height: 3, fill: '#e8b040' }));
-  } else if (inputPlug === 'nema515') {
-    parent.appendChild(el('rect', { x: -4.5, y: -4, width: 9, height: 8, rx: 4, fill: '#2a2a2a', stroke: '#000', 'stroke-width': 0.4 }));
-    parent.appendChild(el('rect', { x: -2.2, y: -2, width: 1, height: 3, fill: '#c0c0c0' }));
-    parent.appendChild(el('rect', { x: 1.2, y: -2, width: 1, height: 3, fill: '#c0c0c0' }));
-    parent.appendChild(el('circle', { cx: 0, cy: 2, r: 0.7, fill: '#c0c0c0' }));
-  } else if (inputPlug === 'iec60309-16a') {
-    parent.appendChild(el('circle', { cx: 0, cy: 0, r: 3.5, fill: '#0a5fb0', stroke: '#063a6e', 'stroke-width': 0.4 }));
-    parent.appendChild(el('circle', { cx: 0, cy: 0, r: 1.6, fill: '#03203d' }));
-  } else {
-    // iec60309-32a (default) — larger blue commando plug
-    parent.appendChild(el('circle', { cx: 0, cy: 0, r: 4.4, fill: '#0a5fb0', stroke: '#063a6e', 'stroke-width': 0.5 }));
-    parent.appendChild(el('circle', { cx: 0, cy: 0, r: 2.2, fill: '#03203d' }));
-  }
-}
-
-/**
- * Draws a short strain-relief stub + the input plug shape, inset near the edge indicated by
- * `cableEntry`. Every PDU panel is drawn inside a nested `<svg viewBox="0 0 W H">`, and nested
- * SVGs clip to their own viewport by default — so unlike the HTML reference (whose canvas is
- * much larger than the device itself), this MUST stay fully within 0..W / 0..H or it's invisible.
- */
-function drawCord(parent: SVGElement, W: number, H: number, cableEntry: string | undefined, cordCsa = 6, inputPlug?: string, marginOverride?: number): void {
-  const margin = marginOverride ?? Math.max(9, Math.min(W, H) * 0.35);
-  const stub = Math.min(4, margin * 0.4);
-  let ex = W / 2, ey = margin, dx = 0, dy = -stub;
-  if (cableEntry === 'bottom') { ex = W / 2; ey = H - margin; dx = 0; dy = stub; }
-  else if (cableEntry === 'left') { ex = margin; ey = H / 2; dx = -stub; dy = 0; }
-  else if (cableEntry === 'right') { ex = W - margin; ey = H / 2; dx = stub; dy = 0; }
-  const thickness = 1 + cordCsa * 0.12;
-  const grp = el('g', { transform: `translate(${ex} ${ey})` });
-  grp.appendChild(el('line', { x1: 0, y1: 0, x2: dx, y2: dy, stroke: '#0f0f0f', 'stroke-width': thickness, 'stroke-linecap': 'round' }));
-  const plugGrp = el('g', { transform: `translate(${dx * 1.3} ${dy * 1.3})` });
-  drawInputPlug(plugGrp, inputPlug);
-  grp.appendChild(plugGrp);
-  parent.appendChild(grp);
 }
 
 /** Sums live wattage + which outlet indices are actually cabled, by walking real cables against
@@ -287,17 +253,6 @@ export function computePduLoad(pduDeviceId: string): { watts: number; connectedO
     }
   }
   return { watts, connectedOutlets };
-}
-
-/** Normalizes `config.composition` (new) or the legacy `config.rows`/`template.outletConfig` shapes into one list. */
-function normalizeComposition(config: PduConfig, fallback: Array<{ socketType: SocketType; count: number }> | undefined): PduOutletGroup[] {
-  const raw = (config.composition as PduOutletGroup[] | undefined)
-    ?? (config as unknown as { rows?: Array<{ type?: string; socketType?: string; count: number }> }).rows;
-  if (Array.isArray(raw) && raw.length) {
-    return raw.map(r => ({ type: ((r as any).type ?? (r as any).socketType ?? 'C13') as SocketType, count: r.count }));
-  }
-  if (fallback?.length) return fallback.map(r => ({ type: r.socketType, count: r.count }));
-  return [{ type: 'C13', count: 8 }];
 }
 
 function makePduDefs(ns: SVGSVGElement, uid: string, finish: FinishPreset): void {
@@ -341,39 +296,162 @@ function makePduDefs(ns: SVGSVGElement, uid: string, finish: FinishPreset): void
   ns.appendChild(defs);
 }
 
-/** Compact brand block (PWR LED + "RACK SLICER" wordmark + model, optionally + voltage/current) reused by both PDU layouts. */
-function drawPduBrand(parent: SVGElement, uid: string, x: number, cy: number, textColor: string, model: string, labelSuffix = ''): number {
-  drawLed(parent, uid, x + 4, cy, '#39ff8a', true, 2.2);
-  const brandTxt = el('text', { x: x + 11, y: cy - 3, 'font-size': 6.5, 'font-weight': 700, fill: '#37b6ff', 'letter-spacing': 0.6 });
+/**
+ * Everything that isn't an outlet — brand wordmark, model/spec subtitle, status LEDs, breaker,
+ * live meter, and the manufacturer badge — stacked vertically inside the fixed-width left rail
+ * (`railW`, from pduLeftRailWidth()). The remaining ~80% of the chassis is reserved purely for
+ * outlet sockets, matching the reference PDU photo: branding/meter/breaker never carve space out
+ * of the port area, they just shrink/truncate/stack to fit their own narrow column instead.
+ */
+function drawPduLeftRail(
+  parent: SVGElement, uid: string, config: PduConfig, template: DeviceTemplate | null,
+  railW: number, H: number, textColor: string,
+  watts: number, showMeter: boolean, mcbShown: boolean,
+): void {
+  const oled = (config.smartFeatures ?? []).includes('oled');
+  const voltage = config.electrical?.voltage ?? 230;
+  const amps = voltage > 0 ? watts / voltage : 0;
+  const leds = (config.leds ?? ['power']).filter(l => l !== 'outlet' && ['power', 'network', 'alarm', 'rgb'].includes(l));
+
+  // Brand wordmark drawn exactly once — no second "RACK SLICER" stamp elsewhere in this rail.
+  drawLed(parent, uid, 6, 6, '#39ff8a', true, 1.3);
+  const brandFontSize = Math.max(3.6, Math.min(6, railW * 0.1));
+  const brandTxt = el('text', { x: 11, y: 8, 'font-size': brandFontSize, 'font-weight': 700, fill: '#37b6ff', 'letter-spacing': 0.1 });
   brandTxt.textContent = 'RACK SLICER';
   parent.appendChild(brandTxt);
-  const fullModel = model + labelSuffix;
-  const modelTxt = el('text', { x: x + 11, y: cy + 7, 'font-size': 6, fill: textColor, opacity: 0.7, 'letter-spacing': 0.4 });
-  modelTxt.textContent = fullModel;
-  parent.appendChild(modelTxt);
-  return x + 11 + Math.max(fullModel.length, 11) * 4.4;
+  let y = 8 + brandFontSize * 0.4;
+
+  // Model/spec subtitle — only when there's real room for it, so it never eats into the meter.
+  if (H - y > 18) {
+    const modelText = template?.model ?? 'PDU';
+    const subFontSize = Math.max(3, Math.min(4.2, railW * 0.075));
+    const maxChars = Math.max(6, Math.floor((railW - 6) / (subFontSize * 0.58)));
+    const displaySub = modelText.length > maxChars ? modelText.slice(0, maxChars - 1) + '…' : modelText;
+    const subTxt = el('text', { x: 5, y: y + subFontSize, 'font-size': subFontSize, fill: textColor, opacity: 0.6 });
+    subTxt.textContent = displaySub;
+    parent.appendChild(subTxt);
+    y += subFontSize + 3;
+  }
+
+  // Status LED strip — lowest priority; only drawn if the meter/breaker below still has enough
+  // room afterward, so the big V/A/W display always wins the remaining space.
+  if (leds.length && H - y > 30) {
+    drawLedStrip(parent, uid, 5, y + 3, leds, false);
+    y += 8;
+  }
+
+  y += 2;
+  const bottomH = Math.max(H - y - 3, 8);
+  if (mcbShown && showMeter) {
+    const mcbColW = Math.min(16, railW * 0.26);
+    drawMcbIfConfigured(parent, config, 2, y + bottomH / 2, false, bottomH);
+    const meterX = mcbColW + 4;
+    drawPduMeter(parent, uid, meterX, y, Math.max(railW - meterX - 3, 20), bottomH, voltage, amps, watts, oled);
+  } else if (showMeter) {
+    drawPduMeter(parent, uid, 3, y, railW - 6, bottomH, voltage, amps, watts, oled);
+  } else if (mcbShown) {
+    drawMcbIfConfigured(parent, config, railW / 2 - 5, y + bottomH / 2, false, bottomH);
+  }
 }
 
-/** Builds the " · 230V 32A" style suffix for drawPduBrand from the `labels`/`electrical` config. */
-function labelSuffixFor(config: PduConfig): string {
-  const labels = config.labels ?? ['model', 'voltage', 'current'];
-  const elec = config.electrical ?? {};
-  const parts: string[] = [];
-  if (labels.includes('voltage') && elec.voltage) parts.push(`${elec.voltage}V`);
-  if (labels.includes('current') && elec.currentA) parts.push(`${elec.currentA}A`);
-  return parts.length ? ` · ${parts.join(' ')}` : '';
+/** Which of the 7 LCD segments (a=top, b=top-right, c=bottom-right, d=bottom, e=bottom-left,
+ *  f=top-left, g=middle) are lit for each digit — the classic calculator/digital-meter font. */
+const SEVEN_SEG: Record<string, string[]> = {
+  '0': ['a','b','c','d','e','f'], '1': ['b','c'], '2': ['a','b','g','e','d'],
+  '3': ['a','b','c','d','g'], '4': ['f','g','b','c'], '5': ['a','f','g','c','d'],
+  '6': ['a','f','g','e','c','d'], '7': ['a','b','c'], '8': ['a','b','c','d','e','f','g'],
+  '9': ['a','b','c','d','f','g'],
+};
+
+/** One 7-segment LCD-style digit glyph (real segments, not a font — no font install is possible
+ *  in this offline environment), height `dh`, top-left at (x,y). Returns the glyph's width.
+ *  Unlit segments are drawn very dim rather than omitted, matching the "ghost segment" look of
+ *  a real digital display. */
+function drawSevenSegDigit(parent: SVGElement, uid: string, x: number, y: number, digit: string, dh: number, color: string): number {
+  const dw = dh * 0.56;
+  const st = dh * 0.16;
+  const on = new Set(SEVEN_SEG[digit] ?? []);
+  const segs: Array<[string, number, number, number, number]> = [
+    ['a', st * 0.5, 0, dw - st, st],
+    ['b', dw - st, st * 0.5, st, dh / 2 - st * 0.75],
+    ['c', dw - st, dh / 2 + st * 0.25, st, dh / 2 - st * 0.75],
+    ['d', st * 0.5, dh - st, dw - st, st],
+    ['e', 0, dh / 2 + st * 0.25, st, dh / 2 - st * 0.75],
+    ['f', 0, st * 0.5, st, dh / 2 - st * 0.75],
+    ['g', st * 0.5, dh / 2 - st * 0.5, dw - st, st],
+  ];
+  segs.forEach(([key, sx, sy, sw, sh]) => {
+    const isOn = on.has(key);
+    const r = el('rect', {
+      x: x + sx, y: y + sy, width: Math.max(sw, 0.1), height: Math.max(sh, 0.1),
+      rx: Math.min(st, sw, sh) * 0.35, fill: color, opacity: isOn ? 1 : 0.12,
+    });
+    if (isOn) r.setAttribute('filter', `url(#${uid}gw)`);
+    parent.appendChild(r);
+  });
+  return dw;
 }
 
-/** Compact digital meter readout for metered/smart PDUs; returns false if there isn't room to draw it. */
-function drawPduMeter(parent: SVGElement, uid: string, x: number, cy: number, w: number, h: number, readingText: string, oled = false): boolean {
-  if (w < 34) return false;
+/** Draws a full digital-meter reading ("450V", "12.5A", "3000W") centered at (cx,cy) — the
+ *  numeric part as real 7-segment glyphs, any trailing unit letters as a smaller plain
+ *  monospace suffix. `dh` is the digit glyph height. */
+function drawSevenSegReading(parent: SVGElement, uid: string, cx: number, cy: number, text: string, dh: number, color: string): void {
+  const dw = dh * 0.56;
+  const gap = dh * 0.18;
+  const dotW = dh * 0.18;
+  const digitPart = text.match(/^[\d.]+/)?.[0] ?? '';
+  const suffix = text.slice(digitPart.length);
+  const chars = digitPart.split('');
+  const charW = (ch: string) => (ch === '.' ? dotW : dw);
+  const digitsW = chars.reduce((sum, ch, i) => sum + charW(ch) + (i > 0 ? gap : 0), 0);
+  const suffixW = suffix.length * dh * 0.52;
+  const totalW = digitsW + (suffix ? gap + suffixW : 0);
+
+  let x = cx - totalW / 2;
+  const y = cy - dh / 2;
+  chars.forEach((ch, i) => {
+    if (i > 0) x += gap;
+    if (ch === '.') {
+      parent.appendChild(el('circle', { cx: x + dotW / 2, cy: y + dh - dh * 0.1, r: dh * 0.09, fill: color }));
+    } else {
+      drawSevenSegDigit(parent, uid, x, y, ch, dh, color);
+    }
+    x += charW(ch);
+  });
+  if (suffix) {
+    x += gap;
+    const t = el('text', {
+      x, y: cy + dh * 0.32,
+      'font-size': dh * 0.62, 'font-family': "'Consolas','Courier New',monospace", 'font-weight': 700,
+      fill: color, opacity: 0.85,
+    });
+    t.textContent = suffix;
+    parent.appendChild(t);
+  }
+}
+
+/**
+ * Digital meter box showing Voltage, Current, and Wattage as 3 stacked 7-segment lines — never
+ * just one of the three, and never anything else drawn on top of it (it owns its full (x,y,w,h)
+ * box exclusively). Digit height auto-shrinks to whatever room is actually available so it never
+ * overlaps neighboring rail content (brand/subtitle/LEDs/breaker above/beside it).
+ */
+function drawPduMeter(parent: SVGElement, uid: string, x: number, y: number, w: number, h: number, voltage: number, amps: number, watts: number, oled = false): void {
   const ledColor = oled ? '#4dd8ff' : '#39ff5a';
-  parent.appendChild(el('rect', { x, y: cy - h / 2, width: w, height: h, rx: 2, fill: oled ? '#020a12' : '#020a06', stroke: oled ? '#0a1a2a' : '#0a2016', 'stroke-width': 1 }));
-  const txt = el('text', { x: x + w / 2, y: cy + 3, 'text-anchor': 'middle', 'font-size': Math.min(h * 0.5, 11), 'font-weight': 700, fill: ledColor, 'font-family': 'monospace' });
-  txt.setAttribute('filter', `url(#${uid}gw)`);
-  txt.textContent = readingText;
-  parent.appendChild(txt);
-  return true;
+  parent.appendChild(el('rect', { x, y, width: w, height: h, rx: 2, fill: oled ? '#020a12' : '#020a06', stroke: oled ? '#0a1a2a' : '#0a2016', 'stroke-width': 1 }));
+
+  const lines = [`${Math.round(voltage)}V`, `${Math.round(amps)}A`, `${Math.round(watts)}W`];
+  const lineH = h / 3;
+  const longest = lines.reduce((a, b) => (b.length > a.length ? b : a));
+  const digitCount = longest.match(/^[\d.]+/)?.[0].length ?? longest.length;
+  const suffixCount = longest.length - digitCount;
+  const widthPerDh = digitCount * 0.74 + (suffixCount ? 0.7 + suffixCount * 0.52 : 0);
+  const dh = Math.max(2.6, Math.min(lineH * 0.72, (w - 4) / Math.max(widthPerDh, 1)));
+
+  lines.forEach((txt, i) => {
+    const lineCy = y + lineH * i + lineH / 2;
+    drawSevenSegReading(parent, uid, x + w / 2, lineCy, txt, dh, ledColor);
+  });
 }
 
 function drawSocket(parent: SVGElement, uid: string, type: string, cx: number, cy: number, outletFace: 'white' | 'black' = 'black', rotationDeg = 0): void {
@@ -381,22 +459,33 @@ function drawSocket(parent: SVGElement, uid: string, type: string, cx: number, c
   if (type === 'C19' || type === 'iec-c19') return drawC19(parent, uid, cx, cy, outletFace, rotationDeg);
   drawNema515(parent, uid, cx, cy, outletFace, rotationDeg);
 }
+/** Draws the IEC 60320 pentagon shroud (shared shape) centered at (cx,cy), sized w x h. */
+function drawIecShroud(parent: SVGElement, uid: string, cx: number, cy: number, w: number, h: number, outletFace: 'white' | 'black' = 'black'): void {
+  const surround = outletFace === 'white' ? '#efe9d8' : '#141618';
+  const stroke = outletFace === 'white' ? '#a89f88' : '#383b42';
+  parent.appendChild(el('path', { d: iecShroudPath(cx, cy, w, h), fill: surround, stroke, 'stroke-width': 0.3 }));
+  parent.appendChild(el('path', { d: iecShroudPath(cx, cy, w - 2.6, h - 2.6), fill: `url(#${uid}pit)`, stroke: '#050505', 'stroke-width': 0.25 }));
+}
+
+/** Draws the Live/Neutral (top) + Earth (bottom) vertical slot contacts of a C13 female
+ *  receptacle onto a w x h IEC shroud centered at (cx,cy). */
+function drawIecFemaleSlots(parent: SVGElement, cx: number, cy: number, w: number, h: number): void {
+  const slotW = w * 0.09, slotH = h * 0.26;
+  [IEC_CONTACTS.live, IEC_CONTACTS.neutral, IEC_CONTACTS.earth].forEach(({ dx, dy }) => {
+    parent.appendChild(el('rect', {
+      x: cx + dx * w - slotW / 2, y: cy + dy * h - slotH / 2, width: slotW, height: slotH, rx: slotW * 0.3,
+      fill: '#050506', stroke: '#000', 'stroke-width': 0.25,
+    }));
+  });
+}
+
 function drawC13(parent: SVGElement, uid: string, cx: number, cy: number, outletFace: 'white' | 'black' = 'black', rotationDeg = 0): void {
   const w = 17, h = 15;
-  const surround = outletFace === 'white' ? '#efe9d8' : '#141618';
-  const stroke = outletFace === 'white' ? '#a89f88' : '#000';
   const grp = el('g');
   grp.setAttribute('transform', `translate(${cx} ${cy}) rotate(${rotationDeg})`);
   grp.setAttribute('filter', `url(#${uid}ss)`);
-  const path = el('path');
-  path.setAttribute('d', `M ${-w/2} ${-h/2+2} Q ${-w/2} ${-h/2} ${-w/2+2} ${-h/2} L ${w/2-2} ${-h/2} Q ${w/2} ${-h/2} ${w/2} ${-h/2+2} L ${w/2} ${h/2-1} Q ${w/2} ${h/2} ${w/2-1} ${h/2} L ${-w/2+1} ${h/2} Q ${-w/2} ${h/2} ${-w/2} ${h/2-1} Z`);
-  path.setAttribute('fill', surround); path.setAttribute('stroke', stroke); path.setAttribute('stroke-width', '0.3');
-  grp.appendChild(path);
-  grp.appendChild(el('rect', { x: -w/2+1.4, y: -h/2+1.4, width: w-2.8, height: h-2.8, rx: 1.2, fill: `url(#${uid}pit)` }));
-  grp.appendChild(el('rect', { x: -4.4, y: -4.1, width: 2.2, height: 3.9, rx: 0.4, fill: '#050506', stroke: '#000', 'stroke-width': 0.25 }));
-  grp.appendChild(el('rect', { x: 2.2,  y: -4.1, width: 2.2, height: 3.9, rx: 0.4, fill: '#050506', stroke: '#000', 'stroke-width': 0.25 }));
-  grp.appendChild(el('rect', { x: -1.3, y:  1.1, width: 2.6, height: 3.4, rx: 0.4, fill: '#050506', stroke: '#000', 'stroke-width': 0.25 }));
-  grp.appendChild(el('rect', { x: -0.9, y:  1.5, width: 1.8, height: 1.1, fill: `url(#${uid}brass)`, opacity: 0.55 }));
+  drawIecShroud(grp, uid, 0, 0, w, h, outletFace);
+  drawIecFemaleSlots(grp, 0, 0, w, h);
   parent.appendChild(grp);
 }
 function drawC19(parent: SVGElement, uid: string, cx: number, cy: number, outletFace: 'white' | 'black' = 'black', rotationDeg = 0): void {
@@ -408,10 +497,14 @@ function drawC19(parent: SVGElement, uid: string, cx: number, cy: number, outlet
   grp.setAttribute('filter', `url(#${uid}ss)`);
   grp.appendChild(el('rect', { x: -w/2, y: -h/2, width: w, height: h, rx: 2.2, fill: surround, stroke, 'stroke-width': 0.3 }));
   grp.appendChild(el('rect', { x: -w/2+1.8, y: -h/2+1.8, width: w-3.6, height: h-3.6, rx: 1.5, fill: `url(#${uid}pit)` }));
-  grp.appendChild(el('rect', { x: -5.5, y: -4.6, width: 2.8, height: 5,   rx: 0.5, fill: '#050506', stroke: '#000', 'stroke-width': 0.25 }));
-  grp.appendChild(el('rect', { x:  2.7, y: -4.6, width: 2.8, height: 5,   rx: 0.5, fill: '#050506', stroke: '#000', 'stroke-width': 0.25 }));
-  grp.appendChild(el('rect', { x: -1.8, y:  1.6, width: 3.6, height: 4,   rx: 0.5, fill: '#050506', stroke: '#000', 'stroke-width': 0.25 }));
-  grp.appendChild(el('rect', { x: -1.2, y:  2.2, width: 2.4, height: 1.4, fill: `url(#${uid}brass)`, opacity: 0.55 }));
+  {
+    // Real C19 receptacles use horizontal (wide/short) blade slots, not vertical ones.
+    const sw = 5, sh = 1.8;
+    grp.appendChild(el('rect', { x: -6 - sw / 2, y: -4 - sh / 2, width: sw, height: sh, rx: 0.5, fill: '#050506', stroke: '#000', 'stroke-width': 0.25 }));
+    grp.appendChild(el('rect', { x:  6 - sw / 2, y: -4 - sh / 2, width: sw, height: sh, rx: 0.5, fill: '#050506', stroke: '#000', 'stroke-width': 0.25 }));
+    grp.appendChild(el('rect', { x: -sw / 2,     y:  3 - sh / 2, width: sw, height: sh, rx: 0.5, fill: '#050506', stroke: '#000', 'stroke-width': 0.25 }));
+    grp.appendChild(el('rect', { x: -1.2,        y:  3 - sh / 2 + 0.3, width: 2.4, height: sh - 0.6, fill: `url(#${uid}brass)`, opacity: 0.55 }));
+  }
   parent.appendChild(grp);
 }
 function drawNema515(parent: SVGElement, uid: string, cx: number, cy: number, outletFace: 'white' | 'black' = 'black', rotationDeg = 0): void {
@@ -429,91 +522,6 @@ function drawNema515(parent: SVGElement, uid: string, cx: number, cy: number, ou
   parent.appendChild(grp);
 }
 
-function socketWidth(type: string): number {
-  if (type === 'C19' || type === 'iec-c19') return 22;
-  if (type === 'NEMA-5-15') return 20;
-  return 17;
-}
-function socketHeight(type: string): number {
-  if (type === 'C19' || type === 'iec-c19') return 18;
-  if (type === 'NEMA-5-15') return 20;
-  return 15;
-}
-
-/**
- * Smart-tier status cluster: SSL/DHCP indicators, a larger digital meter,
- * 1-2 Ethernet management ports, and a FUNCTION button. Distinguishes "smart"
- * PDUs from the plain metered readout drawn by drawPduMeter(). Returns false
- * (drawing nothing) if there isn't enough width/height, so the caller can
- * fall back to the compact meter instead.
- */
-function drawSmartPduPanel(parent: SVGElement, uid: string, x: number, cy: number, w: number, h: number, readingText: string, showLan: boolean, oled = false): boolean {
-  const METER_W = 44;
-  const LAN_W = 24;
-  const FUNC_W = 14;
-  const ledColW = 26;
-  const minW = ledColW + METER_W + 8 + (showLan ? LAN_W : 0) + FUNC_W;
-  if (w < minW || h < 24) return false;
-  const ledColor = oled ? '#4dd8ff' : '#39ff5a';
-  const ledLblColor = oled ? '#1a5a7a' : '#2a8a4a';
-
-  let cx = x;
-
-  // SSL / DHCP indicator LEDs
-  drawLed(parent, uid, cx + 3, cy - 6, '#ffb020', true, 1.6);
-  const sslTxt = el('text', { x: cx + 8, y: cy - 3.5, 'font-size': 5.5, fill: '#aeb6bd' });
-  sslTxt.textContent = 'SSL';
-  parent.appendChild(sslTxt);
-  drawLed(parent, uid, cx + 3, cy + 6, '#39ff8a', true, 1.6);
-  const dhcpTxt = el('text', { x: cx + 8, y: cy + 8.5, 'font-size': 5.5, fill: '#aeb6bd' });
-  dhcpTxt.textContent = 'DHCP';
-  parent.appendChild(dhcpTxt);
-  cx += ledColW;
-
-  // Digital meter readout
-  parent.appendChild(el('rect', { x: cx, y: cy - 10, width: METER_W, height: 20, rx: 2, fill: oled ? '#020a12' : '#020a06', stroke: oled ? '#0a1a2a' : '#0a2016', 'stroke-width': 1 }));
-  const meterTxt = el('text', { x: cx + METER_W / 2, y: cy + 3, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700, fill: ledColor, 'font-family': 'monospace' });
-  meterTxt.setAttribute('filter', `url(#${uid}gw)`);
-  meterTxt.textContent = readingText;
-  parent.appendChild(meterTxt);
-  const meterLbl = el('text', { x: cx + METER_W / 2, y: cy + 9.5, 'text-anchor': 'middle', 'font-size': 4, fill: ledLblColor, 'letter-spacing': 1 });
-  meterLbl.textContent = 'METER';
-  parent.appendChild(meterLbl);
-  cx += METER_W + 8;
-
-  // Ethernet management ports (mini RJ45s) — 1 or 2 depending on remaining width
-  const remaining = w - (cx - x);
-  const lanCount = !showLan ? 0 : remaining >= LAN_W * 2 + FUNC_W + 4 ? 2 : remaining >= LAN_W + FUNC_W ? 1 : 0;
-  for (let i = 0; i < lanCount; i++) {
-    const lx = cx + i * LAN_W;
-    parent.appendChild(el('rect', { x: lx, y: cy - 7, width: 20, height: 14, rx: 1.6, fill: '#1c2024', stroke: '#05070a', 'stroke-width': 0.8 }));
-    parent.appendChild(el('rect', { x: lx + 1.5, y: cy - 5.5, width: 17, height: 11, rx: 1, fill: '#0d1013' }));
-    drawLed(parent, uid, lx + 4, cy - 4.5, i === 0 ? '#39ff8a' : '#20262b', i === 0, 1);
-    const lanTxt = el('text', { x: lx + 10, y: cy + 10.5, 'text-anchor': 'middle', 'font-size': 4.5, fill: '#7b838a' });
-    lanTxt.textContent = `LAN${i + 1}`;
-    parent.appendChild(lanTxt);
-  }
-  cx += lanCount * LAN_W + (lanCount ? 6 : 0);
-
-  // FUNCTION button
-  if (w - (cx - x) >= FUNC_W) {
-    parent.appendChild(el('circle', { cx: cx + 6, cy, r: 6, fill: '#1a1d20', stroke: '#3a4147', 'stroke-width': 1 }));
-    parent.appendChild(el('circle', { cx: cx + 4.5, cy: cy - 1.5, r: 1.4, fill: '#5b6268', opacity: 0.6 }));
-  }
-
-  return true;
-}
-
-/** Formats a wattage reading the way the reference's live meter does — auto W/kW with a fixed reading. */
-function formatMeterReading(watts: number, asAmps: boolean, voltage: number): string {
-  if (asAmps) {
-    const amps = voltage > 0 ? watts / voltage : 0;
-    return `${amps.toFixed(1)}A`;
-  }
-  if (watts < 1000) return `${Math.round(watts)}W`;
-  return `${(watts / 1000).toFixed(2)}kW`;
-}
-
 function renderConfiguredPdu(
   template: DeviceTemplate | null, deviceData: DeviceData | null, W: number, H: number,
 ): SVGGElement {
@@ -521,14 +529,16 @@ function renderConfiguredPdu(
   const uid = `pdu${Math.random().toString(36).slice(2, 7)}_`;
   const config = asPduConfig(deviceData?.deviceConfig);
   const finish = finishFor(config);
-  const composition = normalizeComposition(config, template?.outletConfig);
-  const tier = tierFor(config, template);
   const mfrStyle = MANUFACTURERS[config.manufacturer ?? 'generic'];
   const { watts, connectedOutlets } = deviceData ? computePduLoad(deviceData.id) : { watts: 0, connectedOutlets: new Set<number>() };
-  const smartFeatures = config.smartFeatures ?? [];
   const leds = config.leds ?? ['power'];
   const showLedDot = leds.includes('outlet');
-  const asAmps = smartFeatures.includes('currentMon') || smartFeatures.includes('powerMeter');
+
+  // Single source of truth for the fixed left-rail width and outlet row auto-growth — the exact
+  // same function core/state.ts's getPortWorldPosition() uses to resolve where a power cable
+  // should connect to this PDU's outlets, so the two can never drift apart.
+  const layout = computeConfiguredPduLayout(template, config, W, H);
+  const { positions, allSockets, leftW, showMeter, mcbShown, cy } = layout;
 
   const ns = el('svg', { width: W, height: H });
   ns.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -540,50 +550,16 @@ function renderConfiguredPdu(
   ns.appendChild(el('rect', { x: 2, y: 2.5, width: W - 4, height: 1.5, rx: 0.75, fill: finish.hi, opacity: 0.4 }));
   ns.appendChild(el('rect', { x: 2, y: 2, width: 2.5, height: H - 4, rx: 1, fill: mfrStyle.accent, opacity: 0.85 }));
 
-  const cy = H / 2;
-  const brandEndX = drawPduBrand(ns, uid, 4, cy, finish.text, template?.model ?? 'PDU', labelSuffixFor(config));
-  drawLedStrip(ns, uid, brandEndX + 6, 5, leds, false);
-
-  const totalSocketW = composition.reduce((sum, r) => sum + socketWidth(r.type) * r.count, 0);
-  const allSockets: SocketType[] = composition.flatMap(row => Array.from({ length: row.count }, () => row.type));
-
-  const shownLedCount = leds.filter(l => l !== 'outlet').length;
-  const hasBreaker = !!config.breaker && config.breaker !== 'none';
-  const MCB_RESERVED_W = 20;
-  const afterLedsX = brandEndX + 6 + (shownLedCount ? shownLedCount * 10 + 4 : 0);
-  const startX = afterLedsX + (hasBreaker ? MCB_RESERVED_W : 0);
-  const SMART_PANEL_W = 132;
-  const BASIC_METER_W = 46;
-  let meterW = tier === 'smart' ? SMART_PANEL_W : tier === 'metered' ? BASIC_METER_W : 0;
-  let meterGap = meterW ? 10 : 0;
-  const minSocketArea = totalSocketW + Math.max(allSockets.length - 1, 0) * 2;
-  let showMeter = meterW > 0 && (W - startX - meterGap - meterW - 8) >= minSocketArea;
-  if (tier === 'smart' && !showMeter) {
-    meterW = BASIC_METER_W;
-    meterGap = 10;
-    showMeter = (W - startX - meterGap - meterW - 8) >= minSocketArea;
-  }
-  const socketArea = (showMeter ? W - meterW - meterGap : W) - startX - 8;
-
-  const spacing = allSockets.length > 1
-    ? Math.min(6, (socketArea - totalSocketW) / (allSockets.length - 1))
-    : 0;
+  drawPduLeftRail(ns, uid, config, template, leftW, H, finish.text, watts, showMeter, mcbShown);
 
   const pduDeviceId = deviceData?.id ?? '';
   if (pduDeviceId) ns.setAttribute('data-pdu-device-id', pduDeviceId);
 
   const outletFace = config.enclosure?.outletFace ?? 'black';
   const rotSetting = config.sockets?.rotationDeg;
-  const layoutRows = ({ single: 1, dual: 2, triple: 3 } as Record<string, number>)[config.sockets?.layout ?? 'single'] ?? 1;
-  const perRow = Math.max(1, Math.ceil(allSockets.length / layoutRows));
-  const rowH = (H - 8) / layoutRows;
 
-  let cx = startX + socketWidth(allSockets[0] ?? 'C13') / 2;
-  let lastRow = 0;
   allSockets.forEach((sockType, i) => {
-    const row = Math.floor(i / perRow);
-    if (row !== lastRow) { cx = startX + socketWidth(sockType) / 2; lastRow = row; }
-    const rowCy = layoutRows > 1 ? (4 + rowH * row + rowH / 2) : cy;
+    const { x: cx, y: rowCy } = positions[i];
     const rot = rotSetting === 'alternate' ? (i % 2 ? 180 : 0) : (typeof rotSetting === 'number' ? rotSetting : 0);
     const sw = socketWidth(sockType);
     const isConnected = connectedOutlets.has(i);
@@ -600,24 +576,9 @@ function renderConfiguredPdu(
       hit.setAttribute('data-outlet-idx', String(i));
       ns.appendChild(hit);
     }
-    cx += sw + spacing;
   });
 
-  if (showMeter) {
-    const oled = smartFeatures.includes('oled');
-    const readingText = formatMeterReading(watts, asAmps, config.electrical?.voltage ?? 230);
-    const showLan = !config.networkPorts || config.networkPorts.includes('rj45');
-    const drewSmart = tier === 'smart' && meterW === SMART_PANEL_W
-      && drawSmartPduPanel(ns, uid, W - meterW - 6, cy, meterW, H, readingText, showLan, oled);
-    if (!drewSmart) {
-      drawPduMeter(ns, uid, W - meterW - 6, cy, meterW, Math.min(H - 8, 20), readingText, oled);
-    }
-  }
-
-  drawBranding(ns, W - 40, H - 9, config, 0.8);
-  drawMcbIfConfigured(ns, config, afterLedsX, cy, false, H - 6);
-  if (H >= 40) drawExtraFeatureRow(ns, uid, 4, H - 16, config);
-  drawCord(ns, W, H, config.cableEntry, config.cordCsa ?? 6, config.inputPlug);
+  if (H >= 40) drawExtraFeatureRow(ns, uid, 4, H - 16, config, leftW);
 
   group.appendChild(ns);
   return group;
@@ -633,9 +594,7 @@ function renderGenericPdu(template: DeviceTemplate | null, deviceData: DeviceDat
   const uid = `gpdu${Math.random().toString(36).slice(2, 7)}_`;
   const chY = 2, chH = H - 4, cy = chY + chH / 2;
   const config = asPduConfig(deviceData?.deviceConfig);
-  const tier = tierFor(config, template);
   const { watts, connectedOutlets } = deviceData ? computePduLoad(deviceData.id) : { watts: 0, connectedOutlets: new Set<number>() };
-  const asAmps = (config.smartFeatures ?? []).includes('currentMon') || (config.smartFeatures ?? []).includes('powerMeter');
 
   const defs = el('defs');
   const fGlow = el('filter', { id: `${uid}gw`, x: '-120%', y: '-120%', width: '340%', height: '340%' });
@@ -650,27 +609,18 @@ function renderGenericPdu(template: DeviceTemplate | null, deviceData: DeviceDat
   const pduDeviceId = deviceData?.id ?? '';
   if (pduDeviceId) group.setAttribute('data-pdu-device-id', pduDeviceId);
 
-  const brandEndX = drawPduBrand(group, uid, 4, cy, '#e8eaec', template?.model ?? 'PDU', labelSuffixFor(config));
-  const hasBreaker = !!config.breaker && config.breaker !== 'none';
-  const MCB_RESERVED_W = 20;
-  const startX = brandEndX + 8 + (hasBreaker ? MCB_RESERVED_W : 0);
+  // Single source of truth shared with core/state.ts's getPortWorldPosition() — see
+  // computeConfiguredPduLayout's doc comment for why this matters.
+  const layout = computeGenericPduLayout(template, config, W, H);
+  const { positions, leftW, showMeter, mcbShown } = layout;
 
-  const SMART_PANEL_W = 132;
-  const BASIC_METER_W = 46;
-  let meterW = tier === 'smart' ? SMART_PANEL_W : tier === 'metered' ? BASIC_METER_W : 0;
+  drawPduLeftRail(group, uid, config, template, leftW, H, '#e8eaec', watts, showMeter, mcbShown);
+  const outletW = 20, outletH = chH - 10, outletY = chY + 5;
   const ports = template?.ports ?? [];
   const c13Ports = ports.filter(p => p.type === 'power');
-  const outletW = 20, outletH = chH - 10, outletY = chY + 5;
-  const outletsW = c13Ports.length * (outletW + 4);
-  let showMeter = meterW > 0 && (W - startX - 8 - meterW - 10) >= outletsW;
-  if (tier === 'smart' && !showMeter) {
-    meterW = BASIC_METER_W;
-    showMeter = (W - startX - 8 - meterW - 10) >= outletsW;
-  }
-  const meterX = W - meterW - 6;
 
   c13Ports.forEach((_, i) => {
-    const ax = startX + i * (outletW + 4);
+    const ax = positions[i].x - outletW / 2;
     const isConnected = connectedOutlets.has(i);
     group.appendChild(el('rect', { x: ax, y: outletY, width: outletW, height: outletH, rx: 2, fill: '#0a0a0f', stroke: isConnected ? '#37e07a' : '#333', 'stroke-width': isConnected ? 1.2 : 0.7 }));
     const contactY = outletY + outletH - 8;
@@ -688,18 +638,7 @@ function renderGenericPdu(template: DeviceTemplate | null, deviceData: DeviceDat
     }
   });
 
-  if (showMeter) {
-    const oled = (config.smartFeatures ?? []).includes('oled');
-    const readingText = formatMeterReading(watts, asAmps, config.electrical?.voltage ?? 230);
-    const showLan = !config.networkPorts || config.networkPorts.includes('rj45');
-    const drewSmart = tier === 'smart' && meterW === SMART_PANEL_W
-      && drawSmartPduPanel(group, uid, meterX, cy, meterW, chH, readingText, showLan, oled);
-    if (!drewSmart) drawPduMeter(group, uid, meterX, cy, meterW, Math.min(chH - 4, 20), readingText, oled);
-  }
-
-  drawMcbIfConfigured(group, config, brandEndX + 8, cy, false, chH - 6);
-  if (chH >= 40) drawExtraFeatureRow(group, uid, 4, H - 16, config);
-  drawCord(group, W, H, config.cableEntry, config.cordCsa ?? 6, config.inputPlug);
+  if (chH >= 40) drawExtraFeatureRow(group, uid, 4, H - 16, config, leftW);
 
   return group;
 }
@@ -717,6 +656,7 @@ export function renderPduPanel(
 
 function drawSocketFacePlate(
   parent: SVGElement,
+  uid: string,
   cx: number,
   cy: number,
   ow: number,
@@ -730,7 +670,30 @@ function drawSocketFacePlate(
   const halfW = ow / 2;
   const halfH = oh / 2;
 
-  // Face plate background (shared by all types)
+  // C13/C15 use the real IEC 60320 pentagon shroud (per New_Development/SVG - Power Plug
+  // Types/C13.svg) instead of the generic rounded-rect face plate every other socket type uses.
+  if (sockType === 'C13' || sockType === 'C15') {
+    drawIecShroud(parent, uid, cx, cy, ow, oh, outletFace);
+    if (isConnected) {
+      parent.appendChild(el('path', { d: iecShroudPath(cx, cy, ow, oh), fill: 'none', stroke: strokeColor, 'stroke-width': strokeW }));
+    }
+    drawIecFemaleSlots(parent, cx, cy, ow, oh);
+    if (sockType === 'C15') {
+      // Notch (top edge, indicating the C15/C16 hot-equipment keying)
+      parent.appendChild(el('rect', { x: cx - 1, y: cy - halfH + 0.5, width: 2, height: 2, fill: '#030304' }));
+    }
+    const lbl = el('text', {
+      x: cx, y: cy + halfH + 3,
+      'text-anchor': 'middle', 'font-size': 2.8,
+      fill: isConnected ? '#37e07a' : '#5b636a',
+      'font-family': 'monospace', 'pointer-events': 'none',
+    });
+    lbl.textContent = sockType;
+    parent.appendChild(lbl);
+    return;
+  }
+
+  // Face plate background (shared by all other types)
   const face = el('rect', {
     x: cx - halfW, y: cy - halfH,
     width: ow, height: oh,
@@ -741,29 +704,13 @@ function drawSocketFacePlate(
   });
   parent.appendChild(face);
 
-  // Inner socket graphic — distinct per type
-  if (sockType === 'C13') {
-    // IEC C13: 3 ovals in triangular pattern — bottom-left, top-center, bottom-right
-    const hRx = 1.4, hRy = 2.2;
-    parent.appendChild(el('ellipse', { cx: cx - 2.8, cy: cy + 1.5, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
-    parent.appendChild(el('ellipse', { cx: cx,       cy: cy - 2,   rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
-    parent.appendChild(el('ellipse', { cx: cx + 2.8, cy: cy + 1.5, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
-
-  } else if (sockType === 'C19') {
-    // IEC C19: like C13 but wider, 3 ovals more spread
-    const hRx = 1.6, hRy = 2.5;
-    parent.appendChild(el('ellipse', { cx: cx - 3.5, cy: cy + 1.8, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
-    parent.appendChild(el('ellipse', { cx: cx,       cy: cy - 2.2, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
-    parent.appendChild(el('ellipse', { cx: cx + 3.5, cy: cy + 1.8, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
-
-  } else if (sockType === 'C15') {
-    // IEC C15: same as C13 but with a notch at bottom (hot equipment)
-    const hRx = 1.4, hRy = 2.2;
-    parent.appendChild(el('ellipse', { cx: cx - 2.8, cy: cy + 1.5, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
-    parent.appendChild(el('ellipse', { cx: cx,       cy: cy - 2,   rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
-    parent.appendChild(el('ellipse', { cx: cx + 2.8, cy: cy + 1.5, rx: hRx, ry: hRy, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
-    // Notch (bottom edge)
-    parent.appendChild(el('rect', { x: cx - 1, y: cy + halfH - 2.5, width: 2, height: 2, fill: '#030304' }));
+  // Inner socket graphic — distinct per type.
+  if (sockType === 'C19') {
+    // Real C19 receptacles use horizontal (wide/short) blade slots rather than round/oval holes.
+    const sw = 3.4, sh = 1.6;
+    parent.appendChild(el('rect', { x: cx - 5 - sw / 2, y: cy - 2.8 - sh / 2, width: sw, height: sh, rx: 0.4, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    parent.appendChild(el('rect', { x: cx + 5 - sw / 2, y: cy - 2.8 - sh / 2, width: sw, height: sh, rx: 0.4, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
+    parent.appendChild(el('rect', { x: cx - sw / 2,     y: cy + 2.6 - sh / 2, width: sw, height: sh, rx: 0.4, fill: '#030304', stroke: '#1a1a20', 'stroke-width': 0.3 }));
 
   } else if (sockType === 'NEMA-5-15' || sockType === 'NEMA-5-20') {
     // NEMA: 2 vertical blade slots + D-shaped ground hole below
@@ -861,19 +808,39 @@ export function renderSidePdu(
   ns.appendChild(el('rect', { x: 1, y: 1, width: pduWidth - 2, height: stripH - 2, rx: 1.5, fill: 'none', stroke: '#3a4147', 'stroke-width': 0.5, opacity: 0.4 }));
   ns.appendChild(el('rect', { x: 1, y: 1, width: 2, height: stripH - 2, fill: mfrStyle.accent, opacity: 0.85 }));
 
-  // LCD panel at top — live voltage/current reading + model
-  const lcdH = 28;
-  ns.appendChild(el('rect', { x: 3, y: 6, width: pduWidth - 6, height: lcdH, rx: 2, fill: '#005f73' }));
+  // LCD panel at top — live voltage/current reading + model. Only drawn when a display-type
+  // smart feature is actually selected (Power Meter/LCD/OLED/Energy Meter/Current/Voltage Mon.)
+  // — matching how the horizontal PDU's meter is gated, so a PDU with none of those chips on
+  // shows a plain outlet strip instead of an always-on readout no config could ever turn off.
+  const smartFeatures = config.smartFeatures ?? [];
+  const hasDisplay = smartFeatures.some(f => DISPLAY_FEATURES.includes(f));
+  const oled = smartFeatures.includes('oled');
+  let headerBottom = 10;
+  if (hasDisplay) {
+    // 3-line LED digital readout — Voltage / Current / Wattage stacked, matching a real smart
+    // PDU's front display (bright monospace digits + glow on a black recessed screen), rather
+    // than one small combined text line.
+    const lcdH = 32;
+    const ledColor = oled ? '#4dd8ff' : '#39ff5a';
+    ns.appendChild(el('rect', { x: 3, y: 6, width: pduWidth - 6, height: lcdH, rx: 2, fill: '#04120a', stroke: '#000', 'stroke-width': 0.6 }));
+    ns.appendChild(el('rect', { x: 4, y: 7, width: pduWidth - 8, height: lcdH - 2, rx: 1.5, fill: 'none', stroke: ledColor, 'stroke-width': 0.3, opacity: 0.2 }));
 
-  const lcdTxt = el('text', { x: pduWidth / 2, y: 16, 'text-anchor': 'middle', 'font-size': 5, fill: '#a2d2ff', 'font-family': 'monospace', 'font-weight': 'bold' });
-  lcdTxt.textContent = template.model ?? 'PDU';
-  ns.appendChild(lcdTxt);
+    const lines = [`${Math.round(voltage)}V`, `${Math.round(amps)}A`, `${Math.round(watts)}W`];
+    const lineH = lcdH / 3;
+    // Size digit glyphs to fit both the line height and the longest line's width (the widest
+    // reading, e.g. "12500W", must still fit inside the narrowest vertical PDU chassis).
+    const longest = lines.reduce((a, b) => (b.length > a.length ? b : a));
+    const digitCount = longest.match(/^[\d.]+/)?.[0].length ?? longest.length;
+    const suffixCount = longest.length - digitCount;
+    const widthPerDh = digitCount * 0.74 + (suffixCount ? 0.7 + suffixCount * 0.52 : 0);
+    const dh = Math.max(4, Math.min(lineH * 0.72, (pduWidth - 10) / Math.max(widthPerDh, 1)));
+    lines.forEach((txt, i) => {
+      const lineCy = 6 + lineH * i + lineH / 2;
+      drawSevenSegReading(ns, uid, pduWidth / 2, lineCy, txt, dh, ledColor);
+    });
 
-  const lcdA = el('text', { x: pduWidth / 2, y: 25, 'text-anchor': 'middle', 'font-size': 4.5, fill: '#7ab8d4', 'font-family': 'monospace' });
-  lcdA.textContent = `${amps.toFixed(1)}A / ${Math.round(watts)}W`;
-  ns.appendChild(lcdA);
-
-  let headerBottom = lcdH + 12;
+    headerBottom = lcdH + 12;
+  }
 
   // MCB / breaker widget, LED strip, wireless/env-sensor icons, and branding all live in the
   // header zone above the outlets — matching the reference's "header grows with content" behavior.
@@ -892,19 +859,22 @@ export function renderSidePdu(
   const wireless = config.wireless ?? [];
   wireless.forEach((w, i) => drawWirelessIcon(ns, pduWidth / 2, headerBottom + 6 + i * 14, w));
   if (wireless.length) headerBottom += wireless.length * 14 + 4;
-  const netPorts = (config.networkPorts ?? []).filter(p => p !== 'rj45');
+  const netPorts = config.networkPorts ?? [];
   if (netPorts.length) {
     netPorts.forEach((p, i) => drawNetPort(ns, uid, (pduWidth - 12) / 2, headerBottom + 2 + i * 13, p));
     headerBottom += netPorts.length * 13 + 2;
   }
 
-  // Outlets — composition (per-instance, live) falls back to the catalog template's default
+  // Outlets — composition (per-instance, live) falls back to the catalog template's default.
+  // Positions come from the same computeSidePduOutletPositions() that core/state.ts's
+  // getPortWorldPosition() uses to resolve power-cable connections to these outlets, so a
+  // header-layout change here can never silently desync from where cables actually attach.
+  // (headerBottom, tracked above while drawing the header sections, must stay in sync with
+  // computeSidePduHeaderBottom()'s formula — verified identical as of this writing.)
   const composition = normalizeComposition(config, template.outletConfig);
   const allOutlets: SocketType[] = composition.flatMap(row => Array.from({ length: row.count }, () => row.type));
-
-  const outletAreaTop = headerBottom + 6;
-  const footerH = 8;
-  const outletAreaH = stripH - outletAreaTop - footerH;
+  const outletPositions = computeSidePduOutletPositions(template, config, pduWidth, stripH);
+  const outletAreaH = (stripH - (headerBottom + 6) - 8);
   const outletSpacing = outletAreaH / Math.max(allOutlets.length, 1);
   const outletCx = pduWidth / 2;
   const showLedDot = (config.leds ?? []).includes('outlet');
@@ -912,7 +882,7 @@ export function renderSidePdu(
   const rotSetting = config.sockets?.rotationDeg;
 
   allOutlets.forEach((sockType, i) => {
-    const oy = outletAreaTop + i * outletSpacing + outletSpacing / 2;
+    const oy = outletPositions[i].y;
     const isConnected = connectedOutlets.has(i);
     const ow = Math.min(pduWidth - 6, sockType === 'C19' ? 22 : 18);
     const oh = Math.min(outletSpacing - 2, 14);
@@ -923,7 +893,7 @@ export function renderSidePdu(
     const outletTarget = rot
       ? (() => { const wrap = el('g', { transform: `rotate(${rot} ${outletCx} ${oy})` }); ns.appendChild(wrap); return wrap; })()
       : (ns as unknown as SVGElement);
-    drawSocketFacePlate(outletTarget, outletCx, oy, ow, oh, sockType, isConnected, outletFace);
+    drawSocketFacePlate(outletTarget, uid, outletCx, oy, ow, oh, sockType, isConnected, outletFace);
     if (showLedDot) {
       drawLed(ns as unknown as SVGElement, uid, outletCx + ow / 2 + 4, oy, isConnected ? '#37e07a' : '#39ff8a', true, 1.1);
     }
@@ -939,10 +909,12 @@ export function renderSidePdu(
     ns.appendChild(hitTarget);
   });
 
-  // Footer: labels + branding
+  // Footer: labels + branding. No cord/plug graphic here — the strip is only 42-48px wide and
+  // its header (LCD/MCB/sensors) already fills that width top-to-bottom; the LCD's live A/W
+  // readout already represents "power in" for this narrow 0U form factor. cableEntry/cordCsa/
+  // inputPlug still show up in the Metadata/BOM/JSON inspector for vertical PDUs.
   drawLabelBlock(ns as unknown as SVGElement, 3, stripH - 40, config, template, '#8b939a');
   drawBranding(ns as unknown as SVGElement, 3, stripH - 6, config, 0.55);
-  drawCord(ns as unknown as SVGElement, pduWidth, stripH, config.cableEntry, config.cordCsa ?? 6, config.inputPlug, 4);
 
   // Vertical label
   const vtxt = el('text', {

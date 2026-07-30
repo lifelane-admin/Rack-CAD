@@ -2,7 +2,8 @@ import EventBus from '../core/event-bus';
 import { eventBus } from '../core/event-bus';
 import State from '../core/state';
 import { stateManager } from '../core/state';
-import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, PduConfig, PduOutletGroup, SocketType } from '../core/types';
+import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, PduConfig, PduOutletGroup, SocketType, KvmConfig } from '../core/types';
+import { KVM_LOCAL_PORT_OPTIONS, CONSOLE_LOCAL_PORT_OPTIONS } from '../renderers/networking-renderer';
 import { computePduLoad } from '../renderers/pdu-renderer';
 import { getTemplate } from '../library/device-catalog';
 import { CustomAssetModal } from './custom-asset-modal';
@@ -190,6 +191,10 @@ export class PropertiesPanel {
 
     if (template?.category === 'pdu') {
       this.renderPduProperties(device, template, container);
+      return;
+    }
+    if (template?.category === 'console') {
+      this.renderKvmProperties(device, template, container);
       return;
     }
     const racks = state.racks || [];
@@ -393,6 +398,81 @@ export class PropertiesPanel {
         EventBus.emit('device:update', { id, data: { [field]: e.target.value } });
       });
     });
+  }
+
+  /** Local-peripheral-port configurator, shared by KVM and plain serial console-server devices
+   *  — mirrors a real 1U unit's front panel (local console USB/video/audio for KVM; USB +
+   *  management LAN for a console server), plus its management/diagnostics port(s). Toggling a
+   *  chip here regenerates the device's actual `ports` (see injectNetworkLocalPorts in
+   *  state.ts), not just the SVG — connections to removed ports are dropped, new ports appear
+   *  unconnected, and everything else (the TARGETS/SERIAL group, cabling) is left untouched. */
+  private renderKvmProperties(device: DeviceData, template: DeviceTemplate, container: HTMLElement): void {
+    const isKvm = template.id.startsWith('kvm');
+    const targetLabel = isKvm ? 'TARGETS' : 'SERIAL';
+    const cfg: KvmConfig = (device.deviceConfig as KvmConfig | undefined) ?? {};
+    const targetsCount = device.ports.filter(p => p.group === targetLabel).length
+      || template.ports.filter(p => p.group === targetLabel).length;
+
+    const sections = isKvm
+      ? `
+        <label class="pdu-lbl">USB (Keyboard / Mouse)</label>
+        <div id="kvm-usb" style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px;"></div>
+
+        <label class="pdu-lbl">Local Video</label>
+        <div id="kvm-video" style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px;"></div>
+
+        <label class="pdu-lbl">Local Audio</label>
+        <div id="kvm-audio" style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px;"></div>
+
+        <label class="pdu-lbl">Management &amp; Diagnostics</label>
+        <div id="kvm-mgmt" style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px;"></div>
+      `
+      : `
+        <label class="pdu-lbl">USB (Modem / Storage)</label>
+        <div id="kvm-usb" style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px;"></div>
+
+        <label class="pdu-lbl">Management LAN</label>
+        <div id="kvm-mgmt" style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px;"></div>
+      `;
+
+    container.innerHTML = `
+      <div style="padding:10px 12px;font-family:monospace;font-size:11px;color:#e6ecf2;overflow-y:auto;max-height:100%;">
+        <div style="color:#39ff8a;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;border-bottom:1px solid #23303b;padding-bottom:6px;">
+          &#x1F4DF; ${template.name}<br>
+          <span style="color:#5b636a;font-size:9px;">RACK-MOUNT — ${template.heightUnits}U &middot; ${targetsCount} ${isKvm ? 'SERVER TARGETS' : 'SERIAL PORTS'}</span>
+        </div>
+        ${sections}
+      </div>
+      <style>
+        .pdu-lbl{display:block;font-size:9px;color:#8b939a;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+        .pdu-chip{padding:3px 6px;border-radius:2px;font-size:9.5px;cursor:pointer;border:1px solid #23303b;font-family:monospace;user-select:none}
+        .pdu-chip.on{background:#39ff8a;color:#000;border-color:#39ff8a}
+        .pdu-chip.off{background:#171d24;color:#8b939a}
+      </style>
+    `;
+
+    const defaultOptions = isKvm ? KVM_LOCAL_PORT_OPTIONS : CONSOLE_LOCAL_PORT_OPTIONS;
+    const active = new Set<string>(Array.isArray(cfg.localPorts) ? cfg.localPorts : defaultOptions);
+    const save = () => {
+      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: { localPorts: Array.from(active) } as KvmConfig } });
+    };
+
+    const LABELS: Record<string, string> = {
+      usb1: 'USB 1', usb2: 'USB 2', usb3: 'USB 3', usb4: 'USB 4',
+      vga: 'VGA', hdmi: 'HDMI', dvi: 'DVI', displayport: 'DisplayPort',
+      audio: 'Audio Out', mic: 'Mic In',
+      ethernet: isKvm ? 'Ethernet (LAN/IP)' : 'LAN 1 (Primary)', ethernet2: 'LAN 2 (Failover)',
+      serial: 'RS-232 (Serial)',
+    };
+    if (isKvm) {
+      this.renderPduChips(container, '#kvm-usb', ['usb1', 'usb2', 'usb3', 'usb4'], active, LABELS, save);
+      this.renderPduChips(container, '#kvm-video', ['vga', 'hdmi', 'dvi', 'displayport'], active, LABELS, save);
+      this.renderPduChips(container, '#kvm-audio', ['audio', 'mic'], active, LABELS, save);
+      this.renderPduChips(container, '#kvm-mgmt', ['ethernet', 'serial'], active, LABELS, save);
+    } else {
+      this.renderPduChips(container, '#kvm-usb', ['usb1', 'usb2'], active, LABELS, save);
+      this.renderPduChips(container, '#kvm-mgmt', ['ethernet', 'ethernet2'], active, LABELS, save);
+    }
   }
 
   /** Unified PDU configurator — used for both horizontal (rack-mount) and vertical (0U side-mount) PDUs. */
@@ -621,14 +701,20 @@ export class PropertiesPanel {
 
     this.renderPduOutletRows(container, outletRows, () => save());
 
-    // Smart feature chips
-    const SMART_FEATURES = ['powerMeter','lcd','oled','touch','currentMon','voltageMon','powerFactor','energyMeter','snmp','redfish','restApi','modbus','bacnet'];
+    // Smart feature chips. Energy Meter, Voltage Monitor, Current Monitor, and Power Factor
+    // were previously all offered as separate chips, but every one of them triggers the exact
+    // same single generic meter readout — they were indistinguishable duplicates of "Power
+    // Meter" with no distinct visible effect, so consolidated down to one.
+    const SMART_FEATURES = ['powerMeter','lcd','oled','touch','snmp','redfish','restApi','modbus','bacnet'];
     const SMART_LABELS: Record<string,string> = {
-      powerMeter:'Power Meter',lcd:'LCD',oled:'OLED',touch:'Touchscreen',currentMon:'Current Mon.',
-      voltageMon:'Voltage Mon.',powerFactor:'Power Factor',energyMeter:'Energy Meter',
+      powerMeter:'Power Meter',lcd:'LCD',oled:'OLED',touch:'Touchscreen',
       snmp:'SNMP',redfish:'Redfish',restApi:'REST API',modbus:'Modbus',bacnet:'BACnet',
     };
-    const activeFeatures = new Set<string>(Array.isArray(cfg.smartFeatures) ? cfg.smartFeatures : ['powerMeter','lcd','currentMon','snmp']);
+    // Nothing is pre-selected here — a chip showing "on" before the user has touched anything
+    // is misleading (clicking an already-active chip turns it OFF), and previously caused
+    // every fresh PDU to silently inherit a "smart" feature set the instant any field was
+    // saved. Start blank; whatever the user actually picks is exactly what renders.
+    const activeFeatures = new Set<string>(Array.isArray(cfg.smartFeatures) ? cfg.smartFeatures : []);
     this.renderPduChips(container, '#pdu-features', SMART_FEATURES, activeFeatures, SMART_LABELS, () => save());
 
     // Environmental sensor chips
@@ -638,7 +724,7 @@ export class PropertiesPanel {
 
     // Network port chips
     const NET_PORTS = ['rj45','sfp','usb','usbC','serial','console','microUsb'];
-    const activeNetPorts = new Set<string>(Array.isArray(cfg.networkPorts) ? cfg.networkPorts : ['rj45']);
+    const activeNetPorts = new Set<string>(Array.isArray(cfg.networkPorts) ? cfg.networkPorts : []);
     this.renderPduChips(container, '#pdu-netports', NET_PORTS, activeNetPorts, {}, () => save());
 
     // Wireless chips

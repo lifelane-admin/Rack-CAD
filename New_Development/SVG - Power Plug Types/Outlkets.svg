@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 540" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="chassisGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2a2b2e"/>
+      <stop offset="30%" stop-color="#3a3c40"/>
+      <stop offset="70%" stop-color="#3a3c40"/>
+      <stop offset="100%" stop-color="#222325"/>
+    </linearGradient>
+
+    <!-- Bevel / Outer Frame Gradient -->
+    <linearGradient id="frameGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1f2022"/>
+      <stop offset="100%" stop-color="#141517"/>
+    </linearGradient>
+
+    <!-- Socket Recess Gradient -->
+    <linearGradient id="recessGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0d0e0f"/>
+      <stop offset="100%" stop-color="#1b1c1e"/>
+    </linearGradient>
+
+    <!-- Gold Pin Metallic Gradient -->
+    <linearGradient id="goldPinGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffeea1"/>
+      <stop offset="40%" stop-color="#d4af37"/>
+      <stop offset="100%" stop-color="#8a6d1c"/>
+    </linearGradient>
+
+    <!-- Inner Hole Shadow -->
+    <filter id="innerShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+      <feOffset dx="0" dy="2"/>
+      <feComposite in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1" result="shadowDiff"/>
+      <feFlood flood-color="#000" flood-opacity="0.8"/>
+      <feComposite in2="shadowDiff" operator="in"/>
+      <feComposite in2="SourceGraphic" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- PDU Outer Body Frame -->
+  <rect x="10" y="10" width="160" height="520" rx="4" fill="url(#chassisGrad)" stroke="#111213" stroke-width="3"/>
+  <rect x="16" y="16" width="148" height="508" rx="2" fill="none" stroke="#4a4d52" stroke-width="1" opacity="0.6"/>
+
+  <!-- ==================== OUTLET 1: IEC C20 INLET (TOP) ==================== -->
+  <g transform="translate(20, 22)">
+    <!-- Socket Plate Container -->
+    <rect x="0" y="0" width="140" height="76" rx="6" fill="url(#frameGrad)" stroke="#111" stroke-width="2"/>
+    <rect x="2" y="2" width="136" height="72" rx="5" fill="none" stroke="#444" stroke-width="1" opacity="0.5"/>
+    
+    <!-- Deep Recessed Socket Well -->
+    <rect x="16" y="10" width="108" height="56" rx="12" fill="url(#recessGrad)" filter="url(#innerShadow)" stroke="#050505" stroke-width="2"/>
+    <rect x="20" y="14" width="100" height="48" rx="9" fill="#121314" stroke="#222" stroke-width="1"/>
+
+    <!-- Gold Prongs (C20 Male Pins - Horizontal) -->
+    <!-- Top Left Pin -->
+    <rect x="42" y="25" width="18" height="7" rx="1.5" fill="url(#goldPinGrad)" stroke="#5a450c" stroke-width="0.5"/>
+    <!-- Top Right Pin -->
+    <rect x="80" y="25" width="18" height="7" rx="1.5" fill="url(#goldPinGrad)" stroke="#5a450c" stroke-width="0.5"/>
+    <!-- Bottom Center Pin -->
+    <rect x="61" y="44" width="18" height="7" rx="1.5" fill="url(#goldPinGrad)" stroke="#5a450c" stroke-width="0.5"/>
+  </g>
+
+  <!-- ==================== OUTLET 2: IEC C19 OUTLET ==================== -->
+  <g transform="translate(20, 106)">
+    <rect x="0" y="0" width="140" height="76" rx="6" fill="url(#frameGrad)" stroke="#111" stroke-width="2"/>
+    <rect x="2" y="2" width="136" height="72" rx="5" fill="none" stroke="#444" stroke-width="1" opacity="0.5"/>
+    
+    <!-- C19 Outer Bevel -->
+    <rect x="22" y="12" width="96" height="52" rx="6" fill="#121315" stroke="#2a2c30" stroke-width="2"/>
+    <rect x="28" y="17" width="84" height="42" rx="3" fill="#080809"/>
+
+    <!-- C19 Female Slots (Horizontal) -->
+    <rect x="40" y="25" width="16" height="6" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+    <rect x="84" y="25" width="16" height="6" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+    <rect x="62" y="43" width="16" height="6" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+  </g>
+
+  <!-- ==================== OUTLET 3: IEC C19 OUTLET ==================== -->
+  <g transform="translate(20, 190)">
+    <rect x="0" y="0" width="140" height="76" rx="6" fill="url(#frameGrad)" stroke="#111" stroke-width="2"/>
+    <rect x="2" y="2" width="136" height="72" rx="5" fill="none" stroke="#444" stroke-width="1" opacity="0.5"/>
+    
+    <!-- C19 Outer Bevel -->
+    <rect x="22" y="12" width="96" height="52" rx="6" fill="#121315" stroke="#2a2c30" stroke-width="2"/>
+    <rect x="28" y="17" width="84" height="42" rx="3" fill="#080809"/>
+
+    <!-- C19 Female Slots (Horizontal) -->
+    <rect x="40" y="25" width="16" height="6" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+    <rect x="84" y="25" width="16" height="6" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+    <rect x="62" y="43" width="16" height="6" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+  </g>
+
+  <!-- ==================== OUTLET 4: IEC C13 OUTLET ==================== -->
+  <g transform="translate(20, 274)">
+    <rect x="0" y="0" width="140" height="76" rx="6" fill="url(#frameGrad)" stroke="#111" stroke-width="2"/>
+    <rect x="2" y="2" width="136" height="72" rx="5" fill="none" stroke="#444" stroke-width="1" opacity="0.5"/>
+    
+    <!-- C13 Pentagonal Beveled Shroud -->
+    <path d="M 32 16 L 108 16 A 8 8 0 0 1 116 24 L 116 48 L 98 62 L 42 62 L 24 48 L 24 24 A 8 8 0 0 1 32 16 Z" fill="#121315" stroke="#2a2c30" stroke-width="2"/>
+    <path d="M 36 20 L 104 20 A 5 5 0 0 1 109 25 L 109 46 L 94 58 L 46 58 L 31 46 L 31 25 A 5 5 0 0 1 36 20 Z" fill="#080809"/>
+
+    <!-- C13 Female Slots (Vertical) -->
+    <rect x="46" y="28" width="6" height="15" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+    <rect x="88" y="28" width="6" height="15" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+    <rect x="67" y="38" width="6" height="15" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+  </g>
+
+  <!-- ==================== OUTLET 5: IEC C13 OUTLET ==================== -->
+  <g transform="translate(20, 358)">
+    <rect x="0" y="0" width="140" height="76" rx="6" fill="url(#frameGrad)" stroke="#111" stroke-width="2"/>
+    <rect x="2" y="2" width="136" height="72" rx="5" fill="none" stroke="#444" stroke-width="1" opacity="0.5"/>
+    
+    <!-- C13 Pentagonal Beveled Shroud -->
+    <path d="M 32 16 L 108 16 A 8 8 0 0 1 116 24 L 116 48 L 98 62 L 42 62 L 24 48 L 24 24 A 8 8 0 0 1 32 16 Z" fill="#121315" stroke="#2a2c30" stroke-width="2"/>
+    <path d="M 36 20 L 104 20 A 5 5 0 0 1 109 25 L 109 46 L 94 58 L 46 58 L 31 46 L 31 25 A 5 5 0 0 1 36 20 Z" fill="#080809"/>
+
+    <!-- C13 Female Slots (Vertical) -->
+    <rect x="46" y="28" width="6" height="15" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+    <rect x="88" y="28" width="6" height="15" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+    <rect x="67" y="38" width="6" height="15" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+  </g>
+
+  <!-- ==================== OUTLET 6: IEC C13 OUTLET ==================== -->
+  <g transform="translate(20, 442)">
+    <rect x="0" y="0" width="140" height="76" rx="6" fill="url(#frameGrad)" stroke="#111" stroke-width="2"/>
+    <rect x="2" y="2" width="136" height="72" rx="5" fill="none" stroke="#444" stroke-width="1" opacity="0.5"/>
+    
+    <!-- C13 Pentagonal Beveled Shroud -->
+    <path d="M 32 16 L 108 16 A 8 8 0 0 1 116 24 L 116 48 L 98 62 L 42 62 L 24 48 L 24 24 A 8 8 0 0 1 32 16 Z" fill="#121315" stroke="#2a2c30" stroke-width="2"/>
+    <path d="M 36 20 L 104 20 A 5 5 0 0 1 109 25 L 109 46 L 94 58 L 46 58 L 31 46 L 31 25 A 5 5 0 0 1 36 20 Z" fill="#080809"/>
+
+    <!-- C13 Female Slots (Vertical) -->
+    <rect x="46" y="28" width="6" height="15" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+    <rect x="88" y="28" width="6" height="15" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+    <rect x="67" y="38" width="6" height="15" rx="1" fill="#000" stroke="#1a1a1a" stroke-width="1"/>
+  </g>
+</svg>

@@ -97,6 +97,67 @@
   box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
 }
 
+/* Accent buttons: undo/redo/cable/power — always-on blue rounded-square treatment,
+   distinguishing "drawing mode" / frequent-action icons from plain toggle/utility icons. */
+.ft-btn--accent {
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.16);
+  border-color: rgba(56, 189, 248, 0.3);
+  color: var(--accent-primary);
+}
+
+.ft-btn--accent:hover {
+  background: rgba(56, 189, 248, 0.28);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.ft-btn--accent.active {
+  background: rgba(56, 189, 248, 0.32);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.45);
+}
+
+/* Source/Dest end-picker for the cable-end rotate button — a compact 2-way toggle,
+   not a 4-direction button grid. */
+.ft-end-toggle {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.ft-end-btn {
+  width: 18px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-speed) ease;
+  padding: 0;
+}
+
+.ft-end-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.ft-end-btn.active {
+  background-color: rgba(56, 189, 248, 0.22);
+  color: var(--accent-primary);
+}
+
+.ft-end-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 .ft-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;

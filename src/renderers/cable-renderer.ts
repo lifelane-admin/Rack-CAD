@@ -6,6 +6,7 @@ import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
 import { getExitDirection } from '../utils/routing';
 import { getMaterialProfile } from '../core/cable-materials';
 import { getTemplate } from '../library/device-catalog';
+import { iecShroudPath, IEC_CONTACTS } from './rack-kit';
 
 let _previewDirection: 'up' | 'down' | 'left' | 'right' = 'right';
 let _previewDirLockPos: Point | null = null;
@@ -237,11 +238,18 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   const srcOrient  = getEffectiveOrientation(cable, 'source', allPoints);
   const destOrient = getEffectiveOrientation(cable, 'dest', allPoints);
 
-  // Determine connector type from cable type
+  // Determine connector type from cable type. `cable.type` alone isn't reliable for PDU-outlet
+  // cables — the outlet-click flow only ever sets `powerCableType`/`plugType` (see app.ts's
+  // commitCable), leaving `type` at whatever the cable-type tool was selected to (often
+  // 'general'), which would otherwise fall through to the plain Ethernet connector instead of
+  // the C13/C14 plug graphic.
   const cableType = cable.type || 'general';
   const isSFP = ['sfp', 'sfp-plus', 'sfp28', 'qsfp', 'qsfp28', 'dac-twinax'].some(t => cableType.includes(t));
   const isFiber = ['om3', 'om4', 'om5', 'fiber', 'lc', 'sc'].some(t => cableType.includes(t));
-  const isPower = ['power', 'pwr', 'c13', 'c14', 'c19', 'c13-power', 'c19-power'].some(t => cableType.includes(t));
+  const isPower = cable.powerCableType === 'power'
+    || !!cable.sourcePortId?.startsWith('outlet-')
+    || !!cable.destPortId?.startsWith('outlet-')
+    || ['power', 'pwr', 'c13', 'c14', 'c19', 'c13-power', 'c19-power'].some(t => cableType.includes(t));
 
   // Compact connector mode: switch ports have tiny 9px sockets — full-size connectors float above them
   const srcPortObj  = cable.sourcePortId ? stateManager.getPort(cable.sourcePortId) : null;
@@ -664,9 +672,11 @@ function createPowerConnector(pos: Point, color: string, orientation: 'up' | 'do
 
   const pt = (plugType ?? '').toUpperCase();
   const isC19 = pt.includes('C19');
-  const isNEMA = pt.includes('NEMA') || pt.includes('IS') || pt.includes('BS') || pt.includes('SCHUKO');
+  const isIndian = pt.includes('IS6538') || pt.includes('IS1293');
+  const isNEMA = !isIndian && (pt.includes('NEMA') || pt.includes('BS') || pt.includes('SCHUKO'));
 
-  // IEC body shape: C19 uses rect, C13/C14/C15 uses rect with cut corners, NEMA uses rounded
+  // IEC body shape: C19 uses rect, Indian uses round 3-pin, C13/C14/C15 uses the IEC pentagon
+  // shroud, NEMA/BS/Schuko uses a rounded rect.
   if (isC19) {
     // C19 body — wider rect
     g.appendChild(createRect(4, 8, 22, 22, { fill: '#1b2a32', stroke: '#0a1a22', 'stroke-width': 1.2, rx: 2 }));
@@ -674,6 +684,16 @@ function createPowerConnector(pos: Point, color: string, orientation: 'up' | 'do
     g.appendChild(createRect(7,  15, 6, 2, { fill: '#000', rx: 0.4 }));
     g.appendChild(createRect(17, 15, 6, 2, { fill: '#000', rx: 0.4 }));
     g.appendChild(createRect(12, 22, 6, 2, { fill: '#000', rx: 0.4 }));
+  } else if (isIndian) {
+    // Indian IS1293 (2+E) / IS6538 (Type D/M) — round face, 3 round brass pins in a
+    // triangular arrangement (larger pins for the 15A/16A variants), matching the round-pin
+    // socket look already used for these types in pdu-renderer.ts's drawSocketFacePlate().
+    const cx = 15, cy = 19, r = 11;
+    const pinR = (pt.includes('15A') || pt.includes('16A')) ? 2.2 : 1.7;
+    g.appendChild(createSVGEl('circle', { cx, cy, r, fill: '#1b2a32', stroke: '#0a1a22', 'stroke-width': 1.2 }));
+    [[cx - 4.5, cy + 3], [cx, cy - 4], [cx + 4.5, cy + 3]].forEach(([px, py]) => {
+      g.appendChild(createSVGEl('circle', { cx: px, cy: py, r: pinR, fill: '#d4af37', stroke: '#8a6d1c', 'stroke-width': 0.4 }));
+    });
   } else if (isNEMA) {
     // NEMA/Schuko/BS — rounded rect
     g.appendChild(createRect(5, 8, 20, 22, { fill: '#1b2a32', stroke: '#0a1a22', 'stroke-width': 1.2, rx: 6 }));
@@ -683,12 +703,17 @@ function createPowerConnector(pos: Point, color: string, orientation: 'up' | 'do
     // Ground hole (center)
     g.appendChild(createSVGEl('circle', { cx: 15, cy: 25, r: 2, fill: '#000' }));
   } else {
-    // Default C13/C14/C15 — trapezoidal IEC body with vertical slots
-    g.appendChild(createRect(6, 10, 18, 20, { fill: '#1b2a32', stroke: '#0a1a22', 'stroke-width': 1.2, rx: 2 }));
-    // Vertical slots (L, N, Earth)
-    g.appendChild(createRect(8,   14, 3, 6, { fill: '#000', rx: 0.4 }));
-    g.appendChild(createRect(19,  14, 3, 6, { fill: '#000', rx: 0.4 }));
-    g.appendChild(createRect(13.5, 21, 3, 5, { fill: '#000', rx: 0.4 }));
+    // Default: IEC C14 male plug — the pentagon shroud from New_Development/SVG - Power Plug
+    // Types/C14.svg, with brass Live/Neutral/Earth pins (this is the cable-end connector that
+    // plugs INTO a PDU's C13 receptacle, so it shows solid pins rather than recessed slots).
+    const cx = 15, cy = 20, w = 18, h = 20;
+    g.appendChild(createPath(iecShroudPath(cx, cy, w, h), { fill: '#1b2a32', stroke: '#0a1a22', 'stroke-width': 1.2 }));
+    const pinW = w * 0.14, pinH = h * 0.28;
+    [IEC_CONTACTS.live, IEC_CONTACTS.neutral, IEC_CONTACTS.earth].forEach(({ dx, dy }) => {
+      g.appendChild(createRect(cx + dx * w - pinW / 2, cy + dy * h - pinH / 2, pinW, pinH, {
+        fill: '#d4af37', stroke: '#8a6d1c', 'stroke-width': 0.4, rx: pinW * 0.25,
+      }));
+    });
   }
 
   // Rubber boot / cable strain relief

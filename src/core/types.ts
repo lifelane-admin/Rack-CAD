@@ -24,7 +24,7 @@ export interface RackData {
 }
 
 // === Ports ===
-export type PortType = 'rj45' | 'sfp' | 'sfp-plus' | 'sfp28' | 'qsfp' | 'qsfp28' | 'management' | 'console' | 'power';
+export type PortType = 'rj45' | 'sfp' | 'sfp-plus' | 'sfp28' | 'qsfp' | 'qsfp28' | 'management' | 'console' | 'power' | 'hybrid' | 'usb' | 'dvi' | 'displayport' | 'vga' | 'hdmi' | 'audio' | 'mic' | 'serial';
 
 export type SocketType =
   | 'C13' | 'C19' | 'C15' | 'C5'
@@ -65,6 +65,15 @@ export interface PduConfig {
   cableEntry?: 'top' | 'bottom' | 'left' | 'right';
   branding?: 'manufacturer' | 'rackSlicer' | 'none';
   labels?: string[];
+}
+
+/** KVM switch's local console-side peripheral ports (the "TARGETS" group — connections out to
+ *  each managed server — is fixed/unaffected by this). Customizable subset of: 'usb1'..'usb4',
+ *  'vga', 'hdmi', 'dvi', 'displayport', 'audio', 'mic', 'ethernet', 'serial'. Mirrors a typical
+ *  1U KVM's real front-panel: local console ports (video + USB keyboard/mouse + audio), a
+ *  management (LAN/IP) port, and a firmware/diagnostics serial (RS-232) port. */
+export interface KvmConfig {
+  localPorts?: string[];
 }
 
 export interface PortData {
@@ -213,7 +222,7 @@ export interface CableData {
 }
 
 // === Application State ===
-export type ToolMode = 'select' | 'pan' | 'cable' | 'zoom-in' | 'zoom-out' | 'export-area';
+export type ToolMode = 'select' | 'pan' | 'cable' | 'power' | 'zoom-in' | 'zoom-out' | 'export-area';
 export type Theme = 'dark' | 'light';
 
 export type SelectableItem = 

@@ -83,6 +83,7 @@ export class StatusBar {
       'select': '🔲',
       'pan': '✋',
       'cable': '🔗',
+      'power': '🔌',
       'zoom-in': '🔍+',
       'zoom-out': '🔍-',
       'export-area': '📐'

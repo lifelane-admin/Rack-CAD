@@ -68,15 +68,22 @@ export class Toolbar {
         action: () => this.setTool('pan'), 
         toggle: true 
       },
-      { 
-        id: 'tool-cable', 
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="6" rx="1"></rect><rect x="3" y="15" width="6" height="6" rx="1"></rect><rect x="15" y="15" width="6" height="6" rx="1"></rect><path d="M12 9v4M6 15v-2h12v2"></path></svg>', 
-        title: 'Draw Ethernet Cable (C)', 
-        action: () => this.setTool('cable'), 
-        toggle: true 
+      {
+        id: 'tool-cable',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="6" rx="1"></rect><rect x="3" y="15" width="6" height="6" rx="1"></rect><rect x="15" y="15" width="6" height="6" rx="1"></rect><path d="M12 9v4M6 15v-2h12v2"></path></svg>',
+        title: 'Draw Ethernet Cable (C)',
+        action: () => this.setTool('cable'),
+        toggle: true
       },
-      { 
-        id: 'tool-zoomin', 
+      {
+        id: 'tool-power',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v4M15 2v4"></path><path d="M7 6h10v4a5 5 0 01-10 0V6z"></path><path d="M12 15v7"></path></svg>',
+        title: 'Draw Power Cable to PDU (P)',
+        action: () => this.setTool('power'),
+        toggle: true
+      },
+      {
+        id: 'tool-zoomin',
         icon: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/></svg>', 
         title: 'Zoom In', 
         action: () => EventBus.emit('view:zoom-in', undefined) 

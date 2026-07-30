@@ -3,6 +3,7 @@ import { createGroup, createRect, createCircle, createText, createLinearGradient
 import { stateManager } from '../core/state';
 import { renderSidePdu } from './pdu-renderer';
 import { getTemplate } from '../library/device-catalog';
+import { sidePduOffsetX } from './pdu-layout';
 
 export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverride?: Partial<AppState>): SVGGElement {
   const rackGroup = createGroup('rack-' + rack.id, 'rack');
@@ -67,8 +68,13 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
   const rightPduTemplate = rightPduDevice ? getTemplate(rightPduDevice.templateId) : null;
   const leftPduW = leftPduTemplate?.pduWidth ?? 0;
   const rightPduW = rightPduTemplate?.pduWidth ?? 0;
-  const OUTER_W_TOTAL = RACK_CONSTANTS.RACK_OUTER_WIDTH + leftPduW + rightPduW;
-  const pduOffset = leftPduW;
+  // Layout order (innermost to outermost) is always Rack -> Cable Manager -> PDU, so a PDU
+  // never overlaps a vertical cable manager on the same side — see pdu-layout.ts's
+  // sidePduOffsetX(), also used by core/state.ts's getPortWorldPosition() for cable endpoints.
+  const leftPduX = sidePduOffsetX(rack, 'left', leftPduW);
+  const rightPduX = sidePduOffsetX(rack, 'right', rightPduW);
+  const pduOffset = -leftPduX;
+  const OUTER_W_TOTAL = (rightPduX + rightPduW) - leftPduX;
 
   // === 3D ISOMETRIC / PERSPECTIVE WALL DRAWINGS ===
   if (isIso) {
@@ -223,20 +229,21 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
   // === LEFT PDU ZONE OR "+" HANDLE ===
   if (leftPduTemplate && leftPduDevice) {
     const leftPduGrp = renderSidePdu(leftPduTemplate, leftPduW, innerHeight, 'left', leftPduDevice);
-    leftPduGrp.setAttribute('transform', `translate(${-leftPduW}, ${innerY})`);
+    leftPduGrp.setAttribute('transform', `translate(${leftPduX}, ${innerY})`);
     leftPduGrp.setAttribute('data-pdu-side', 'left');
     leftPduGrp.setAttribute('data-rack-id', rack.id);
     leftPduGrp.setAttribute('data-pdu-device-id', rack.leftPduId ?? '');
     leftPduGrp.setAttribute('style', 'cursor:pointer');
     rackGroup.appendChild(leftPduGrp);
   } else {
-    // "+" add handle — dashed strip on left side
+    // "+" add handle — dashed strip on left side, beyond any left cable manager
+    const leftHandleX = sidePduOffsetX(rack, 'left', PDU_HANDLE_W);
     const addHandle = createGroup('rack-' + rack.id + '-pdu-add-left', 'pdu-add-left');
     addHandle.setAttribute('data-pdu-add-side', 'left');
     addHandle.setAttribute('data-rack-id', rack.id);
     addHandle.setAttribute('style', 'cursor:pointer');
 
-    const handleRect = createRect(-PDU_HANDLE_W, innerY, PDU_HANDLE_W, innerHeight, {
+    const handleRect = createRect(leftHandleX, innerY, PDU_HANDLE_W, innerHeight, {
       fill: 'none',
       stroke: '#2a5a3a',
       'stroke-width': 1.2,
@@ -245,7 +252,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
     });
     addHandle.appendChild(handleRect);
 
-    const plusTxt = createText(-PDU_HANDLE_W / 2, innerY + innerHeight / 2 + 5, '+', {
+    const plusTxt = createText(leftHandleX + PDU_HANDLE_W / 2, innerY + innerHeight / 2 + 5, '+', {
       'text-anchor': 'middle',
       'font-size': 14,
       'font-weight': 'bold',
@@ -253,7 +260,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
     });
     addHandle.appendChild(plusTxt);
 
-    const tipTxt = createText(-PDU_HANDLE_W / 2, innerY + innerHeight / 2 + 14, 'Add PDU', {
+    const tipTxt = createText(leftHandleX + PDU_HANDLE_W / 2, innerY + innerHeight / 2 + 14, 'Add PDU', {
       'text-anchor': 'middle',
       'font-size': 4.5,
       fill: '#1a6a3a'
@@ -263,8 +270,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
     rackGroup.appendChild(addHandle);
   }
 
-  // === RIGHT PDU ZONE OR "+" HANDLE ===
-  const rightPduX = RACK_CONSTANTS.RACK_OUTER_WIDTH;
+  // === RIGHT PDU ZONE OR "+" HANDLE (beyond any right cable manager) ===
   if (rightPduTemplate && rightPduDevice) {
     const rightPduGrp = renderSidePdu(rightPduTemplate, rightPduW, innerHeight, 'right', rightPduDevice);
     rightPduGrp.setAttribute('transform', `translate(${rightPduX}, ${innerY})`);

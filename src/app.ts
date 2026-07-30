@@ -30,6 +30,7 @@ import { generateId, distToSegment } from './utils/geometry';
 import { initExportHandlers } from './utils/export';
 import { computeSmartRouting, get3DefaultAnchors } from './utils/routing';
 import { cloneDevice } from './utils/clone';
+import { socketTypeAtOutletIndex } from './renderers/pdu-layout';
 import {
   RackData, DeviceData, PortData, CableData, LegendItem,
   RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode, SocketType
@@ -846,6 +847,24 @@ export class App {
       }
 
       if (s.tool === 'select') {
+        // Side-mount PDU click — checked ahead of the generic rack-drag branch below, since
+        // its group lives inside the rack's `.rack` element and carries `data-pdu-device-id`
+        // rather than the standard `data-device-id`, so it would otherwise never match the
+        // device check and fall through to starting a whole-rack drag instead of selecting it.
+        const pduEl = target.closest('[data-pdu-side]') as SVGElement;
+        if (pduEl) {
+          const deviceId = pduEl.getAttribute('data-pdu-device-id') ?? '';
+          if (deviceId) {
+            const sel: SelectableItem[] = [{ type: 'device', id: deviceId }];
+            stateManager.setState({ selection: sel });
+            eventBus.emit('selection:changed', sel);
+          }
+          // PDU repositioning (moving it between rack sides) isn't supported — select only,
+          // don't start any drag (no isDragging* flag set, so no 'dragging-active' to clean up).
+          e.stopPropagation();
+          return;
+        }
+
         const deviceEl = target.closest('[data-device-id]') as SVGElement;
         if (deviceEl) {
           const deviceId = deviceEl.getAttribute('data-device-id')!;
@@ -1234,14 +1253,17 @@ export class App {
       if (pduEl) {
         const deviceId = pduEl.getAttribute('data-pdu-device-id') ?? '';
         if (deviceId) {
-          stateManager.setState({ selection: [{ type: 'device', id: deviceId }] });
+          const sel: SelectableItem[] = [{ type: 'device', id: deviceId }];
+          stateManager.setState({ selection: sel });
+          eventBus.emit('selection:changed', sel);
           this.renderAll();
         }
         return;
       }
 
-      // Cable creation mode
-      if (s.tool === 'cable') {
+      // Cable creation mode (both the generic cable tool and the power-cable tool share this
+      // flow — handleCablePortClick already detects power ports/outlets and validates them)
+      if (s.tool === 'cable' || s.tool === 'power') {
         // Primary: detect port via SVG hit-testing
         const portEl = target.closest('[data-port-id]') as SVGElement;
         if (portEl) {
@@ -1264,20 +1286,24 @@ export class App {
           }
         }
 
-        // Fallback: proximity snap — find nearest port within 40px world units
-        // (handles cases where the neon ring / gutter area was clicked instead of the port circle)
-        if (s.cableInProgress || s.tool === 'cable') {
+        // Fallback: proximity snap — find nearest port (or PDU outlet) within 40px world units
+        // (handles cases where the neon ring / gutter area was clicked instead of the port circle,
+        // or a PDU outlet's small `.pdu-outlet-hit` rect was narrowly missed)
+        if (s.cableInProgress || s.tool === 'cable' || s.tool === 'power') {
           let closestPortId: string | null = null;
           let closestDist = 40;
+          const candidateIds: string[] = [];
           for (const dev of s.devices) {
-            for (const port of dev.ports) {
-              const pos = stateManager.getPortWorldPosition(port.id);
-              if (!pos) continue;
-              const dist = Math.sqrt(Math.pow(this.mouseWorldPos.x - pos.x, 2) + Math.pow(this.mouseWorldPos.y - pos.y, 2));
-              if (dist < closestDist) {
-                closestDist = dist;
-                closestPortId = port.id;
-              }
+            for (const port of dev.ports) candidateIds.push(port.id);
+          }
+          candidateIds.push(...stateManager.getAllPduOutletPortIds());
+          for (const id of candidateIds) {
+            const pos = stateManager.getPortWorldPosition(id);
+            if (!pos) continue;
+            const dist = Math.sqrt(Math.pow(this.mouseWorldPos.x - pos.x, 2) + Math.pow(this.mouseWorldPos.y - pos.y, 2));
+            if (dist < closestDist) {
+              closestDist = dist;
+              closestPortId = id;
             }
           }
           if (closestPortId) {
@@ -1356,6 +1382,22 @@ export class App {
         this.clearHighlights();
       }
     });
+  }
+
+  /**
+   * Resolve the actual configured plug/socket type (C13, C19, IS6538-15A, etc.) for a synthetic
+   * `outlet-<deviceId>-<idx>` PDU port, so a power cable's plug can be auto-matched to what the
+   * outlet really is instead of asking the user to guess it from a generic list.
+   */
+  private resolveOutletSocketType(outletPortId: string): SocketType | null {
+    const match = /^outlet-(.+)-(\d+)$/.exec(outletPortId);
+    if (!match) return null;
+    const device = stateManager.getDevice(match[1]);
+    if (!device) return null;
+    const template = getTemplate(device.templateId);
+    if (!template) return null;
+    const config = (device.deviceConfig && typeof device.deviceConfig === 'object') ? device.deviceConfig as any : {};
+    return socketTypeAtOutletIndex(template, config, Number(match[2]));
   }
 
   /**
@@ -1476,7 +1518,7 @@ export class App {
         this.renderAll();
       };
 
-      // Power cable: show plug-type modal before committing
+      // Power cable: match the plug to whichever end is a PDU outlet before committing
       if (isSrcPower || isDestPower) {
         // Clear cableInProgress immediately so UI doesn't show stale preview
         stateManager.setState({ cableInProgress: null });
@@ -1484,11 +1526,10 @@ export class App {
         if (interactionLayer) interactionLayer.innerHTML = '';
         resetPreviewDirection();
 
-        this.showPlugTypeModal((plugType) => {
-          if (!plugType) return; // cancelled — cable discarded
+        const outletPortId = isDestOutlet ? portId : (isSrcOutlet ? sourcePortId : null);
+        const finish = (plugType: SocketType) => {
           // Determine cable color: blue for B-feed (right PDU), red for A-feed (left PDU)
           let cableColor = '#ff4422'; // default red (A-feed / left PDU)
-          const outletPortId = isDestOutlet ? portId : (isSrcOutlet ? sourcePortId : null);
           if (outletPortId) {
             // outlet-<deviceId>-<idx> — extract deviceId
             const parts = outletPortId.split('-');
@@ -1499,8 +1540,21 @@ export class App {
             if (isRightPdu) cableColor = '#3399ff'; // blue for B-feed
           }
           commitCable({ powerCableType: 'power', plugType, color: cableColor });
-        });
-        return; // handled async
+        };
+
+        // Auto-detect the plug from the outlet's actual configured socket type (C13, C19,
+        // Indian IS6538/IS1293, etc.) — only fall back to asking the user when neither end
+        // is a resolvable PDU outlet (e.g. a manual power port <-> power port connection).
+        const autoPlugType = outletPortId ? this.resolveOutletSocketType(outletPortId) : null;
+        if (autoPlugType) {
+          finish(autoPlugType);
+        } else {
+          this.showPlugTypeModal((plugType) => {
+            if (!plugType) return; // cancelled — cable discarded
+            finish(plugType);
+          });
+        }
+        return; // handled async (or already committed synchronously above)
       }
 
       // Non-power cable — commit immediately
@@ -1812,6 +1866,8 @@ export class App {
 
         // Create device from template
         const deviceId = generateId();
+        // Strip any "ear hole" ports here — injectEarPorts() regenerates the full PSU/network/
+        // hybrid sequence separately as one evenly-spaced grid (see core/state.ts).
         const ports: PortData[] = template.ports
           .filter(p => !p.id.includes('-ear-'))
           .map((p, i) => ({
@@ -1896,6 +1952,7 @@ export class App {
       if (e.key === 'h') eventBus.emit('tool:changed', 'pan');
       // C = Cable tool
       if (e.key === 'c' && !e.ctrlKey) eventBus.emit('tool:changed', 'cable');
+      if (e.key === 'p' && !e.ctrlKey) eventBus.emit('tool:changed', 'power');
 
       // Ctrl+S = Save
       if (e.ctrlKey && e.key === 's') {
@@ -2641,63 +2698,84 @@ export class App {
 
     // Render racks
     for (const rack of s.racks) {
-      const rackGroup = renderRack(rack, rackLayer);
+      let rackGroup: SVGGElement;
+      try {
+        rackGroup = renderRack(rack, rackLayer);
+      } catch (err) {
+        console.error(`renderAll: failed to render rack "${rack.id}" (${rack.name}) — skipping it so the rest of the canvas can still render`, err);
+        continue;
+      }
 
-      // Render devices in this rack
+      // Render devices in this rack. Each device is isolated so a single bad device
+      // (e.g. corrupted/legacy deviceConfig) can't blank the entire canvas — before this,
+      // one throwing renderDevice() call would abort renderAll() with the layers already
+      // cleared, leaving nothing visible at all.
       const devices = stateManager.getDevicesInRack(rack.id);
       for (const device of devices) {
-        const deviceGroup = renderDevice(device, 0, 0, rack.units);
-        rackGroup.appendChild(deviceGroup);
-      }
-    }
-
-    // Render cables
-    for (const cable of s.cables) {
-      let sourcePos = cable.floatingSource || stateManager.getPortWorldPosition(cable.sourcePortId);
-      let destPos = cable.destPortId ? stateManager.getPortWorldPosition(cable.destPortId) : null;
-      if (!destPos && cable.floatingDest) {
-        destPos = cable.floatingDest;
-      }
-      if (sourcePos && destPos) {
-        const srcPort = stateManager.getPort(cable.sourcePortId);
-        const destPort = cable.destPortId ? stateManager.getPort(cable.destPortId) : null;
-        
-        let srcVisible = true;
-        let destVisible = true;
-        const isRear = s.cabinetViewMode === 'rear';
-        
-        const isPortVisibleOnSide = (p: typeof srcPort, isRearSide: boolean) => {
-          if (!p) return true;
-          const dev = stateManager.getDevice(p.deviceId);
-          const temp = dev ? getTemplate(dev.templateId) : null;
-          const cat = temp?.category || 'server';
-          
-          if (p.id.includes('-ear-')) {
-            return !isRearSide;
-          }
-          
-          if (cat === 'server' || cat === 'firewall' || cat === 'storage' || cat === 'ups' || cat === 'pdu') {
-            return isRearSide;
-          } else if (cat === 'switch' || cat === 'patch-panel') {
-            if (p.type === 'power') return isRearSide;
-            return !isRearSide;
-          }
-          return true;
-        };
-        
-        if (srcPort) srcVisible = isPortVisibleOnSide(srcPort, isRear);
-        if (destPort) destVisible = isPortVisibleOnSide(destPort, isRear);
-        
-        if (srcVisible || destVisible) {
-          renderCable(cable, sourcePos, destPos, cableLayer);
+        try {
+          const deviceGroup = renderDevice(device, 0, 0, rack.units);
+          rackGroup.appendChild(deviceGroup);
+        } catch (err) {
+          console.error(`renderAll: failed to render device "${device.id}" (${device.name}) — skipping it so the rest of the canvas can still render`, err);
         }
       }
     }
 
+    // Render cables — same per-item isolation as the device loop above.
+    for (const cable of s.cables) {
+      try {
+        let sourcePos = cable.floatingSource || stateManager.getPortWorldPosition(cable.sourcePortId);
+        let destPos = cable.destPortId ? stateManager.getPortWorldPosition(cable.destPortId) : null;
+        if (!destPos && cable.floatingDest) {
+          destPos = cable.floatingDest;
+        }
+        if (sourcePos && destPos) {
+          const srcPort = stateManager.getPort(cable.sourcePortId);
+          const destPort = cable.destPortId ? stateManager.getPort(cable.destPortId) : null;
+
+          let srcVisible = true;
+          let destVisible = true;
+          const isRear = s.cabinetViewMode === 'rear';
+
+          const isPortVisibleOnSide = (p: typeof srcPort, isRearSide: boolean) => {
+            if (!p) return true;
+            const dev = stateManager.getDevice(p.deviceId);
+            const temp = dev ? getTemplate(dev.templateId) : null;
+            const cat = temp?.category || 'server';
+
+            if (p.id.includes('-ear-')) {
+              return !isRearSide;
+            }
+
+            if (cat === 'server' || cat === 'firewall' || cat === 'storage' || cat === 'ups' || cat === 'pdu') {
+              return isRearSide;
+            } else if (cat === 'switch' || cat === 'patch-panel') {
+              if (p.type === 'power') return isRearSide;
+              return !isRearSide;
+            }
+            return true;
+          };
+
+          if (srcPort) srcVisible = isPortVisibleOnSide(srcPort, isRear);
+          if (destPort) destVisible = isPortVisibleOnSide(destPort, isRear);
+
+          if (srcVisible || destVisible) {
+            renderCable(cable, sourcePos, destPos, cableLayer);
+          }
+        }
+      } catch (err) {
+        console.error(`renderAll: failed to render cable "${cable.id}" (${cable.name}) — skipping it so the rest of the canvas can still render`, err);
+      }
+    }
+
     // Render dashboard widgets
-    if (labelLayer && s.racks.length > 0 && s.showLegends) {
-      const firstRack = s.racks[0];
-      renderDashboardWidgets(firstRack, s.devices, s.cables, labelLayer);
+    try {
+      if (labelLayer && s.racks.length > 0 && s.showLegends) {
+        const firstRack = s.racks[0];
+        renderDashboardWidgets(firstRack, s.devices, s.cables, labelLayer);
+      }
+    } catch (err) {
+      console.error('renderAll: failed to render dashboard widgets — skipping', err);
     }
   }
 
@@ -2712,6 +2790,7 @@ export class App {
       'select': 'default',
       'pan': 'grab',
       'cable': 'crosshair',
+      'power': 'crosshair',
       'zoom-in': 'zoom-in',
       'zoom-out': 'zoom-out',
       'export-area': 'crosshair'
