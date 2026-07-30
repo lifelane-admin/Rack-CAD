@@ -1,6 +1,6 @@
 // src/renderers/fortigate-renderer.ts
 import { el, g } from './rack-kit';
-import type { DeviceTemplate } from '../core/types';
+import type { DeviceTemplate, PortData } from '../core/types';
 
 const PORT_W = 26, PORT_H = 20, COL_GAP = 5, ZONE_GAP = 26;
 const EAR = 30, padL = 8, padR = 20, padY = 16, ROW_LABEL_H = 16, PAIR_GAP = 6;
@@ -96,7 +96,13 @@ function drawSfpPort(parent: SVGElement, px: number, py: number, up: boolean): v
   parent.appendChild(grp);
 }
 
-export function renderFortiGatePanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
+export function renderFortiGatePanel(
+  template: DeviceTemplate | null,
+  W: number,
+  H: number,
+  ports: PortData[] = [],
+  connectedIds: Set<string> = new Set(),
+): SVGGElement {
   const group = g('fortigate-panel');
   const model = template?.model ?? 'FortiGate 400F';
   const uid = `fg${Math.random().toString(36).slice(2, 7)}_`;
@@ -163,11 +169,12 @@ export function renderFortiGatePanel(template: DeviceTemplate | null, W: number,
   subTxt.textContent = 'ENTERPRISE FIREWALL'; brandG.appendChild(subTxt);
   chG.appendChild(brandG);
 
-  placed.forEach(p => {
+  placed.forEach((p, portIdx) => {
     const z = p.zone;
     const py = p.row === 0 ? topRowY : botRowY;
     const px = p.x - EAR;
-    const up = true;
+    const port = ports[portIdx];
+    const up = port ? connectedIds.has(port.id) : false;
 
     if (z.kind === 'sfp') {
       drawSfpPort(chG, px, py, up);

@@ -222,7 +222,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
 
   // === LEFT PDU ZONE OR "+" HANDLE ===
   if (leftPduTemplate && leftPduDevice) {
-    const leftPduGrp = renderSidePdu(leftPduTemplate, leftPduW, innerHeight, 'left');
+    const leftPduGrp = renderSidePdu(leftPduTemplate, leftPduW, innerHeight, 'left', leftPduDevice);
     leftPduGrp.setAttribute('transform', `translate(${-leftPduW}, ${innerY})`);
     leftPduGrp.setAttribute('data-pdu-side', 'left');
     leftPduGrp.setAttribute('data-rack-id', rack.id);
@@ -266,7 +266,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
   // === RIGHT PDU ZONE OR "+" HANDLE ===
   const rightPduX = RACK_CONSTANTS.RACK_OUTER_WIDTH;
   if (rightPduTemplate && rightPduDevice) {
-    const rightPduGrp = renderSidePdu(rightPduTemplate, rightPduW, innerHeight, 'right');
+    const rightPduGrp = renderSidePdu(rightPduTemplate, rightPduW, innerHeight, 'right', rightPduDevice);
     rightPduGrp.setAttribute('transform', `translate(${rightPduX}, ${innerY})`);
     rightPduGrp.setAttribute('data-pdu-side', 'right');
     rightPduGrp.setAttribute('data-rack-id', rack.id);

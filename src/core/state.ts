@@ -373,8 +373,10 @@ class StateManager {
     let cables = this.state.cables;
     if (device) {
       const portIds = device.ports.map(p => p.id);
-      cables = this.state.cables.filter(
-        c => !portIds.includes(c.sourcePortId) && (!c.destPortId || !portIds.includes(c.destPortId))
+      const outletPrefix = `outlet-${id}-`;
+      cables = this.state.cables.filter(c =>
+        !portIds.includes(c.sourcePortId) && (!c.destPortId || !portIds.includes(c.destPortId)) &&
+        !c.sourcePortId.startsWith(outletPrefix) && !(c.destPortId ?? '').startsWith(outletPrefix)
       );
     }
     const devices = this.state.devices.filter(d => d.id !== id);

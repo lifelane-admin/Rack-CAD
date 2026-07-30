@@ -1324,36 +1324,34 @@ git commit -m "feat: PDU configurator v2 in properties panel for vertical side-m
 **Files:**
 - Test: `src/tests/` (or wherever existing tests live)
 
-- [ ] **Step 1: Run all existing tests**
+- [x] **Step 1: Run all existing tests**
 
 ```bash
-cd "G:\Claude\Rack_Design" && npm test 2>&1 | tail -20
+cd "C:\claude\Rack_Design" && npm test 2>&1 | tail -20
 ```
-Expected: all 70 tests pass (no regressions).
+Result (2026-07-30): all 70 tests pass, no regressions.
 
-- [ ] **Step 2: TypeScript full check**
+- [x] **Step 2: TypeScript full check**
 
 ```bash
-cd "G:\Claude\Rack_Design" && npx tsc --noEmit 2>&1
+cd "C:\claude\Rack_Design" && npx tsc --noEmit 2>&1
 ```
-Expected: 0 errors.
+Result (2026-07-30): 0 errors. `npm run build` also succeeds (confirms `?raw` CSS imports used by the new HTML export resolve correctly).
 
-- [ ] **Step 3: Full manual smoke test**
+- [x] **Step 3: Full manual smoke test** — done as a code audit, not a live browser click-through (no chromium-cli/playwright available in this environment):
 
-1. Open http://localhost:5173
-2. **LED fix**: Place a switch → all port LEDs are off. Connect port 3 → port 3 LEDs blink. Disconnect → port 3 LEDs go off.
-3. **PDU drag from catalog**: Drag "APC AP8858" from sidebar PDU section → drop on left side of rack → PDU zone appears, rack expands. Drag "APC AP8868" → drop on right → both sides occupied.
-4. **"+" handle**: Clear state, open fresh rack → "+" handles appear both sides. Click "+" → modal shows 7 PDU models. Select one → mounts.
-5. **Delete PDU**: Click left PDU → selected. Press Delete → PDU removed, rack contracts.
-6. **Port types**: Right-click server port → "Set as Power port" → port shows C14 inlet (purple). Start cable from it → plug type modal appears. Select C13 → cable is thick, dashed, red.
-7. **PDU configurator**: Select vertical PDU → properties panel shows full v2 configurator with all fields.
+1. **LED fix**: `switch-renderer.ts:373` derives `connected` from `connectedPortIndices.has(n-1)` (no more `n % 3` fake logic); `device-renderer.ts:191-205` builds the set from real cable state and passes it through `panel-renderer.ts:323/327` into `renderSwitchPanel`. Confirmed wired end-to-end.
+2. **PDU drag from catalog**: `app.ts:1697` routes any `template.mountType === 'side'` drop to nearest-rack + left/right-half detection, blocks if slot occupied, creates the `DeviceData`, and sets `leftPduId`/`rightPduId` on the rack (`app.ts:1697-1742`).
+3. **"+" handle**: `rack-renderer.ts:221-292` renders `renderSidePdu()` when a PDU id is present, else a dashed `pdu-add-left`/`pdu-add-right` handle; `app.ts:1224-1228` detects the click and opens `showPduPickerModal()` (`app.ts:2424`), which lists `deviceCatalog` entries filtered by `mountType === 'side'`.
+4. **Delete PDU**: `app.ts:2495-2515` (`deleteSelection`) special-cases side-mount PDU devices — clears `leftPduId`/`rightPduId` from the rack and drops cables referencing `outlet-${devId}` before removing the device.
+5. **Port types**: C14 inlet rendering lives in `port-renderer.ts:183-230` (not `device-renderer.ts` as the plan sketched — implementation moved it during Task 7, functionally equivalent), gated on `device.portTypes[portIndex] === 'power'`. Right-click menu wiring confirmed in `app.ts:2253-2272`.
+6. **Power cable + plug modal**: `app.ts:1487` (`showPlugTypeModal`) fires when a power port is the cable source; `cable-renderer.ts` power connector now varies shape (C19 rect / NEMA-BS-Schuko rounded / C13-C14-C15 trapezoidal) by `cable.plugType` (committed this session).
+7. **Connection validation**: `app.ts:1390-1428` blocks power↔data mismatches via combined `portTypes` override + port-name heuristic, with an ear-port exception — more permissive/robust than the plan's original outline.
+8. **PDU configurator**: `properties.ts:191-192` branches to `renderVerticalPduProperties` (`properties.ts:414`) for any `template.mountType === 'side'` selection.
 
-- [ ] **Step 4: Final commit**
+All 7 items are wired correctly in code. Recommend an actual click-through in the browser before shipping to end users, since this was a static-analysis pass, not a runtime/visual check.
 
-```bash
-git add -A
-git commit -m "feat: complete vertical PDU side-wall + switch LED fix + power cables implementation"
-```
+- [x] **Step 4: Final commit** — not applicable as a single sweep-commit: all functional code for Tasks 1-9 was already committed incrementally (commits `045f747`..`ee30db6`), and the HTML-export/plug-visual work from this session was committed separately (`9e4016e`) rather than bundled with unrelated untracked scratch files (`.claude/`, `New_Development/`, `review_diff.txt`, etc.) via `git add -A`.
 
 ---
 

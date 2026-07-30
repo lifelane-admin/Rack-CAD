@@ -37,6 +37,36 @@ export interface OutletConfig {
   socketType: SocketType;
 }
 
+// === PDU Configurator ===
+export interface PduOutletGroup {
+  type: SocketType;
+  count: number;
+}
+
+/** Full PDU configuration — shared by horizontal (rack-mount) and vertical (0U side-mount) PDUs. */
+export interface PduConfig {
+  category?: 'basic' | 'metered' | 'meteredOutlet' | 'switched' | 'managed' | 'smart' | 'intelligent' | 'monitored' | 'highDensity';
+  manufacturer?: 'apc' | 'vertiv' | 'generic';
+  electrical?: { phase?: 'single' | 'three' | 'split'; voltage?: number; currentA?: number };
+  inputPlug?: string;
+  cordLen?: number;
+  cordCsa?: number;
+  frls?: boolean;
+  composition?: PduOutletGroup[];
+  sockets?: { layout?: 'single' | 'dual' | 'triple'; rotationDeg?: number | 'alternate' };
+  breaker?: 'none' | 'mcb' | 'mcb-guarded' | 'hydraulic' | 'electronic' | 'locking';
+  mcbCurve?: 'B' | 'C' | 'D';
+  smartFeatures?: string[];
+  envSensors?: string[];
+  networkPorts?: string[];
+  wireless?: string[];
+  leds?: string[];
+  enclosure?: { finish?: string; customHex?: string; outletFace?: 'white' | 'black' };
+  cableEntry?: 'top' | 'bottom' | 'left' | 'right';
+  branding?: 'manufacturer' | 'rackSlicer' | 'none';
+  labels?: string[];
+}
+
 export interface PortData {
   id: string;
   deviceId: string;

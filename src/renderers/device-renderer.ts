@@ -7,7 +7,14 @@ import { stateManager } from '../core/state';
 
 export function renderDevice(device: DeviceData, rackX: number, rackY: number, rackUnits: number, stateOverride?: Partial<AppState>): SVGGElement {
   const template = getTemplate(device.templateId);
-  const heightUnits = template?.heightUnits || 1;
+
+  // Side-mount (0U wall-mount) devices are drawn exclusively by rack-renderer.ts's
+  // PDU-zone code, positioned outside the rack-unit grid entirely — render nothing here.
+  if (template?.mountType === 'side') {
+    return createGroup('device-' + device.id, 'device');
+  }
+
+  const heightUnits = template?.heightUnits ?? 1;
   const category: DeviceCategory = template?.category ?? 'server';
 
   const innerX = rackX + (RACK_CONSTANTS.RACK_OUTER_WIDTH - RACK_CONSTANTS.RACK_INNER_WIDTH) / 2;

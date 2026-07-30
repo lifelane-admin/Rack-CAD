@@ -327,7 +327,7 @@ export function renderFrontPanel(
     case 'switch':        return renderSwitchPanel(template, deviceWidth, deviceHeight, connectedPortIndices);
     case 'server':        return renderServerPanel(template, deviceWidth, deviceHeight);
     case 'firewall': {
-      if (template?.id === 'fw-fortigate-400f') return renderFortiGatePanel(template, deviceWidth, deviceHeight);
+      if (template?.id === 'fw-fortigate-400f') return renderFortiGatePanel(template, deviceWidth, deviceHeight, deviceData?.ports ?? [], connectedPortIds);
       const portCount = template?.ports.length ?? 6;
       const variant = template?.id === 'fw-4p' ? 'appliance' : 'ngfw';
       return renderNetworkingPanel('firewall', portCount, variant, template?.model ?? 'Firewall', deviceWidth, deviceHeight, deviceData?.ports ?? [], connectedPortIds);
