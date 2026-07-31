@@ -20,7 +20,6 @@ import { ContextMenu, MenuItem } from './components/context-menu';
 import { ReportsPanel } from './components/reports-panel';
 import { FloatingToolbar } from './components/floating-toolbar';
 import { NotificationCenter } from './components/notifications';
-import { VersionHistoryModal } from './components/version-history';
 import { FloatingRackSummaryPanel, FloatingCableSummaryPanel } from './components/floating-summary-panels';
 import './styles/floating-summary.css';
 import { AIPanel } from './components/ai-panel';
@@ -133,10 +132,6 @@ export class App {
     // Initialize toast notifications — every export/save/undo/redo/etc. success or failure is
     // emitted as a 'notification' event; without this listener they all resolved into silence.
     new NotificationCenter();
-
-    // Initialize the version-history modal (rolling auto-save/checkpoint browser)
-    new VersionHistoryModal();
-    eventBus.on('versions:restored', () => this.renderAll());
 
     // Initialize the floating, draggable Rack Load Summary + Cable Types panels (screen-space
     // overlays on the canvas viewport — independent of pan/zoom, unlike the old on-canvas
@@ -347,17 +342,12 @@ export class App {
       eventBus.emit('tool:changed', 'export-area');
     });
 
-    // File operations
+    // File operations — no background auto-save; Save/Save As/Open are real file downloads/
+    // reads, and beforeunload (below) warns before any unsaved work is lost.
     (eventBus as any).on('file:new', () => {
       const current = stateManager.getState();
       const stakes = `${current.devices.length} device${current.devices.length === 1 ? '' : 's'} and ${current.cables.length} cable${current.cables.length === 1 ? '' : 's'}`;
-      if (confirm(`Start a new project? This will clear ${stakes} from the canvas.\n\nA checkpoint of your current work will be saved to Version History first, so you can restore it from there if needed.`)) {
-        // Auto-checkpoint before the destructive reset — a New Workspace click confirmed by
-        // reflex (easy to do on a native browser dialog) previously meant permanent data loss;
-        // now it's always recoverable via the Version History panel.
-        if (current.devices.length > 0 || current.cables.length > 0) {
-          stateManager.saveVersion('Before New Workspace', true);
-        }
+      if (confirm(`Start a new project? This will clear ${stakes} from the canvas.\n\nIf you want to keep your current work, save it first.`)) {
         stateManager.setState({
           racks: [
             { id: generateId(), name: 'Rack 1', units: 42, x: 300, y: 100, showPduLeft: true, showPduRight: true },
@@ -368,18 +358,15 @@ export class App {
           showLegends: true,
         });
         this.renderAll();
-        eventBus.emit('notification', { message: 'New project started — your previous work was checkpointed in Version History', type: 'info' });
+        eventBus.emit('notification', { message: 'New project started', type: 'info' });
       }
     });
 
     (eventBus as any).on('file:demo', () => {
       const current = stateManager.getState();
       const stakes = `${current.devices.length} device${current.devices.length === 1 ? '' : 's'} and ${current.cables.length} cable${current.cables.length === 1 ? '' : 's'}`;
-      if (!confirm(`Load the demo cluster? This will replace ${stakes} currently on the canvas.\n\nA checkpoint of your current work will be saved to Version History first, so you can restore it from there if needed.`)) {
+      if (!confirm(`Load the demo cluster? This will replace ${stakes} currently on the canvas.\n\nIf you want to keep your current work, save it first.`)) {
         return;
-      }
-      if (current.devices.length > 0 || current.cables.length > 0) {
-        stateManager.saveVersion('Before Load Demo Cluster', true);
       }
       stateManager.loadDemoProject(); // emits its own 'Loaded demo project!' notification
       this.renderAll();
@@ -396,7 +383,7 @@ export class App {
       const filename = name.toLowerCase().endsWith('.json') ? name : `${name}.json`;
       try {
         downloadFile(exportJSON(), filename, 'application/json');
-        stateManager.saveVersion(`Manual save as "${filename}"`, true);
+        stateManager.markSaved();
         eventBus.emit('notification', { message: `Project saved as ${filename}`, type: 'success' });
       } catch (err) {
         eventBus.emit('notification', { message: `Save As failed: ${err}`, type: 'error' });
@@ -410,6 +397,15 @@ export class App {
         this.renderAll();
       };
       reader.readAsText(file);
+    });
+
+    // Warn before leaving the tab with unsaved work — the only safety net now that there's no
+    // background auto-save.
+    window.addEventListener('beforeunload', (e) => {
+      if (stateManager.hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
     });
 
     // View operations

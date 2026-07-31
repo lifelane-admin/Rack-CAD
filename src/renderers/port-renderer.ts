@@ -170,23 +170,25 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
       blueHl.setAttribute('y', String(-ph / 2));
       blueHl.setAttribute('width', String(pw));
       blueHl.setAttribute('height', String(ph));
-      blueHl.setAttribute('rx', '2.5');
+      blueHl.setAttribute('rx', '1');
       blueHl.setAttribute('fill', '#37b6ff');
       blueHl.setAttribute('opacity', '0');
       blueHl.setAttribute('pointer-events', 'none');
       blueHl.style.transition = 'opacity 0.12s ease';
       portGroup.appendChild(blueHl);
 
-      // Neon ring for cable-drag snap visual feedback
+      // Neon ring for cable-drag snap visual feedback — hugs the port's exact footprint (no
+      // outward padding, so it doesn't drift off the jack) with a tight corner radius rather
+      // than a soft "pill" rounding that reads oversized on a port this small.
       const glowRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      glowRect.setAttribute('x', String(-pw / 2 - 1.5));
-      glowRect.setAttribute('y', String(-ph / 2 - 1.5));
-      glowRect.setAttribute('width', String(pw + 3));
-      glowRect.setAttribute('height', String(ph + 3));
+      glowRect.setAttribute('x', String(-pw / 2));
+      glowRect.setAttribute('y', String(-ph / 2));
+      glowRect.setAttribute('width', String(pw));
+      glowRect.setAttribute('height', String(ph));
       glowRect.setAttribute('fill', 'none');
       glowRect.setAttribute('stroke', '#00e5ff');
       glowRect.setAttribute('stroke-width', '1');
-      glowRect.setAttribute('rx', '3');
+      glowRect.setAttribute('rx', '1');
       glowRect.setAttribute('opacity', '0');
       glowRect.setAttribute('class', 'port-neon-ring');
       portGroup.appendChild(glowRect);

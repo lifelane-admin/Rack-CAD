@@ -503,6 +503,7 @@ export function exportJSON(): string {
     racks: s.racks,
     devices: s.devices,
     cables: s.cables,
+    bundles: s.bundles ?? [],
     customTemplates: s.customTemplates ?? [],
   };
   return JSON.stringify(project, null, 2);
@@ -531,9 +532,11 @@ export function importJSON(jsonString: string): void {
       racks: project.racks,
       devices: project.devices,
       cables: project.cables,
+      bundles: project.bundles ?? [],
       customTemplates: merged,
       selection: [],
     });
+    stateManager.markSaved();
     eventBus.emit('notification', { message: 'Project loaded successfully', type: 'success' });
   } catch (err) {
     eventBus.emit('notification', { message: `Failed to load project: ${err}`, type: 'error' });
@@ -648,7 +651,7 @@ export function initExportHandlers(): void {
     try {
       const jsonContent = exportJSON();
       downloadFile(jsonContent, 'rack-slicer.json', 'application/json');
-      stateManager.saveVersion('Manual save (.json export)', true);
+      stateManager.markSaved();
       eventBus.emit('notification', { message: 'Project saved successfully — rack-slicer.json downloaded', type: 'success' });
     } catch (err) {
       eventBus.emit('notification', { message: `JSON export failed: ${err}`, type: 'error' });

@@ -51,12 +51,6 @@ export class Toolbar {
         action: () => EventBus.emit('file:save-as', undefined)
       },
       {
-        id: 'btn-versions',
-        icon: '<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-        title: 'Version History',
-        action: () => EventBus.emit('versions:open', undefined)
-      },
-      {
         id: 'btn-demo',
         icon: '<svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>',
         title: 'Load Demo Cluster',

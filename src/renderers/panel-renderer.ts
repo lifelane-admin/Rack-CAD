@@ -1,6 +1,6 @@
 import type { DeviceCategory, DeviceTemplate, DeviceData, KvmConfig } from '../core/types';
 import { renderSwitchPanel } from './switch-renderer';
-import { renderFortiGatePanel } from './fortigate-renderer';
+import { renderFirewallPanel } from './firewall-renderer';
 import { renderPduPanel } from './pdu-renderer';
 import { makeConnectorDefs, drawSfpPort } from './rack-kit';
 import { renderNetworkingPanel } from './networking-renderer';
@@ -332,14 +332,9 @@ export function renderFrontPanel(
   connectedPortIds: Set<string> = new Set(),
 ): SVGGElement {
   switch (category) {
-    case 'switch':        return renderSwitchPanel(template, deviceWidth, deviceHeight, connectedPortIndices);
+    case 'switch':        return renderSwitchPanel(template, deviceWidth, deviceHeight, connectedPortIndices, deviceData ?? undefined);
     case 'server':        return renderServerPanel(template, deviceWidth, deviceHeight);
-    case 'firewall': {
-      if (template?.id === 'fw-fortigate-400f') return renderFortiGatePanel(template, deviceWidth, deviceHeight, deviceData?.ports ?? [], connectedPortIds);
-      const portCount = template?.ports.length ?? 6;
-      const variant = template?.id === 'fw-4p' ? 'appliance' : 'ngfw';
-      return renderNetworkingPanel('firewall', portCount, variant, template?.model ?? 'Firewall', deviceWidth, deviceHeight, deviceData?.ports ?? [], connectedPortIds);
-    }
+    case 'firewall':      return renderFirewallPanel(template, deviceData, deviceWidth, deviceHeight, connectedPortIds);
     case 'router': {
       const hasQsfp = template?.ports.some(p => p.type === 'qsfp28') ?? false;
       if (hasQsfp) return renderCoreRouterPanel(template, deviceWidth, deviceHeight);

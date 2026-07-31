@@ -1,30 +1,25 @@
-import { AppState, RackData, DeviceData, PortData, CableData, CableType, SelectableItem, Transform, RACK_CONSTANTS, CableBundle, ValidationAlert, PduConfig, KvmConfig, DeviceTemplate, ProjectVersion } from './types';
+import { AppState, RackData, DeviceData, PortData, CableData, CableType, SelectableItem, Transform, RACK_CONSTANTS, CableBundle, ValidationAlert, PduConfig, KvmConfig, SwitchConfig, FirewallConfig, DeviceTemplate } from './types';
 import { eventBus } from './event-bus';
 import { getTemplate } from '../library/device-catalog';
 import { runValidationAlerts } from './validation';
 import { loadCustomTemplates, saveAllCustomTemplates } from '../library/custom-catalog';
 import { computeConfiguredPduLayout, computeGenericPduLayout, computeSidePduOutletPositions, sidePduOffsetX, normalizeComposition } from '../renderers/pdu-layout';
 import { networkingPorts } from '../renderers/networking-renderer';
-import { generateId } from '../utils/geometry';
+import { switchPorts } from '../renderers/switch-renderer';
+import { firewallPorts } from '../renderers/firewall-renderer';
 
 function asPduConfig(config: unknown): PduConfig {
   return (config && typeof config === 'object') ? (config as PduConfig) : {};
 }
 
-const AUTOSAVE_KEY = 'rack_design_autosave';
-const VERSIONS_KEY = 'rack_design_versions';
-const MAX_VERSIONS = 30;
-// Routine auto-saves only roll a new version into history at most this often — every state
-// change already writes the "latest" snapshot (autoSave's original behavior, unchanged), but
-// checkpointing a distinct history entry on every keystroke/drag would flood storage with
-// near-duplicate versions.
-const MIN_AUTO_VERSION_INTERVAL_MS = 2 * 60 * 1000;
-
 class StateManager {
   private state: AppState;
   private undoStack: string[] = [];
   private redoStack: string[] = [];
-  private lastVersionSnapshotAt = 0;
+  /** True whenever structural state has changed since the last explicit file Save/Open/New —
+   *  there is no background auto-save, so this purely drives the beforeunload warning in
+   *  app.ts (see markSaved()). */
+  private _hasUnsavedChanges = false;
 
   constructor() {
     this.state = {
@@ -61,12 +56,6 @@ class StateManager {
       previewDiff: null,
       customTemplates: loadCustomTemplates()
     };
-
-    // Load auto-save if present, otherwise load the Proxmox demo project automatically
-    const loaded = this.loadAutoSave();
-    if (!loaded) {
-      this.loadDemoProject();
-    }
   }
 
   getState(): AppState {
@@ -161,9 +150,10 @@ class StateManager {
       const template = getTemplate(d.templateId);
       if (!template) return d;
       const withLocalPorts = injectNetworkLocalPorts(d.id, template, d.deviceConfig, d.ports);
+      const withConfigurablePorts = injectConfigurablePorts(d.id, template, d.deviceConfig, withLocalPorts);
       return {
         ...d,
-        ports: injectEarPorts(d.id, template.category, template.heightUnits, withLocalPorts)
+        ports: injectEarPorts(d.id, template.category, template.heightUnits, withConfigurablePorts)
       };
     });
   }
@@ -207,8 +197,19 @@ class StateManager {
     eventBus.emit('state:changed', partial);
 
     if (isStructuralChange) {
-      this.autoSave();
+      this._hasUnsavedChanges = true;
     }
+  }
+
+  /** Whether structural state has changed since the last explicit Save/Open/New — drives the
+   *  beforeunload "unsaved changes" browser warning (see app.ts). */
+  get hasUnsavedChanges(): boolean {
+    return this._hasUnsavedChanges;
+  }
+
+  /** Call after a successful file Save/Save As/Open so the beforeunload guard stops warning. */
+  markSaved(): void {
+    this._hasUnsavedChanges = false;
   }
 
   undo(): void {
@@ -239,7 +240,7 @@ class StateManager {
         cables: this.state.cables,
         bundles: this.state.bundles
       });
-      this.autoSave();
+      this._hasUnsavedChanges = true;
       eventBus.emit('notification', { message: 'Undo successful', type: 'success' });
     } catch (err) {
       console.error('Undo failed', err);
@@ -274,136 +275,10 @@ class StateManager {
         cables: this.state.cables,
         bundles: this.state.bundles
       });
-      this.autoSave();
+      this._hasUnsavedChanges = true;
       eventBus.emit('notification', { message: 'Redo successful', type: 'success' });
     } catch (err) {
       console.error('Redo failed', err);
-    }
-  }
-
-  autoSave(): void {
-    try {
-      const data = JSON.stringify({
-        racks: this.state.racks,
-        devices: this.state.devices,
-        cables: this.state.cables,
-        bundles: this.state.bundles
-      });
-      localStorage.setItem(AUTOSAVE_KEY, data);
-    } catch (err) {
-      console.error('Autosave failed', err);
-    }
-
-    // Version control: roll a routine checkpoint into history at most every
-    // MIN_AUTO_VERSION_INTERVAL_MS, independent of the "latest" snapshot above (which is
-    // always kept current so a page reload resumes exactly where you left off).
-    const now = Date.now();
-    if (now - this.lastVersionSnapshotAt >= MIN_AUTO_VERSION_INTERVAL_MS) {
-      this.saveVersion('Auto-save', false);
-    }
-  }
-
-  loadAutoSave(): boolean {
-    try {
-      const data = localStorage.getItem(AUTOSAVE_KEY);
-      if (!data) return false;
-
-      const parsed = JSON.parse(data);
-      if (parsed.racks && parsed.devices && parsed.cables) {
-        this.state.racks = parsed.racks;
-        this.state.devices = this.prepareDevices(parsed.devices);
-        this.state.cables = parsed.cables;
-        this.state.bundles = parsed.bundles || [];
-        return true;
-      }
-    } catch (err) {
-      console.error('Load autosave failed', err);
-    }
-    return false;
-  }
-
-  /**
-   * Records a named checkpoint into the rolling version-control history (capped at
-   * MAX_VERSIONS, oldest dropped first). `manual` distinguishes an explicit user checkpoint
-   * (e.g. "Save Project") from a routine timed auto-save, purely for display in the version
-   * history UI — both restore identically.
-   */
-  saveVersion(label = 'Checkpoint', manual = true): void {
-    this.lastVersionSnapshotAt = Date.now();
-    const version: ProjectVersion = {
-      id: generateId(),
-      timestamp: new Date().toISOString(),
-      label,
-      manual,
-      racks: this.state.racks,
-      devices: this.state.devices,
-      cables: this.state.cables,
-      bundles: this.state.bundles,
-    };
-    const versions = this.readVersions();
-    versions.push(version);
-    while (versions.length > MAX_VERSIONS) versions.shift();
-    this.writeVersions(versions);
-    eventBus.emit('versions:changed', undefined);
-  }
-
-  /** Newest-first list of saved versions, for the version-history UI. */
-  listVersions(): ProjectVersion[] {
-    return this.readVersions().slice().reverse();
-  }
-
-  /** Restores a prior version as the current working state (destructive to unsaved changes,
-   *  same as loading a project file). Returns false if the version id no longer exists. */
-  restoreVersion(id: string): boolean {
-    const version = this.readVersions().find(v => v.id === id);
-    if (!version) return false;
-
-    this.state.racks = version.racks;
-    this.state.devices = this.prepareDevices(version.devices);
-    this.state.cables = version.cables;
-    this.state.bundles = version.bundles || [];
-    this.state.selection = [];
-    eventBus.emit('state:changed', {
-      racks: this.state.racks, devices: this.state.devices,
-      cables: this.state.cables, bundles: this.state.bundles, selection: [],
-    });
-    this.autoSave();
-    return true;
-  }
-
-  deleteVersion(id: string): void {
-    this.writeVersions(this.readVersions().filter(v => v.id !== id));
-    eventBus.emit('versions:changed', undefined);
-  }
-
-  private readVersions(): ProjectVersion[] {
-    try {
-      const raw = localStorage.getItem(VERSIONS_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (err) {
-      console.error('Read version history failed', err);
-      return [];
-    }
-  }
-
-  private writeVersions(versions: ProjectVersion[]): void {
-    try {
-      localStorage.setItem(VERSIONS_KEY, JSON.stringify(versions));
-    } catch (err) {
-      // Most likely a quota error — drop the oldest half of the history and retry once rather
-      // than losing the newest checkpoint outright.
-      if (versions.length > 2) {
-        const trimmed = versions.slice(Math.floor(versions.length / 2));
-        try {
-          localStorage.setItem(VERSIONS_KEY, JSON.stringify(trimmed));
-        } catch (err2) {
-          console.error('Save version history failed even after trimming', err2);
-        }
-      } else {
-        console.error('Save version history failed', err);
-      }
     }
   }
 
@@ -640,6 +515,48 @@ export function injectNetworkLocalPorts(deviceId: string, template: DeviceTempla
   });
 
   return [...targetPorts, ...mergedLocal, ...earPorts];
+}
+
+/**
+ * Regenerates a switch's or firewall's port-group ports (see SwitchConfig/FirewallConfig) from
+ * its live `deviceConfig`, merging `connected`/`cableId` from the old array by matching `id` —
+ * same live-regeneration pattern as injectNetworkLocalPorts, so changing a port count or toggle
+ * in the properties panel immediately regenerates the device's actual connectable ports. A no-op
+ * for any device with no `deviceConfig` (every switch/firewall placed before this feature
+ * existed), which keeps their appearance and ports byte-identical to before.
+ */
+export function injectConfigurablePorts(deviceId: string, template: DeviceTemplate, deviceConfig: unknown, basePorts: PortData[]): PortData[] {
+  if (template.category !== 'switch' && template.category !== 'firewall') return basePorts;
+  if (!deviceConfig || typeof deviceConfig !== 'object') return basePorts;
+
+  const earPorts = basePorts.filter(p => p.id.includes('-ear-'));
+  const nonEarPorts = basePorts.filter(p => !p.id.includes('-ear-'));
+
+  let fresh: Omit<PortData, 'deviceId' | 'connected' | 'cableId'>[];
+
+  if (template.category === 'switch') {
+    const cfg = deviceConfig as SwitchConfig;
+    const currentRj45 = nonEarPorts.filter(p => p.type === 'rj45' && p.group !== 'STACK').length;
+    const rj45 = cfg.rj45Count ?? currentRj45;
+    const sfp = cfg.sfpCount ?? 0;
+    const sfpPlus = cfg.sfpPlusCount ?? 0;
+    const qsfp = cfg.qsfpCount ?? 0;
+    const stack = cfg.stackPorts ? 2 : 0;
+    const rows = rj45 <= 8 ? 1 : 2;
+    const mgmt = cfg.mgmtPort !== false;
+    const consolePort = cfg.consolePort !== false;
+    const usbPort = cfg.usbPort !== false;
+    fresh = switchPorts(rj45, sfpPlus, rows, `${deviceId}-`, { sfp, qsfp, stack, mgmt, consolePort, usbPort });
+  } else {
+    fresh = firewallPorts(deviceConfig as FirewallConfig, `${deviceId}-`);
+  }
+
+  const merged: PortData[] = fresh.map(p => {
+    const existing = nonEarPorts.find(op => op.id === p.id);
+    return { ...p, deviceId, connected: existing?.connected ?? false, cableId: existing?.cableId ?? null };
+  });
+
+  return [...merged, ...earPorts];
 }
 
 const EAR_HOLE_CATEGORIES = new Set(['server', 'switch', 'router', 'firewall', 'ups', 'storage', 'console']);

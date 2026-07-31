@@ -56,4 +56,29 @@ describe('Standard Library catalog', () => {
       expect(validCategories).toContain(item.category);
     }
   });
+
+  it('sw-enterprise is a configurable switch seeded with matching ports', () => {
+    const t = getTemplate('sw-enterprise');
+    expect(t).toBeDefined();
+    expect(t!.deviceConfig).toBeDefined();
+    const rj45 = t!.ports.filter(p => p.type === 'rj45' && p.group !== 'STACK');
+    const sfpPlus = t!.ports.filter(p => p.type === 'sfp-plus');
+    expect(rj45.length).toBe((t!.deviceConfig as any).rj45Count);
+    expect(sfpPlus.length).toBe((t!.deviceConfig as any).sfpPlusCount);
+  });
+
+  it('fw-enterprise is a configurable firewall seeded with matching ports', () => {
+    const t = getTemplate('fw-enterprise');
+    expect(t).toBeDefined();
+    expect(t!.deviceConfig).toBeDefined();
+    const cfg = t!.deviceConfig as any;
+    const expectedCount = (cfg.mgmtPort ? 1 : 0) + (cfg.haPorts ? 1 : 0) + (cfg.consolePort !== false ? 1 : 0) + cfg.rj45Count + cfg.sfpPlusCount;
+    expect(t!.ports.length).toBe(expectedCount);
+  });
+
+  it('fw-fortigate-400f keeps its fixed 34-port zone layout', () => {
+    const t = getTemplate('fw-fortigate-400f');
+    expect(t).toBeDefined();
+    expect(t!.ports.length).toBe(34);
+  });
 });

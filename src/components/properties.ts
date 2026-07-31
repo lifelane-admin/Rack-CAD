@@ -2,9 +2,10 @@ import EventBus from '../core/event-bus';
 import { eventBus } from '../core/event-bus';
 import State from '../core/state';
 import { stateManager } from '../core/state';
-import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, PduConfig, PduOutletGroup, SocketType, KvmConfig } from '../core/types';
+import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, PduConfig, PduOutletGroup, SocketType, KvmConfig, SwitchConfig, FirewallConfig, SwitchVendor, FirewallVendor, LedTheme, SwitchLayer, SwitchPortGroup } from '../core/types';
 import { KVM_LOCAL_PORT_OPTIONS, CONSOLE_LOCAL_PORT_OPTIONS } from '../renderers/networking-renderer';
 import { computePduLoad } from '../renderers/pdu-renderer';
+import { switchVendorSkin, firewallVendorSkin } from '../renderers/vendor-palette';
 import { getTemplate } from '../library/device-catalog';
 import { CustomAssetModal } from './custom-asset-modal';
 
@@ -195,6 +196,14 @@ export class PropertiesPanel {
     }
     if (template?.category === 'console') {
       this.renderKvmProperties(device, template, container);
+      return;
+    }
+    if (template?.category === 'switch') {
+      this.renderSwitchProperties(device, template, container);
+      return;
+    }
+    if (template?.category === 'firewall') {
+      this.renderFirewallProperties(device, template, container);
       return;
     }
     const racks = state.racks || [];
@@ -475,6 +484,326 @@ export class PropertiesPanel {
     }
   }
 
+  /** Chip-toggle-group initial state: starts from `defaultOn`, then applies any explicit
+   *  true/false the saved config already has for each key. Shared by the switch/firewall
+   *  configurators — both model their boolean toggles (Mgmt Port, Console, LCD, ...) as a chip
+   *  set the same way the PDU configurator models Smart Features/LEDs/Labels. */
+  private initToggleSet(cfg: Record<string, unknown>, keys: string[], defaultOn: string[]): Set<string> {
+    const s = new Set(defaultOn);
+    keys.forEach(k => {
+      if (cfg[k] === true) s.add(k);
+      else if (cfg[k] === false) s.delete(k);
+    });
+    return s;
+  }
+
+  private readonly SWITCH_VENDORS: SwitchVendor[] = [
+    'generic', 'cisco-catalyst', 'cisco-nexus', 'aruba-cx', 'juniper-ex', 'dell-powerswitch',
+    'fortiswitch', 'huawei', 'extreme', 'mikrotik', 'ubiquiti', 'netgear', 'custom',
+  ];
+  private readonly SWITCH_LAYERS: SwitchLayer[] = ['L1', 'L2', 'L3'];
+  private readonly SWITCH_TOGGLES = ['poe', 'mgmtPort', 'consolePort', 'usbPort', 'lcd', 'stackPorts', 'rackEars', 'assetLabel', 'dustCovers'];
+  private readonly SWITCH_TOGGLE_LABELS: Record<string, string> = {
+    poe: 'PoE', mgmtPort: 'Mgmt Port', consolePort: 'Console', usbPort: 'USB', lcd: 'LCD',
+    stackPorts: 'Stack Ports', rackEars: 'Rack Ears', assetLabel: 'Asset Label', dustCovers: 'Dust Covers',
+  };
+  /** Cycled as a sensible default whenever a new port range group is added, so groups are
+   *  visually distinct from the start — the colour picker on each row still lets the user
+   *  override any of them. */
+  private readonly PORT_GROUP_PALETTE = ['#37b6ff', '#39ff8a', '#ffb020', '#ff4d6a', '#a06cff', '#2dd4bf', '#f472b6', '#ff8a3d'];
+
+  /** Enterprise Switch Physical SDK configurator. RJ45/SFP/SFP+/QSFP counts regenerate the
+   *  device's actual ports live (see injectConfigurablePorts in state.ts) — everything else
+   *  (vendor skin, toggled chrome, colors) is cosmetic only. */
+  private renderSwitchProperties(device: DeviceData, template: DeviceTemplate, container: HTMLElement): void {
+    const cfg: SwitchConfig = (device.deviceConfig as SwitchConfig | undefined) ?? {};
+    const skin = switchVendorSkin(cfg.vendor);
+    // Default each count field to the device's ACTUAL current ports, not a hardcoded guess —
+    // otherwise opening properties on any switch whose real counts differ from the guess (every
+    // catalog SKU except the ones that happen to already be 24 RJ45 + 4 SFP+) would silently
+    // rewrite its port composition to the guess the moment anything on this panel is saved.
+    // Exclude the auto-injected ear-hole ports (see injectEarPorts in state.ts) — they're mostly
+    // typed 'rj45' too (for the plain-jack holes) but aren't real network ports, so counting them
+    // here would silently inflate rj45Count on every save (e.g. a 1U switch gets 6 ear 'rj45'
+    // holes on top of its real ports — this was the actual cause of ports "shifting slightly"
+    // the moment the panel was first saved).
+    const ports = (device.ports ?? []).filter(p => !p.id.includes('-ear-'));
+    const defaultRj45 = ports.filter(p => p.type === 'rj45' && p.group !== 'STACK').length;
+    const defaultSfp = ports.filter(p => p.type === 'sfp').length;
+    const defaultSfpPlus = ports.filter(p => p.type === 'sfp-plus').length;
+    const defaultQsfp = ports.filter(p => p.type === 'qsfp28').length;
+
+    container.innerHTML = `
+      <div style="padding:10px 12px;font-family:monospace;font-size:11px;color:#e6ecf2;overflow-y:auto;max-height:100%;">
+        <div style="color:#37b6ff;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;border-bottom:1px solid #23303b;padding-bottom:6px;">
+          &#x1F500; ${template.name}<br>
+          <span style="color:#5b636a;font-size:9px;">RACK-MOUNT — ${template.heightUnits}U</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+          <div>
+            <label class="pdu-lbl">Vendor Profile</label>
+            <select id="sw-vendor" class="pdu-sel">
+              ${this.SWITCH_VENDORS.map(v => `<option value="${v}" ${(cfg.vendor ?? 'generic') === v ? 'selected' : ''}>${switchVendorSkin(v).brandName}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="pdu-lbl">Switch Category</label>
+            <select id="sw-layer" class="pdu-sel">
+              ${this.SWITCH_LAYERS.map(v => `<option value="${v}" ${(cfg.layer ?? 'L2') === v ? 'selected' : ''}>${v} ${v === 'L1' ? '(Hub)' : v === 'L2' ? '(Switch)' : '(Routing)'}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Port Counts</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+          <div><div class="pdu-sub">RJ45 Count</div><input type="number" id="sw-rj45" class="pdu-inp" value="${cfg.rj45Count ?? defaultRj45}" min="0" max="96"/></div>
+          <div><div class="pdu-sub">SFP Count</div><input type="number" id="sw-sfp" class="pdu-inp" value="${cfg.sfpCount ?? defaultSfp}" min="0" max="16"/></div>
+          <div><div class="pdu-sub">SFP+ Count</div><input type="number" id="sw-sfpplus" class="pdu-inp" value="${cfg.sfpPlusCount ?? defaultSfpPlus}" min="0" max="16"/></div>
+          <div><div class="pdu-sub">QSFP Count</div><input type="number" id="sw-qsfp" class="pdu-inp" value="${cfg.qsfpCount ?? defaultQsfp}" min="0" max="8"/></div>
+        </div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Features</label>
+        <div id="sw-toggles" style="display:flex;flex-wrap:wrap;gap:3px;"></div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">PoE Port Range</label>
+        <div style="margin-bottom:5px;"><div class="pdu-sub">Start Port</div><input type="number" id="sw-poe-start" class="pdu-inp" value="${cfg.poeStartPort ?? 1}" min="1" max="${defaultRj45 || 96}"/></div>
+        <div><div class="pdu-sub">End Port</div><input type="number" id="sw-poe-end" class="pdu-inp" value="${cfg.poeEndPort ?? (cfg.rj45Count ?? defaultRj45)}" min="1" max="${defaultRj45 || 96}"/></div>
+        <div style="font-size:9px;color:#5b636a;margin-top:3px;">Only applies while the PoE feature chip above is on — narrows PoE to this range instead of all ports. Individual port groups below can also mark themselves PoE regardless of this range.</div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Port Range Groups (VLAN-style)</label>
+        <div style="display:grid;grid-template-columns:1.3fr 0.6fr 0.6fr 26px 30px;gap:4px;margin-bottom:3px;">
+          <div class="pdu-sub">Name</div><div class="pdu-sub">Start</div><div class="pdu-sub">End</div><div class="pdu-sub">Colour</div><div class="pdu-sub" title="PoE">PoE</div>
+        </div>
+        <div id="sw-portgroup-rows" style="display:flex;flex-direction:column;gap:6px;"></div>
+        <button id="sw-add-portgroup" style="width:100%;margin-top:5px;padding:5px;background:#0f2a1e;color:#00e0a4;border:1px dashed #1e5040;font-size:10px;cursor:pointer;border-radius:2px;">+ Add Port Group</button>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Appearance</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;align-items:end;">
+          <div><div class="pdu-sub">Panel Colour</div><input type="color" id="sw-panelcolor" value="${cfg.panelColor || (skin.tone === 'light' ? '#f6f7f9' : '#23282c')}" style="width:100%;height:24px;padding:0;border:1px solid #23303b;border-radius:2px;background:#171d24;"/></div>
+          <div><div class="pdu-sub">Accent Colour</div><input type="color" id="sw-accentcolor" value="${cfg.accentColor || skin.accent}" style="width:100%;height:24px;padding:0;border:1px solid #23303b;border-radius:2px;background:#171d24;"/></div>
+        </div>
+        <div style="margin-top:5px;">
+          <div class="pdu-sub">LED Theme</div>
+          <select id="sw-ledtheme" class="pdu-sel">
+            ${['green', 'blue', 'amber', 'white'].map(v => `<option value="${v}" ${(cfg.ledTheme ?? 'green') === v ? 'selected' : ''}>${v.charAt(0).toUpperCase() + v.slice(1)}</option>`).join('')}
+          </select>
+        </div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Branding</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+          <div><div class="pdu-sub">Brand Name</div><input type="text" id="sw-brandname" class="pdu-inp" value="${cfg.brandName ?? ''}" placeholder="${skin.brandName}"/></div>
+          <div><div class="pdu-sub">Model Name</div><input type="text" id="sw-modelname" class="pdu-inp" value="${cfg.modelName ?? ''}" placeholder="${template.model}"/></div>
+        </div>
+      </div>
+      <style>
+        .pdu-lbl{display:block;font-size:9px;color:#8b939a;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+        .pdu-sub{font-size:9px;color:#5b636a;margin-bottom:2px}
+        .pdu-sel{width:100%;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:4px;font-size:10px;border-radius:2px;font-family:monospace}
+        .pdu-inp{width:100%;min-width:0;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:4px;font-size:10px;border-radius:2px;font-family:monospace;box-sizing:border-box}
+        .pdu-chip{padding:3px 6px;border-radius:2px;font-size:9.5px;cursor:pointer;border:1px solid #23303b;font-family:monospace;user-select:none}
+        .pdu-chip.on{background:#37b6ff;color:#000;border-color:#37b6ff}
+        .pdu-chip.off{background:#171d24;color:#8b939a}
+      </style>
+    `;
+
+    const activeToggles = this.initToggleSet(cfg as Record<string, unknown>, this.SWITCH_TOGGLES, ['mgmtPort', 'consolePort', 'usbPort', 'rackEars']);
+    const portGroupRows: SwitchPortGroup[] = Array.isArray(cfg.portGroups) ? cfg.portGroups.map(g => ({ ...g })) : [];
+    let save: () => void = () => {};
+    this.renderPduChips(container, '#sw-toggles', this.SWITCH_TOGGLES, activeToggles, this.SWITCH_TOGGLE_LABELS, () => save());
+    this.renderSwitchPortGroupRows(container, portGroupRows, () => save());
+
+    save = () => {
+      const newConfig: SwitchConfig = {
+        vendor: (container.querySelector('#sw-vendor') as HTMLSelectElement)?.value as SwitchVendor,
+        layer: (container.querySelector('#sw-layer') as HTMLSelectElement)?.value as SwitchLayer,
+        rj45Count: Math.max(0, Number((container.querySelector('#sw-rj45') as HTMLInputElement)?.value ?? 24)),
+        sfpCount: Math.max(0, Number((container.querySelector('#sw-sfp') as HTMLInputElement)?.value ?? 0)),
+        sfpPlusCount: Math.max(0, Number((container.querySelector('#sw-sfpplus') as HTMLInputElement)?.value ?? 0)),
+        qsfpCount: Math.max(0, Number((container.querySelector('#sw-qsfp') as HTMLInputElement)?.value ?? 0)),
+        panelColor: (container.querySelector('#sw-panelcolor') as HTMLInputElement)?.value,
+        accentColor: (container.querySelector('#sw-accentcolor') as HTMLInputElement)?.value,
+        ledTheme: (container.querySelector('#sw-ledtheme') as HTMLSelectElement)?.value as LedTheme,
+        brandName: (container.querySelector('#sw-brandname') as HTMLInputElement)?.value || undefined,
+        modelName: (container.querySelector('#sw-modelname') as HTMLInputElement)?.value || undefined,
+        poe: activeToggles.has('poe'),
+        poeStartPort: Math.max(1, Number((container.querySelector('#sw-poe-start') as HTMLInputElement)?.value ?? 1)),
+        poeEndPort: Math.max(1, Number((container.querySelector('#sw-poe-end') as HTMLInputElement)?.value ?? 1)),
+        mgmtPort: activeToggles.has('mgmtPort'),
+        consolePort: activeToggles.has('consolePort'),
+        usbPort: activeToggles.has('usbPort'),
+        lcd: activeToggles.has('lcd'),
+        stackPorts: activeToggles.has('stackPorts'),
+        rackEars: activeToggles.has('rackEars'),
+        assetLabel: activeToggles.has('assetLabel'),
+        dustCovers: activeToggles.has('dustCovers'),
+        portGroups: portGroupRows,
+      };
+      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig } });
+    };
+
+    container.querySelector('#sw-add-portgroup')?.addEventListener('click', () => {
+      const color = this.PORT_GROUP_PALETTE[portGroupRows.length % this.PORT_GROUP_PALETTE.length];
+      const lastEnd = portGroupRows.length ? portGroupRows[portGroupRows.length - 1].endPort : 0;
+      portGroupRows.push({ name: `VLAN${portGroupRows.length + 1}`, startPort: lastEnd + 1, endPort: lastEnd + 4, color });
+      this.renderSwitchPortGroupRows(container, portGroupRows, () => save());
+      save();
+    });
+
+    container.querySelectorAll('select, input[type="number"], input[type="text"]').forEach(el => el.addEventListener('change', save));
+    container.querySelector('#sw-panelcolor')?.addEventListener('change', save);
+    container.querySelector('#sw-accentcolor')?.addEventListener('change', save);
+  }
+
+  private readonly FIREWALL_VENDORS: FirewallVendor[] = [
+    'generic', 'fortinet', 'cisco', 'paloalto', 'juniper', 'sophos', 'checkpoint', 'sonicwall', 'aruba', 'dell', 'huawei',
+  ];
+  private readonly FIREWALL_TOGGLES = ['mgmtPort', 'haPorts', 'usbPort', 'consolePort', 'lcd', 'rackEars', 'qrCode', 'assetLabel', 'dustCovers'];
+  private readonly FIREWALL_TOGGLE_LABELS: Record<string, string> = {
+    mgmtPort: 'Mgmt Port', haPorts: 'HA Ports', usbPort: 'USB', consolePort: 'Console', lcd: 'LCD',
+    rackEars: 'Rack Ears', qrCode: 'QR Code', assetLabel: 'Asset Label', dustCovers: 'Dust Covers',
+  };
+
+  /** Enterprise Firewall Physical SDK configurator — mirrors renderSwitchProperties' shape;
+   *  RJ45/SFP+/SFP28/QSFP counts regenerate the device's actual ports live. */
+  private renderFirewallProperties(device: DeviceData, template: DeviceTemplate, container: HTMLElement): void {
+    const cfg: FirewallConfig = (device.deviceConfig as FirewallConfig | undefined) ?? {};
+    const skin = firewallVendorSkin(cfg.vendor);
+    // Same reasoning as renderSwitchProperties: default each count to the device's actual
+    // current ports rather than a hardcoded guess, so opening properties on any firewall SKU
+    // whose real counts differ (every one except a device already at 16 RJ45 + 8 SFP+) doesn't
+    // silently rewrite its port composition on the first save. MGMT is its own port type
+    // ('management'), already excluded by the type filter; HA is a plain RJ45 jack tagged
+    // `group: 'HA'` (both the new firewallPorts() and the legacy networkingPorts() firewall
+    // zones tag it this way), so it's excluded explicitly.
+    const ports = (device.ports ?? []).filter(p => !p.id.includes('-ear-'));
+    const defaultRj45 = ports.filter(p => p.type === 'rj45' && p.group !== 'HA' && p.group !== 'WAN').length;
+    const defaultWan = ports.filter(p => p.group === 'WAN').length;
+    const defaultSfpPlus = ports.filter(p => p.type === 'sfp-plus').length;
+    const defaultSfp28 = ports.filter(p => p.type === 'sfp28').length;
+    const defaultQsfp = ports.filter(p => p.type === 'qsfp28').length;
+
+    container.innerHTML = `
+      <div style="padding:10px 12px;font-family:monospace;font-size:11px;color:#e6ecf2;overflow-y:auto;max-height:100%;">
+        <div style="color:#ee3124;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;border-bottom:1px solid #23303b;padding-bottom:6px;">
+          &#x1F6E1; ${template.name}<br>
+          <span style="color:#5b636a;font-size:9px;">RACK-MOUNT — ${template.heightUnits}U</span>
+        </div>
+
+        <label class="pdu-lbl">Vendor Profile</label>
+        <select id="fw-vendor" class="pdu-sel">
+          ${this.FIREWALL_VENDORS.map(v => `<option value="${v}" ${(cfg.vendor ?? 'generic') === v ? 'selected' : ''}>${firewallVendorSkin(v).brandName}</option>`).join('')}
+        </select>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Port Groups</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+          <div><div class="pdu-sub">WAN Count</div><input type="number" id="fw-wan" class="pdu-inp" value="${cfg.wanCount ?? defaultWan}" min="0" max="8"/></div>
+          <div><div class="pdu-sub">RJ45 (LAN) Count</div><input type="number" id="fw-rj45" class="pdu-inp" value="${cfg.rj45Count ?? defaultRj45}" min="0" max="64"/></div>
+          <div><div class="pdu-sub">SFP+ Count</div><input type="number" id="fw-sfpplus" class="pdu-inp" value="${cfg.sfpPlusCount ?? defaultSfpPlus}" min="0" max="24"/></div>
+          <div><div class="pdu-sub">SFP28 Count</div><input type="number" id="fw-sfp28" class="pdu-inp" value="${cfg.sfp28Count ?? defaultSfp28}" min="0" max="16"/></div>
+          <div><div class="pdu-sub">QSFP Count</div><input type="number" id="fw-qsfp" class="pdu-inp" value="${cfg.qsfpCount ?? defaultQsfp}" min="0" max="8"/></div>
+        </div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Features</label>
+        <div id="fw-toggles" style="display:flex;flex-wrap:wrap;gap:3px;"></div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Port Range Groups (WAN/LAN/PoE/10GbE/25GbE etc.)</label>
+        <div style="display:grid;grid-template-columns:1.3fr 0.6fr 0.6fr 26px 30px;gap:4px;margin-bottom:3px;">
+          <div class="pdu-sub">Name</div><div class="pdu-sub">Start</div><div class="pdu-sub">End</div><div class="pdu-sub">Colour</div><div class="pdu-sub" title="PoE">PoE</div>
+        </div>
+        <div id="fw-portgroup-rows" style="display:flex;flex-direction:column;gap:6px;"></div>
+        <button id="fw-add-portgroup" style="width:100%;margin-top:5px;padding:5px;background:#2a0f0f;color:#ff8a70;border:1px dashed #502020;font-size:10px;cursor:pointer;border-radius:2px;">+ Add Port Group</button>
+        <div style="font-size:9px;color:#5b636a;margin-top:3px;">Start/End are LAN (RJ45) port numbers — this labels/colours ranges of the LAN block, e.g. a range for PoE or a fast-Ethernet zone.</div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Appearance</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;align-items:end;">
+          <div><div class="pdu-sub">Panel Colour</div><input type="color" id="fw-panelcolor" value="${cfg.panelColor || (skin.tone === 'light' ? '#f6f7f9' : '#23282c')}" style="width:100%;height:24px;padding:0;border:1px solid #23303b;border-radius:2px;background:#171d24;"/></div>
+          <div><div class="pdu-sub">Accent Colour</div><input type="color" id="fw-accentcolor" value="${cfg.accentColor || skin.accent}" style="width:100%;height:24px;padding:0;border:1px solid #23303b;border-radius:2px;background:#171d24;"/></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px;">
+          <div><div class="pdu-sub">Branding Strip</div><input type="color" id="fw-stripcolor" value="${cfg.brandStripColor || skin.accent}" style="width:100%;height:24px;padding:0;border:1px solid #23303b;border-radius:2px;background:#171d24;"/></div>
+          <div>
+            <div class="pdu-sub">LED Theme</div>
+            <select id="fw-ledtheme" class="pdu-sel">
+              ${['green', 'blue', 'amber', 'white'].map(v => `<option value="${v}" ${(cfg.ledTheme ?? 'green') === v ? 'selected' : ''}>${v.charAt(0).toUpperCase() + v.slice(1)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px;">
+          <div><div class="pdu-sub">Font Colour</div><input type="color" id="fw-fontcolor" value="${cfg.fontColor || (skin.tone === 'light' ? '#5a616a' : '#aeb6bd')}" style="width:100%;height:24px;padding:0;border:1px solid #23303b;border-radius:2px;background:#171d24;"/></div>
+          <div><div class="pdu-sub">Font Mute Colour</div><input type="color" id="fw-fontmutecolor" value="${cfg.fontMuteColor || (skin.tone === 'light' ? '#8a9099' : '#8b939a')}" style="width:100%;height:24px;padding:0;border:1px solid #23303b;border-radius:2px;background:#171d24;"/></div>
+        </div>
+        <div style="font-size:9px;color:#5b636a;margin-top:3px;">Font Colour: port numbers/names (HA, WAN1, MGMT, RJ45 #s). Font Mute Colour: model name, zone captions (WAN/UPLINK), USB-C/RST, status line.</div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Branding</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+          <div><div class="pdu-sub">Brand Name</div><input type="text" id="fw-brandname" class="pdu-inp" value="${cfg.brandName ?? ''}" placeholder="${skin.brandName}"/></div>
+          <div><div class="pdu-sub">Model Name</div><input type="text" id="fw-modelname" class="pdu-inp" value="${cfg.modelName ?? ''}" placeholder="${template.model}"/></div>
+        </div>
+      </div>
+      <style>
+        .pdu-lbl{display:block;font-size:9px;color:#8b939a;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+        .pdu-sub{font-size:9px;color:#5b636a;margin-bottom:2px}
+        .pdu-sel{width:100%;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:4px;font-size:10px;border-radius:2px;font-family:monospace}
+        .pdu-inp{width:100%;min-width:0;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:4px;font-size:10px;border-radius:2px;font-family:monospace;box-sizing:border-box}
+        .pdu-chip{padding:3px 6px;border-radius:2px;font-size:9.5px;cursor:pointer;border:1px solid #23303b;font-family:monospace;user-select:none}
+        .pdu-chip.on{background:#ee3124;color:#fff;border-color:#ee3124}
+        .pdu-chip.off{background:#171d24;color:#8b939a}
+      </style>
+    `;
+
+    const activeToggles = this.initToggleSet(cfg as Record<string, unknown>, this.FIREWALL_TOGGLES, ['mgmtPort', 'haPorts', 'consolePort', 'usbPort', 'rackEars']);
+    const portGroupRows: SwitchPortGroup[] = Array.isArray(cfg.portGroups) ? cfg.portGroups.map(g => ({ ...g })) : [];
+    let save: () => void = () => {};
+    this.renderPduChips(container, '#fw-toggles', this.FIREWALL_TOGGLES, activeToggles, this.FIREWALL_TOGGLE_LABELS, () => save());
+    this.renderSwitchPortGroupRows(container, portGroupRows, () => save(), '#fw-portgroup-rows');
+
+    save = () => {
+      const newConfig: FirewallConfig = {
+        vendor: (container.querySelector('#fw-vendor') as HTMLSelectElement)?.value as FirewallVendor,
+        wanCount: Math.max(0, Number((container.querySelector('#fw-wan') as HTMLInputElement)?.value ?? 0)),
+        rj45Count: Math.max(0, Number((container.querySelector('#fw-rj45') as HTMLInputElement)?.value ?? 16)),
+        sfpPlusCount: Math.max(0, Number((container.querySelector('#fw-sfpplus') as HTMLInputElement)?.value ?? 0)),
+        sfp28Count: Math.max(0, Number((container.querySelector('#fw-sfp28') as HTMLInputElement)?.value ?? 0)),
+        qsfpCount: Math.max(0, Number((container.querySelector('#fw-qsfp') as HTMLInputElement)?.value ?? 0)),
+        panelColor: (container.querySelector('#fw-panelcolor') as HTMLInputElement)?.value,
+        accentColor: (container.querySelector('#fw-accentcolor') as HTMLInputElement)?.value,
+        brandStripColor: (container.querySelector('#fw-stripcolor') as HTMLInputElement)?.value,
+        fontColor: (container.querySelector('#fw-fontcolor') as HTMLInputElement)?.value,
+        fontMuteColor: (container.querySelector('#fw-fontmutecolor') as HTMLInputElement)?.value,
+        ledTheme: (container.querySelector('#fw-ledtheme') as HTMLSelectElement)?.value as LedTheme,
+        brandName: (container.querySelector('#fw-brandname') as HTMLInputElement)?.value || undefined,
+        modelName: (container.querySelector('#fw-modelname') as HTMLInputElement)?.value || undefined,
+        mgmtPort: activeToggles.has('mgmtPort'),
+        haPorts: activeToggles.has('haPorts'),
+        usbPort: activeToggles.has('usbPort'),
+        consolePort: activeToggles.has('consolePort'),
+        lcd: activeToggles.has('lcd'),
+        rackEars: activeToggles.has('rackEars'),
+        qrCode: activeToggles.has('qrCode'),
+        assetLabel: activeToggles.has('assetLabel'),
+        dustCovers: activeToggles.has('dustCovers'),
+        portGroups: portGroupRows,
+      };
+      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig } });
+    };
+
+    container.querySelector('#fw-add-portgroup')?.addEventListener('click', () => {
+      const color = this.PORT_GROUP_PALETTE[portGroupRows.length % this.PORT_GROUP_PALETTE.length];
+      const lastEnd = portGroupRows.length ? portGroupRows[portGroupRows.length - 1].endPort : 0;
+      portGroupRows.push({ name: `LAN-GRP${portGroupRows.length + 1}`, startPort: lastEnd + 1, endPort: lastEnd + 4, color });
+      this.renderSwitchPortGroupRows(container, portGroupRows, () => save(), '#fw-portgroup-rows');
+      save();
+    });
+
+    container.querySelectorAll('select, input[type="number"], input[type="text"]').forEach(el => el.addEventListener('change', save));
+    container.querySelector('#fw-panelcolor')?.addEventListener('change', save);
+    container.querySelector('#fw-accentcolor')?.addEventListener('change', save);
+    container.querySelector('#fw-stripcolor')?.addEventListener('change', save);
+    container.querySelector('#fw-fontcolor')?.addEventListener('change', save);
+    container.querySelector('#fw-fontmutecolor')?.addEventListener('change', save);
+  }
+
   /** Unified PDU configurator — used for both horizontal (rack-mount) and vertical (0U side-mount) PDUs. */
   private renderPduProperties(device: DeviceData, template: DeviceTemplate, container: HTMLElement): void {
     const cfg: PduConfig = (device.deviceConfig as PduConfig | undefined) ?? {};
@@ -681,7 +1010,7 @@ export class PropertiesPanel {
         .pdu-lbl{display:block;font-size:9px;color:#8b939a;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
         .pdu-sub{font-size:9px;color:#5b636a;margin-bottom:2px}
         .pdu-sel{width:100%;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:4px;font-size:10px;border-radius:2px;font-family:monospace}
-        .pdu-inp{width:100%;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:4px;font-size:10px;border-radius:2px;font-family:monospace;box-sizing:border-box}
+        .pdu-inp{width:100%;min-width:0;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:4px;font-size:10px;border-radius:2px;font-family:monospace;box-sizing:border-box}
         .pdu-chip{padding:3px 6px;border-radius:2px;font-size:9.5px;cursor:pointer;border:1px solid #23303b;font-family:monospace;user-select:none}
         .pdu-chip.on{background:#37b6ff;color:#000;border-color:#37b6ff}
         .pdu-chip.off{background:#171d24;color:#8b939a}
@@ -868,6 +1197,54 @@ export class PropertiesPanel {
       });
 
       rowsEl.appendChild(rowEl);
+    });
+  }
+
+  /** Named, coloured port-range groups (WAN/LAN/PoE/10GbE/25GbE/VLAN-style visual grouping only,
+   *  no switching logic) — same add/edit/remove row pattern as renderPduOutletRows. Shared by
+   *  both the Switch and Firewall configurators via `rowsContainerSelector`. */
+  private renderSwitchPortGroupRows(container: HTMLElement, rows: SwitchPortGroup[], onSave: () => void, rowsContainerSelector = '#sw-portgroup-rows'): void {
+    const rowsEl = container.querySelector(rowsContainerSelector);
+    if (!rowsEl) return;
+    rowsEl.innerHTML = '';
+
+    rows.forEach((row, idx) => {
+      // Each group is its own bordered card — the delete action is a full-width labeled button
+      // below the fields, not a cramped icon squeezed into the grid, so it's unmistakable.
+      const card = document.createElement('div');
+      card.style.cssText = 'border:1px solid #23303b;border-radius:4px;padding:5px;background:rgba(255,255,255,0.02);';
+
+      const rowEl = document.createElement('div');
+      rowEl.style.cssText = 'display:grid;grid-template-columns:1.3fr 0.6fr 0.6fr 26px 30px;gap:4px;align-items:center;';
+      rowEl.innerHTML = `
+        <input type="text" value="${row.name}" placeholder="Name" style="width:100%;min-width:0;box-sizing:border-box;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:3px;font-size:10px;border-radius:2px;font-family:monospace;"/>
+        <input type="number" value="${row.startPort}" min="1" title="Start port" style="width:100%;min-width:0;box-sizing:border-box;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:3px;font-size:10px;border-radius:2px;font-family:monospace;"/>
+        <input type="number" value="${row.endPort}" min="1" title="End port" style="width:100%;min-width:0;box-sizing:border-box;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:3px;font-size:10px;border-radius:2px;font-family:monospace;"/>
+        <input type="color" value="${row.color}" style="width:100%;height:24px;padding:0;border:1px solid #23303b;border-radius:2px;background:#171d24;"/>
+        <input type="checkbox" title="PoE on these ports" ${row.poe ? 'checked' : ''} style="width:16px;height:16px;margin:0 auto;display:block;cursor:pointer;"/>
+      `;
+
+      const [nameEl, startEl, endEl, colorEl, poeEl] = rowEl.querySelectorAll('input');
+      nameEl.addEventListener('change', () => { rows[idx].name = (nameEl as HTMLInputElement).value; onSave(); });
+      startEl.addEventListener('change', () => { rows[idx].startPort = Number((startEl as HTMLInputElement).value) || 1; onSave(); });
+      endEl.addEventListener('change', () => { rows[idx].endPort = Number((endEl as HTMLInputElement).value) || 1; onSave(); });
+      colorEl.addEventListener('change', () => { rows[idx].color = (colorEl as HTMLInputElement).value; onSave(); });
+      poeEl.addEventListener('change', () => { rows[idx].poe = (poeEl as HTMLInputElement).checked; onSave(); });
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.textContent = '🗑 Delete Group';
+      delBtn.style.cssText = 'width:100%;margin-top:5px;padding:4px;background:#2a1416;color:#ff8080;border:1px solid #4a2020;border-radius:2px;font-size:10px;font-weight:600;cursor:pointer;';
+      delBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        rows.splice(idx, 1);
+        this.renderSwitchPortGroupRows(container, rows, onSave, rowsContainerSelector);
+        onSave();
+      });
+
+      card.appendChild(rowEl);
+      card.appendChild(delBtn);
+      rowsEl.appendChild(card);
     });
   }
 

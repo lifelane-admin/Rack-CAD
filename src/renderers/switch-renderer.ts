@@ -1,6 +1,7 @@
 // src/renderers/switch-renderer.ts
 import { el, g } from './rack-kit';
-import type { DeviceTemplate, PortData } from '../core/types';
+import { switchVendorSkin } from './vendor-palette';
+import type { DeviceTemplate, PortData, PortType, DeviceData, SwitchConfig } from '../core/types';
 
 const U1 = 132;
 const RW = 1240;
@@ -22,18 +23,28 @@ const CPB = 4;
 // constant — a flat console block next to a small (e.g. 8-port) switch's ports row was 40%+ of
 // the panel. Clamped so the block never gets too narrow for the brand text to stay legible.
 const MIN_CONSOLE_W = 170, MAX_CONSOLE_W = 250;
-// Below this width the USB-C + console jack + reset button cluster would crowd the brand text.
-const CONSOLE_ICONS_MIN_W = 195;
+// Trailing far-right cluster: MGMT and Console are real RJ45-shaped ports (same RJ_W×RJ_H
+// footprint as a regular Ethernet jack — no separate, oddly-proportioned shape); USB-C and the
+// reset button stay small decorative elements (never real connectable ports).
+const USB_W = 24, RST_W = 10, TRAIL_GAP = 14;
 
 interface SwitchLayout {
-  totRjW: number; sfpRowW: number; consoleW: number; showConsoleIcons: boolean;
+  totRjW: number; sfpRowW: number; stackRowW: number; trailW: number; consoleW: number;
   chassisW: number; bladeW: number; totW: number;
-  rjX: number; sfpX: number; rjTop: number; sfpTop: number; blkW: number;
+  rjX: number; sfpX: number; stackX: number; mgmtX: number; consoleJackX: number; usbX: number; rstX: number;
+  rjTop: number; sfpTop: number; stackTop: number; blkW: number;
 }
 
 /** Single source of truth for switchPorts() (catalog port positions) and renderSwitchPanel()
- *  (actual drawing) — computed once so the two can never drift out of sync. */
-function computeSwitchLayout(rj45: number, sfp: number, rows: number): SwitchLayout {
+ *  (actual drawing) — computed once so the two can never drift out of sync. `sfpTotal` is the
+ *  combined SFP + SFP+ + QSFP transceiver count (all drawn in one uplink row, reusing the same
+ *  SFP module art per the SDK's "reuse existing visuals" scoping); `stack` is the fixed 0/2
+ *  stacking-port count. `mgmt`/`consolePort`/`usbPort` control the trailing far-right cluster —
+ *  the reset button is always present, so that cluster always has non-zero width. */
+function computeSwitchLayout(
+  rj45: number, sfpTotal: number, rows: number, stack = 0,
+  mgmt = true, consolePort = true, usbPort = true,
+): SwitchLayout {
   const units = rows === 1 ? rj45 : Math.ceil(rj45 / 2);
   const blks = units > 0 ? Math.ceil(units / CPB) : 0;
   const blkW = CPB * RJ_W + (CPB - 1) * RJ_COL_GAP;
@@ -41,11 +52,23 @@ function computeSwitchLayout(rj45: number, sfp: number, rows: number): SwitchLay
     ? blks * blkW + (blks - 1) * BLOCK_GAP - (blks * CPB - units) * (RJ_W + RJ_COL_GAP)
     : 0;
   totRjW = Math.max(0, totRjW);
-  const sfpRowW = sfp > 0 ? sfp * SFP_W + (sfp - 1) * SFP_GAP_X : 0;
-  const portsRowW = totRjW + (sfp > 0 ? SECTION_GAP + sfpRowW : 0);
+  const sfpRowW = sfpTotal > 0 ? sfpTotal * SFP_W + (sfpTotal - 1) * SFP_GAP_X : 0;
+  const stackRowW = stack > 0 ? stack * RJ_W + (stack - 1) * RJ_COL_GAP : 0;
+
+  const trailItemWidths = [
+    ...(mgmt ? [RJ_W] : []),
+    ...(consolePort ? [RJ_W] : []),
+    ...(usbPort ? [USB_W] : []),
+    RST_W, // always present
+  ];
+  const trailW = trailItemWidths.reduce((a, b) => a + b, 0) + (trailItemWidths.length - 1) * TRAIL_GAP;
+
+  const portsRowW = totRjW
+    + (sfpTotal > 0 ? SECTION_GAP + sfpRowW : 0)
+    + (stack > 0 ? SECTION_GAP + stackRowW : 0)
+    + SECTION_GAP + trailW;
 
   const consoleW = Math.max(MIN_CONSOLE_W, Math.min(portsRowW * 0.25, MAX_CONSOLE_W));
-  const showConsoleIcons = consoleW >= CONSOLE_ICONS_MIN_W;
 
   const chassisW = EAR_W * 2 + PANEL_PAD * 2 + consoleW + SECTION_GAP + portsRowW;
   let bladeW = (RW - chassisW) / 2;
@@ -53,18 +76,34 @@ function computeSwitchLayout(rj45: number, sfp: number, rows: number): SwitchLay
   if (bladeW < MIN_BLADE_W) { bladeW = MIN_BLADE_W; totW = chassisW + bladeW * 2; }
 
   const rjX = bladeW + EAR_W + PANEL_PAD + consoleW + SECTION_GAP;
-  const sfpX = rjX + totRjW + (sfp > 0 ? SECTION_GAP : 0);
+  const sfpX = rjX + totRjW + (sfpTotal > 0 ? SECTION_GAP : 0);
+  const stackX = sfpX + sfpRowW + (stack > 0 ? SECTION_GAP : 0);
+  const trailX = stackX + stackRowW + SECTION_GAP;
+  const mgmtX = trailX;
+  const consoleJackX = mgmtX + (mgmt ? RJ_W + TRAIL_GAP : 0);
+  const usbX = consoleJackX + (consolePort ? RJ_W + TRAIL_GAP : 0);
+  const rstX = usbX + (usbPort ? USB_W + TRAIL_GAP : 0);
   const rjTop = (U1 - (rows === 1 ? RJ_H : RJ_H * 2 + RJ_ROW_GAP)) / 2;
   const sfpTop = (U1 - SFP_H) / 2;
+  const stackTop = (U1 - RJ_H) / 2;
 
-  return { totRjW, sfpRowW, consoleW, showConsoleIcons, chassisW, bladeW, totW, rjX, sfpX, rjTop, sfpTop, blkW };
+  return { totRjW, sfpRowW, stackRowW, trailW, consoleW, chassisW, bladeW, totW, rjX, sfpX, stackX, mgmtX, consoleJackX, usbX, rstX, rjTop, sfpTop, stackTop, blkW };
 }
 
+/** One combined transceiver uplink row, ordered SFP → SFP+ → QSFP. QSFP+/QSFP56/QSFP-DD all
+ *  render as the same QSFP module (labelled "Q<n>") per the SDK's port-type scoping decision —
+ *  no dedicated artwork per exotic transceiver type. `sfpPlus` stays the 2nd positional arg
+ *  (existing catalog entries all call this 4-arg form) so every pre-existing call site keeps
+ *  producing byte-identical ports; `extra` carries the new SwitchConfig-driven fields. */
 export function switchPorts(
-  rj45: number, sfp: number, rows: number, idPfx: string,
+  rj45: number, sfpPlus: number, rows: number, idPfx: string,
+  extra?: { sfp?: number; qsfp?: number; stack?: number; mgmt?: boolean; consolePort?: boolean; usbPort?: boolean },
 ): DeviceTemplate['ports'] {
+  const { sfp = 0, qsfp = 0, stack = 0, mgmt = true, consolePort = true, usbPort = true } = extra ?? {};
   const W = 350, H = 30;
-  const { blkW, totW, rjX, sfpX, rjTop, sfpTop } = computeSwitchLayout(rj45, sfp, rows);
+  const sfpTotal = sfp + sfpPlus + qsfp;
+  const { blkW, totW, rjX, sfpX, stackX, mgmtX, consoleJackX, rjTop, sfpTop, stackTop } =
+    computeSwitchLayout(rj45, sfpTotal, rows, stack, mgmt, consolePort, usbPort);
 
   const sx = W / totW;
   const sy = H / U1;
@@ -86,17 +125,58 @@ export function switchPorts(
     }
     out.push({
       id: `${idPfx}p${n}`, name: `Port ${n}`, type: 'rj45', speed: '1 Gbps',
-      relativeX: Math.round((jx + RJ_W / 2) * sx), relativeY: Math.round((jy + RJ_H / 2) * sy),
-      portW: Math.round(RJ_W * sx), portH: Math.round(RJ_H * sy),
+      // Not rounded — the panel SVG scales this exact same geometry by the exact same (sx, sy)
+      // factors via preserveAspectRatio="none", so keeping full precision here is what makes the
+      // hover/neon-glow overlay (drawn from these relativeX/Y/portW/portH values) land pixel-
+      // perfect on the actual jack instead of drifting off by rounding error.
+      relativeX: (jx + RJ_W / 2) * sx, relativeY: (jy + RJ_H / 2) * sy,
+      portW: RJ_W * sx, portH: RJ_H * sy,
     });
   }
 
-  for (let n = 1; n <= sfp; n++) {
-    const jx = sfpX + (n - 1) * (SFP_W + SFP_GAP_X);
+  const transceivers: { type: PortType; label: string; speed: string }[] = [
+    ...Array.from({ length: sfp }, () => ({ type: 'sfp' as PortType, label: 'SFP', speed: '1 Gbps' })),
+    ...Array.from({ length: sfpPlus }, () => ({ type: 'sfp-plus' as PortType, label: 'SFP+', speed: '10 Gbps' })),
+    ...Array.from({ length: qsfp }, () => ({ type: 'qsfp28' as PortType, label: 'QSFP', speed: '40 Gbps' })),
+  ];
+  transceivers.forEach((t, idx) => {
+    const n = idx + 1;
+    const jx = sfpX + idx * (SFP_W + SFP_GAP_X);
     out.push({
-      id: `${idPfx}sfp${n}`, name: `SFP ${n}`, type: 'sfp-plus', speed: '10 Gbps',
-      relativeX: Math.round((jx + SFP_W / 2) * sx), relativeY: Math.round((sfpTop + SFP_H / 2) * sy),
-      portW: Math.round(SFP_W * sx), portH: Math.round(SFP_H * sy),
+      id: `${idPfx}sfp${n}`, name: `${t.label} ${n}`, type: t.type, speed: t.speed,
+      relativeX: (jx + SFP_W / 2) * sx, relativeY: (sfpTop + SFP_H / 2) * sy,
+      portW: SFP_W * sx, portH: SFP_H * sy,
+      group: 'UPLINK',
+    });
+  });
+
+  for (let n = 1; n <= stack; n++) {
+    const jx = stackX + (n - 1) * (RJ_W + RJ_COL_GAP);
+    out.push({
+      id: `${idPfx}stk${n}`, name: `Stack ${n}`, type: 'rj45', speed: '10 Gbps',
+      relativeX: (jx + RJ_W / 2) * sx, relativeY: (stackTop + RJ_H / 2) * sy,
+      portW: RJ_W * sx, portH: RJ_H * sy,
+      group: 'STACK',
+    });
+  }
+
+  // MGMT and Console are real, separately-connectable ports in the trailing far-right cluster —
+  // not a relabeled entry borrowed from the numbered RJ45 range. Same RJ_W×RJ_H footprint as a
+  // regular Ethernet jack (see computeSwitchLayout's trailing-cluster math above).
+  if (mgmt) {
+    out.push({
+      id: `${idPfx}mgmt`, name: 'MGMT', type: 'management', speed: '1 Gbps',
+      relativeX: (mgmtX + RJ_W / 2) * sx, relativeY: (stackTop + RJ_H / 2) * sy,
+      portW: RJ_W * sx, portH: RJ_H * sy,
+      group: 'MGMT',
+    });
+  }
+  if (consolePort) {
+    out.push({
+      id: `${idPfx}console`, name: 'Console', type: 'console', speed: '115.2 Kbps',
+      relativeX: (consoleJackX + RJ_W / 2) * sx, relativeY: (stackTop + RJ_H / 2) * sy,
+      portW: RJ_W * sx, portH: RJ_H * sy,
+      group: 'MGMT',
     });
   }
 
@@ -132,20 +212,59 @@ export function renderSwitchPanel(
   W: number,
   H: number,
   connectedPortIndices: Set<number> = new Set(),
+  deviceData?: DeviceData,
 ): SVGGElement {
   const group = g('switch-panel');
 
-  const ports = template?.ports ?? [];
-  const rj45Count = ports.filter(p => p.type === 'rj45').length;
-  const sfpCount = ports.filter(p =>
-    p.type === 'sfp' || p.type === 'sfp-plus' || p.type === 'sfp28' ||
-    p.type === 'qsfp' || p.type === 'qsfp28',
-  ).length;
-  const model = template?.model ?? 'RS-2400M';
+  const config = deviceData?.deviceConfig as SwitchConfig | undefined;
+  const skin = switchVendorSkin(config?.vendor);
+  const isLight = !!config && skin.tone === 'light';
+
+  // Prefer the device's own live ports (kept in sync with SwitchConfig by injectConfigurablePorts
+  // in state.ts) over the catalog template's frozen ports — otherwise, once a device's port
+  // counts diverge from the template's original composition, the panel keeps drawing the stale
+  // template layout while the port-renderer.ts hover/neon overlay (positioned from the live
+  // ports) moves to the new layout, visibly desyncing the two. Ear-hole ports (injectEarPorts in
+  // state.ts, mostly typed 'rj45' too) only exist on live device.ports, never on the template —
+  // exclude them here or they'd inflate rj45Count and the panel would draw extra jacks that
+  // don't correspond to any real network port.
+  const ports = (deviceData?.ports ?? template?.ports ?? []).filter(p => !p.id.includes('-ear-'));
+  const rj45Count = ports.filter(p => p.type === 'rj45' && p.group !== 'STACK').length;
+  // `group` is only set on ports generated after this feature landed — fall back to type-based
+  // matching so devices persisted before this change (no `group` field yet) keep their uplinks.
+  const isTransceiverType = (t: string) => t === 'sfp' || t === 'sfp-plus' || t === 'sfp28' || t === 'qsfp' || t === 'qsfp28';
+  const uplinkPorts = ports.filter(p => p.group === 'UPLINK' || (!p.group && isTransceiverType(p.type)));
+  const sfpCount = uplinkPorts.length;
+  const stackPorts = ports.filter(p => p.group === 'STACK');
+  const stackCount = stackPorts.length;
+  const model = config?.modelName || template?.model || 'RS-2400M';
+  const brandLabel = config?.brandName || skin.brandName;
   const rjRows = rj45Count <= 8 ? 1 : 2;
 
-  const { blkW, consoleW, showConsoleIcons, chassisW, bladeW, totW, rjX, sfpX, rjTop, sfpTop } =
-    computeSwitchLayout(rj45Count, sfpCount, rjRows);
+  const linkOn = config?.ledTheme ?? 'green';
+  const actOn = `${linkOn}Blink`;
+
+  // MGMT/Console are real, separately-connectable ports (see switchPorts()) — their presence in
+  // `ports`, not a config flag, is what drives drawing them (a config flag only controls whether
+  // injectConfigurablePorts generated the port in the first place). USB-C stays config-driven
+  // since it's decorative only and never a real port entity.
+  const mgmtPortEntry = ports.find(p => p.type === 'management');
+  const consolePortEntry = ports.find(p => p.type === 'console');
+  const showMgmt = !!mgmtPortEntry;
+  const showConsolePort = !!consolePortEntry;
+  const showUsbPort = !config || config.usbPort !== false;
+  const showLcd = !!config?.lcd;
+  const showAssetLabel = !!config?.assetLabel;
+  const showDustCovers = !!config?.dustCovers;
+  // The global PoE toggle only applies to ports inside [poeStartPort, poeEndPort] (defaulting to
+  // the full RJ45 range) — a port group's own `poe` flag is an independent, additional way to
+  // mark a specific named range as PoE-capable.
+  const poeStart = config?.poeStartPort ?? 1;
+  const poeEnd = config?.poeEndPort ?? rj45Count;
+  const poeForPort = (n: number, grp?: { poe?: boolean }) => (!!config?.poe && n >= poeStart && n <= poeEnd) || !!grp?.poe;
+
+  const { blkW, consoleW, chassisW, bladeW, totW, rjX, sfpX, stackX, mgmtX, consoleJackX, usbX, rstX, rjTop, sfpTop, stackTop } =
+    computeSwitchLayout(rj45Count, sfpCount, rjRows, stackCount, showMgmt, showConsolePort, showUsbPort);
 
   const chassisX = bladeW;
   const consX = bladeW + EAR_W + PANEL_PAD;
@@ -166,7 +285,7 @@ export function renderSwitchPanel(
   ns.setAttribute('viewBox', `0 0 ${totW} ${U1}`);
   ns.setAttribute('preserveAspectRatio', 'none');
   ns.setAttribute('role', 'img');
-  ns.setAttribute('aria-label', `Rack Slicer ${model} switch`);
+  ns.setAttribute('aria-label', `${brandLabel} ${model} switch`);
 
   const defs = el('defs');
 
@@ -188,16 +307,20 @@ export function renderSwitchPanel(
     defs.appendChild(gr);
   }
 
-  linGrad(`chassis-${uid}`, '0', '1', [['0','#3a4046'],['0.06','#2c3237'],['0.5','#23282c'],['0.94','#1b1f22'],['1','#141719']]);
-  linGrad(`blade-${uid}`, '1', '0', [['0','#2a3035'],['0.35','#3a4247'],['0.55','#454d53'],['0.8','#2b3136'],['1','#1a1e21']]);
-  linGrad(`cage-${uid}`, '0', '1', [['0','#0c0e10'],['0.12','#2a2f34'],['0.5','#171b1e'],['0.88','#0a0c0d'],['1','#050607']]);
-  linGrad(`cageLip-${uid}`, '0', '1', [['0','#4b5258'],['1','#20252a']]);
-  linGrad(`rjMouth-${uid}`, '0', '1', [['0','#d9d3c2'],['0.5','#b3ad9c'],['1','#7c7768']]);
-  linGrad(`gold-${uid}`, '0', '1', [['0','#f6d98a'],['0.5','#c9a24b'],['1','#7d6021']]);
-  linGrad(`sfpBody-${uid}`, '0', '1', [['0','#c7ced4'],['0.14','#8f979e'],['0.5','#5c646b'],['0.86','#3a4147'],['1','#24292e']]);
-  linGrad(`sfpBoot-${uid}`, '0', '1', [['0','#2c333a'],['0.5','#171c21'],['1','#0c0f12']]);
-  radGrad(`cageInner-${uid}`, '0.5', '0.35', '0.9', [['0','#111417'],['1','#000000']]);
-  radGrad(`bore-${uid}`, '0.5', '0.4', '0.75', [['0','#1a2a3a'],['0.7','#060b12'],['1','#000']]);
+  linGrad(`chassis-${uid}`, '0', '1', isLight
+    ? [['0', '#ffffff'], ['0.5', '#f6f7f9'], ['1', '#eceef1']]
+    : [['0', '#3a4046'], ['0.06', '#2c3237'], ['0.5', '#23282c'], ['0.94', '#1b1f22'], ['1', '#141719']]);
+  linGrad(`blade-${uid}`, '1', '0', isLight
+    ? [['0', '#f2f4f6'], ['0.5', '#e8eaed'], ['1', '#dfe2e6']]
+    : [['0', '#2a3035'], ['0.35', '#3a4247'], ['0.55', '#454d53'], ['0.8', '#2b3136'], ['1', '#1a1e21']]);
+  linGrad(`cage-${uid}`, '0', '1', [['0', '#0c0e10'], ['0.12', '#2a2f34'], ['0.5', '#171b1e'], ['0.88', '#0a0c0d'], ['1', '#050607']]);
+  linGrad(`cageLip-${uid}`, '0', '1', [['0', '#4b5258'], ['1', '#20252a']]);
+  linGrad(`rjMouth-${uid}`, '0', '1', [['0', '#d9d3c2'], ['0.5', '#b3ad9c'], ['1', '#7c7768']]);
+  linGrad(`gold-${uid}`, '0', '1', [['0', '#f6d98a'], ['0.5', '#c9a24b'], ['1', '#7d6021']]);
+  linGrad(`sfpBody-${uid}`, '0', '1', [['0', '#c7ced4'], ['0.14', '#8f979e'], ['0.5', '#5c646b'], ['0.86', '#3a4147'], ['1', '#24292e']]);
+  linGrad(`sfpBoot-${uid}`, '0', '1', [['0', '#2c333a'], ['0.5', '#171c21'], ['1', '#0c0f12']]);
+  radGrad(`cageInner-${uid}`, '0.5', '0.35', '0.9', [['0', '#111417'], ['1', '#000000']]);
+  radGrad(`bore-${uid}`, '0.5', '0.4', '0.75', [['0', '#1a2a3a'], ['0.7', '#060b12'], ['1', '#000']]);
 
   // ── filters ────────────────────────────────────────────────────────────
   const grainF = el('filter', { id: `grain-${uid}`, x: '-2%', y: '-2%', width: '104%', height: '104%' });
@@ -300,12 +423,21 @@ export function renderSwitchPanel(
 
   ns.appendChild(defs);
 
+  // ── text tone (dark text on a light chassis vs. light text on a dark chassis) ──────────────
+  const txt = isLight
+    ? { label: '#5a616a', mute: '#8a9099' }
+    : { label: '#aeb6bd', mute: '#8b939a' };
+  const chassisStroke = isLight ? '#d4d7dc' : '#0c0f11';
+  const accent = config?.accentColor || (config ? skin.accent : '#37b6ff');
+
   // ── chassis ────────────────────────────────────────────────────────────
   const chG = g(); chG.setAttribute('filter', `url(#ao-${uid})`);
-  chG.appendChild(el('rect', { x: chassisX, y: 1, width: chassisW, height: U1 - 2, rx: 4, fill: `url(#chassis-${uid})`, stroke: '#0c0f11', 'stroke-width': 1.2 }));
-  const chGrain = el('rect', { x: chassisX, y: 1, width: chassisW, height: U1 - 2, rx: 4, fill: 'transparent' });
-  chGrain.setAttribute('filter', `url(#grain-${uid})`); chG.appendChild(chGrain);
-  chG.appendChild(el('rect', { x: chassisX + 2, y: 2.5, width: chassisW - 4, height: 2, rx: 1, fill: '#454b51', opacity: 0.55 }));
+  chG.appendChild(el('rect', { x: chassisX, y: 1, width: chassisW, height: U1 - 2, rx: 4, fill: config?.panelColor || `url(#chassis-${uid})`, stroke: chassisStroke, 'stroke-width': 1.2 }));
+  if (!isLight) {
+    const chGrain = el('rect', { x: chassisX, y: 1, width: chassisW, height: U1 - 2, rx: 4, fill: 'transparent' });
+    chGrain.setAttribute('filter', `url(#grain-${uid})`); chG.appendChild(chGrain);
+  }
+  chG.appendChild(el('rect', { x: chassisX + 2, y: 2.5, width: chassisW - 4, height: 2, rx: 1, fill: isLight ? '#fff' : '#454b51', opacity: 0.55 }));
   ns.appendChild(chG);
 
   // ── blades ────────────────────────────────────────────────────────────
@@ -315,11 +447,13 @@ export function renderSwitchPanel(
     const holeCx = isLeft ? Math.min(16, bladeW / 2) : bladeX + bladeW - Math.min(16, bladeW / 2);
     const bendX = isLeft ? bladeW - 2.5 : bladeX;
     const bg = g(); bg.setAttribute('filter', `url(#ao-${uid})`);
-    bg.appendChild(el('rect', { x: bladeX, y: 0, width: bladeW, height: U1, rx: 2.5, fill: `url(#blade-${uid})`, stroke: '#0c0f11', 'stroke-width': 1 }));
-    const blGrain = el('rect', { x: bladeX, y: 1, width: bladeW, height: U1 - 2, fill: 'transparent', opacity: 0.7 });
-    blGrain.setAttribute('filter', `url(#grain-${uid})`); bg.appendChild(blGrain);
-    bg.appendChild(el('rect', { x: bendX, y: 4, width: 2.5, height: U1 - 8, fill: '#4c545b', opacity: 0.55 }));
-    bg.appendChild(el('rect', { x: isLeft ? bladeW - 1 : bladeX + bladeW - 1.4, y: 4, width: 1.2, height: U1 - 8, fill: '#05070a', opacity: 0.7 }));
+    bg.appendChild(el('rect', { x: bladeX, y: 0, width: bladeW, height: U1, rx: 2.5, fill: config?.panelColor || `url(#blade-${uid})`, stroke: chassisStroke, 'stroke-width': 1 }));
+    if (!isLight) {
+      const blGrain = el('rect', { x: bladeX, y: 1, width: bladeW, height: U1 - 2, fill: 'transparent', opacity: 0.7 });
+      blGrain.setAttribute('filter', `url(#grain-${uid})`); bg.appendChild(blGrain);
+    }
+    bg.appendChild(el('rect', { x: bendX, y: 4, width: 2.5, height: U1 - 8, fill: isLight ? '#c7cbd0' : '#4c545b', opacity: 0.55 }));
+    bg.appendChild(el('rect', { x: isLeft ? bladeW - 1 : bladeX + bladeW - 1.4, y: 4, width: 1.2, height: U1 - 8, fill: isLight ? '#b8bcc2' : '#05070a', opacity: 0.7 }));
     for (const f of [0.34, 0.66]) {
       const hg = g();
       hg.appendChild(el('rect', { x: holeCx - 4.5, y: U1 * f - 8, width: 9, height: 16, rx: 4.5, fill: '#0a0c0e', stroke: '#525a61', 'stroke-width': 1 }));
@@ -334,12 +468,14 @@ export function renderSwitchPanel(
   const cy = U1 / 2;
   const con = g(); con.setAttribute('transform', `translate(${consX} 0)`);
 
-  const statusLeds: [string, string][] = [['PWR','green'],['SYS','greenBlink'],['ALM','off'],['LOC','blue']];
+  const statusLeds: [string, string][] = [
+    ['PWR', 'green'], ['SYS', 'greenBlink'], ['ALM', 'off'], ['LOC', 'blue'],
+  ];
   for (let i = 0; i < statusLeds.length; i++) {
     const [lbl, state] = statusLeds[i];
     const ly = 20 + i * 22;
     switchLed(con, uid, 10, ly, state);
-    const t = el('text', { x: 20, y: ly + 3.4, 'font-size': 8.5, fill: '#aeb6bd', 'letter-spacing': 0.6 });
+    const t = el('text', { x: 20, y: ly + 3.4, 'font-size': 8.5, fill: txt.label, 'letter-spacing': 0.6 });
     t.textContent = lbl; con.appendChild(t);
   }
 
@@ -348,61 +484,75 @@ export function renderSwitchPanel(
   // own right edge into the ports area.
   const textAvailW = Math.max(consoleW - 62 - 6, 40);
   const brandFontSize = Math.max(10, Math.min(17, textAvailW / (11 * 0.62)));
-  const tw = el('text', { x: 62, y: cy - 12, 'font-size': brandFontSize, 'font-weight': 700, fill: '#37b6ff', 'letter-spacing': 1.5 });
-  tw.textContent = 'RACK SLICER'; con.appendChild(tw);
+  const tw = el('text', { x: 62, y: cy - 12, 'font-size': brandFontSize, 'font-weight': 700, fill: accent, 'letter-spacing': 1.5 });
+  tw.textContent = brandLabel.toUpperCase(); con.appendChild(tw);
+
+  // Switch layer badge (L1/L2/L3) — a physical/labeling attribute only, no routing/switching
+  // logic (out of this app's physical-appearance-only scope). Only shown once a device has a
+  // deviceConfig, so legacy no-config switches keep their exact prior look.
+  const layer = config?.layer ?? (config ? 'L2' : undefined);
+  if (layer) {
+    const lyG = g(); lyG.setAttribute('transform', `translate(${consoleW - 24} 8)`);
+    lyG.appendChild(el('rect', { x: 0, y: 0, width: 20, height: 11, rx: 2, fill: accent }));
+    const lyT = el('text', { x: 10, y: 8.2, 'text-anchor': 'middle', 'font-size': 7, 'font-weight': 700, fill: isLight ? '#fff' : '#04060a' });
+    lyT.textContent = layer; lyG.appendChild(lyT);
+    con.appendChild(lyG);
+  }
   const modelMaxChars = Math.max(4, Math.floor(textAvailW / (9 * 0.58)));
-  const tm = el('text', { x: 62, y: cy + 5, 'font-size': 9, fill: '#8b939a', 'letter-spacing': 1.2 });
+  const tm = el('text', { x: 62, y: cy + 5, 'font-size': 9, fill: txt.mute, 'letter-spacing': 1.2 });
   tm.textContent = model.length > modelMaxChars ? model.slice(0, modelMaxChars - 1) + '…' : model;
   con.appendChild(tm);
-  con.appendChild(el('rect', { x: 62, y: cy + 12, width: textAvailW, height: 1, fill: '#3a4147' }));
-  const tp = el('text', { x: 62, y: cy + 25, 'font-size': 7, fill: '#5b636a', 'letter-spacing': 1.2 });
-  tp.textContent = `${rj45Count ? rj45Count + '× RJ45' : ''}${sfpCount ? (rj45Count ? ' + ' : '') + sfpCount + '× SFP' : ''} • 1U`;
+  con.appendChild(el('rect', { x: 62, y: cy + 12, width: textAvailW, height: 1, fill: isLight ? '#d4d7dc' : '#3a4147' }));
+
+  const totalPortCount = rj45Count + sfpCount + stackCount + (showMgmt ? 1 : 0) + (showConsolePort ? 1 : 0);
+  const lcdLine = showLcd
+    ? `${connectedPortIndices.size}/${totalPortCount} UP`
+    : `${rj45Count ? rj45Count + '× RJ45' : ''}${sfpCount ? (rj45Count ? ' + ' : '') + sfpCount + '× SFP' : ''} • 1U`;
+  const tp = el('text', { x: 62, y: cy + 25, 'font-size': 7, fill: isLight ? '#8a9099' : '#5b636a', 'letter-spacing': 1.2 });
+  tp.textContent = lcdLine;
   con.appendChild(tp);
 
-  // USB-C + console jack + reset button — dropped entirely below CONSOLE_ICONS_MIN_W rather
-  // than overlapping the brand text, matching how the PDU rail drops its own extras when tight.
-  if (showConsoleIcons) {
-    const usbG = g(); usbG.setAttribute('transform', `translate(${consoleW - 110} ${cy + 6})`);
-    usbG.appendChild(el('rect', { x: 0, y: 0, width: 24, height: 9, rx: 4.5, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.8 }));
-    usbG.appendChild(el('rect', { x: 3, y: 2.9, width: 18, height: 3.2, rx: 1.6, fill: '#2a3036' }));
-    const usbT = el('text', { x: 12, y: 18, 'font-size': 6, 'text-anchor': 'middle', fill: '#7b838a', 'letter-spacing': 0.6 });
-    usbT.textContent = 'USB-C'; usbG.appendChild(usbT); con.appendChild(usbG);
+  ns.appendChild(con);
 
-    const rjCG = g(); rjCG.setAttribute('transform', `translate(${consoleW - 72} ${cy + 4})`);
-    rjCG.appendChild(el('rect', { x: 0, y: 0, width: 26, height: 18, rx: 1.6, fill: `url(#cage-${uid})`, stroke: '#05070a', 'stroke-width': 0.9 }));
-    const rjCI = el('rect', { x: 2, y: 2, width: 22, height: 14, rx: 1, fill: `url(#cageInner-${uid})` });
-    rjCI.setAttribute('filter', `url(#innerShadow-${uid})`); rjCG.appendChild(rjCI);
-    rjCG.appendChild(el('path', { d: 'M9 2 h8 v4 h-2 v-2 h-4 v2 h-2 z', fill: '#04060a' }));
-    for (let i = 0; i < 8; i++) rjCG.appendChild(el('rect', { x: 4 + i * 2.3, y: 4.5, width: 1.3, height: 4, fill: '#c9a24b', opacity: 0.8 }));
-    const rjCT = el('text', { x: 13, y: 26, 'font-size': 6.5, 'text-anchor': 'middle', fill: '#7b838a', 'letter-spacing': 0.6 });
-    rjCT.textContent = 'CONSOLE'; rjCG.appendChild(rjCT); con.appendChild(rjCG);
-
-    const rstG = g(); rstG.setAttribute('transform', `translate(${consoleW - 22} ${cy + 11})`);
-    rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 3.4, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.8 }));
-    rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 1.1, fill: '#02040a' }));
-    const rstT = el('text', { x: 0, y: 14, 'font-size': 6, 'text-anchor': 'middle', fill: '#7b838a', 'letter-spacing': 0.6 });
-    rstT.textContent = 'RST'; rstG.appendChild(rstT); con.appendChild(rstG);
+  if (showAssetLabel) {
+    const ag = g(); ag.setAttribute('transform', `translate(${chassisX + chassisW - 46} ${U1 - 12})`);
+    ag.appendChild(el('rect', { x: 0, y: 0, width: 42, height: 9, rx: 1.2, fill: isLight ? '#eef0f3' : '#0d1114', stroke: isLight ? '#c7cbd0' : '#33383d', 'stroke-width': 0.6 }));
+    const at = el('text', { x: 21, y: 6.4, 'text-anchor': 'middle', 'font-size': 5, fill: txt.mute, 'letter-spacing': 0.3 });
+    at.textContent = deviceData?.serialNumber ? `S/N ${deviceData.serialNumber}` : 'S/N —';
+    ag.appendChild(at); ns.appendChild(ag);
   }
 
-  ns.appendChild(con);
+  // Port-range groups (VLAN-style visual grouping only — no switching logic). First match wins
+  // when ranges overlap.
+  const portGroups = config?.portGroups ?? [];
+  const groupForPort = (n: number) => portGroups.find(pgr => n >= pgr.startPort && n <= pgr.endPort);
 
   // ── RJ45 ports ─────────────────────────────────────────────────────────
   for (let n = 1; n <= rj45Count; n++) {
     const { x, y, row, single } = rjPos(n);
     const connected = connectedPortIndices.has(n - 1);  // n is 1-based; port indices are 0-based
-    const linkState = connected ? 'green' : 'off';
-    const actState = connected ? 'greenBlink' : 'off';
+    const linkState = connected ? linkOn : 'off';
+    const actState = connected ? actOn : 'off';
     const symId = (single || row === 0) ? `rj45up-${uid}` : `rj45dn-${uid}`;
     const ledY = single ? 5 : row === 0 ? 5 : RJ_H - 5;
+    const grp = groupForPort(n);
     const pg = g(); pg.setAttribute('transform', `translate(${x} ${y})`);
     pg.setAttribute('role', 'button'); pg.setAttribute('tabindex', '0');
-    pg.setAttribute('aria-label', `RJ45 port ${n}`);
+    pg.setAttribute('aria-label', `RJ45 port ${n}${grp ? ` (${grp.name}${grp.poe ? ', PoE' : ''})` : ''}`);
     pg.setAttribute('style', 'cursor:pointer;outline:none');
     const u = el('use'); u.setAttribute('href', `#${symId}`); u.setAttribute('width', String(RJ_W)); u.setAttribute('height', String(RJ_H));
     pg.appendChild(u);
     switchLed(pg, uid, 6, ledY, linkState, 1.4);
     switchLed(pg, uid, RJ_W - 6, ledY, actState, 1.4);
-    const hov = el('rect', { x: 0, y: 0, width: RJ_W, height: RJ_H, rx: 2.5, fill: '#37b6ff', opacity: 0 });
+    if (poeForPort(n, grp)) {
+      pg.appendChild(el('circle', { cx: RJ_W - 4, cy: 4, r: 2.6, fill: '#ffb020', opacity: 0.85, class: 'poe-badge' }));
+      const poeT = el('text', { x: RJ_W - 4, y: 6.2, 'text-anchor': 'middle', 'font-size': 3.6, 'font-weight': 700, fill: '#241a00' });
+      poeT.textContent = 'P'; pg.appendChild(poeT);
+    }
+    if (grp) {
+      pg.appendChild(el('rect', { x: 2, y: RJ_H - 2.2, width: RJ_W - 4, height: 1.8, rx: 0.9, fill: grp.color }));
+    }
+    const hov = el('rect', { x: 0, y: 0, width: RJ_W, height: RJ_H, rx: 2.5, fill: accent, opacity: 0 });
     hov.setAttribute('class', `hov-${uid}`); hov.setAttribute('pointer-events', 'none');
     pg.appendChild(hov); ns.appendChild(pg);
   }
@@ -411,32 +561,126 @@ export function renderSwitchPanel(
   for (let n = 1; n <= rj45Count; n++) {
     const { x, y, row, single } = rjPos(n);
     const labelY = single ? y + RJ_H + 11 : row === 0 ? y - 4 : y + RJ_H + 11;
-    const t = el('text', { x: x + RJ_W / 2, y: labelY, 'text-anchor': 'middle', 'font-size': 9.5, 'font-weight': 600, fill: '#aeb6bd' });
+    const grp = groupForPort(n);
+    const t = el('text', { x: x + RJ_W / 2, y: labelY, 'text-anchor': 'middle', 'font-size': 9.5, 'font-weight': 600, fill: grp ? grp.color : txt.label });
     t.setAttribute('pointer-events', 'none'); t.textContent = String(n); ns.appendChild(t);
   }
 
-  // ── SFP uplinks ─────────────────────────────────────────────────────────
+  // ── uplink transceivers (SFP / SFP+ / QSFP, one combined row) ──────────
   if (sfpCount > 0) {
-    ns.appendChild(el('line', { x1: sfpX - SECTION_GAP / 2, y1: 20, x2: sfpX - SECTION_GAP / 2, y2: U1 - 20, stroke: '#3a4147', 'stroke-width': 1, opacity: 0.5 }));
-    const ts = el('text', { x: sfpX, y: sfpTop - 9, 'font-size': 8, fill: '#7b838a', 'letter-spacing': 1.4 });
-    ts.textContent = 'SFP UPLINK'; ns.appendChild(ts);
+    ns.appendChild(el('line', { x1: sfpX - SECTION_GAP / 2, y1: 20, x2: sfpX - SECTION_GAP / 2, y2: U1 - 20, stroke: isLight ? '#d4d7dc' : '#3a4147', 'stroke-width': 1, opacity: 0.5 }));
+    const ts = el('text', { x: sfpX, y: sfpTop - 9, 'font-size': 8, fill: txt.mute, 'letter-spacing': 1.4 });
+    ts.textContent = 'UPLINK'; ns.appendChild(ts);
 
     for (let n = 1; n <= sfpCount; n++) {
+      const port = uplinkPorts[n - 1];
+      const displayLabel = port?.type === 'qsfp28' ? `Q${uplinkPorts.slice(0, n).filter(p => p.type === 'qsfp28').length}` : String(rj45Count + n);
       const sx = sfpX + (n - 1) * (SFP_W + SFP_GAP_X);
+      const globalIdx = rj45Count + n - 1;
+      const connected = connectedPortIndices.has(globalIdx);
+      const linkState = connected ? linkOn : 'off';
+      const actState = connected ? actOn : 'off';
       const sg = g(); sg.setAttribute('transform', `translate(${sx} ${sfpTop})`);
       sg.setAttribute('role', 'button'); sg.setAttribute('tabindex', '0');
-      sg.setAttribute('aria-label', `SFP port ${rj45Count + n}`);
+      sg.setAttribute('aria-label', `Uplink port ${displayLabel}`);
       sg.setAttribute('style', 'cursor:pointer;outline:none;--bail:#39ff8a');
       const u = el('use'); u.setAttribute('href', `#sfpFiber-${uid}`); u.setAttribute('width', String(SFP_W)); u.setAttribute('height', String(SFP_H));
       sg.appendChild(u);
-      switchLed(sg, uid, 6.5, SFP_H - 3.2, 'green');
-      switchLed(sg, uid, SFP_W - 6.5, SFP_H - 3.2, 'greenBlink');
-      const tl = el('text', { x: SFP_W / 2, y: -5.5, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 600, fill: '#aeb6bd' });
-      tl.setAttribute('pointer-events', 'none'); tl.textContent = String(rj45Count + n); sg.appendChild(tl);
-      const sfpHov = el('rect', { x: 0, y: 0, width: SFP_W, height: SFP_H, rx: 2.5, fill: '#37b6ff', opacity: 0 });
+      switchLed(sg, uid, 6.5, SFP_H - 3.2, linkState);
+      switchLed(sg, uid, SFP_W - 6.5, SFP_H - 3.2, actState);
+      const tl = el('text', { x: SFP_W / 2, y: -5.5, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 600, fill: txt.label });
+      tl.setAttribute('pointer-events', 'none'); tl.textContent = displayLabel; sg.appendChild(tl);
+      if (showDustCovers && !connected) {
+        sg.appendChild(el('rect', { x: 4, y: 4, width: SFP_W - 8, height: SFP_H - 8, rx: 2, fill: '#3a3f46', opacity: 0.55 }));
+      }
+      const sfpHov = el('rect', { x: 0, y: 0, width: SFP_W, height: SFP_H, rx: 2.5, fill: accent, opacity: 0 });
       sfpHov.setAttribute('class', `hov-${uid}`); sfpHov.setAttribute('pointer-events', 'none');
       sg.appendChild(sfpHov); ns.appendChild(sg);
     }
+  }
+
+  // ── stacking ports (fixed-count toggle, reuses the RJ45 jack visual) ───
+  if (stackCount > 0) {
+    ns.appendChild(el('line', { x1: stackX - SECTION_GAP / 2, y1: 20, x2: stackX - SECTION_GAP / 2, y2: U1 - 20, stroke: isLight ? '#d4d7dc' : '#3a4147', 'stroke-width': 1, opacity: 0.5 }));
+    const ts = el('text', { x: stackX, y: stackTop - 9, 'font-size': 8, fill: txt.mute, 'letter-spacing': 1.4 });
+    ts.textContent = 'STACK'; ns.appendChild(ts);
+
+    for (let n = 1; n <= stackCount; n++) {
+      const sx = stackX + (n - 1) * (RJ_W + RJ_COL_GAP);
+      const globalIdx = rj45Count + sfpCount + n - 1;
+      const connected = connectedPortIndices.has(globalIdx);
+      const linkState = connected ? linkOn : 'off';
+      const stG = g(); stG.setAttribute('transform', `translate(${sx} ${stackTop})`);
+      stG.setAttribute('role', 'button'); stG.setAttribute('tabindex', '0');
+      stG.setAttribute('aria-label', `Stack port ${n}`);
+      stG.setAttribute('style', 'cursor:pointer;outline:none');
+      const u = el('use'); u.setAttribute('href', `#rj45up-${uid}`); u.setAttribute('width', String(RJ_W)); u.setAttribute('height', String(RJ_H));
+      stG.appendChild(u);
+      switchLed(stG, uid, 6, 5, linkState, 1.4);
+      switchLed(stG, uid, RJ_W - 6, 5, linkState, 1.4);
+      const tl = el('text', { x: RJ_W / 2, y: RJ_H + 11, 'text-anchor': 'middle', 'font-size': 8.5, 'font-weight': 600, fill: txt.label });
+      tl.setAttribute('pointer-events', 'none'); tl.textContent = `S${n}`; stG.appendChild(tl);
+      ns.appendChild(stG);
+    }
+  }
+
+  // ── trailing far-right cluster: MGMT, Console, USB-C, reset ────────────
+  // MGMT and Console are real ports (same RJ_W×RJ_H footprint/artwork as a regular Ethernet
+  // jack — matching aspect ratio, not a separate squashed shape); USB-C/reset stay decorative.
+  const trailBaseIdx = rj45Count + sfpCount + stackCount;
+  if (showMgmt) {
+    const connected = connectedPortIndices.has(trailBaseIdx);
+    const linkState = connected ? linkOn : 'off';
+    const mg = g(); mg.setAttribute('transform', `translate(${mgmtX} ${stackTop})`);
+    mg.setAttribute('role', 'button'); mg.setAttribute('tabindex', '0');
+    mg.setAttribute('aria-label', 'MGMT port');
+    mg.setAttribute('style', 'cursor:pointer;outline:none');
+    const u = el('use'); u.setAttribute('href', `#rj45up-${uid}`); u.setAttribute('width', String(RJ_W)); u.setAttribute('height', String(RJ_H));
+    mg.appendChild(u);
+    switchLed(mg, uid, 6, 5, linkState, 1.4);
+    switchLed(mg, uid, RJ_W - 6, 5, linkState, 1.4);
+    const tl = el('text', { x: RJ_W / 2, y: RJ_H + 11, 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: accent });
+    tl.setAttribute('pointer-events', 'none'); tl.textContent = 'MGMT'; mg.appendChild(tl);
+    const hov = el('rect', { x: 0, y: 0, width: RJ_W, height: RJ_H, rx: 2.5, fill: accent, opacity: 0 });
+    hov.setAttribute('class', `hov-${uid}`); hov.setAttribute('pointer-events', 'none');
+    mg.appendChild(hov);
+    ns.appendChild(mg);
+  }
+
+  if (showConsolePort) {
+    const consoleIdx = trailBaseIdx + (showMgmt ? 1 : 0);
+    const connected = connectedPortIndices.has(consoleIdx);
+    const cg2 = g(); cg2.setAttribute('transform', `translate(${consoleJackX} ${stackTop})`);
+    cg2.setAttribute('role', 'button'); cg2.setAttribute('tabindex', '0');
+    cg2.setAttribute('aria-label', 'Console port');
+    cg2.setAttribute('style', 'cursor:pointer;outline:none');
+    const u = el('use'); u.setAttribute('href', `#rj45up-${uid}`); u.setAttribute('width', String(RJ_W)); u.setAttribute('height', String(RJ_H));
+    cg2.appendChild(u);
+    switchLed(cg2, uid, RJ_W / 2, 5, connected ? 'blue' : 'off', 1.4);
+    const tl = el('text', { x: RJ_W / 2, y: RJ_H + 11, 'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 600, fill: txt.label });
+    tl.setAttribute('pointer-events', 'none'); tl.textContent = 'CONSOLE'; cg2.appendChild(tl);
+    const hov = el('rect', { x: 0, y: 0, width: RJ_W, height: RJ_H, rx: 2.5, fill: accent, opacity: 0 });
+    hov.setAttribute('class', `hov-${uid}`); hov.setAttribute('pointer-events', 'none');
+    cg2.appendChild(hov);
+    ns.appendChild(cg2);
+  }
+
+  if (showUsbPort) {
+    const usbG = g(); usbG.setAttribute('transform', `translate(${usbX} ${U1 / 2 - 4.5})`);
+    usbG.appendChild(el('rect', { x: 0, y: 0, width: USB_W, height: 9, rx: 4.5, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.8 }));
+    usbG.appendChild(el('rect', { x: 3, y: 2.9, width: 18, height: 3.2, rx: 1.6, fill: '#2a3036' }));
+    const usbT = el('text', { x: USB_W / 2, y: 20, 'font-size': 6, 'text-anchor': 'middle', fill: txt.mute, 'letter-spacing': 0.6 });
+    usbT.textContent = 'USB-C'; usbG.appendChild(usbT);
+    ns.appendChild(usbG);
+  }
+
+  {
+    const rstG = g(); rstG.setAttribute('transform', `translate(${rstX + RST_W / 2} ${U1 / 2})`);
+    rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 3.4, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.8 }));
+    rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 1.1, fill: '#02040a' }));
+    const rstT = el('text', { x: 0, y: 14, 'font-size': 6, 'text-anchor': 'middle', fill: txt.mute, 'letter-spacing': 0.6 });
+    rstT.textContent = 'RST'; rstG.appendChild(rstT);
+    ns.appendChild(rstG);
   }
 
   // ── CSS animations ─────────────────────────────────────────────────────

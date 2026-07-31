@@ -1,7 +1,16 @@
-import { DeviceTemplate, DeviceCategory } from '../core/types';
+import { DeviceTemplate, DeviceCategory, SwitchConfig, FirewallConfig } from '../core/types';
 import { switchPorts } from '../renderers/switch-renderer';
-import { fortigatePorts } from '../renderers/fortigate-renderer';
+import { fortigatePorts, firewallPorts } from '../renderers/firewall-renderer';
 import { networkingPorts } from '../renderers/networking-renderer';
+
+const SW_ENTERPRISE_CONFIG: SwitchConfig = {
+  vendor: 'generic', rj45Count: 24, sfpPlusCount: 4,
+  mgmtPort: true, consolePort: true, usbPort: true,
+};
+const FW_ENTERPRISE_CONFIG: FirewallConfig = {
+  vendor: 'generic', rj45Count: 16, sfpPlusCount: 8,
+  mgmtPort: true, haPorts: true, consolePort: true, usbPort: true,
+};
 
 export const deviceCatalog: DeviceTemplate[] = [
 
@@ -179,6 +188,19 @@ export const deviceCatalog: DeviceTemplate[] = [
     powerWatts: 55,
     ports: switchPorts(48, 4, 2, 'rsw48-'),
   },
+  {
+    id: 'sw-enterprise',
+    name: 'Enterprise Switch',
+    manufacturer: 'Rack Slicer',
+    model: 'Enterprise Switch',
+    category: 'switch',
+    heightUnits: 1,
+    color: '#1a1e21',
+    icon: '🔀',
+    powerWatts: 40,
+    deviceConfig: SW_ENTERPRISE_CONFIG as Record<string, unknown>,
+    ports: switchPorts(SW_ENTERPRISE_CONFIG.rj45Count!, SW_ENTERPRISE_CONFIG.sfpPlusCount!, 2, 'sw-ent-'),
+  },
 
   // ─── ROUTERS ────────────────────────────────────────────────────────────────
   {
@@ -289,6 +311,19 @@ export const deviceCatalog: DeviceTemplate[] = [
     icon: '🛡️',
     powerWatts: 150,
     ports: fortigatePorts(),
+  },
+  {
+    id: 'fw-enterprise',
+    name: 'Enterprise Firewall',
+    manufacturer: 'Rack Slicer',
+    model: 'Enterprise Firewall',
+    category: 'firewall',
+    heightUnits: 1,
+    color: '#eceef1',
+    icon: '🛡️',
+    powerWatts: 90,
+    deviceConfig: FW_ENTERPRISE_CONFIG as Record<string, unknown>,
+    ports: firewallPorts(FW_ENTERPRISE_CONFIG, 'fw-ent-'),
   },
 
   // ─── PATCH PANELS ───────────────────────────────────────────────────────────

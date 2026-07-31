@@ -76,6 +76,97 @@ export interface KvmConfig {
   localPorts?: string[];
 }
 
+export type SwitchVendor = 'cisco-catalyst' | 'cisco-nexus' | 'aruba-cx' | 'juniper-ex' | 'dell-powerswitch' | 'fortiswitch' | 'huawei' | 'extreme' | 'mikrotik' | 'ubiquiti' | 'netgear' | 'generic' | 'custom';
+export type FirewallVendor = 'fortinet' | 'cisco' | 'paloalto' | 'juniper' | 'sophos' | 'checkpoint' | 'sonicwall' | 'aruba' | 'dell' | 'huawei' | 'generic';
+export type LedTheme = 'green' | 'blue' | 'amber' | 'white';
+export type SwitchLayer = 'L1' | 'L2' | 'L3';
+
+/** A named, coloured port range — a purely visual grouping (like a VLAN's port membership,
+ *  without any actual VLAN/switching logic, which is out of this app's physical-only scope).
+ *  `poe`, when set, marks just this range as PoE-capable (independent of SwitchConfig's global
+ *  `poe` toggle) — real switches commonly power only a subset of their ports. */
+export interface SwitchPortGroup {
+  name: string;
+  startPort: number;
+  endPort: number;
+  color: string;
+  poe?: boolean;
+}
+
+/** Enterprise Switch Physical SDK — physical-appearance-only configurator state. Port counts
+ *  drive live regeneration of the device's real ports (see injectConfigurablePorts in state.ts);
+ *  everything else is cosmetic (vendor skin, toggled chrome, colors, port-range grouping). */
+export interface SwitchConfig {
+  vendor?: SwitchVendor;
+  layer?: SwitchLayer;
+  rj45Count?: number;
+  sfpCount?: number;
+  sfpPlusCount?: number;
+  qsfpCount?: number;
+  /** When `poe` is on, only ports in [poeStartPort, poeEndPort] are actually PoE-capable —
+   *  defaults to the full RJ45 range when unset, so a bare "PoE" toggle still means "all ports"
+   *  until the user narrows it. A port group's own `poe` flag (see SwitchPortGroup) is an
+   *  independent, additional way to mark a named range as PoE, regardless of this range. */
+  poe?: boolean;
+  poeStartPort?: number;
+  poeEndPort?: number;
+  mgmtPort?: boolean;
+  consolePort?: boolean;
+  usbPort?: boolean;
+  lcd?: boolean;
+  stackPorts?: boolean;
+  rackEars?: boolean;
+  assetLabel?: boolean;
+  dustCovers?: boolean;
+  panelColor?: string;
+  accentColor?: string;
+  ledTheme?: LedTheme;
+  brandName?: string;
+  modelName?: string;
+  portGroups?: SwitchPortGroup[];
+}
+
+/** Enterprise Firewall Physical SDK — physical-appearance-only configurator state. Mirrors
+ *  SwitchConfig's shape; HA ports are a labeled RJ45 pair, not a distinct port type. */
+export interface FirewallConfig {
+  vendor?: FirewallVendor;
+  /** WAN1/WAN2/... — real, separately-connectable ports of their own zone (distinct from the
+   *  numbered LAN/rj45 range), matching how enterprise firewalls physically group Internet-
+   *  facing uplinks apart from the internal LAN block. */
+  wanCount?: number;
+  rj45Count?: number;
+  sfpPlusCount?: number;
+  sfp28Count?: number;
+  qsfpCount?: number;
+  mgmtPort?: boolean;
+  haPorts?: boolean;
+  usbPort?: boolean;
+  consolePort?: boolean;
+  lcd?: boolean;
+  rackEars?: boolean;
+  qrCode?: boolean;
+  assetLabel?: boolean;
+  dustCovers?: boolean;
+  panelColor?: string;
+  brandStripColor?: string;
+  accentColor?: string;
+  ledTheme?: LedTheme;
+  brandName?: string;
+  modelName?: string;
+  /** Overrides the panel's port-number/port-name labels (HA, WAN1, MGMT, port numbers, etc.),
+   *  which otherwise default to a vendor-tone-derived grey. Independent of accentColor (used only
+   *  for the brand name and MGMT's own label) and of a port group's own colour (which still wins
+   *  for ports inside that group). */
+  fontColor?: string;
+  /** Overrides secondary/muted text (model name, WAN/UPLINK zone captions, USB-C/RST labels,
+   *  the status line) — otherwise defaults to a dimmer vendor-tone-derived grey. */
+  fontMuteColor?: string;
+  /** Named, coloured port-range groups (WAN/LAN/PoE/10GbE/25GbE etc.) — same visual-only
+   *  grouping as SwitchConfig.portGroups; `poe` is accepted but not drawn for firewalls (no PoE
+   *  badge in this renderer yet), only name/color/range. */
+  portGroups?: SwitchPortGroup[];
+}
+
 export interface PortData {
   id: string;
   deviceId: string;
@@ -238,20 +329,6 @@ export interface LegendItem {
   color: string;
 }
 
-/** A single point-in-time snapshot in the rolling auto-save/version-control history. Payload
- *  mirrors what autoSave()/loadAutoSave() already persist (racks/devices/cables/bundles) so
- *  restoring a version reuses the exact same load path as the "latest" autosave. */
-export interface ProjectVersion {
-  id: string;
-  timestamp: string;      // ISO 8601
-  label: string;           // e.g. "Auto-save" or a user-supplied checkpoint name
-  manual: boolean;         // true if explicitly checkpointed by the user, vs a routine auto-save
-  racks: RackData[];
-  devices: DeviceData[];
-  cables: CableData[];
-  bundles: CableBundle[];
-}
-
 export interface AppState {
   theme: Theme;
   tool: ToolMode;
@@ -345,9 +422,6 @@ export interface AppEvents {
   'file:save-as': void;
   'file:open': File;
   'file:demo': void;
-  'versions:open': void;
-  'versions:changed': void;
-  'versions:restored': void;
   'view:zoom-in': void;
   'view:zoom-out': void;
   'edit:undo': void;
