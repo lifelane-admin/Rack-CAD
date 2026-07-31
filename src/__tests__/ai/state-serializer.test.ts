@@ -12,6 +12,7 @@ const minimalState: AppState = {
   validationAlerts: [],
   selection: [],
   cableInProgress: null,
+  airdropDestination: false,
   sidebarCollapsed: false,
   propertiesCollapsed: false,
   showLegends: false,

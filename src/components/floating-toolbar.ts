@@ -120,6 +120,7 @@ export class FloatingToolbar {
     const isPan = this.currentTool === 'pan';
     const isCableMode = this.currentTool === 'cable';
     const isPowerMode = this.currentTool === 'power';
+    const isAirdropDestination = state.airdropDestination;
     const isSnap = state.snapEnabled;
 
     const colors = [
@@ -211,6 +212,15 @@ export class FloatingToolbar {
               <path d="M12 15v7"/>
             </svg>
           </button>
+          <button class="ft-btn ft-btn--accent ${isAirdropDestination ? 'active' : ''}" id="ft-toggle-airdrop-dest" title="Airdrop Destination — while drawing a cable from a real source port, finish it anywhere on the canvas (any rack, any spot) instead of requiring a real destination port">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v10"/>
+              <path d="M8 8l4 4 4-4"/>
+              <rect x="5" y="15" width="14" height="7" rx="1.5"/>
+              <circle cx="9" cy="18.5" r="1"/>
+              <circle cx="15" cy="18.5" r="1"/>
+            </svg>
+          </button>
         </div>
 
         <div class="ft-separator"></div>
@@ -248,6 +258,9 @@ export class FloatingToolbar {
     });
     this.element.querySelector('#ft-tool-power')?.addEventListener('click', () => {
       EventBus.emit('tool:changed', 'power');
+    });
+    this.element.querySelector('#ft-toggle-airdrop-dest')?.addEventListener('click', () => {
+      EventBus.emit('cable:toggle-airdrop-destination', undefined);
     });
 
     this.element.querySelector('#ft-act-undo')?.addEventListener('click', () => {

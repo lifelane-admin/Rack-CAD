@@ -197,7 +197,7 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
     // High-fidelity SVG panel renderer
     const connectedPortIndices = new Set<number>();
     const connectedPortIds = new Set<string>();
-    const usesConnectionState = category === 'switch' || category === 'router' || category === 'firewall' || category === 'console' || category === 'patch-panel';
+    const usesConnectionState = category === 'switch' || category === 'router' || category === 'firewall' || category === 'console' || category === 'patch-panel' || category === 'nac' || category === 'ats';
     if (usesConnectionState && device) {
       const cables = stateManager.getState().cables;
       for (const cable of cables) {

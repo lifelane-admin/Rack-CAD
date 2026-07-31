@@ -111,7 +111,22 @@ export function computeSmartRouting(
   destPos: Point
 ): Point[] {
   const srcOrient  = getPortOrientation(cable, 'source');
-  const destOrient = getPortOrientation(cable, 'dest');
+  // A floating destination (Airdrop Destination — no real destPortId) has no device-relative
+  // port position to derive an orientation from; getPortOrientation's fallback for that case is
+  // a hardcoded 'right', which made the cable's exit point always shift +15px to the right of
+  // wherever the user actually dropped it, regardless of which direction the drop actually was
+  // relative to the source — visually "landing" away from the exact click. Derive it from the
+  // real direction of the drop instead (still overridable, same as any port).
+  // Note: this deliberately does NOT reuse getExitDirection() below — that helper's vertical
+  // sign convention (dy > 0 → 'down') is inverted relative to what getExitPoint expects here
+  // (orientation 'down' pulls the exit point UP, per its own port-facing convention), so reusing
+  // it directly would flip the exit overshoot the wrong way for vertical drops.
+  const destHasOverride = cable.destOrientation && cable.destOrientation !== 'auto';
+  const destOrient = (!cable.destPortId && !destHasOverride)
+    ? (Math.abs(destPos.x - sourcePos.x) > Math.abs(destPos.y - sourcePos.y)
+        ? (destPos.x >= sourcePos.x ? 'right' : 'left')
+        : (destPos.y >= sourcePos.y ? 'up' : 'down'))
+    : getPortOrientation(cable, 'dest');
   const exitOffset = cable.exitStraightOffset ?? 15;
 
   const srcExit  = getExitPoint(sourcePos, srcOrient,  exitOffset);

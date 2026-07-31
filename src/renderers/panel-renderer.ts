@@ -2,6 +2,8 @@ import type { DeviceCategory, DeviceTemplate, DeviceData, KvmConfig } from '../c
 import { renderSwitchPanel } from './switch-renderer';
 import { renderFirewallPanel } from './firewall-renderer';
 import { renderPduPanel } from './pdu-renderer';
+import { renderNacPanel } from './nac-renderer';
+import { renderAtsPanel } from './ats-renderer';
 import { makeConnectorDefs, drawSfpPort } from './rack-kit';
 import { renderNetworkingPanel } from './networking-renderer';
 
@@ -347,6 +349,8 @@ export function renderFrontPanel(
       return renderNetworkingPanel(isFiber ? 'patch-fiber' : 'patch-cat6', portCount, undefined, template?.model ?? 'Patch Panel', deviceWidth, deviceHeight, deviceData?.ports ?? [], connectedPortIds);
     }
     case 'pdu': return renderPduPanel(template, deviceData, deviceWidth, deviceHeight);
+    case 'nac': return renderNacPanel(template, deviceData, deviceWidth, deviceHeight, connectedPortIds);
+    case 'ats': return renderAtsPanel(template, deviceData, deviceWidth, deviceHeight, connectedPortIds);
     case 'ups':           return renderUpsPanel(template, deviceWidth, deviceHeight);
     case 'storage':       return renderStoragePanel(template, deviceWidth, deviceHeight);
     case 'console': {

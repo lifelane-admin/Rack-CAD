@@ -2,10 +2,10 @@ import EventBus from '../core/event-bus';
 import { eventBus } from '../core/event-bus';
 import State from '../core/state';
 import { stateManager } from '../core/state';
-import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, PduConfig, PduOutletGroup, SocketType, KvmConfig, SwitchConfig, FirewallConfig, SwitchVendor, FirewallVendor, LedTheme, SwitchLayer, SwitchPortGroup } from '../core/types';
+import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, PduConfig, PduOutletGroup, SocketType, KvmConfig, SwitchConfig, FirewallConfig, SwitchVendor, FirewallVendor, LedTheme, SwitchLayer, SwitchPortGroup, NacConfig, NacVendor, AtsConfig } from '../core/types';
 import { KVM_LOCAL_PORT_OPTIONS, CONSOLE_LOCAL_PORT_OPTIONS } from '../renderers/networking-renderer';
 import { computePduLoad } from '../renderers/pdu-renderer';
-import { switchVendorSkin, firewallVendorSkin } from '../renderers/vendor-palette';
+import { switchVendorSkin, firewallVendorSkin, nacVendorSkin } from '../renderers/vendor-palette';
 import { getTemplate } from '../library/device-catalog';
 import { CustomAssetModal } from './custom-asset-modal';
 
@@ -204,6 +204,14 @@ export class PropertiesPanel {
     }
     if (template?.category === 'firewall') {
       this.renderFirewallProperties(device, template, container);
+      return;
+    }
+    if (template?.category === 'nac') {
+      this.renderNacProperties(device, template, container);
+      return;
+    }
+    if (template?.category === 'ats') {
+      this.renderAtsProperties(device, template, container);
       return;
     }
     const racks = state.racks || [];
@@ -802,6 +810,154 @@ export class PropertiesPanel {
     container.querySelector('#fw-stripcolor')?.addEventListener('change', save);
     container.querySelector('#fw-fontcolor')?.addEventListener('change', save);
     container.querySelector('#fw-fontmutecolor')?.addEventListener('change', save);
+  }
+
+  private readonly NAC_VENDORS: NacVendor[] = ['generic', 'forescout', 'cisco-ise', 'aruba-clearpass'];
+  private readonly NAC_TOGGLES = ['mgmtPort', 'consolePort', 'usbPort', 'rackEars', 'assetLabel'];
+  private readonly NAC_TOGGLE_LABELS: Record<string, string> = {
+    mgmtPort: 'Mgmt Port', consolePort: 'Console', usbPort: 'USB', rackEars: 'Rack Ears', assetLabel: 'Asset Label',
+  };
+
+  /** Network Access Control appliance configurator — deliberately small compared to
+   *  renderSwitchProperties/renderFirewallProperties: NAC boxes are simple fixed-role 1U
+   *  appliances (a handful of RJ45 uplinks + MGMT + console), not parametric switching fabric. */
+  private renderNacProperties(device: DeviceData, template: DeviceTemplate, container: HTMLElement): void {
+    const cfg: NacConfig = (device.deviceConfig as NacConfig | undefined) ?? {};
+    const skin = nacVendorSkin(cfg.vendor);
+    const ports = (device.ports ?? []).filter(p => !p.id.includes('-ear-'));
+    const defaultRj45 = ports.filter(p => p.type === 'rj45').length;
+
+    container.innerHTML = `
+      <div style="padding:10px 12px;font-family:monospace;font-size:11px;color:#e6ecf2;overflow-y:auto;max-height:100%;">
+        <div style="color:#5c9fe0;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;border-bottom:1px solid #23303b;padding-bottom:6px;">
+          &#x1F510; ${template.name}<br>
+          <span style="color:#5b636a;font-size:9px;">RACK-MOUNT — ${template.heightUnits}U</span>
+        </div>
+
+        <label class="pdu-lbl">Vendor Profile</label>
+        <select id="nac-vendor" class="pdu-sel">
+          ${this.NAC_VENDORS.map(v => `<option value="${v}" ${(cfg.vendor ?? 'generic') === v ? 'selected' : ''}>${nacVendorSkin(v).brandName}</option>`).join('')}
+        </select>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Port Count</label>
+        <div><div class="pdu-sub">RJ45 Count</div><input type="number" id="nac-rj45" class="pdu-inp" value="${cfg.rj45Count ?? defaultRj45}" min="0" max="24"/></div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Features</label>
+        <div id="nac-toggles" style="display:flex;flex-wrap:wrap;gap:3px;"></div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Appearance</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;align-items:end;">
+          <div><div class="pdu-sub">Panel Colour</div><input type="color" id="nac-panelcolor" value="${cfg.panelColor || '#23282c'}" style="width:100%;height:24px;padding:0;border:1px solid #23303b;border-radius:2px;background:#171d24;"/></div>
+          <div><div class="pdu-sub">Accent Colour</div><input type="color" id="nac-accentcolor" value="${cfg.accentColor || skin.accent}" style="width:100%;height:24px;padding:0;border:1px solid #23303b;border-radius:2px;background:#171d24;"/></div>
+        </div>
+        <div style="margin-top:5px;">
+          <div class="pdu-sub">LED Theme</div>
+          <select id="nac-ledtheme" class="pdu-sel">
+            ${['green', 'blue', 'amber', 'white'].map(v => `<option value="${v}" ${(cfg.ledTheme ?? 'green') === v ? 'selected' : ''}>${v.charAt(0).toUpperCase() + v.slice(1)}</option>`).join('')}
+          </select>
+        </div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Branding</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+          <div><div class="pdu-sub">Brand Name</div><input type="text" id="nac-brandname" class="pdu-inp" value="${cfg.brandName ?? ''}" placeholder="${skin.brandName}"/></div>
+          <div><div class="pdu-sub">Model Name</div><input type="text" id="nac-modelname" class="pdu-inp" value="${cfg.modelName ?? ''}" placeholder="${template.model}"/></div>
+        </div>
+      </div>
+      <style>
+        .pdu-lbl{display:block;font-size:9px;color:#8b939a;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+        .pdu-sub{font-size:9px;color:#5b636a;margin-bottom:2px}
+        .pdu-sel{width:100%;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:4px;font-size:10px;border-radius:2px;font-family:monospace}
+        .pdu-inp{width:100%;min-width:0;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:4px;font-size:10px;border-radius:2px;font-family:monospace;box-sizing:border-box}
+        .pdu-chip{padding:3px 6px;border-radius:2px;font-size:9.5px;cursor:pointer;border:1px solid #23303b;font-family:monospace;user-select:none}
+        .pdu-chip.on{background:#5c9fe0;color:#000;border-color:#5c9fe0}
+        .pdu-chip.off{background:#171d24;color:#8b939a}
+      </style>
+    `;
+
+    const activeToggles = this.initToggleSet(cfg as Record<string, unknown>, this.NAC_TOGGLES, ['mgmtPort', 'consolePort', 'usbPort', 'rackEars']);
+    let save: () => void = () => {};
+    this.renderPduChips(container, '#nac-toggles', this.NAC_TOGGLES, activeToggles, this.NAC_TOGGLE_LABELS, () => save());
+
+    save = () => {
+      const newConfig: NacConfig = {
+        vendor: (container.querySelector('#nac-vendor') as HTMLSelectElement)?.value as NacVendor,
+        rj45Count: Math.max(0, Number((container.querySelector('#nac-rj45') as HTMLInputElement)?.value ?? 4)),
+        panelColor: (container.querySelector('#nac-panelcolor') as HTMLInputElement)?.value,
+        accentColor: (container.querySelector('#nac-accentcolor') as HTMLInputElement)?.value,
+        ledTheme: (container.querySelector('#nac-ledtheme') as HTMLSelectElement)?.value as LedTheme,
+        brandName: (container.querySelector('#nac-brandname') as HTMLInputElement)?.value || undefined,
+        modelName: (container.querySelector('#nac-modelname') as HTMLInputElement)?.value || undefined,
+        mgmtPort: activeToggles.has('mgmtPort'),
+        consolePort: activeToggles.has('consolePort'),
+        usbPort: activeToggles.has('usbPort'),
+        rackEars: activeToggles.has('rackEars'),
+        assetLabel: activeToggles.has('assetLabel'),
+      };
+      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig } });
+    };
+
+    container.querySelectorAll('select, input[type="number"], input[type="text"]').forEach(el => el.addEventListener('change', save));
+    container.querySelector('#nac-panelcolor')?.addEventListener('change', save);
+    container.querySelector('#nac-accentcolor')?.addEventListener('change', save);
+  }
+
+  /** Automatic Transfer Switch configurator — dual power-input source picker + output outlet
+   *  count, deliberately smaller than the full PDU configurator (see AtsConfig). */
+  private renderAtsProperties(device: DeviceData, template: DeviceTemplate, container: HTMLElement): void {
+    const cfg: AtsConfig = (device.deviceConfig as AtsConfig | undefined) ?? {};
+
+    container.innerHTML = `
+      <div style="padding:10px 12px;font-family:monospace;font-size:11px;color:#e6ecf2;overflow-y:auto;max-height:100%;">
+        <div style="color:#ffb020;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;border-bottom:1px solid #23303b;padding-bottom:6px;">
+          &#x1F501; ${template.name}<br>
+          <span style="color:#5b636a;font-size:9px;">RACK-MOUNT — ${template.heightUnits}U</span>
+        </div>
+
+        <label class="pdu-lbl">Output Outlets</label>
+        <div><div class="pdu-sub">Outlet Count</div><input type="number" id="ats-outlets" class="pdu-inp" value="${cfg.outletCount ?? 8}" min="1" max="16"/></div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Active Power Source</label>
+        <select id="ats-activesource" class="pdu-sel">
+          <option value="A" ${(cfg.activeSource ?? 'A') === 'A' ? 'selected' : ''}>Source A</option>
+          <option value="B" ${cfg.activeSource === 'B' ? 'selected' : ''}>Source B</option>
+        </select>
+        <div style="font-size:9px;color:#5b636a;margin-top:3px;">Which input is currently feeding the outlets — the transfer-status indicator on the panel points to this source. This app doesn't simulate live failover; use this to depict the rack's normal running state.</div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Appearance</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;align-items:end;">
+          <div><div class="pdu-sub">Panel Colour</div><input type="color" id="ats-panelcolor" value="${cfg.panelColor || '#23282c'}" style="width:100%;height:24px;padding:0;border:1px solid #23303b;border-radius:2px;background:#171d24;"/></div>
+          <div><div class="pdu-sub">Accent Colour</div><input type="color" id="ats-accentcolor" value="${cfg.accentColor || '#ffb020'}" style="width:100%;height:24px;padding:0;border:1px solid #23303b;border-radius:2px;background:#171d24;"/></div>
+        </div>
+
+        <label class="pdu-lbl" style="margin-top:10px;">Branding</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+          <div><div class="pdu-sub">Brand Name</div><input type="text" id="ats-brandname" class="pdu-inp" value="${cfg.brandName ?? ''}" placeholder="Rack Slicer"/></div>
+          <div><div class="pdu-sub">Model Name</div><input type="text" id="ats-modelname" class="pdu-inp" value="${cfg.modelName ?? ''}" placeholder="${template.model}"/></div>
+        </div>
+      </div>
+      <style>
+        .pdu-lbl{display:block;font-size:9px;color:#8b939a;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+        .pdu-sub{font-size:9px;color:#5b636a;margin-bottom:2px}
+        .pdu-sel{width:100%;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:4px;font-size:10px;border-radius:2px;font-family:monospace}
+        .pdu-inp{width:100%;min-width:0;background:#171d24;border:1px solid #23303b;color:#e6ecf2;padding:4px;font-size:10px;border-radius:2px;font-family:monospace;box-sizing:border-box}
+      </style>
+    `;
+
+    const save = () => {
+      const newConfig: AtsConfig = {
+        outletCount: Math.max(1, Number((container.querySelector('#ats-outlets') as HTMLInputElement)?.value ?? 8)),
+        activeSource: (container.querySelector('#ats-activesource') as HTMLSelectElement)?.value as 'A' | 'B',
+        panelColor: (container.querySelector('#ats-panelcolor') as HTMLInputElement)?.value,
+        accentColor: (container.querySelector('#ats-accentcolor') as HTMLInputElement)?.value,
+        brandName: (container.querySelector('#ats-brandname') as HTMLInputElement)?.value || undefined,
+        modelName: (container.querySelector('#ats-modelname') as HTMLInputElement)?.value || undefined,
+      };
+      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig } });
+    };
+
+    container.querySelectorAll('select, input[type="number"], input[type="text"]').forEach(el => el.addEventListener('change', save));
+    container.querySelector('#ats-panelcolor')?.addEventListener('change', save);
+    container.querySelector('#ats-accentcolor')?.addEventListener('change', save);
   }
 
   /** Unified PDU configurator — used for both horizontal (rack-mount) and vertical (0U side-mount) PDUs. */

@@ -4,7 +4,7 @@
 // Physical SDKs). Vendor selection changes appearance only — accent color, LED tint, default
 // brand text, and light-vs-dark chassis tone — never port geometry or capability.
 
-import type { SwitchVendor, FirewallVendor } from '../core/types';
+import type { SwitchVendor, FirewallVendor, NacVendor } from '../core/types';
 
 export interface VendorSkin {
   tone: 'light' | 'dark';
@@ -42,10 +42,21 @@ const FIREWALL_PALETTE: Record<FirewallVendor, VendorSkin> = {
   'generic': { tone: 'light', accent: '#3a3f46', brandName: 'Rack Slicer' },
 };
 
+const NAC_PALETTE: Record<NacVendor, VendorSkin> = {
+  'generic': { tone: 'dark', accent: '#5c9fe0', brandName: 'Rack Slicer' },
+  'forescout': { tone: 'dark', accent: '#00b2a9', brandName: 'ForeScout' },
+  'cisco-ise': { tone: 'dark', accent: '#049fd9', brandName: 'Cisco ISE' },
+  'aruba-clearpass': { tone: 'dark', accent: '#ff8300', brandName: 'Aruba ClearPass' },
+};
+
 export function switchVendorSkin(vendor: SwitchVendor | undefined): VendorSkin {
   return SWITCH_PALETTE[vendor ?? 'generic'] ?? SWITCH_PALETTE.generic;
 }
 
 export function firewallVendorSkin(vendor: FirewallVendor | undefined): VendorSkin {
   return FIREWALL_PALETTE[vendor ?? 'generic'] ?? FIREWALL_PALETTE.generic;
+}
+
+export function nacVendorSkin(vendor: NacVendor | undefined): VendorSkin {
+  return NAC_PALETTE[vendor ?? 'generic'] ?? NAC_PALETTE.generic;
 }

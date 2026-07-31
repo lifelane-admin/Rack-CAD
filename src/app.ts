@@ -51,6 +51,11 @@ export class App {
   // Clipboard for copy/paste
   private clipboard: DeviceData | null = null;
 
+  // The on-disk file this project was last opened from or saved to (File System Access API —
+  // Chromium-based browsers only). Lets plain "Save" re-write the same file/location without
+  // re-prompting, once the user has picked a destination once via "Save As" or "Open".
+  private fileHandle: any = null;
+
   // Interaction state
   private spacePressed = false;
   private mouseWorldPos: Point = { x: 0, y: 0 };
@@ -158,6 +163,15 @@ export class App {
 
     // Setup export handlers
     initExportHandlers();
+
+    // The only thing that actually mutates state on a file load is importJSON()'s
+    // stateManager.setState(...), inside export.ts's own 'project:load' listener (registered
+    // just above by initExportHandlers()) — this one re-renders the canvas afterward.
+    // Registration order matters: this must be added AFTER initExportHandlers() so importJSON
+    // runs first and this renders the NEW state, not the stale pre-import one.
+    (eventBus as any).on('project:load', () => {
+      this.renderAll();
+    });
 
     // Initial render
     this.renderAll();
@@ -348,6 +362,7 @@ export class App {
       const current = stateManager.getState();
       const stakes = `${current.devices.length} device${current.devices.length === 1 ? '' : 's'} and ${current.cables.length} cable${current.cables.length === 1 ? '' : 's'}`;
       if (confirm(`Start a new project? This will clear ${stakes} from the canvas.\n\nIf you want to keep your current work, save it first.`)) {
+        this.fileHandle = null; // a fresh project isn't the file that was previously open
         stateManager.setState({
           racks: [
             { id: generateId(), name: 'Rack 1', units: 42, x: 300, y: 100, showPduLeft: true, showPduRight: true },
@@ -368,35 +383,24 @@ export class App {
       if (!confirm(`Load the demo cluster? This will replace ${stakes} currently on the canvas.\n\nIf you want to keep your current work, save it first.`)) {
         return;
       }
+      this.fileHandle = null; // the demo cluster isn't the file that was previously open
       stateManager.loadDemoProject(); // emits its own 'Loaded demo project!' notification
       this.renderAll();
     });
 
+    // Save re-writes the same file/location the project was last opened from or saved to
+    // (Chromium's File System Access API), so it behaves like a normal desktop app's Ctrl+S —
+    // only "Save As" (or the very first Save) prompts for a destination.
     (eventBus as any).on('file:save', () => {
-      eventBus.emit('export:json', undefined as any);
+      this.saveProject(false);
     });
 
     (eventBus as any).on('file:save-as', () => {
-      const stamp = new Date().toISOString().slice(0, 10);
-      const name = prompt('Save project as:', `rack-slicer-${stamp}.json`);
-      if (!name) return; // cancelled
-      const filename = name.toLowerCase().endsWith('.json') ? name : `${name}.json`;
-      try {
-        downloadFile(exportJSON(), filename, 'application/json');
-        stateManager.markSaved();
-        eventBus.emit('notification', { message: `Project saved as ${filename}`, type: 'success' });
-      } catch (err) {
-        eventBus.emit('notification', { message: `Save As failed: ${err}`, type: 'error' });
-      }
+      this.saveProject(true);
     });
 
-    (eventBus as any).on('file:open', (file: File) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        eventBus.emit('project:load', reader.result as string);
-        this.renderAll();
-      };
-      reader.readAsText(file);
+    (eventBus as any).on('file:open', () => {
+      this.openProject();
     });
 
     // Warn before leaving the tab with unsaved work — the only safety net now that there's no
@@ -429,6 +433,17 @@ export class App {
     (eventBus as any).on('view:toggle-snap', () => {
       const s = stateManager.getState();
       stateManager.setState({ snapEnabled: !s.snapEnabled });
+    });
+
+    (eventBus as any).on('cable:toggle-airdrop-destination', () => {
+      const s = stateManager.getState();
+      stateManager.setState({ airdropDestination: !s.airdropDestination });
+      eventBus.emit('notification', {
+        message: s.airdropDestination
+          ? 'Airdrop Destination off — cables must land on a real port again'
+          : 'Airdrop Destination on — draw a cable from a real source port, then click anywhere to finish it there',
+        type: 'info',
+      });
     });
 
     (eventBus as any).on('view:toggle-rulers', () => {
@@ -1123,8 +1138,31 @@ export class App {
             }
           }
 
-          // If no port snapped, snap the tip back to its original connected state to avoid leaving it floating
-          if (this.dragStartCablesState && this.dragStartDevicesState) {
+          // No port snapped — decide whether to cancel (revert) or commit the new floating
+          // position. Reverting protects a previously REAL connection from being stranded by an
+          // accidental drop in empty space. But an end that was ALREADY floating before this drag
+          // (e.g. repositioning an Airdrop-Destination cable to correct its spot) has no real
+          // connection to protect — reverting it just snaps every correction straight back to the
+          // original drop point, making it impossible to ever move. Commit instead.
+          const originalCable = this.dragStartCablesState?.find(c => c.id === cableId);
+          const wasAlreadyFloating = handleType === 'source'
+            ? !!originalCable?.floatingSource
+            : !originalCable?.destPortId;
+
+          if (wasAlreadyFloating) {
+            // The continuous mousemove updates above already wrote the live drag position into
+            // state — silently restore the pre-drag snapshot, then reapply that already-current
+            // state normally, so the whole drag collapses into a single undo/redo history frame
+            // (same pattern used for the real-port-reconnect and anchor-drag cases above).
+            const finalCables = stateManager.getState().cables;
+            if (this.dragStartCablesState) {
+              stateManager.setState({ cables: this.dragStartCablesState }, true);
+              stateManager.setState({ cables: finalCables });
+            }
+            this.dragStartCablesState = null;
+            this.dragStartDevicesState = null;
+            eventBus.emit('notification', { message: 'Cable end moved', type: 'success' });
+          } else if (this.dragStartCablesState && this.dragStartDevicesState) {
             stateManager.setState({ cables: this.dragStartCablesState, devices: this.dragStartDevicesState });
             this.dragStartCablesState = null;
             this.dragStartDevicesState = null;
@@ -1354,6 +1392,14 @@ export class App {
             this.handleCablePortClick(closestPortId);
             return;
           }
+        }
+
+        // No real port was found anywhere near this click. With Airdrop Destination on and a
+        // cable already in progress (started from a real source port the normal way), finish it
+        // right here instead of requiring a real destination port — any rack, any spot, no snap.
+        if (s.airdropDestination && s.cableInProgress) {
+          this.commitCableToFloatingDestination(this.canvas.screenToWorld({ x: e.clientX, y: e.clientY }));
+          return;
         }
       }
 
@@ -1613,6 +1659,60 @@ export class App {
       // Non-power cable — commit immediately
       commitCable();
     }
+  }
+
+  /**
+   * "Airdrop Destination" — finishes the in-progress cable at an arbitrary canvas point instead
+   * of a real destination port. The source end is untouched (always a real port, started the
+   * normal way via handleCablePortClick); only the destination is a floating point. Ethernet/data
+   * cables only — a power cable's far end is always a real PDU outlet or power port in reality.
+   */
+  private commitCableToFloatingDestination(point: Point) {
+    const s = stateManager.getState();
+    if (!s.cableInProgress) return;
+    if (s.cableInProgress.cableType === 'power') return;
+
+    const sourcePortId = s.cableInProgress.sourcePortId;
+    const sourcePort = stateManager.getPort(sourcePortId);
+    const isSrcOutlet = sourcePortId.startsWith('outlet-');
+    if (!sourcePort && !isSrcOutlet) return;
+
+    const color = s.selectedCableType === 'custom'
+      ? (s.selectedCableColor || '#78909c')
+      : (CABLE_COLORS[s.cableInProgress.cableType] || CABLE_COLORS.general);
+
+    const newCable: CableData = {
+      id: generateId(),
+      name: `Cable ${s.cables.length + 1}`,
+      type: s.cableInProgress.cableType,
+      color,
+      sourcePortId,
+      destPortId: null,
+      floatingDest: point,
+      bendPoints: [...s.cableInProgress.bendPoints],
+      thickness: RACK_CONSTANTS.CABLE_THICKNESS,
+      bendRadius: s.selectedCableBend !== undefined ? s.selectedCableBend : RACK_CONSTANTS.CABLE_BEND_RADIUS,
+      sourceTermination: s.selectedCableTermination || 'RJ45 Ethernet',
+      destTermination: s.selectedCableTermination || 'RJ45 Ethernet',
+      bundleId: null,
+      notes: '',
+      anchorPoints: [],
+      anchorsLocked: false,
+    };
+
+    if (sourcePort) { sourcePort.connected = true; sourcePort.cableId = newCable.id; }
+
+    resetPreviewDirection();
+    stateManager.setState({ cables: [...stateManager.getState().cables, newCable], cableInProgress: null });
+    eventBus.emit('cable:added', newCable);
+    eventBus.emit('notification', { message: 'Cable dropped at that spot — drag its end later to attach a real port', type: 'success' });
+
+    const interactionLayer = this.canvas.getLayer('interaction-layer');
+    if (interactionLayer) interactionLayer.innerHTML = '';
+    const svgCanvasEl = document.getElementById('canvas') as unknown as SVGSVGElement;
+    if (svgCanvasEl) svgCanvasEl.classList.remove('cable-laying');
+    this.clearSnapTargets();
+    this.renderAll();
   }
 
   /**
@@ -2010,7 +2110,7 @@ export class App {
       // Ctrl+S = Save
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
-        eventBus.emit('export:json', undefined as any);
+        eventBus.emit('file:save', undefined);
       }
 
       // Escape = Deselect / Cancel cable / Cancel rubber-band / Cancel export-area draw
@@ -2669,6 +2769,105 @@ export class App {
   }
 
   /**
+   * Save the project. Uses the File System Access API (Chromium-based browsers) so the user can
+   * pick — and, for a plain "Save", re-use — a real destination on disk, rather than always
+   * dropping a file into the browser's default Downloads folder. `forcePicker` is true for
+   * "Save As" (always prompt for a destination); a plain "Save" only prompts the first time,
+   * then re-writes whatever file was last opened/saved. Falls back to the original
+   * download-a-blob behavior on browsers without the API (Firefox, Safari).
+   */
+  private async saveProject(forcePicker: boolean): Promise<void> {
+    const json = exportJSON();
+    const hasPicker = typeof (window as any).showSaveFilePicker === 'function';
+
+    if (hasPicker && (forcePicker || !this.fileHandle)) {
+      try {
+        const handle = await (window as any).showSaveFilePicker({
+          suggestedName: this.fileHandle?.name ?? `rack-slicer-${new Date().toISOString().slice(0, 10)}.json`,
+          types: [{ description: 'Rack Slicer Project', accept: { 'application/json': ['.json'] } }],
+        });
+        this.fileHandle = handle;
+        await this.writeToFileHandle(handle, json);
+        stateManager.markSaved();
+        eventBus.emit('notification', { message: `Project saved as ${handle.name}`, type: 'success' });
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return; // user cancelled the picker
+        eventBus.emit('notification', { message: `Save failed: ${err}`, type: 'error' });
+      }
+      return;
+    }
+
+    if (hasPicker && this.fileHandle) {
+      try {
+        await this.writeToFileHandle(this.fileHandle, json);
+        stateManager.markSaved();
+        eventBus.emit('notification', { message: `Project saved — ${this.fileHandle.name}`, type: 'success' });
+      } catch (err) {
+        eventBus.emit('notification', { message: `Save failed: ${err}`, type: 'error' });
+      }
+      return;
+    }
+
+    // Fallback: no File System Access API — same download-link behavior as before.
+    const filename = `rack-slicer-${new Date().toISOString().slice(0, 10)}.json`;
+    try {
+      downloadFile(json, filename, 'application/json');
+      stateManager.markSaved();
+      eventBus.emit('notification', { message: `Project saved — ${filename} downloaded`, type: 'success' });
+    } catch (err) {
+      eventBus.emit('notification', { message: `Save failed: ${err}`, type: 'error' });
+    }
+  }
+
+  private async writeToFileHandle(handle: any, content: string): Promise<void> {
+    const writable = await handle.createWritable();
+    await writable.write(content);
+    await writable.close();
+  }
+
+  /**
+   * Open a project. Uses the File System Access API where available so the picked file's handle
+   * can be remembered for a subsequent plain "Save" to write straight back to it; falls back to a
+   * hidden <input type="file"> (Firefox, Safari, or a non-secure context) where the browser's own
+   * native file-picker still lets the user choose the source, just without a remembered handle.
+   */
+  private async openProject(): Promise<void> {
+    const hasPicker = typeof (window as any).showOpenFilePicker === 'function';
+
+    if (hasPicker) {
+      try {
+        const [handle] = await (window as any).showOpenFilePicker({
+          types: [{ description: 'Rack Slicer Project', accept: { 'application/json': ['.json'] } }],
+          multiple: false,
+        });
+        const file = await handle.getFile();
+        const text = await file.text();
+        this.fileHandle = handle;
+        eventBus.emit('project:load', text);
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return; // user cancelled the picker
+        eventBus.emit('notification', { message: `Open failed: ${err}`, type: 'error' });
+      }
+      return;
+    }
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e: any) => {
+      const file: File | undefined = e.target.files?.[0];
+      if (!file) return;
+      this.fileHandle = null; // no handle to remember via this path — next Save prompts once
+      const reader = new FileReader();
+      reader.onload = () => {
+        eventBus.emit('project:load', reader.result as string);
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+
+  /**
    * Render all elements on the canvas.
    */
   private renderAll() {
@@ -2837,7 +3036,7 @@ export class App {
       'power': 'crosshair',
       'zoom-in': 'zoom-in',
       'zoom-out': 'zoom-out',
-      'export-area': 'crosshair'
+      'export-area': 'crosshair',
     };
     viewport.style.cursor = cursorMap[mode] || 'default';
   }

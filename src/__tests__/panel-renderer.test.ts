@@ -3,6 +3,8 @@ import { renderFrontPanel } from '../renderers/panel-renderer';
 import { getTemplate } from '../library/device-catalog';
 import { switchPorts } from '../renderers/switch-renderer';
 import { firewallPorts } from '../renderers/firewall-renderer';
+import { nacPorts } from '../renderers/nac-renderer';
+import { atsPorts } from '../renderers/ats-renderer';
 
 describe('renderFrontPanel', () => {
   const W = 350;
@@ -34,7 +36,7 @@ describe('renderFrontPanel', () => {
   });
 
   it('returns SVGGElement for every category', () => {
-    const categories = ['server','switch','router','firewall','storage','patch-panel','pdu','ups','blank-panel','cable-manager','cooling','console'] as const;
+    const categories = ['server','switch','router','firewall','nac','storage','patch-panel','pdu','ats','ups','blank-panel','cable-manager','cooling','console'] as const;
     for (const cat of categories) {
       const result = renderFrontPanel(cat, null, null, W, 30);
       expect(result.tagName.toLowerCase()).toBe('g');
@@ -135,6 +137,7 @@ describe('renderFrontPanel', () => {
     const groupPort = result.querySelector('[aria-label*="VLAN10"]');
     expect(groupPort).toBeTruthy();
   });
+
 
   it('draws the live device port count, not the stale catalog template count', () => {
     // rs-sw-4p's template is frozen at 4 RJ45 + 2 SFP+ — simulate a config-driven device that
@@ -322,5 +325,83 @@ describe('renderFrontPanel', () => {
     const columnPitch = xOf(rj45Ports[2]) - xOf(rj45Ports[0]);
     const jumpAt13 = xOf(rj45Ports[24 - 12]) - xOf(rj45Ports[24 - 12 - 2]);
     expect(jumpAt13).toBeGreaterThan(columnPitch);
+  });
+
+  it('renders nac-enterprise with a deviceConfig without throwing', () => {
+    const t = getTemplate('nac-enterprise')!;
+    const deviceData = { id: 'd1', templateId: t.id, rackId: 'r1', startUnit: 1, name: '', hostname: '', managementIp: '', serialNumber: '', description: '', ports: t.ports.map(p => ({ ...p, deviceId: 'd1', connected: false, cableId: null })), deviceConfig: t.deviceConfig } as any;
+    const result = renderFrontPanel('nac', t, deviceData, W, 30, new Set(), new Set());
+    expect(result.tagName.toLowerCase()).toBe('g');
+  });
+
+  it('nac: MGMT/Console are separate real ports matching the RJ45 jack aspect ratio', () => {
+    const t = getTemplate('nac-enterprise')!;
+    const cfg = { vendor: 'generic', rj45Count: 6, mgmtPort: true, consolePort: true };
+    const livePorts = nacPorts(cfg as any, 'd1-').map(p => ({ ...p, deviceId: 'd1', connected: false, cableId: null }));
+    const deviceData = { id: 'd1', templateId: t.id, rackId: 'r1', startUnit: 1, name: '', hostname: '', managementIp: '', serialNumber: '', description: '', ports: livePorts, deviceConfig: cfg } as any;
+    const result = renderFrontPanel('nac', t, deviceData, W, 30, new Set(), new Set());
+
+    const rj45Ports = Array.from(result.querySelectorAll('[aria-label^="RJ45 port"]'));
+    expect(rj45Ports.length).toBe(6);
+    const mgmtEl = result.querySelector('[aria-label="MGMT port"]');
+    const consoleEl = result.querySelector('[aria-label="Console port"]');
+    expect(mgmtEl).toBeTruthy();
+    expect(consoleEl).toBeTruthy();
+
+    const rjUse = rj45Ports[0].querySelector('use')!;
+    for (const portEl of [mgmtEl, consoleEl]) {
+      const use = portEl!.querySelector('use')!;
+      expect(use.getAttribute('width')).toBe(rjUse.getAttribute('width'));
+      expect(use.getAttribute('height')).toBe(rjUse.getAttribute('height'));
+    }
+  });
+
+  it('nac: draws the live device port count, not the stale catalog template count', () => {
+    const t = getTemplate('nac-enterprise')!;
+    const liveCfg = { vendor: 'generic', rj45Count: 12, mgmtPort: true, consolePort: true };
+    const livePorts = nacPorts(liveCfg as any, 'd1-').map(p => ({ ...p, deviceId: 'd1', connected: false, cableId: null }));
+    const deviceData = { id: 'd1', templateId: t.id, rackId: 'r1', startUnit: 1, name: '', hostname: '', managementIp: '', serialNumber: '', description: '', ports: livePorts, deviceConfig: liveCfg } as any;
+    const result = renderFrontPanel('nac', t, deviceData, W, 30, new Set(), new Set());
+    const rj45Ports = Array.from(result.querySelectorAll('[aria-label^="RJ45 port"]'));
+    expect(rj45Ports.length).toBe(12);
+  });
+
+  it('renders ats-enterprise with a deviceConfig without throwing', () => {
+    const t = getTemplate('ats-enterprise')!;
+    const deviceData = { id: 'd1', templateId: t.id, rackId: 'r1', startUnit: 1, name: '', hostname: '', managementIp: '', serialNumber: '', description: '', ports: t.ports.map(p => ({ ...p, deviceId: 'd1', connected: false, cableId: null })), deviceConfig: t.deviceConfig } as any;
+    const result = renderFrontPanel('ats', t, deviceData, W, 30, new Set(), new Set());
+    expect(result.tagName.toLowerCase()).toBe('g');
+  });
+
+  it('ats: shows both SOURCE A and SOURCE B inlet labels and matches the configured outlet count', () => {
+    const t = getTemplate('ats-enterprise')!;
+    const cfg = { outletCount: 6, activeSource: 'A' };
+    const livePorts = atsPorts(cfg as any, 'd1-').map(p => ({ ...p, deviceId: 'd1', connected: false, cableId: null }));
+    const deviceData = { id: 'd1', templateId: t.id, rackId: 'r1', startUnit: 1, name: '', hostname: '', managementIp: '', serialNumber: '', description: '', ports: livePorts, deviceConfig: cfg } as any;
+    const result = renderFrontPanel('ats', t, deviceData, W, 30, new Set(), new Set());
+
+    const texts = Array.from(result.querySelectorAll('text')).map(el => el.textContent);
+    expect(texts).toContain('SOURCE A');
+    expect(texts).toContain('SOURCE B');
+
+    const outlets = Array.from(result.querySelectorAll('[aria-label^="Outlet"]'));
+    expect(outlets.length).toBe(6);
+  });
+
+  it('ats: switching activeSource changes which inlet is highlighted, not the outlet count', () => {
+    const t = getTemplate('ats-enterprise')!;
+    const buildDevice = (activeSource: 'A' | 'B') => {
+      const cfg = { outletCount: 4, activeSource };
+      const ports = atsPorts(cfg as any, 'd1-').map(p => ({ ...p, deviceId: 'd1', connected: false, cableId: null }));
+      return { id: 'd1', templateId: t.id, rackId: 'r1', startUnit: 1, name: '', hostname: '', managementIp: '', serialNumber: '', description: '', ports, deviceConfig: cfg } as any;
+    };
+    const onA = renderFrontPanel('ats', t, buildDevice('A'), W, 30, new Set(), new Set());
+    const onB = renderFrontPanel('ats', t, buildDevice('B'), W, 30, new Set(), new Set());
+
+    const sourceALabel = (panel: SVGGElement) => Array.from(panel.querySelectorAll('text')).find(el => el.textContent === 'SOURCE A');
+    expect(sourceALabel(onA)?.getAttribute('fill')).not.toBe(sourceALabel(onB)?.getAttribute('fill'));
+
+    expect(onA.querySelectorAll('[aria-label^="Outlet"]').length).toBe(4);
+    expect(onB.querySelectorAll('[aria-label^="Outlet"]').length).toBe(4);
   });
 });

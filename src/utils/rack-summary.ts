@@ -12,9 +12,11 @@ export const CATEGORY_LABELS: Record<DeviceCategory, string> = {
   switch: 'Switches',
   router: 'Routers',
   firewall: 'Firewalls',
+  nac: 'NAC Appliances',
   storage: 'Storage',
   'patch-panel': 'Patch Panels',
   pdu: 'PDUs',
+  ats: 'ATS Switches',
   ups: 'UPS Units',
   'blank-panel': 'Blank Panels',
   'cable-manager': 'Cable Managers',
@@ -25,7 +27,7 @@ export const CATEGORY_LABELS: Record<DeviceCategory, string> = {
 // Devices are grouped in a fixed, sensible order (servers/network gear first) rather than
 // object-key iteration order, so the list doesn't jump around as devices are added/removed.
 const CATEGORY_ORDER: DeviceCategory[] = [
-  'server', 'switch', 'router', 'firewall', 'storage', 'pdu', 'ups', 'console', 'patch-panel', 'cable-manager', 'cooling', 'blank-panel',
+  'server', 'switch', 'router', 'firewall', 'nac', 'storage', 'pdu', 'ats', 'ups', 'console', 'patch-panel', 'cable-manager', 'cooling', 'blank-panel',
 ];
 
 export const SEVERITY_COLORS: Record<'ok' | 'warning' | 'critical' | 'none', string> = {

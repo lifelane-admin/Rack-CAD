@@ -4,7 +4,7 @@ import { getTemplate, deviceCatalog } from '../library/device-catalog';
 import { renderFrontPanel } from '../renderers/panel-renderer';
 import { PropertiesPanel } from '../components/properties';
 import { eventBus } from '../core/event-bus';
-import type { PortData, SwitchConfig, FirewallConfig, DeviceData } from '../core/types';
+import type { PortData, SwitchConfig, FirewallConfig, NacConfig, AtsConfig, DeviceData } from '../core/types';
 
 function basePort(id: string, overrides: Partial<PortData> = {}): PortData {
   return {
@@ -95,6 +95,30 @@ describe('injectConfigurablePorts', () => {
     const result = injectConfigurablePorts('dev1', switchTemplate, { rj45Count: 4 }, [earPort]);
     expect(result.some(p => p.id === 'dev1-ear-1')).toBe(true);
   });
+
+  const nacTemplate = getTemplate('nac-enterprise')!;
+  const atsTemplate = getTemplate('ats-enterprise')!;
+
+  it('regenerates NAC ports to match rj45Count', () => {
+    const cfg: NacConfig = { rj45Count: 8, mgmtPort: true, consolePort: true };
+    const result = injectConfigurablePorts('dev1', nacTemplate, cfg, []);
+    expect(result.filter(p => p.type === 'rj45').length).toBe(8);
+    expect(result.filter(p => p.type === 'management').length).toBe(1);
+    expect(result.filter(p => p.type === 'console').length).toBe(1);
+  });
+
+  it('omits NAC MGMT/Console when toggled off', () => {
+    const cfg: NacConfig = { rj45Count: 4, mgmtPort: false, consolePort: false };
+    const result = injectConfigurablePorts('dev1', nacTemplate, cfg, []);
+    expect(result.length).toBe(4);
+  });
+
+  it('regenerates ATS ports to match outletCount, always keeping 2 power inputs', () => {
+    const cfg: AtsConfig = { outletCount: 10 };
+    const result = injectConfigurablePorts('dev1', atsTemplate, cfg, []);
+    expect(result.filter(p => p.group === 'INPUT').length).toBe(2);
+    expect(result.filter(p => p.group === 'OUTPUT').length).toBe(10);
+  });
 });
 
 /**
@@ -164,6 +188,33 @@ describe('properties-panel default derivation is a true no-op across the whole c
       sfp28Count: seedPorts.filter(p => p.type === 'sfp28').length,
       qsfpCount: seedPorts.filter(p => p.type === 'qsfp28').length,
     };
+    const after = injectConfigurablePorts('dev1', t, cfg, seedPorts);
+    expect(after.length).toBe(seedPorts.length);
+  });
+
+  const nacTemplates = deviceCatalog.filter(t => t.category === 'nac');
+  it.each(nacTemplates.map(t => t.id))('nac %s: default-derived config reproduces its own port composition', (id) => {
+    const t = getTemplate(id)!;
+    const seedPorts = t.ports.map(p => ({ ...p, deviceId: 'dev1', connected: false, cableId: null }));
+    // Mirrors renderNacProperties' default derivation.
+    const cfg: NacConfig = {
+      rj45Count: seedPorts.filter(p => p.type === 'rj45').length,
+      mgmtPort: seedPorts.some(p => p.type === 'management'),
+      consolePort: seedPorts.some(p => p.type === 'console'),
+    };
+    const after = injectConfigurablePorts('dev1', t, cfg, seedPorts);
+    expect(after.length).toBe(seedPorts.length);
+
+    const deviceData = { id: 'dev1', templateId: t.id, rackId: 'r1', startUnit: 1, name: '', hostname: '', managementIp: '', serialNumber: '', description: '', ports: after, deviceConfig: cfg as unknown as Record<string, unknown> } as DeviceData;
+    const panel = renderFrontPanel('nac', t, deviceData, 350, 30, new Set(), new Set());
+    expect(panel.querySelectorAll('[aria-label^="RJ45 port"]').length).toBe(cfg.rj45Count);
+  });
+
+  const atsTemplates = deviceCatalog.filter(t => t.category === 'ats');
+  it.each(atsTemplates.map(t => t.id))('ats %s: default-derived config reproduces its own port composition', (id) => {
+    const t = getTemplate(id)!;
+    const seedPorts = t.ports.map(p => ({ ...p, deviceId: 'dev1', connected: false, cableId: null }));
+    const cfg: AtsConfig = { outletCount: seedPorts.filter(p => p.group === 'OUTPUT').length };
     const after = injectConfigurablePorts('dev1', t, cfg, seedPorts);
     expect(after.length).toBe(seedPorts.length);
   });
@@ -327,6 +378,67 @@ describe('end-to-end: firewall Properties panel — WAN count default + Port Gro
 
     expect(capturedConfig.portGroups.map((g: any) => g.name)).toEqual(['LAN-GRP2']);
     expect(container.querySelectorAll('#fw-portgroup-rows > div').length).toBe(1);
+
+    eventBus.off('device:update' as any, handler);
+  });
+});
+
+describe('end-to-end: NAC and ATS Properties panels regenerate live ports through the real stateManager', () => {
+  it('changing RJ45 Count on the real NAC Properties panel regenerates the device\'s actual ports', () => {
+    const template = getTemplate('nac-enterprise')!;
+    const deviceId = 'e2e-nac';
+    const cfg: NacConfig = { vendor: 'generic', rj45Count: 4, mgmtPort: true, consolePort: true };
+    const seedPorts = injectConfigurablePorts(deviceId, template, cfg, []);
+    stateManager.setState({ devices: [{ id: deviceId, templateId: template.id, rackId: 'r1', startUnit: 1, name: '', hostname: '', managementIp: '', serialNumber: '', description: '', ports: seedPorts, deviceConfig: cfg } as DeviceData] });
+
+    const container = document.createElement('div');
+    const panel = new PropertiesPanel(container);
+    (panel as any).renderNacProperties(stateManager.getDevice(deviceId), template, container);
+
+    expect(Number((container.querySelector('#nac-rj45') as HTMLInputElement).value)).toBe(4);
+
+    const handler = (payload: any) => {
+      if (payload.id !== deviceId) return;
+      stateManager.setState({ devices: [{ ...stateManager.getDevice(deviceId)!, deviceConfig: payload.data.deviceConfig }] });
+    };
+    eventBus.on('device:update' as any, handler);
+
+    const rj45Input = container.querySelector('#nac-rj45') as HTMLInputElement;
+    rj45Input.value = '10';
+    rj45Input.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const updated = stateManager.getDevice(deviceId)!;
+    expect(updated.ports.filter(p => p.type === 'rj45').length).toBe(10);
+
+    eventBus.off('device:update' as any, handler);
+  });
+
+  it('changing Outlet Count on the real ATS Properties panel regenerates the device\'s actual ports', () => {
+    const template = getTemplate('ats-enterprise')!;
+    const deviceId = 'e2e-ats';
+    const cfg: AtsConfig = { outletCount: 8, activeSource: 'A' };
+    const seedPorts = injectConfigurablePorts(deviceId, template, cfg, []);
+    stateManager.setState({ devices: [{ id: deviceId, templateId: template.id, rackId: 'r1', startUnit: 1, name: '', hostname: '', managementIp: '', serialNumber: '', description: '', ports: seedPorts, deviceConfig: cfg } as DeviceData] });
+
+    const container = document.createElement('div');
+    const panel = new PropertiesPanel(container);
+    (panel as any).renderAtsProperties(stateManager.getDevice(deviceId), template, container);
+
+    expect(Number((container.querySelector('#ats-outlets') as HTMLInputElement).value)).toBe(8);
+
+    const handler = (payload: any) => {
+      if (payload.id !== deviceId) return;
+      stateManager.setState({ devices: [{ ...stateManager.getDevice(deviceId)!, deviceConfig: payload.data.deviceConfig }] });
+    };
+    eventBus.on('device:update' as any, handler);
+
+    const outletsInput = container.querySelector('#ats-outlets') as HTMLInputElement;
+    outletsInput.value = '12';
+    outletsInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const updated = stateManager.getDevice(deviceId)!;
+    expect(updated.ports.filter(p => p.group === 'OUTPUT').length).toBe(12);
+    expect(updated.ports.filter(p => p.group === 'INPUT').length).toBe(2);
 
     eventBus.off('device:update' as any, handler);
   });

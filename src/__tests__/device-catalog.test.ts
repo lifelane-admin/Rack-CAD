@@ -51,7 +51,7 @@ describe('Standard Library catalog', () => {
   });
 
   it('all entries have valid category', () => {
-    const validCategories = ['server','switch','router','firewall','storage','patch-panel','pdu','ups','blank-panel','cable-manager','cooling','console'];
+    const validCategories = ['server','switch','router','firewall','nac','storage','patch-panel','pdu','ats','ups','blank-panel','cable-manager','cooling','console'];
     for (const item of deviceCatalog) {
       expect(validCategories).toContain(item.category);
     }
@@ -80,5 +80,38 @@ describe('Standard Library catalog', () => {
     const t = getTemplate('fw-fortigate-400f');
     expect(t).toBeDefined();
     expect(t!.ports.length).toBe(34);
+  });
+
+  // NTT DC Rack reference devices — added to replicate a real customer rack's device list.
+  // (sw-npci/sw-dell/sw-aruba-6200f/router-npci/router-iftas were removed from the catalog.)
+  describe('NTT DC Rack reference devices', () => {
+    it('fw-fortinet-preset uses the fortinet vendor skin', () => {
+      const t = getTemplate('fw-fortinet-preset');
+      expect(t).toBeDefined();
+      expect(t!.category).toBe('firewall');
+      expect((t!.deviceConfig as any).vendor).toBe('fortinet');
+    });
+
+    it('nac-enterprise is a configurable NAC appliance seeded with matching ports', () => {
+      const t = getTemplate('nac-enterprise');
+      expect(t).toBeDefined();
+      expect(t!.category).toBe('nac');
+      const cfg = t!.deviceConfig as any;
+      const rj45 = t!.ports.filter(p => p.type === 'rj45');
+      expect(rj45.length).toBe(cfg.rj45Count);
+      expect(t!.ports.some(p => p.type === 'management')).toBe(true);
+      expect(t!.ports.some(p => p.type === 'console')).toBe(true);
+    });
+
+    it('ats-enterprise is a configurable ATS with dual power inputs and matching outlet count', () => {
+      const t = getTemplate('ats-enterprise');
+      expect(t).toBeDefined();
+      expect(t!.category).toBe('ats');
+      const cfg = t!.deviceConfig as any;
+      const inputs = t!.ports.filter(p => p.group === 'INPUT');
+      const outputs = t!.ports.filter(p => p.group === 'OUTPUT');
+      expect(inputs.length).toBe(2);
+      expect(outputs.length).toBe(cfg.outletCount);
+    });
   });
 });

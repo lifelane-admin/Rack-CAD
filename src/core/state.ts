@@ -1,4 +1,4 @@
-import { AppState, RackData, DeviceData, PortData, CableData, CableType, SelectableItem, Transform, RACK_CONSTANTS, CableBundle, ValidationAlert, PduConfig, KvmConfig, SwitchConfig, FirewallConfig, DeviceTemplate } from './types';
+import { AppState, RackData, DeviceData, PortData, CableData, CableType, SelectableItem, Transform, RACK_CONSTANTS, CableBundle, ValidationAlert, PduConfig, KvmConfig, SwitchConfig, FirewallConfig, NacConfig, AtsConfig, DeviceTemplate } from './types';
 import { eventBus } from './event-bus';
 import { getTemplate } from '../library/device-catalog';
 import { runValidationAlerts } from './validation';
@@ -7,6 +7,8 @@ import { computeConfiguredPduLayout, computeGenericPduLayout, computeSidePduOutl
 import { networkingPorts } from '../renderers/networking-renderer';
 import { switchPorts } from '../renderers/switch-renderer';
 import { firewallPorts } from '../renderers/firewall-renderer';
+import { nacPorts } from '../renderers/nac-renderer';
+import { atsPorts } from '../renderers/ats-renderer';
 
 function asPduConfig(config: unknown): PduConfig {
   return (config && typeof config === 'object') ? (config as PduConfig) : {};
@@ -38,6 +40,7 @@ class StateManager {
       validationAlerts: [],
       selection: [],
       cableInProgress: null,
+      airdropDestination: false,
       sidebarCollapsed: false,
       propertiesCollapsed: false,
       showLegends: true,
@@ -526,7 +529,8 @@ export function injectNetworkLocalPorts(deviceId: string, template: DeviceTempla
  * existed), which keeps their appearance and ports byte-identical to before.
  */
 export function injectConfigurablePorts(deviceId: string, template: DeviceTemplate, deviceConfig: unknown, basePorts: PortData[]): PortData[] {
-  if (template.category !== 'switch' && template.category !== 'firewall') return basePorts;
+  const CONFIGURABLE_CATEGORIES = new Set(['switch', 'firewall', 'nac', 'ats']);
+  if (!CONFIGURABLE_CATEGORIES.has(template.category)) return basePorts;
   if (!deviceConfig || typeof deviceConfig !== 'object') return basePorts;
 
   const earPorts = basePorts.filter(p => p.id.includes('-ear-'));
@@ -547,8 +551,12 @@ export function injectConfigurablePorts(deviceId: string, template: DeviceTempla
     const consolePort = cfg.consolePort !== false;
     const usbPort = cfg.usbPort !== false;
     fresh = switchPorts(rj45, sfpPlus, rows, `${deviceId}-`, { sfp, qsfp, stack, mgmt, consolePort, usbPort });
-  } else {
+  } else if (template.category === 'firewall') {
     fresh = firewallPorts(deviceConfig as FirewallConfig, `${deviceId}-`);
+  } else if (template.category === 'nac') {
+    fresh = nacPorts(deviceConfig as NacConfig, `${deviceId}-`);
+  } else {
+    fresh = atsPorts(deviceConfig as AtsConfig, `${deviceId}-`);
   }
 
   const merged: PortData[] = fresh.map(p => {

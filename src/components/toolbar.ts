@@ -32,11 +32,11 @@ export class Toolbar {
         title: 'New Workspace', 
         action: () => EventBus.emit('file:new', undefined) 
       },
-      { 
-        id: 'btn-open', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>', 
-        title: 'Open File', 
-        action: () => this.handleOpen() 
+      {
+        id: 'btn-open',
+        icon: '<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>',
+        title: 'Open File',
+        action: () => EventBus.emit('file:open', undefined)
       },
       {
         id: 'btn-save',
@@ -382,22 +382,6 @@ export class Toolbar {
 
   private setTool(mode: ToolMode) {
     EventBus.emit('tool:changed', mode);
-  }
-
-  private handleOpen() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (e: any) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (evt: any) => {
-        EventBus.emit('project:load' as any, evt.target.result);
-      };
-      reader.readAsText(file);
-    };
-    input.click();
   }
 
   private createAiToggle(): HTMLElement {

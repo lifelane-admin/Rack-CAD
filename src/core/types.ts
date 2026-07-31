@@ -80,6 +80,7 @@ export type SwitchVendor = 'cisco-catalyst' | 'cisco-nexus' | 'aruba-cx' | 'juni
 export type FirewallVendor = 'fortinet' | 'cisco' | 'paloalto' | 'juniper' | 'sophos' | 'checkpoint' | 'sonicwall' | 'aruba' | 'dell' | 'huawei' | 'generic';
 export type LedTheme = 'green' | 'blue' | 'amber' | 'white';
 export type SwitchLayer = 'L1' | 'L2' | 'L3';
+export type NacVendor = 'generic' | 'forescout' | 'cisco-ise' | 'aruba-clearpass';
 
 /** A named, coloured port range — a purely visual grouping (like a VLAN's port membership,
  *  without any actual VLAN/switching logic, which is out of this app's physical-only scope).
@@ -167,6 +168,37 @@ export interface FirewallConfig {
   portGroups?: SwitchPortGroup[];
 }
 
+/** Network Access Control appliance — physical-appearance-only configurator state, same shape
+ *  family as SwitchConfig/FirewallConfig but deliberately small: NAC boxes are simple fixed-role
+ *  1U appliances (a handful of RJ45 uplinks + MGMT + console), not parametric switching fabric. */
+export interface NacConfig {
+  vendor?: NacVendor;
+  rj45Count?: number;
+  mgmtPort?: boolean;
+  consolePort?: boolean;
+  usbPort?: boolean;
+  rackEars?: boolean;
+  assetLabel?: boolean;
+  panelColor?: string;
+  accentColor?: string;
+  ledTheme?: LedTheme;
+  brandName?: string;
+  modelName?: string;
+}
+
+/** Automatic Transfer Switch — dual power-input inlets (labeled SOURCE A / SOURCE B) feeding a
+ *  row of output outlets, with a transfer-status indicator showing which source is currently
+ *  active. Visually distinct from a plain PDU (single input) even though both are power gear. */
+export interface AtsConfig {
+  outletCount?: number;
+  outletType?: SocketType;
+  activeSource?: 'A' | 'B';
+  panelColor?: string;
+  accentColor?: string;
+  brandName?: string;
+  modelName?: string;
+}
+
 export interface PortData {
   id: string;
   deviceId: string;
@@ -184,7 +216,7 @@ export interface PortData {
 }
 
 // === Devices ===
-export type DeviceCategory = 'server' | 'switch' | 'router' | 'firewall' | 'storage' | 'patch-panel' | 'pdu' | 'ups' | 'blank-panel' | 'cable-manager' | 'cooling' | 'console';
+export type DeviceCategory = 'server' | 'switch' | 'router' | 'firewall' | 'storage' | 'patch-panel' | 'pdu' | 'ups' | 'blank-panel' | 'cable-manager' | 'cooling' | 'console' | 'nac' | 'ats';
 
 export interface DeviceTemplate {
   id: string;
@@ -348,6 +380,11 @@ export interface AppState {
     bendPoints: Point[];
     cableType: CableType;
   } | null;
+  /** "Airdrop Destination" — while drawing a (non-power) cable from a real source port, lets a
+   *  click anywhere on the canvas (any rack, any spot, no snapping to a real port) finish the
+   *  cable at that exact point instead of requiring a real destination port. Source ports are
+   *  never affected — only where a cable is allowed to land. */
+  airdropDestination: boolean;
   sidebarCollapsed: boolean;
   propertiesCollapsed: boolean;
   showLegends: boolean;
@@ -420,7 +457,7 @@ export interface AppEvents {
   'file:new': void;
   'file:save': void;
   'file:save-as': void;
-  'file:open': File;
+  'file:open': void;
   'file:demo': void;
   'view:zoom-in': void;
   'view:zoom-out': void;
@@ -432,6 +469,7 @@ export interface AppEvents {
   'view:toggle-rulers': void;
   'view:toggle-theme': void;
   'view:toggle-legends': void;
+  'cable:toggle-airdrop-destination': void;
   'notification': { message: string; type: 'info' | 'success' | 'warning' | 'error' };
   'ai:mode-changed': boolean;
   'ai:provider-changed': AIProviderName;

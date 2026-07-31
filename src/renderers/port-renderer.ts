@@ -17,9 +17,9 @@ export function renderPorts(ports: PortData[], deviceGroup: SVGGElement): void {
 
     if (isEarPort) {
       shouldRender = !isRearView;
-    } else if (category === 'server' || category === 'storage' || category === 'ups' || category === 'pdu') {
+    } else if (category === 'server' || category === 'storage' || category === 'ups' || category === 'pdu' || category === 'ats') {
       shouldRender = isRearView;
-    } else if (category === 'switch' || category === 'patch-panel' || category === 'router' || category === 'firewall' || category === 'console') {
+    } else if (category === 'switch' || category === 'patch-panel' || category === 'router' || category === 'firewall' || category === 'console' || category === 'nac') {
       if (port.type === 'power') {
         shouldRender = isRearView;
       } else {
@@ -47,10 +47,15 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
 
   // Switch/router/firewall/console/patch-panel ports: the panel renderer already draws
   // full port graphics for these categories; overlays must be transparent hit-targets only.
+  // That's only true when the coded panel renderer actually ran — a device showing a custom
+  // uploaded front-panel image instead (device-renderer.ts's hasCustomImage branch) skips the
+  // panel renderer entirely, so any port on it (e.g. one placed with the Airdrop Port tool)
+  // needs a REAL visible jack drawn here, not just an invisible hit-target over nothing.
   const _dev = stateManager.getDevice(port.deviceId);
   const _tpl = _dev ? getTemplate(_dev.templateId) : null;
   const _cat = _tpl?.category;
-  const hasCustomPanel = _cat === 'switch' || _cat === 'router' || _cat === 'firewall' || _cat === 'console' || _cat === 'patch-panel';
+  const _hasCustomImage = !!(_dev?.frontPanelImage || _tpl?.frontPanelImage);
+  const hasCustomPanel = !_hasCustomImage && (_cat === 'switch' || _cat === 'router' || _cat === 'firewall' || _cat === 'console' || _cat === 'patch-panel' || _cat === 'nac' || _cat === 'ats');
 
   let w = 12;
   let h = 10;

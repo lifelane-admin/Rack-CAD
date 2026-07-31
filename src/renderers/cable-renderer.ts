@@ -189,6 +189,20 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
 
     const port    = portId ? stateManager.getPort(portId) : null;
     if (!port) {
+      // Floating endpoint (Airdrop Destination — no real port to derive a device-relative
+      // orientation from). The old hardcoded 'right' fallback made the connector always face
+      // right regardless of where the user actually dropped it, visually displacing it from the
+      // exact drop point whenever the real direction wasn't rightward — derive it from the
+      // actual route direction instead, same dominant-axis rule the device-aware branches below
+      // already use for their own dynamic case.
+      if (points.length >= 2) {
+        const start = end === 'source' ? points[0] : points[points.length - 1];
+        const target = end === 'source' ? points[1] : points[points.length - 2];
+        const dx = target.x - start.x;
+        const dy = target.y - start.y;
+        if (Math.abs(dx) > Math.abs(dy)) return dx >= 0 ? 'right' : 'left';
+        return dy >= 0 ? 'up' : 'down';
+      }
       return cable.sidePreference || 'right';
     }
 
@@ -265,16 +279,19 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   // Source connector
   group.appendChild(createConnector(sourcePos, cable.color, srcOrient, isFiber, isPower, isSFP, srcCompact, cable.plugType));
 
-  // Dest connector / draggable handle
-  if (cable.destPortId) {
-    group.appendChild(createConnector(destPos, cable.color, destOrient, isFiber, isPower, isSFP, dstCompact, cable.plugType));
-  }
+  // Dest connector — drawn regardless of whether the destination is a real port or a floating
+  // point (Airdrop Destination): the endpoint should always read as the actual connector shape
+  // for this cable's type (Ethernet jack / power plug / fiber / SFP), never a bare dot.
+  group.appendChild(createConnector(destPos, cable.color, destOrient, isFiber, isPower, isSFP, dstCompact, cable.plugType));
 
-  // Render tip drag handles (both Source & Destination tip handles) when selected or floating
-  if (isSelected || cable.floatingSource) {
+  // Render tip drag handles only when the cable is selected — a finished Airdrop-Destination
+  // cable (destPortId null, floatingDest set permanently) previously kept the glowing handle dot
+  // showing forever, since `!cable.destPortId` was always true for it; now the destination
+  // connector alone represents a "finished" floating cable, and the handle only reappears (to
+  // drag the end onto a real port later) once the cable is actually selected — same as a cable
+  // with a real destination port already behaved.
+  if (isSelected) {
     group.appendChild(createDragHandle(sourcePos, cable.id, 'source', cable.color));
-  }
-  if (isSelected || !cable.destPortId || cable.floatingDest) {
     group.appendChild(createDragHandle(destPos, cable.id, 'dest', cable.color));
   }
 

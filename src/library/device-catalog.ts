@@ -1,7 +1,9 @@
-import { DeviceTemplate, DeviceCategory, SwitchConfig, FirewallConfig } from '../core/types';
+import { DeviceTemplate, DeviceCategory, SwitchConfig, FirewallConfig, NacConfig, AtsConfig } from '../core/types';
 import { switchPorts } from '../renderers/switch-renderer';
 import { fortigatePorts, firewallPorts } from '../renderers/firewall-renderer';
 import { networkingPorts } from '../renderers/networking-renderer';
+import { nacPorts } from '../renderers/nac-renderer';
+import { atsPorts } from '../renderers/ats-renderer';
 
 const SW_ENTERPRISE_CONFIG: SwitchConfig = {
   vendor: 'generic', rj45Count: 24, sfpPlusCount: 4,
@@ -10,6 +12,18 @@ const SW_ENTERPRISE_CONFIG: SwitchConfig = {
 const FW_ENTERPRISE_CONFIG: FirewallConfig = {
   vendor: 'generic', rj45Count: 16, sfpPlusCount: 8,
   mgmtPort: true, haPorts: true, consolePort: true, usbPort: true,
+};
+// NTT DC Rack reference config (Firewall 1/2) — same Enterprise Firewall engine as
+// FW_ENTERPRISE_CONFIG, preset to a Fortinet vendor skin so it's ready to drag in as-is.
+const FW_FORTINET_CONFIG: FirewallConfig = {
+  vendor: 'fortinet', rj45Count: 16, sfpPlusCount: 8,
+  mgmtPort: true, haPorts: true, consolePort: true, usbPort: true,
+};
+const NAC_ENTERPRISE_CONFIG: NacConfig = {
+  vendor: 'generic', rj45Count: 4, mgmtPort: true, consolePort: true, usbPort: true,
+};
+const ATS_ENTERPRISE_CONFIG: AtsConfig = {
+  outletCount: 8, activeSource: 'A',
 };
 
 export const deviceCatalog: DeviceTemplate[] = [
@@ -201,7 +215,6 @@ export const deviceCatalog: DeviceTemplate[] = [
     deviceConfig: SW_ENTERPRISE_CONFIG as Record<string, unknown>,
     ports: switchPorts(SW_ENTERPRISE_CONFIG.rj45Count!, SW_ENTERPRISE_CONFIG.sfpPlusCount!, 2, 'sw-ent-'),
   },
-
   // ─── ROUTERS ────────────────────────────────────────────────────────────────
   {
     id: 'router-4p',
@@ -324,6 +337,36 @@ export const deviceCatalog: DeviceTemplate[] = [
     powerWatts: 90,
     deviceConfig: FW_ENTERPRISE_CONFIG as Record<string, unknown>,
     ports: firewallPorts(FW_ENTERPRISE_CONFIG, 'fw-ent-'),
+  },
+  {
+    // NTT DC Rack reference device: "Firewall 1/2" — Enterprise Firewall preset to a Fortinet skin.
+    id: 'fw-fortinet-preset',
+    name: 'Enterprise Firewall (Fortinet)',
+    manufacturer: 'Fortinet',
+    model: 'Enterprise Firewall',
+    category: 'firewall',
+    heightUnits: 1,
+    color: '#eceef1',
+    icon: '🛡️',
+    powerWatts: 90,
+    deviceConfig: FW_FORTINET_CONFIG as Record<string, unknown>,
+    ports: firewallPorts(FW_FORTINET_CONFIG, 'fw-fnt-'),
+  },
+
+  // ─── NAC APPLIANCES ─────────────────────────────────────────────────────────
+  {
+    // NTT DC Rack reference device: "NAC".
+    id: 'nac-enterprise',
+    name: 'NAC Appliance',
+    manufacturer: 'Rack Slicer',
+    model: 'NAC Appliance',
+    category: 'nac',
+    heightUnits: 1,
+    color: '#1a1e21',
+    icon: '🔐',
+    powerWatts: 60,
+    deviceConfig: NAC_ENTERPRISE_CONFIG as Record<string, unknown>,
+    ports: nacPorts(NAC_ENTERPRISE_CONFIG, 'nac-ent-'),
   },
 
   // ─── PATCH PANELS ───────────────────────────────────────────────────────────
@@ -641,6 +684,23 @@ export const deviceCatalog: DeviceTemplate[] = [
     powerWatts: 0,
     outletConfig: [{ count: 16, socketType: 'BS1363' }],
     ports: [],
+  },
+
+  // ─── ATS SWITCHES ───────────────────────────────────────────────────────────
+  {
+    // NTT DC Rack reference device: "ATS Switch" — dual power-input automatic transfer switch,
+    // distinct custom graphic (see ats-renderer.ts) rather than reused PDU art.
+    id: 'ats-enterprise',
+    name: 'ATS Switch',
+    manufacturer: 'Rack Slicer',
+    model: 'ATS Switch',
+    category: 'ats',
+    heightUnits: 1,
+    color: '#23282c',
+    icon: '🔁',
+    powerWatts: 0,
+    deviceConfig: ATS_ENTERPRISE_CONFIG as Record<string, unknown>,
+    ports: atsPorts(ATS_ENTERPRISE_CONFIG, 'ats-ent-'),
   },
 
   // ─── UPS ────────────────────────────────────────────────────────────────────
