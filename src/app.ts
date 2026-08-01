@@ -37,9 +37,11 @@ import {
   RackData, DeviceData, PortData, CableData, LegendItem,
   RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode, SocketType
 } from './core/types';
+import { ThreeViewport } from './three/ThreeViewport';
 
 export class App {
   private canvas!: CanvasManager;
+  private threeViewport?: ThreeViewport;
   private toolbar!: Toolbar;
   private sidebar!: Sidebar;
   private properties!: PropertiesPanel;
@@ -111,6 +113,14 @@ export class App {
   init() {
     // Initialize canvas
     this.canvas = new CanvasManager('canvas-viewport', 'canvas');
+
+    // Mount 3D viewport
+    const canvas3d = document.getElementById('canvas-3d');
+    if (canvas3d) {
+      this.threeViewport = new ThreeViewport();
+      this.threeViewport.mount(canvas3d);
+      this.addCameraPresetButtons(canvas3d);
+    }
 
     // Initialize UI components
     const toolbarEl = document.getElementById('toolbar')!;
@@ -3180,5 +3190,30 @@ export class App {
       this.renderAll();
       modal.remove();
     });
+  }
+
+  private addCameraPresetButtons(container: HTMLElement): void {
+    if (!this.threeViewport) return;
+    const bar = document.createElement('div');
+    bar.id = 'three-cam-presets';
+    const presets = ['Front', 'Rear', 'Left', 'Right', 'Top', 'Perspective'] as const;
+    let activeBtn: HTMLButtonElement | null = null;
+
+    for (const label of presets) {
+      const btn = document.createElement('button');
+      btn.textContent = label;
+      btn.addEventListener('click', () => {
+        this.threeViewport!.setPreset(label.toLowerCase() as any);
+        activeBtn?.classList.remove('active');
+        btn.classList.add('active');
+        activeBtn = btn;
+      });
+      bar.appendChild(btn);
+      if (label === 'Perspective') {
+        btn.classList.add('active');
+        activeBtn = btn;
+      }
+    }
+    container.appendChild(bar);
   }
 }
