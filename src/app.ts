@@ -114,12 +114,19 @@ export class App {
     // Initialize canvas
     this.canvas = new CanvasManager('canvas-viewport', 'canvas');
 
-    // Mount 3D viewport
+    // Mount 3D viewport — wrapped so a WebGL failure never kills the 2D app
     const canvas3d = document.getElementById('canvas-3d');
     if (canvas3d) {
-      this.threeViewport = new ThreeViewport();
-      this.threeViewport.mount(canvas3d);
-      this.addCameraPresetButtons(canvas3d);
+      try {
+        this.threeViewport = new ThreeViewport();
+        this.threeViewport.mount(canvas3d);
+        this.addCameraPresetButtons(canvas3d);
+      } catch (err) {
+        console.error('[ThreeViewport] 3D init failed, continuing in 2D-only mode:', err);
+        canvas3d.style.display = 'none';
+        const splitter = document.getElementById('splitter-3d');
+        if (splitter) splitter.style.display = 'none';
+      }
     }
 
     // Initialize UI components
