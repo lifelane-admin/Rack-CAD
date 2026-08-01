@@ -53,7 +53,7 @@ export function buildRackGroup(rack: RackData, materials: MaterialManager): THRE
   group.add(rightRail);
 
   // Inner bay volume — back-face mesh gives interior depth
-  const bayMat = new THREE.MeshStandardMaterial({ color: 0x080c14, transparent: true, opacity: 0.15, side: THREE.BackSide });
+  const bayMat = materials.get('bay');
   const bayGeo = new THREE.BoxGeometry(RACK_INNER_WIDTH, rack.units * RU_HEIGHT, RACK_DEPTH * 0.95);
   const bay = new THREE.Mesh(bayGeo, bayMat);
   group.add(bay);

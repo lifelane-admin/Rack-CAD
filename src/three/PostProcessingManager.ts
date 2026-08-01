@@ -57,8 +57,6 @@ export class PostProcessingManager {
   onResize(width: number, height: number): void {
     this.composer.setSize(width, height);
     this.ssaoPass.setSize(width, height);
-    this.ssrPass.resolution = new THREE.Vector2(width, height);
-    this.bloomPass.resolution = new THREE.Vector2(width, height);
   }
 
   dispose(): void {

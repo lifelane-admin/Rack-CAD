@@ -13,6 +13,7 @@ export class SceneManager {
   private rackGroups = new Map<string, THREE.Group>();
   private deviceMeshes = new Map<string, { mesh: THREE.Mesh; rackId: string }>();
   private materials: MaterialManager;
+  private floorGeo: THREE.PlaneGeometry | null = null;
 
   constructor(materials: MaterialManager) {
     this.materials = materials;
@@ -23,8 +24,8 @@ export class SceneManager {
     hemi.position.set(0, 5000, 0);
     this.scene.add(hemi);
 
-    const floorGeo = new THREE.PlaneGeometry(20000, 20000);
-    const floor = new THREE.Mesh(floorGeo, this.materials.get('floor'));
+    this.floorGeo = new THREE.PlaneGeometry(20000, 20000);
+    const floor = new THREE.Mesh(this.floorGeo, this.materials.get('floor'));
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -1;
     this.scene.add(floor);
@@ -91,6 +92,15 @@ export class SceneManager {
   }
 
   dispose(): void {
+    // Dispose GPU resources for all geometries in the scene before clearing
+    this.scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.geometry?.dispose();
+      }
+    });
+    this.floorGeo?.dispose();
+    this.floorGeo = null;
     this.scene.clear();
     this.rackGroups.clear();
     this.deviceMeshes.clear();

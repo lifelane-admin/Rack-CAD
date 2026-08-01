@@ -22,6 +22,8 @@ export class MaterialManager {
         return new THREE.MeshStandardMaterial({ color: 0x111118, metalness: 0.1, roughness: 0.8, transparent: true, opacity: 0.8 });
       case 'blank-panel':
         return new THREE.MeshStandardMaterial({ color: 0x0d1018, metalness: 0.5, roughness: 0.7 });
+      case 'bay':
+        return new THREE.MeshStandardMaterial({ color: 0x080c14, transparent: true, opacity: 0.15, side: THREE.BackSide });
       default: // 'device'
         if (type !== 'device') {
           console.warn(`[MaterialManager] Unknown material type "${type}", using device default`);
