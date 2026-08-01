@@ -4,7 +4,7 @@ export class MaterialManager {
   private cache = new Map<string, THREE.MeshStandardMaterial>();
 
   get(type: string, color?: string): THREE.MeshStandardMaterial {
-    const key = color ? `device:${color}` : type;
+    const key = color ? `device\0${color}` : type;
     const cached = this.cache.get(key);
     if (cached) return cached;
     const mat = this.create(type, color);
@@ -23,6 +23,9 @@ export class MaterialManager {
       case 'blank-panel':
         return new THREE.MeshStandardMaterial({ color: 0x0d1018, metalness: 0.5, roughness: 0.7 });
       default: // 'device'
+        if (type !== 'device') {
+          console.warn(`[MaterialManager] Unknown material type "${type}", using device default`);
+        }
         return new THREE.MeshStandardMaterial({
           color: color ? new THREE.Color(color) : new THREE.Color(0x1a3a6a),
           metalness: 0.3,

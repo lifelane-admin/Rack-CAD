@@ -44,10 +44,10 @@ describe('MaterialManager', () => {
     expect(a).not.toBe(c);
   });
 
-  it('dispose clears all cached materials', () => {
+  it('dispose clears all cached materials and calls dispose on each', () => {
     const mat = mgr.get('rack-frame');
     mgr.dispose();
-    // After dispose, requesting the same type creates a new instance
+    expect(mat.dispose).toHaveBeenCalledOnce();
     const mat2 = mgr.get('rack-frame');
     expect(mat2).not.toBe(mat);
   });
