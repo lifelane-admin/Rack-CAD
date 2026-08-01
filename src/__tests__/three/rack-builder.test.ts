@@ -55,8 +55,14 @@ describe('buildRackGroup', () => {
 
   it('sets group position based on rack x/y', () => {
     const rack = { id: 'r1', name: 'Rack 1', units: 42, x: 300, y: 100 } as any;
+    const { RACK_OUTER_WIDTH, RACK_PADDING_TOP, RACK_PADDING_BOTTOM, RU_HEIGHT } = RACK_CONSTANTS;
+    const totalH = RACK_PADDING_TOP + 42 * RU_HEIGHT + RACK_PADDING_BOTTOM;
     const group = buildRackGroup(rack, materials);
-    expect(group.position.set).toHaveBeenCalled();
+    expect(group.position.set).toHaveBeenCalledWith(
+      rack.x + RACK_OUTER_WIDTH / 2,
+      totalH / 2,
+      0
+    );
   });
 
   it('adds children (posts, plates, rails, bay) to the group', () => {

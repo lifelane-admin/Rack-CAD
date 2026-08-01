@@ -36,7 +36,9 @@ export function buildRackGroup(rack: RackData, materials: MaterialManager): THRE
   topPlate.position.set(0, (totalH - RACK_PADDING_TOP) / 2, 0);
   group.add(topPlate);
 
-  const botPlate = new THREE.Mesh(plateGeo.clone(), frameMat);
+  // create a separate geometry so the height uses RACK_PADDING_BOTTOM, not RACK_PADDING_TOP
+  const botPlateGeo = new THREE.BoxGeometry(RACK_OUTER_WIDTH, RACK_PADDING_BOTTOM, RACK_DEPTH);
+  const botPlate = new THREE.Mesh(botPlateGeo, frameMat);
   botPlate.position.set(0, -(totalH - RACK_PADDING_BOTTOM) / 2, 0);
   group.add(botPlate);
 
