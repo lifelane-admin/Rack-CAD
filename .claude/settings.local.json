@@ -59,7 +59,11 @@
       "Bash(bash *)",
       "Bash(C:\\\\Users\\\\srini\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\5.1.0\\\\skills\\\\brainstorming\\\\scripts\\\\start-server.sh *)",
       "PowerShell(node \"C:\\\\Users\\\\srini\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\5.1.0\\\\skills\\\\brainstorming\\\\scripts\\\\server.cjs\" --project-dir \"G:\\\\Claude\\\\Rack-Slicer\\\\Rack_Design\")",
-      "PowerShell(ls \"G:\\\\Claude\\\\Rack-Slicer\\\\Rack_Design\\\\src\\\\__tests__\\\\\" 2>$null; if \\(!\\(Test-Path \"G:\\\\Claude\\\\Rack-Slicer\\\\Rack_Design\\\\src\\\\__tests__\\\\three\"\\)\\) { \"three subdir does not exist\" } else { ls \"G:\\\\Claude\\\\Rack-Slicer\\\\Rack_Design\\\\src\\\\__tests__\\\\three\\\\\" })"
+      "PowerShell(ls \"G:\\\\Claude\\\\Rack-Slicer\\\\Rack_Design\\\\src\\\\__tests__\\\\\" 2>$null; if \\(!\\(Test-Path \"G:\\\\Claude\\\\Rack-Slicer\\\\Rack_Design\\\\src\\\\__tests__\\\\three\"\\)\\) { \"three subdir does not exist\" } else { ls \"G:\\\\Claude\\\\Rack-Slicer\\\\Rack_Design\\\\src\\\\__tests__\\\\three\\\\\" })",
+      "Bash(node -e ' *)",
+      "Bash(findstr \":5173\")",
+      "Bash(taskkill *)",
+      "PowerShell(Stop-Process *)"
     ]
   }
 }
