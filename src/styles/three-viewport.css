@@ -1,0 +1,72 @@
+/* Split: make #canvas-viewport a flex row so 2D and 3D panels sit side by side */
+#canvas-viewport {
+  display: flex;
+  flex-direction: row;
+}
+
+#canvas-viewport > svg#canvas {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.splitter-3d {
+  width: 5px;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  cursor: col-resize;
+  transition: background 0.15s;
+  z-index: 10;
+}
+
+.splitter-3d:hover,
+.splitter-3d.dragging {
+  background: var(--accent-primary);
+  opacity: 0.7;
+}
+
+#canvas-3d {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+  background: #060c18;
+}
+
+#canvas-3d canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Camera preset button strip at bottom of 3D panel */
+#three-cam-presets {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  z-index: 20;
+}
+
+#three-cam-presets button {
+  background: rgba(10, 20, 40, 0.75);
+  border: 1px solid rgba(80, 120, 200, 0.3);
+  color: var(--accent-primary, #7eb8f7);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 10px;
+  cursor: pointer;
+  font-family: monospace;
+  backdrop-filter: blur(4px);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+#three-cam-presets button:hover,
+#three-cam-presets button.active {
+  background: rgba(40, 80, 180, 0.5);
+  border-color: var(--accent-primary, #5865f2);
+}
