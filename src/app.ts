@@ -20,21 +20,26 @@ import { ContextMenu, MenuItem } from './components/context-menu';
 import { ReportsPanel } from './components/reports-panel';
 import { FloatingToolbar } from './components/floating-toolbar';
 import { NotificationCenter } from './components/notifications';
-import { FloatingRackSummaryPanel, FloatingCableSummaryPanel } from './components/floating-summary-panels';
-import './styles/floating-summary.css';
+import { TextToolPanel } from './components/text-tool-panel';
+import { ImageToolPanel } from './components/image-tool-panel';
+import './styles/text-tool-panel.css';
 import { AIPanel } from './components/ai-panel';
 import { runSelfTests } from './utils/self-test';
 import { renderRack } from './renderers/rack-renderer';
 import { renderDevice } from './renderers/device-renderer';
 import { renderCable, renderCableInProgress, resetPreviewDirection } from './renderers/cable-renderer';
+import { renderTextLabel } from './renderers/text-label-renderer';
+import { renderImageAsset } from './renderers/image-asset-renderer';
 import { deviceCatalog, getTemplate } from './library/device-catalog';
 import { generateId, distToSegment } from './utils/geometry';
 import { initExportHandlers, downloadFile, exportJSON } from './utils/export';
 import { computeSmartRouting, get3DefaultAnchors } from './utils/routing';
 import { cloneDevice } from './utils/clone';
 import { socketTypeAtOutletIndex } from './renderers/pdu-layout';
+import { countDevicePowerCables } from './utils/power';
+import { appendExportSummaryOverlay, getAutoSummaryCardOffset } from './renderers/export-summary-overlay';
 import {
-  RackData, DeviceData, PortData, CableData, LegendItem,
+  RackData, DeviceData, PortData, CableData, LegendItem, TextLabel, ImageAsset,
   RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode, SocketType
 } from './core/types';
 
@@ -84,6 +89,18 @@ export class App {
   private draggedAnchorIndex: number = -1;
   private draggedAnchorRealIndex: number = -1;
 
+  // Label pointer (device callout) anchor dragging state — mirrors the cable anchor state
+  // above, for TextLabel.pointerAnchorPoints when pointerStyle === 'flexible'.
+  private isDraggingLabelAnchor = false;
+  private draggedLabelAnchorTextId: string | null = null;
+  private draggedLabelAnchorIndex: number = -1;
+
+  // Label pointer STARTING point (the device-end dot / pointerAnchorX/Y) dragging state — lets
+  // the leader line's attachment point on the device be repositioned after the label was placed,
+  // instead of being fixed forever to wherever it was first clicked.
+  private isDraggingLabelStartAnchor = false;
+  private draggedLabelStartAnchorTextId: string | null = null;
+
   // History tracking states for atomic drag undo
   private dragStartDevicesState: DeviceData[] | null = null;
   private dragStartCablesState: CableData[] | null = null;
@@ -93,6 +110,38 @@ export class App {
   private isDraggingRack = false;
   private draggedRackId: string | null = null;
   private dragStartRackX = 0;
+
+  // Text label dragging state
+  private isDraggingText = false;
+  private draggedTextId: string | null = null;
+  private dragStartTextX = 0;
+  private dragStartTextY = 0;
+  private dragStartTextLabelsState: TextLabel[] | null = null;
+  // A text-tool placement click is fully handled by the mousedown handler (creates the label,
+  // selects it, reverts to select tool) — the native 'click' that follows must be swallowed, or
+  // the separate click handler below (which doesn't know about text labels) falls through to its
+  // "clicked empty canvas -> deselect" branch and immediately wipes the selection it just made.
+  private suppressNextClick = false;
+
+  // Image asset dragging/resizing state
+  private isDraggingImage = false;
+  private draggedImageId: string | null = null;
+  private dragStartImageX = 0;
+  private dragStartImageY = 0;
+  private isResizingImage = false;
+  private resizedImageId: string | null = null;
+  private dragStartImageWidth = 0;
+  private dragStartImageHeight = 0;
+  private dragStartImageAssetsState: ImageAsset[] | null = null;
+  private imageFileInput!: HTMLInputElement;
+
+  // Summary Card Preview drag state — re-renders each mousemove frame with a transient live
+  // offset (same pattern as rack dragging's skipHistory setState), so no undo-history entries
+  // pile up until the final position is committed via 'rack:update' on mouseup.
+  private isDraggingSummaryCard = false;
+  private draggedSummaryRackId: string | null = null;
+  private dragStartSummaryOffset: { x: number; y: number } = { x: 0, y: 0 };
+  private summaryCardDragPreview: { rackId: string; offset: { x: number; y: number } } | null = null;
 
   // Mouse screen position tracking for tooltip
   private lastMouseScreenX = 0;
@@ -138,11 +187,15 @@ export class App {
     // emitted as a 'notification' event; without this listener they all resolved into silence.
     new NotificationCenter();
 
-    // Initialize the floating, draggable Rack Load Summary + Cable Types panels (screen-space
-    // overlays on the canvas viewport — independent of pan/zoom, unlike the old on-canvas
-    // per-rack SVG dashboard they replace).
-    new FloatingRackSummaryPanel();
-    new FloatingCableSummaryPanel();
+    // Initialize the Text Tool panel — opens when the Text tool is activated or an existing
+    // label is selected; independently closeable via its own ✕ button (see text-tool-panel.ts).
+    new TextToolPanel();
+
+    // Initialize the Image Tool panel — opens when an uploaded image is selected; same
+    // independently-closeable pattern (see image-tool-panel.ts).
+    new ImageToolPanel();
+
+    this.setupImageUpload();
 
     // Render UI
     this.toolbar.render();
@@ -231,11 +284,35 @@ export class App {
       this.renderAll();
       this.properties.update(stateManager.getState().selection);
     });
+    // Removing a manually-added port must also drop any cable plugged into it (same cleanup
+    // pattern as stateManager.removeDevice) — a dangling sourcePortId/destPortId would otherwise
+    // point at nothing and render at the fallback (0,0) origin.
+    eventBus.on('device:remove-port', ({ deviceId, portId }) => {
+      const device = stateManager.getDevice(deviceId);
+      if (!device) return;
+      const ports = device.ports.filter(p => p.id !== portId);
+      const cables = stateManager.getState().cables.filter(c => c.sourcePortId !== portId && c.destPortId !== portId);
+      const devices = stateManager.getState().devices.map(d => d.id === deviceId ? { ...d, ports } : d);
+      stateManager.setState({ devices, cables });
+      this.renderAll();
+      this.properties.update(stateManager.getState().selection);
+      eventBus.emit('notification', { message: 'Port removed', type: 'info' });
+    });
     eventBus.on('cable:added', () => this.renderAll());
     eventBus.on('cable:removed', () => this.renderAll());
     eventBus.on('cable:update', ({ id, data }) => {
       const cables = stateManager.getState().cables.map(c => c.id === id ? { ...c, ...data } : c);
       stateManager.setState({ cables });
+      this.renderAll();
+    });
+    eventBus.on('textlabel:update', ({ id, data }) => {
+      const textLabels = stateManager.getState().textLabels.map(t => t.id === id ? { ...t, ...data } : t);
+      stateManager.setState({ textLabels });
+      this.renderAll();
+    });
+    eventBus.on('imageasset:update', ({ id, data }) => {
+      const imageAssets = stateManager.getState().imageAssets.map(a => a.id === id ? { ...a, ...data } : a);
+      stateManager.setState({ imageAssets });
       this.renderAll();
     });
     eventBus.on('cable:batch-generate', ({ deviceId, side, type, color, count }) => {
@@ -369,6 +446,8 @@ export class App {
           ],
           devices: [],
           cables: [],
+          textLabels: [],
+          imageAssets: [],
           selection: [],
           showLegends: true,
         });
@@ -684,6 +763,46 @@ export class App {
         }
       }
 
+      // Label pointer STARTING point drag handling — repositions pointerAnchorX/Y (the device-
+      // local offset), converting the live mouse world position back into device-local
+      // coordinates via the device's current origin so it stays correct even if the device was
+      // also just moved.
+      if (this.isDraggingLabelStartAnchor && this.draggedLabelStartAnchorTextId !== null) {
+        const textId = this.draggedLabelStartAnchorTextId;
+        const targetLabel = stateManager.getState().textLabels.find(t => t.id === textId);
+        const origin = targetLabel?.pointerDeviceId ? stateManager.getDeviceWorldOrigin(targetLabel.pointerDeviceId) : null;
+        if (targetLabel && origin) {
+          const textLabels = stateManager.getState().textLabels.map(t =>
+            t.id === textId
+              ? { ...t, pointerAnchorX: this.mouseWorldPos.x - origin.x, pointerAnchorY: this.mouseWorldPos.y - origin.y }
+              : t
+          );
+          stateManager.setState({ textLabels }, true);
+          this.renderAnnotationLayer();
+          return;
+        }
+      }
+
+      // Label pointer anchor drag handling — same pattern as the cable anchor block above, but
+      // for TextLabel.pointerAnchorPoints. Only the annotation layer needs to move (see the
+      // note on renderAnnotationLayer() — a full renderAll() on every mousemove is what made
+      // dragging feel like it was stuttering before).
+      if (this.isDraggingLabelAnchor && this.draggedLabelAnchorTextId !== null) {
+        const textId = this.draggedLabelAnchorTextId;
+        const idx = this.draggedLabelAnchorIndex;
+        const targetLabel = stateManager.getState().textLabels.find(t => t.id === textId);
+        if (targetLabel) {
+          const anchors = [...(targetLabel.pointerAnchorPoints ?? [])];
+          anchors[idx] = { ...this.mouseWorldPos };
+          const textLabels = stateManager.getState().textLabels.map(t =>
+            t.id === textId ? { ...t, pointerAnchorPoints: anchors } : t
+          );
+          stateManager.setState({ textLabels }, true);
+          this.renderAnnotationLayer();
+          return;
+        }
+      }
+
       // Cable end drag handling (either source or dest tip)
       if (this.isDraggingCableEnd && this.draggedCableId) {
         const cables = stateManager.getState().cables.map(c => {
@@ -711,6 +830,18 @@ export class App {
         svgEl.classList.remove('cable-laying');
       }
 
+      // Summary Card Preview drag handling
+      if (this.isDraggingSummaryCard && this.draggedSummaryRackId) {
+        const dx = this.mouseWorldPos.x - this.dragStartWorldPos.x;
+        const dy = this.mouseWorldPos.y - this.dragStartWorldPos.y;
+        this.summaryCardDragPreview = {
+          rackId: this.draggedSummaryRackId,
+          offset: { x: this.dragStartSummaryOffset.x + dx, y: this.dragStartSummaryOffset.y + dy },
+        };
+        this.renderAll();
+        return;
+      }
+
       // Rack drag handling
       if (this.isDraggingRack && this.draggedRackId) {
         const dx = this.mouseWorldPos.x - this.dragStartWorldPos.x;
@@ -723,6 +854,55 @@ export class App {
         );
         stateManager.setState({ racks }, true);
         this.renderAll();
+        return;
+      }
+
+      // Text label drag handling — tracks the cursor 1:1 with no grid rounding while live (grid
+      // snapping here made it visibly hop in GRID_SIZE (20 world-unit) steps every mousemove,
+      // which reads as huge jumps once zoomed in enough to matter — snapping is applied once,
+      // on drop, instead (see the mouseup handler below).
+      if (this.isDraggingText && this.draggedTextId) {
+        const dx = this.mouseWorldPos.x - this.dragStartWorldPos.x;
+        const dy = this.mouseWorldPos.y - this.dragStartWorldPos.y;
+        const targetX = this.dragStartTextX + dx;
+        const targetY = this.dragStartTextY + dy;
+        const textLabels = stateManager.getState().textLabels.map(t =>
+          t.id === this.draggedTextId ? { ...t, x: targetX, y: targetY } : t
+        );
+        stateManager.setState({ textLabels }, true);
+        // Only the annotation layer needs to move — not a full canvas rebuild (see
+        // renderAnnotationLayer()'s doc comment for why this matters here specifically).
+        this.renderAnnotationLayer();
+        return;
+      }
+
+      // Image asset resize handling — smooth (no grid rounding) while live, same reasoning as
+      // the text-label drag above; preserves aspect ratio from the drag-start dimensions.
+      if (this.isResizingImage && this.resizedImageId) {
+        const dx = this.mouseWorldPos.x - this.dragStartWorldPos.x;
+        const aspect = this.dragStartImageWidth / this.dragStartImageHeight;
+        const newWidth = Math.max(20, this.dragStartImageWidth + dx);
+        const newHeight = newWidth / aspect;
+        const imageAssets = stateManager.getState().imageAssets.map(a =>
+          a.id === this.resizedImageId ? { ...a, width: newWidth, height: newHeight } : a
+        );
+        stateManager.setState({ imageAssets }, true);
+        this.renderAnnotationLayer();
+        return;
+      }
+
+      // Image asset drag handling — smooth (no grid rounding) while live; see the text-label
+      // drag note above for why.
+      if (this.isDraggingImage && this.draggedImageId) {
+        const dx = this.mouseWorldPos.x - this.dragStartWorldPos.x;
+        const dy = this.mouseWorldPos.y - this.dragStartWorldPos.y;
+        const targetX = this.dragStartImageX + dx;
+        const targetY = this.dragStartImageY + dy;
+        const imageAssets = stateManager.getState().imageAssets.map(a =>
+          a.id === this.draggedImageId ? { ...a, x: targetX, y: targetY } : a
+        );
+        stateManager.setState({ imageAssets }, true);
+        this.renderAnnotationLayer();
         return;
       }
 
@@ -831,6 +1011,33 @@ export class App {
         return;
       }
 
+      // Text tool — owns the click entirely, same as export-area above: a click anywhere on
+      // the canvas places a new label at that point rather than hit-testing racks/devices/cables.
+      if (s.tool === 'text') {
+        const worldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+        this.placeTextLabel(worldPos);
+        this.suppressNextClick = true;
+        e.stopPropagation();
+        return;
+      }
+
+      // Label tool — owns the click entirely, but unlike text placement it requires an actual
+      // device under the cursor (the whole point is a label that points AT something); a miss
+      // just notifies and leaves the tool active rather than silently discarding the intent.
+      if (s.tool === 'label') {
+        const deviceElHit = target.closest('[data-device-id]') as SVGElement | null;
+        const deviceId = deviceElHit?.getAttribute('data-device-id');
+        if (deviceId) {
+          const worldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+          this.placeDeviceLabel(deviceId, worldPos);
+          this.suppressNextClick = true;
+        } else {
+          eventBus.emit('notification', { message: 'Click a device to point a label at it', type: 'info' });
+        }
+        e.stopPropagation();
+        return;
+      }
+
       // Check for anchor handle drag first (before cable-end handle)
       const anchorEl = target.closest('.cable-anchor-handle') as SVGElement;
       if (anchorEl) {
@@ -842,6 +1049,34 @@ export class App {
         this.draggedAnchorRealIndex = parseInt(anchorEl.getAttribute('data-anchor-real-index') || String(anchorIdx), 10);
         this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
         this.dragStartCablesState = JSON.parse(JSON.stringify(stateManager.getState().cables));
+        svgEl.classList.add('dragging-active');
+        e.stopPropagation();
+        return;
+      }
+
+      // Label pointer STARTING point handle (the device-end dot) — checked before the via-point
+      // anchor handle below since both can render simultaneously on a flexible-style label.
+      const labelStartEl = target.closest('.label-pointer-device-handle') as SVGElement;
+      if (labelStartEl) {
+        const textId = labelStartEl.getAttribute('data-text-id')!;
+        this.isDraggingLabelStartAnchor = true;
+        this.draggedLabelStartAnchorTextId = textId;
+        this.dragStartTextLabelsState = JSON.parse(JSON.stringify(stateManager.getState().textLabels));
+        svgEl.classList.add('dragging-active');
+        e.stopPropagation();
+        return;
+      }
+
+      // Label pointer (device callout) anchor handle — same priority tier as the cable anchor
+      // handle above, mirroring its drag pattern for TextLabel.pointerAnchorPoints.
+      const labelAnchorEl = target.closest('.label-pointer-anchor-handle') as SVGElement;
+      if (labelAnchorEl) {
+        const textId = labelAnchorEl.getAttribute('data-text-id')!;
+        const anchorIdx = parseInt(labelAnchorEl.getAttribute('data-anchor-index') || '0', 10);
+        this.isDraggingLabelAnchor = true;
+        this.draggedLabelAnchorTextId = textId;
+        this.draggedLabelAnchorIndex = anchorIdx;
+        this.dragStartTextLabelsState = JSON.parse(JSON.stringify(stateManager.getState().textLabels));
         svgEl.classList.add('dragging-active');
         e.stopPropagation();
         return;
@@ -906,6 +1141,91 @@ export class App {
       }
 
       if (s.tool === 'select') {
+        // Rack Load Summary / Cable Types card drag — checked first since these overlay
+        // elements sit visually on top of everything else and carry their own data-rack-id,
+        // unrelated to the rack/device hit-tests below. Always draggable whenever they're
+        // rendered (i.e. whenever showLegends is true — see renderAll()), not gated behind a
+        // separate "preview mode" — there's only one rendering of these now, and it's this one.
+        const cardEl = target.closest('[data-draggable="true"]') as SVGGElement | null;
+        if (cardEl) {
+          const rackId = cardEl.getAttribute('data-rack-id');
+          const rack = rackId ? stateManager.getRack(rackId) : null;
+          if (rack) {
+            this.isDraggingSummaryCard = true;
+            this.draggedSummaryRackId = rack.id;
+            this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+            this.dragStartSummaryOffset = rack.summaryCardOffset ?? getAutoSummaryCardOffset(rack, s.devices);
+            this.summaryCardDragPreview = { rackId: rack.id, offset: this.dragStartSummaryOffset };
+            e.stopPropagation();
+            return;
+          }
+        }
+
+        // Image resize handle — checked first since the handle sits right at the image's own
+        // edge and carries the same data-image-id attribute as the image body below, which
+        // would otherwise swallow it.
+        const imgHandleEl = target.closest('.image-resize-handle') as SVGElement;
+        if (imgHandleEl) {
+          const imageId = imgHandleEl.getAttribute('data-image-id')!;
+          const asset = stateManager.getState().imageAssets.find(a => a.id === imageId);
+          if (asset && !asset.locked) {
+            this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+            this.isResizingImage = true;
+            this.resizedImageId = imageId;
+            this.dragStartImageWidth = asset.width;
+            this.dragStartImageHeight = asset.height;
+            this.dragStartImageAssetsState = JSON.parse(JSON.stringify(stateManager.getState().imageAssets));
+            svgEl.classList.add('dragging-active');
+          }
+          e.stopPropagation();
+          return;
+        }
+
+        // Image asset click — free-floating annotation, same priority tier as text labels.
+        const imageEl = target.closest('[data-image-id]') as SVGElement;
+        if (imageEl) {
+          const imageId = imageEl.getAttribute('data-image-id')!;
+          const asset = stateManager.getState().imageAssets.find(a => a.id === imageId);
+          if (asset) {
+            stateManager.setState({ selection: [{ type: 'image', id: imageId }] });
+            eventBus.emit('selection:changed', [{ type: 'image', id: imageId }]);
+            if (!asset.locked) {
+              this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+              this.isDraggingImage = true;
+              this.draggedImageId = imageId;
+              this.dragStartImageX = asset.x;
+              this.dragStartImageY = asset.y;
+              this.dragStartImageAssetsState = JSON.parse(JSON.stringify(stateManager.getState().imageAssets));
+              svgEl.classList.add('dragging-active');
+            }
+            e.stopPropagation();
+            return;
+          }
+        }
+
+        // Text label click — checked ahead of device/rack hit-tests since labels are free-
+        // floating annotations that can sit anywhere on the canvas, including on top of a rack.
+        const textEl = target.closest('[data-text-id]') as SVGElement;
+        if (textEl) {
+          const textId = textEl.getAttribute('data-text-id')!;
+          const label = stateManager.getState().textLabels.find(t => t.id === textId);
+          if (label) {
+            stateManager.setState({ selection: [{ type: 'text', id: textId }] });
+            eventBus.emit('selection:changed', [{ type: 'text', id: textId }]);
+            if (!label.locked) {
+              this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+              this.isDraggingText = true;
+              this.draggedTextId = textId;
+              this.dragStartTextX = label.x;
+              this.dragStartTextY = label.y;
+              this.dragStartTextLabelsState = JSON.parse(JSON.stringify(stateManager.getState().textLabels));
+              svgEl.classList.add('dragging-active');
+            }
+            e.stopPropagation();
+            return;
+          }
+        }
+
         // Side-mount PDU click — checked ahead of the generic rack-drag branch below, since
         // its group lives inside the rack's `.rack` element and carries `data-pdu-device-id`
         // rather than the standard `data-device-id`, so it would otherwise never match the
@@ -1013,6 +1333,55 @@ export class App {
         return;
       }
 
+      // 0a1. Label pointer STARTING point drag completion — same "revert then commit" pattern.
+      if (this.isDraggingLabelStartAnchor) {
+        this.isDraggingLabelStartAnchor = false;
+        this.draggedLabelStartAnchorTextId = null;
+        svgEl.classList.remove('dragging-active');
+
+        if (this.dragStartTextLabelsState) {
+          const finalTextLabels = stateManager.getState().textLabels;
+          stateManager.setState({ textLabels: this.dragStartTextLabelsState }, true);
+          stateManager.setState({ textLabels: finalTextLabels });
+          this.dragStartTextLabelsState = null;
+        }
+
+        this.renderAll();
+        return;
+      }
+
+      // 0a2. Label pointer anchor drag completion — same "revert then commit" pattern as the
+      // cable anchor completion above.
+      if (this.isDraggingLabelAnchor) {
+        this.isDraggingLabelAnchor = false;
+        this.draggedLabelAnchorTextId = null;
+        this.draggedLabelAnchorIndex = -1;
+        svgEl.classList.remove('dragging-active');
+
+        if (this.dragStartTextLabelsState) {
+          const finalTextLabels = stateManager.getState().textLabels;
+          stateManager.setState({ textLabels: this.dragStartTextLabelsState }, true);
+          stateManager.setState({ textLabels: finalTextLabels });
+          this.dragStartTextLabelsState = null;
+        }
+
+        this.renderAll();
+        return;
+      }
+
+      // 0a. Summary Card Preview drag completion — no intermediate state/history writes happened
+      // during the drag (see summaryCardDragPreview), so this just commits the final offset.
+      if (this.isDraggingSummaryCard && this.draggedSummaryRackId) {
+        const rackId = this.draggedSummaryRackId;
+        const offset = this.summaryCardDragPreview?.offset ?? this.dragStartSummaryOffset;
+        this.isDraggingSummaryCard = false;
+        this.draggedSummaryRackId = null;
+        this.summaryCardDragPreview = null;
+        eventBus.emit('rack:update', { id: rackId, data: { summaryCardOffset: offset } });
+        this.renderAll();
+        return;
+      }
+
       // Remove cable-laying mode if not in progress
       const sCheck = stateManager.getState();
       if (!sCheck.cableInProgress && !this.isDraggingCableEnd) {
@@ -1055,19 +1424,44 @@ export class App {
             }
           }
 
-          // 2. Fallback to generous 35px radius proximity snap search
+          // 2. Fallback to generous 35px radius proximity snap search — TWO PASSES, not one.
+          // Ear-mount holes sit right at a device's rail edge (x=-12.5), which puts them close to
+          // any real port calibrated near a panel's left/right edge (a common case when matching a
+          // real hardware photo). A single combined "closest wins, but ear holes have a smaller
+          // cap" comparison still let an ear hole win whenever it happened to be a fraction of a
+          // pixel closer than the intended real port — capping *how far* an ear hole could reach
+          // never stopped it from *outcompeting* a real port that was simultaneously in range. So:
+          // pass 1 searches ONLY real ports at the normal 35px radius; ear holes are only even
+          // considered in pass 2, and only if pass 1 found nothing at all. A real port now always
+          // wins whenever it's anywhere in normal range, regardless of exact pixel distances.
           if (!targetPort) {
             let closestDist = 35;
             for (const dev of s.devices) {
               for (const port of dev.ports) {
-                if (port.id === skipPortId) continue;
-
+                if (port.id === skipPortId || port.id.includes('-ear-')) continue;
                 const portPos = stateManager.getPortWorldPosition(port.id);
                 if (portPos) {
                   const dist = Math.sqrt(Math.pow(this.mouseWorldPos.x - portPos.x, 2) + Math.pow(this.mouseWorldPos.y - portPos.y, 2));
                   if (dist < closestDist) {
                     closestDist = dist;
                     targetPort = port;
+                  }
+                }
+              }
+            }
+            if (!targetPort) {
+              const EAR_SNAP_RADIUS = 1.5;
+              let closestEarDist = EAR_SNAP_RADIUS;
+              for (const dev of s.devices) {
+                for (const port of dev.ports) {
+                  if (port.id === skipPortId || !port.id.includes('-ear-')) continue;
+                  const portPos = stateManager.getPortWorldPosition(port.id);
+                  if (portPos) {
+                    const dist = Math.sqrt(Math.pow(this.mouseWorldPos.x - portPos.x, 2) + Math.pow(this.mouseWorldPos.y - portPos.y, 2));
+                    if (dist < closestEarDist) {
+                      closestEarDist = dist;
+                      targetPort = port;
+                    }
                   }
                 }
               }
@@ -1257,6 +1651,76 @@ export class App {
         }
       }
 
+      // 3a. Text label dragging completion
+      if (this.isDraggingText && this.draggedTextId) {
+        svgEl.classList.remove('dragging-active');
+
+        const textId = this.draggedTextId;
+        const finalLabel = stateManager.getState().textLabels.find(t => t.id === textId);
+
+        this.isDraggingText = false;
+        this.draggedTextId = null;
+
+        if (finalLabel) {
+          let dropX = finalLabel.x;
+          let dropY = finalLabel.y;
+          if (stateManager.getState().snapEnabled) {
+            dropX = Math.round(dropX / RACK_CONSTANTS.GRID_SIZE) * RACK_CONSTANTS.GRID_SIZE;
+            dropY = Math.round(dropY / RACK_CONSTANTS.GRID_SIZE) * RACK_CONSTANTS.GRID_SIZE;
+          }
+          // Silently restore to start position, then perform standard update to push a single history frame
+          if (this.dragStartTextLabelsState) {
+            stateManager.setState({ textLabels: this.dragStartTextLabelsState }, true);
+            this.dragStartTextLabelsState = null;
+          }
+          eventBus.emit('textlabel:update', { id: textId, data: { x: dropX, y: dropY } });
+        }
+      }
+
+      // 3b. Image asset resize completion
+      if (this.isResizingImage && this.resizedImageId) {
+        svgEl.classList.remove('dragging-active');
+
+        const imageId = this.resizedImageId;
+        const finalAsset = stateManager.getState().imageAssets.find(a => a.id === imageId);
+
+        this.isResizingImage = false;
+        this.resizedImageId = null;
+
+        if (finalAsset) {
+          if (this.dragStartImageAssetsState) {
+            stateManager.setState({ imageAssets: this.dragStartImageAssetsState }, true);
+            this.dragStartImageAssetsState = null;
+          }
+          eventBus.emit('imageasset:update', { id: imageId, data: { width: finalAsset.width, height: finalAsset.height } });
+        }
+      }
+
+      // 3c. Image asset drag completion
+      if (this.isDraggingImage && this.draggedImageId) {
+        svgEl.classList.remove('dragging-active');
+
+        const imageId = this.draggedImageId;
+        const finalAsset = stateManager.getState().imageAssets.find(a => a.id === imageId);
+
+        this.isDraggingImage = false;
+        this.draggedImageId = null;
+
+        if (finalAsset) {
+          let dropX = finalAsset.x;
+          let dropY = finalAsset.y;
+          if (stateManager.getState().snapEnabled) {
+            dropX = Math.round(dropX / RACK_CONSTANTS.GRID_SIZE) * RACK_CONSTANTS.GRID_SIZE;
+            dropY = Math.round(dropY / RACK_CONSTANTS.GRID_SIZE) * RACK_CONSTANTS.GRID_SIZE;
+          }
+          if (this.dragStartImageAssetsState) {
+            stateManager.setState({ imageAssets: this.dragStartImageAssetsState }, true);
+            this.dragStartImageAssetsState = null;
+          }
+          eventBus.emit('imageasset:update', { id: imageId, data: { x: dropX, y: dropY } });
+        }
+      }
+
       // 4. Rubber-band multi-select completion
       if (this.isRubberBanding) {
         this.isRubberBanding = false;
@@ -1284,6 +1748,19 @@ export class App {
 
           const intersects = deviceX < selX + selW && deviceX + deviceW > selX && deviceY < selY + selH && deviceY + deviceH > selY;
           if (intersects) selected.push({ type: 'device', id: dev.id });
+        });
+
+        state.textLabels.forEach(label => {
+          // Rough point-in-rect test at the label's anchor — good enough for a rubber-band
+          // selection tool without duplicating renderer's text-width estimation here.
+          if (label.x >= selX && label.x <= selX + selW && label.y >= selY && label.y <= selY + selH) {
+            selected.push({ type: 'text', id: label.id });
+          }
+        });
+
+        state.imageAssets.forEach(asset => {
+          const intersects = asset.x < selX + selW && asset.x + asset.width > selX && asset.y < selY + selH && asset.y + asset.height > selY;
+          if (intersects) selected.push({ type: 'image', id: asset.id });
         });
 
         const existingIds = new Set(state.selection.map(s => s.id));
@@ -1318,6 +1795,11 @@ export class App {
 
     // Click handling for selection and cable creation
     svgEl.addEventListener('click', (e) => {
+      if (this.suppressNextClick) {
+        this.suppressNextClick = false;
+        return;
+      }
+
       const target = e.target as SVGElement;
       const s = stateManager.getState();
 
@@ -1346,55 +1828,89 @@ export class App {
       // Cable creation mode (both the generic cable tool and the power-cable tool share this
       // flow — handleCablePortClick already detects power ports/outlets and validates them)
       if (s.tool === 'cable' || s.tool === 'power') {
-        // Primary: detect port via SVG hit-testing
-        const portEl = target.closest('[data-port-id]') as SVGElement;
-        if (portEl) {
-          const portId = portEl.getAttribute('data-port-id')!;
-          this.handleCablePortClick(portId);
-          return;
-        }
+        // Finishing a non-power cable with Airdrop Destination on must land EXACTLY where
+        // clicked, full stop — no port hit-testing of any kind (not the direct SVG hit-test
+        // below, not the PDU-outlet hit-test, not the proximity fallback). Previously only the
+        // proximity fallback was guarded, but the direct hit-test runs first and matches whenever
+        // the click physically lands inside a port's hit-target (a few px of padding around each
+        // jack) — which happens constantly on dense switches/patch panels — so it kept silently
+        // reconnecting airdropped cables to whatever real port was under the cursor instead of
+        // dropping a floating end there. Starting a NEW cable (no cableInProgress yet) is
+        // unaffected — that still requires clicking a real source port normally.
+        const finishingAirdropCable = s.airdropDestination && !!s.cableInProgress && s.cableInProgress.cableType !== 'power';
 
-        // PDU outlet hit target detection — .pdu-outlet-hit has data-outlet-idx but no data-port-id
-        const outletEl = target.closest('.pdu-outlet-hit') as SVGElement;
-        if (outletEl) {
-          const outletIdx = outletEl.getAttribute('data-outlet-idx') ?? '0';
-          // Walk up to find the PDU group which has data-pdu-device-id
-          const pduGroupEl = outletEl.closest('[data-pdu-device-id]') as SVGElement;
-          const pduDeviceId = pduGroupEl?.getAttribute('data-pdu-device-id') ?? '';
-          if (pduDeviceId) {
-            const outletPortId = `outlet-${pduDeviceId}-${outletIdx}`;
-            this.handleCablePortClick(outletPortId);
+        if (!finishingAirdropCable) {
+          // Primary: detect port via SVG hit-testing
+          const portEl = target.closest('[data-port-id]') as SVGElement;
+          if (portEl) {
+            const portId = portEl.getAttribute('data-port-id')!;
+            this.handleCablePortClick(portId);
             return;
           }
-        }
 
-        // Fallback: proximity snap — find nearest port (or PDU outlet) within 40px world units
-        // (handles cases where the neon ring / gutter area was clicked instead of the port circle,
-        // or a PDU outlet's small `.pdu-outlet-hit` rect was narrowly missed)
-        if (s.cableInProgress || s.tool === 'cable' || s.tool === 'power') {
-          let closestPortId: string | null = null;
-          let closestDist = 40;
-          const candidateIds: string[] = [];
-          for (const dev of s.devices) {
-            for (const port of dev.ports) candidateIds.push(port.id);
-          }
-          candidateIds.push(...stateManager.getAllPduOutletPortIds());
-          for (const id of candidateIds) {
-            const pos = stateManager.getPortWorldPosition(id);
-            if (!pos) continue;
-            const dist = Math.sqrt(Math.pow(this.mouseWorldPos.x - pos.x, 2) + Math.pow(this.mouseWorldPos.y - pos.y, 2));
-            if (dist < closestDist) {
-              closestDist = dist;
-              closestPortId = id;
+          // PDU outlet hit target detection — .pdu-outlet-hit has data-outlet-idx but no data-port-id
+          const outletEl = target.closest('.pdu-outlet-hit') as SVGElement;
+          if (outletEl) {
+            const outletIdx = outletEl.getAttribute('data-outlet-idx') ?? '0';
+            // Walk up to find the PDU group which has data-pdu-device-id
+            const pduGroupEl = outletEl.closest('[data-pdu-device-id]') as SVGElement;
+            const pduDeviceId = pduGroupEl?.getAttribute('data-pdu-device-id') ?? '';
+            if (pduDeviceId) {
+              const outletPortId = `outlet-${pduDeviceId}-${outletIdx}`;
+              this.handleCablePortClick(outletPortId);
+              return;
             }
           }
-          if (closestPortId) {
-            this.handleCablePortClick(closestPortId);
-            return;
+
+          // Fallback: proximity snap — find nearest port (or PDU outlet) within 40px world units
+          // (handles cases where the neon ring / gutter area was clicked instead of the port circle,
+          // or a PDU outlet's small `.pdu-outlet-hit` rect was narrowly missed). TWO PASSES: real
+          // ports (+ PDU outlets) at the normal 40px radius first; ear-mount holes are only even
+          // considered if that first pass finds nothing, and only within their own tight 1.5px
+          // radius. Ear holes sit right at a device's rail edge, close to any real port calibrated
+          // near a panel's edge — a single combined "closest wins, smaller cap for ear holes"
+          // comparison still let an ear hole win whenever it was a fraction of a pixel closer than
+          // the intended real port, no matter how small that cap got.
+          if (s.cableInProgress || s.tool === 'cable' || s.tool === 'power') {
+            let closestPortId: string | null = null;
+            let closestDist = 40;
+            const realCandidateIds: string[] = [];
+            const earCandidateIds: string[] = [];
+            for (const dev of s.devices) {
+              for (const port of dev.ports) (port.id.includes('-ear-') ? earCandidateIds : realCandidateIds).push(port.id);
+            }
+            realCandidateIds.push(...stateManager.getAllPduOutletPortIds());
+            for (const id of realCandidateIds) {
+              const pos = stateManager.getPortWorldPosition(id);
+              if (!pos) continue;
+              const dist = Math.sqrt(Math.pow(this.mouseWorldPos.x - pos.x, 2) + Math.pow(this.mouseWorldPos.y - pos.y, 2));
+              if (dist < closestDist) {
+                closestDist = dist;
+                closestPortId = id;
+              }
+            }
+            if (!closestPortId) {
+              const EAR_SNAP_RADIUS = 1.5;
+              let closestEarDist = EAR_SNAP_RADIUS;
+              for (const id of earCandidateIds) {
+                const pos = stateManager.getPortWorldPosition(id);
+                if (!pos) continue;
+                const dist = Math.sqrt(Math.pow(this.mouseWorldPos.x - pos.x, 2) + Math.pow(this.mouseWorldPos.y - pos.y, 2));
+                if (dist < closestEarDist) {
+                  closestEarDist = dist;
+                  closestPortId = id;
+                }
+              }
+            }
+            if (closestPortId) {
+              this.handleCablePortClick(closestPortId);
+              return;
+            }
           }
         }
 
-        // No real port was found anywhere near this click. With Airdrop Destination on and a
+        // No real port was found anywhere near this click (or we're finishing an Airdrop cable
+        // and deliberately skipped all port hit-testing above). With Airdrop Destination on and a
         // cable already in progress (started from a real source port the normal way), finish it
         // right here instead of requiring a real destination port — any rack, any spot, no snap.
         if (s.airdropDestination && s.cableInProgress) {
@@ -1462,6 +1978,24 @@ export class App {
           eventBus.emit('selection:changed', [{ type: 'cable', id: cableId }]);
           this.renderAll();
           this.properties.update([{ type: 'cable', id: cableId }]);
+          return;
+        }
+
+        // Check for text label click
+        const textElClick = target.closest('[data-text-id]') as SVGElement;
+        if (textElClick) {
+          const textId = textElClick.getAttribute('data-text-id')!;
+          stateManager.setState({ selection: [{ type: 'text', id: textId }] });
+          eventBus.emit('selection:changed', [{ type: 'text', id: textId }]);
+          return;
+        }
+
+        // Check for image asset click
+        const imageElClick = target.closest('[data-image-id]') as SVGElement;
+        if (imageElClick) {
+          const imageId = imageElClick.getAttribute('data-image-id')!;
+          stateManager.setState({ selection: [{ type: 'image', id: imageId }] });
+          eventBus.emit('selection:changed', [{ type: 'image', id: imageId }]);
           return;
         }
 
@@ -1626,6 +2160,9 @@ export class App {
         resetPreviewDirection();
 
         const outletPortId = isDestOutlet ? portId : (isSrcOutlet ? sourcePortId : null);
+        // The end that's a real device port (not the PDU outlet) — used to detect whether this
+        // device already has a power cord running to a PDU, making this new one its redundant feed.
+        const deviceEndDeviceId = isDestOutlet ? sourcePort?.deviceId : (isSrcOutlet ? destPort?.deviceId : null);
         const finish = (plugType: SocketType) => {
           // Determine cable color: blue for B-feed (right PDU), red for A-feed (left PDU)
           let cableColor = '#ff4422'; // default red (A-feed / left PDU)
@@ -1638,7 +2175,16 @@ export class App {
             const isRightPdu = allRacks.some(r => r.rightPduId === outletDeviceId);
             if (isRightPdu) cableColor = '#3399ff'; // blue for B-feed
           }
-          commitCable({ powerCableType: 'power', plugType, color: cableColor });
+          const currentState = stateManager.getState();
+          const isRedundant = !!deviceEndDeviceId
+            && countDevicePowerCables(deviceEndDeviceId, currentState.cables, currentState.devices) >= 1;
+          commitCable({
+            powerCableType: 'power', plugType, color: cableColor,
+            type: isRedundant ? 'power-redundant' : 'power',
+          });
+          if (isRedundant) {
+            eventBus.emit('notification', { message: 'Marked as Redundant Power — 2nd feed for this device', type: 'success' });
+          }
         };
 
         // Auto-detect the plug from the outlet's actual configured socket type (C13, C19,
@@ -1812,9 +2358,15 @@ export class App {
       if (cable) skipId = cable.sourcePortId;
     }
 
+    // Two passes, same reasoning as the click-commit fallback above: ear holes sit right at a
+    // device's rail edge, close to any real port calibrated near a panel's edge, so a single
+    // combined "closest wins, smaller cap for ear holes" comparison still let an ear hole's glow
+    // win whenever it was a fraction of a pixel closer than the intended real port. Real ports are
+    // searched first at the normal 30px radius; ear holes are only even considered — at their own
+    // tight 1.5px radius — if that first pass finds nothing.
     for (const dev of s.devices) {
       for (const port of dev.ports) {
-        if (port.id === skipId) continue;
+        if (port.id === skipId || port.id.includes('-ear-')) continue;
         if (port.connected && !dragCableId) continue; // already used
         const pos = stateManager.getPortWorldPosition(port.id);
         if (!pos) continue;
@@ -1822,6 +2374,23 @@ export class App {
         if (dist < closestDist) {
           closestDist = dist;
           closestPortId = port.id;
+        }
+      }
+    }
+    if (!closestPortId) {
+      const EAR_HIGHLIGHT_RADIUS = 1.5;
+      let closestEarDist = EAR_HIGHLIGHT_RADIUS;
+      for (const dev of s.devices) {
+        for (const port of dev.ports) {
+          if (port.id === skipId || !port.id.includes('-ear-')) continue;
+          if (port.connected && !dragCableId) continue; // already used
+          const pos = stateManager.getPortWorldPosition(port.id);
+          if (!pos) continue;
+          const dist = Math.sqrt(Math.pow(worldPos.x - pos.x, 2) + Math.pow(worldPos.y - pos.y, 2));
+          if (dist < closestEarDist) {
+            closestEarDist = dist;
+            closestPortId = port.id;
+          }
         }
       }
     }
@@ -2077,6 +2646,33 @@ export class App {
         }
       }
 
+      // Pixel-precise nudge for a selected text label or image with Arrow keys — 1px per press,
+      // 10px with Shift held, bypassing grid snapping entirely (unlike a mouse drop, which still
+      // snaps when the grid-snap toggle is on). The only way to land on an exact, non-grid pixel.
+      if (s.selection.length === 1 && (s.selection[0].type === 'text' || s.selection[0].type === 'image')) {
+        const arrowDeltas: Record<string, { dx: number; dy: number }> = {
+          ArrowUp: { dx: 0, dy: -1 }, ArrowDown: { dx: 0, dy: 1 },
+          ArrowLeft: { dx: -1, dy: 0 }, ArrowRight: { dx: 1, dy: 0 },
+        };
+        const delta = arrowDeltas[e.key];
+        if (delta) {
+          e.preventDefault();
+          const step = e.shiftKey ? 10 : 1;
+          const item = s.selection[0];
+          if (item.type === 'text') {
+            const label = stateManager.getState().textLabels.find(t => t.id === item.id);
+            if (label && !label.locked) {
+              eventBus.emit('textlabel:update', { id: item.id, data: { x: label.x + delta.dx * step, y: label.y + delta.dy * step } });
+            }
+          } else {
+            const asset = stateManager.getState().imageAssets.find(a => a.id === item.id);
+            if (asset && !asset.locked) {
+              eventBus.emit('imageasset:update', { id: item.id, data: { x: asset.x + delta.dx * step, y: asset.y + delta.dy * step } });
+            }
+          }
+        }
+      }
+
       if (e.key === ' ') {
         this.spacePressed = true;
         e.preventDefault();
@@ -2106,6 +2702,10 @@ export class App {
       // C = Cable tool
       if (e.key === 'c' && !e.ctrlKey) eventBus.emit('tool:changed', 'cable');
       if (e.key === 'p' && !e.ctrlKey) eventBus.emit('tool:changed', 'power');
+      // T = Text tool
+      if (e.key === 't' && !e.ctrlKey) eventBus.emit('tool:changed', 'text');
+      // L = Add Label (device-pointing) tool
+      if (e.key === 'l' && !e.ctrlKey) eventBus.emit('tool:changed', 'label');
 
       // Ctrl+S = Save
       if (e.ctrlKey && e.key === 's') {
@@ -2137,6 +2737,8 @@ export class App {
         const allSelection = [
           ...s.devices.map(d => ({ type: 'device' as const, id: d.id })),
           ...s.cables.map(c => ({ type: 'cable' as const, id: c.id })),
+          ...s.textLabels.map(t => ({ type: 'text' as const, id: t.id })),
+          ...s.imageAssets.map(a => ({ type: 'image' as const, id: a.id })),
         ];
         stateManager.setState({ selection: allSelection });
         eventBus.emit('selection:changed', allSelection);
@@ -2702,6 +3304,146 @@ export class App {
   /**
    * Delete currently selected elements.
    */
+  /** Places a new TextLabel at `pos` (world coords), selects it (opening the Text Tool panel),
+   *  and returns the tool to 'select' — a "stamp once" flow so the user isn't stuck in
+   *  placement mode after adding one label. */
+  private placeTextLabel(pos: Point) {
+    const label: TextLabel = {
+      id: generateId(),
+      x: pos.x,
+      y: pos.y,
+      text: 'Label',
+      fontFamily: 'Inter, sans-serif',
+      fontSize: 10,
+      fontWeight: 'normal',
+      fontStyle: 'normal',
+      underline: false,
+      color: stateManager.getState().theme === 'light' ? '#1f2937' : '#e6ecf2',
+      align: 'left',
+      backgroundColor: null,
+      rotation: 0,
+    };
+    const textLabels = [...stateManager.getState().textLabels, label];
+    stateManager.setState({ textLabels, selection: [{ type: 'text', id: label.id }] });
+    eventBus.emit('selection:changed', [{ type: 'text', id: label.id }]);
+    eventBus.emit('tool:changed', 'select');
+    this.renderAll();
+  }
+
+  /** Places a new TextLabel pointing at `deviceId` — `clickPos` (world coords) becomes the
+   *  device-local pointerAnchorX/Y (see getDeviceWorldOrigin), so the leader line tracks the
+   *  device if it's later dragged to a different rack unit. The box itself is placed clear of
+   *  the device's rack, pre-filled with the device's real name and styled to match the
+   *  dark-badge callout look from the reference screenshot. Same stamp-once flow as
+   *  placeTextLabel(): selects the new label and reverts to the select tool. */
+  private placeDeviceLabel(deviceId: string, clickPos: Point) {
+    const device = stateManager.getDevice(deviceId);
+    const origin = stateManager.getDeviceWorldOrigin(deviceId);
+    if (!device || !origin) return;
+
+    const rack = stateManager.getRack(device.rackId);
+    const boxX = rack ? rack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH + 40 : clickPos.x + 150;
+    const boxY = clickPos.y - 15;
+
+    const label: TextLabel = {
+      id: generateId(),
+      x: boxX,
+      y: boxY,
+      text: device.name || 'Device Name',
+      fontFamily: 'Inter, sans-serif',
+      fontSize: 10,
+      fontWeight: 'bold',
+      fontStyle: 'normal',
+      underline: false,
+      color: '#ffffff',
+      align: 'left',
+      backgroundColor: '#1a4971',
+      backgroundPaddingX: 0,
+      backgroundPaddingY: 0,
+      rotation: 0,
+      pointerDeviceId: deviceId,
+      pointerAnchorX: clickPos.x - origin.x,
+      pointerAnchorY: clickPos.y - origin.y,
+      pointerStyle: 'elbow',
+    };
+    const textLabels = [...stateManager.getState().textLabels, label];
+    stateManager.setState({ textLabels, selection: [{ type: 'text', id: label.id }] });
+    eventBus.emit('selection:changed', [{ type: 'text', id: label.id }]);
+    eventBus.emit('tool:changed', 'select');
+    this.renderAll();
+  }
+
+  /**
+   * Wires the "Insert Image" toolbar button to a hidden file input, matching the same
+   * FileReader.readAsDataURL() upload pattern already used for a device's front panel image
+   * (properties.ts) — the data URL round-trips through project JSON save/load and preserves
+   * PNG/GIF/WEBP/SVG alpha transparency untouched, since it's the original uploaded bytes.
+   */
+  private setupImageUpload() {
+    this.imageFileInput = document.createElement('input');
+    this.imageFileInput.type = 'file';
+    this.imageFileInput.accept = 'image/*';
+    this.imageFileInput.style.display = 'none';
+    document.body.appendChild(this.imageFileInput);
+
+    this.imageFileInput.addEventListener('change', (e: any) => {
+      const file: File | undefined = e.target.files?.[0];
+      this.imageFileInput.value = ''; // allow re-selecting the same file again later
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const probe = new Image();
+        probe.onload = () => this.insertImageAsset(dataUrl, probe.naturalWidth || 200, probe.naturalHeight || 200);
+        probe.onerror = () => this.insertImageAsset(dataUrl, 200, 200);
+        probe.src = dataUrl;
+      };
+      reader.onerror = () => eventBus.emit('notification', { message: 'Failed to read image file', type: 'error' });
+      reader.readAsDataURL(file);
+    });
+
+    (eventBus as any).on('image:insert', () => this.imageFileInput.click());
+  }
+
+  /** Places a new ImageAsset centered in the current viewport, scaled down (preserving aspect
+   *  ratio) if larger than a reasonable on-canvas default, selects it, and opens the Image Tool
+   *  panel via the resulting selection change. */
+  private insertImageAsset(dataUrl: string, naturalWidth: number, naturalHeight: number) {
+    const MAX_DIM = 240;
+    let width = naturalWidth;
+    let height = naturalHeight;
+    if (width > MAX_DIM || height > MAX_DIM) {
+      const scale = MAX_DIM / Math.max(width, height);
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+    }
+
+    const viewport = document.getElementById('canvas-viewport');
+    const rect = viewport?.getBoundingClientRect();
+    const centerScreen = {
+      x: (rect?.left ?? 0) + (rect?.width ?? 800) / 2,
+      y: (rect?.top ?? 0) + (rect?.height ?? 600) / 2,
+    };
+    const centerWorld = this.canvas.screenToWorld(centerScreen);
+
+    const asset: ImageAsset = {
+      id: generateId(),
+      x: Math.round(centerWorld.x - width / 2),
+      y: Math.round(centerWorld.y - height / 2),
+      width,
+      height,
+      src: dataUrl,
+      opacity: 1,
+      rotation: 0,
+    };
+    const imageAssets = [...stateManager.getState().imageAssets, asset];
+    stateManager.setState({ imageAssets, selection: [{ type: 'image', id: asset.id }] });
+    eventBus.emit('selection:changed', [{ type: 'image', id: asset.id }]);
+    this.renderAll();
+    eventBus.emit('notification', { message: 'Image added to canvas', type: 'success' });
+  }
+
   private deleteSelection() {
     const s = stateManager.getState();
 
@@ -2751,6 +3493,14 @@ export class App {
           cables: stateManager.getState().cables.filter(c => c.id !== item.id)
         });
         eventBus.emit('cable:removed', item.id);
+      } else if (item.type === 'text') {
+        stateManager.setState({
+          textLabels: stateManager.getState().textLabels.filter(t => t.id !== item.id)
+        });
+      } else if (item.type === 'image') {
+        stateManager.setState({
+          imageAssets: stateManager.getState().imageAssets.filter(a => a.id !== item.id)
+        });
       } else if ((item as any).type === 'vertical-mgr') {
         const side = (item as any).side;
         const prop = side === 'left' ? 'leftCableManagerWidth' : 'rightCableManagerWidth';
@@ -3020,6 +3770,75 @@ export class App {
       }
     }
 
+    this.renderAnnotationLayer();
+
+    // Rack Load Summary / Cable Types cards — the exact same cards export draws, rendered live
+    // here (inside the pannable/zoomable viewport, so they scale and pan correctly with the
+    // rack — unlike the old fixed-position HTML overlay this replaced) and always draggable, so
+    // their per-rack placement (rack.summaryCardOffset) doubles as both "get them out of the
+    // way of a label" for live editing and the exact position the export uses — one system, not
+    // two that could disagree.
+    const summaryPreviewLayer = this.canvas.getLayer('summary-preview-layer');
+    if (summaryPreviewLayer) {
+      summaryPreviewLayer.innerHTML = '';
+      if (s.showLegends) {
+        // While actively dragging, splice in the transient live offset for just that rack —
+        // never written to real state, so nothing hits the undo stack until mouseup commits it.
+        const racksForPreview = this.summaryCardDragPreview
+          ? s.racks.map(r => r.id === this.summaryCardDragPreview!.rackId
+              ? { ...r, summaryCardOffset: this.summaryCardDragPreview!.offset }
+              : r)
+          : s.racks;
+        appendExportSummaryOverlay(summaryPreviewLayer, racksForPreview, s.devices, s.cables, s.customLegendItems, { draggable: true });
+      }
+    }
+  }
+
+  /**
+   * Re-renders just the annotation layer (image assets + text labels) without touching
+   * racks/devices/cables. renderAll() calls this as part of a full render; text/image drag and
+   * resize call it directly on every mousemove instead of the full renderAll() — rebuilding
+   * every rack/device/cable from scratch at mouse-move frequency is what made dragging a small
+   * label feel like it was stuttering, even once the position math itself was smooth.
+   */
+  private renderAnnotationLayer() {
+    const s = stateManager.getState();
+    const labelLayer = this.canvas.getLayer('label-layer');
+    if (!labelLayer) return;
+
+    labelLayer.innerHTML = '';
+
+    for (const asset of s.imageAssets) {
+      try {
+        const isSelected = s.selection.some(sel => sel.type === 'image' && sel.id === asset.id);
+        renderImageAsset(asset, labelLayer, isSelected);
+      } catch (err) {
+        console.error(`renderAnnotationLayer: failed to render image asset "${asset.id}" — skipping it so the rest of the layer can still render`, err);
+      }
+    }
+    for (const label of s.textLabels) {
+      try {
+        const isSelected = s.selection.some(sel => sel.type === 'text' && sel.id === label.id);
+        // Graceful degrade: if pointerDeviceId is stale (its target device was deleted),
+        // getDeviceWorldOrigin returns null and the label just renders as a plain floating box
+        // with no connector — never a crash or a dangling-reference render.
+        const deviceAnchorWorld = label.pointerDeviceId
+          ? this.resolveLabelPointerAnchor(label)
+          : null;
+        renderTextLabel(label, labelLayer, isSelected, deviceAnchorWorld);
+      } catch (err) {
+        console.error(`renderAnnotationLayer: failed to render text label "${label.id}" — skipping it so the rest of the layer can still render`, err);
+      }
+    }
+  }
+
+  /** Resolves a pointer-carrying label's world anchor point from its live device position
+   *  (device.rackId/startUnit) plus its stored device-local offset — see getDeviceWorldOrigin. */
+  private resolveLabelPointerAnchor(label: TextLabel): Point | null {
+    if (!label.pointerDeviceId) return null;
+    const origin = stateManager.getDeviceWorldOrigin(label.pointerDeviceId);
+    if (!origin) return null;
+    return { x: origin.x + (label.pointerAnchorX ?? 0), y: origin.y + (label.pointerAnchorY ?? 0) };
   }
 
   /**
@@ -3034,6 +3853,8 @@ export class App {
       'pan': 'grab',
       'cable': 'crosshair',
       'power': 'crosshair',
+      'text': 'text',
+      'label': 'crosshair',
       'zoom-in': 'zoom-in',
       'zoom-out': 'zoom-out',
       'export-area': 'crosshair',

@@ -9,6 +9,8 @@ const minimalState: AppState = {
   devices: [],
   cables: [],
   bundles: [],
+  textLabels: [],
+  imageAssets: [],
   validationAlerts: [],
   selection: [],
   cableInProgress: null,

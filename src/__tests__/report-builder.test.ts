@@ -24,7 +24,9 @@ vi.mock('../renderers/device-renderer', () => ({
 }));
 
 vi.mock('../library/device-catalog', () => ({
-  getTemplate: vi.fn(() => ({ heightUnits: 2, category: 'server' })),
+  getTemplate: vi.fn((id: string) =>
+    id === 'pdu-1u' ? { heightUnits: 1, category: 'pdu', powerWatts: 0 } : { heightUnits: 2, category: 'server' }
+  ),
 }));
 
 const makeState = (overrides: Partial<any> = {}): any => ({
@@ -78,10 +80,21 @@ describe('buildReport', () => {
   it('calculates 50% power usage for 3600W on a single 7200W PDU rack', async () => {
     const { buildReport } = await import('../export/report-builder');
     const state = makeState({
-      racks: [{ id: 'r1', name: 'Rack', units: 42, x: 0, y: 0, showPduLeft: true, showPduRight: false }],
-      devices: [{
-        id: 'd1', rackId: 'r1', startUnit: 1, name: 'Srv', hostname: '', managementIp: '',
-        serialNumber: '', description: '3600W', powerWatts: 3600, templateId: 'server-2u', ports: [],
+      racks: [{ id: 'r1', name: 'Rack', units: 42, x: 0, y: 0 }],
+      devices: [
+        {
+          id: 'pdu1', rackId: 'r1', startUnit: 42, name: 'PDU', hostname: '', managementIp: '',
+          serialNumber: '', description: '', templateId: 'pdu-1u', ports: [],
+        },
+        {
+          id: 'd1', rackId: 'r1', startUnit: 1, name: 'Srv', hostname: '', managementIp: '',
+          serialNumber: '', description: '3600W', powerWatts: 3600, templateId: 'server-2u',
+          ports: [{ id: 'd1-power', deviceId: 'd1', name: 'Power', type: 'power', relativeX: 0, relativeY: 0, connected: true, cableId: 'c1' }],
+        },
+      ],
+      cables: [{
+        id: 'c1', name: 'Power cord', type: 'power', color: '#000', sourcePortId: 'd1-power', destPortId: 'outlet-pdu1-0',
+        bendPoints: [], thickness: 2, bendRadius: 0, bundleId: null, notes: '',
       }],
     });
     const html = buildReport(state, makeMeta());
@@ -93,10 +106,21 @@ describe('buildReport', () => {
   it('shows Critical status badge when usage >= 95%', async () => {
     const { buildReport } = await import('../export/report-builder');
     const state = makeState({
-      racks: [{ id: 'r1', name: 'Rack', units: 42, x: 0, y: 0, showPduLeft: true, showPduRight: false }],
-      devices: [{
-        id: 'd1', rackId: 'r1', startUnit: 1, name: 'Srv', hostname: '', managementIp: '',
-        serialNumber: '', description: '7000W', powerWatts: 7000, templateId: 'server-2u', ports: [],
+      racks: [{ id: 'r1', name: 'Rack', units: 42, x: 0, y: 0 }],
+      devices: [
+        {
+          id: 'pdu1', rackId: 'r1', startUnit: 42, name: 'PDU', hostname: '', managementIp: '',
+          serialNumber: '', description: '', templateId: 'pdu-1u', ports: [],
+        },
+        {
+          id: 'd1', rackId: 'r1', startUnit: 1, name: 'Srv', hostname: '', managementIp: '',
+          serialNumber: '', description: '7000W', powerWatts: 7000, templateId: 'server-2u',
+          ports: [{ id: 'd1-power', deviceId: 'd1', name: 'Power', type: 'power', relativeX: 0, relativeY: 0, connected: true, cableId: 'c1' }],
+        },
+      ],
+      cables: [{
+        id: 'c1', name: 'Power cord', type: 'power', color: '#000', sourcePortId: 'd1-power', destPortId: 'outlet-pdu1-0',
+        bendPoints: [], thickness: 2, bendRadius: 0, bundleId: null, notes: '',
       }],
     });
     const html = buildReport(state, makeMeta());

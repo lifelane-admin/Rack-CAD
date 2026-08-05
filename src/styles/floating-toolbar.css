@@ -6,17 +6,45 @@
   z-index: 90;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   background: var(--bg-panel);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: var(--glass-border);
-  border-radius: 16px; /* Adjusted from pill to rounded rectangle for double-decker design */
-  padding: 10px 16px;
+  border-radius: 14px; /* Adjusted from pill to rounded rectangle for double-decker design */
+  padding: 8px 14px;
   box-shadow: var(--shadow-float);
   transition: opacity var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
   user-select: none;
   opacity: 0.96;
+}
+
+/* Row 1 (select/pan, quick actions, anchor + text/label/image tools) is deliberately more
+   compact than row 2 (the primary cable/power drawing-mode buttons) — it packs the most
+   buttons of either row, and shrinking it keeps the whole floating toolbar from growing every
+   time a new tool button gets added here. */
+#ft-row-1 .ft-btn {
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+}
+
+#ft-row-1 .ft-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+#ft-row-1 .ft-drag-handle {
+  height: 26px;
+  font-size: 12px;
+}
+
+#ft-row-1 .ft-separator {
+  height: 16px;
+}
+
+#ft-row-1 .ft-section {
+  gap: 4px;
 }
 
 .floating-toolbar:hover {

@@ -84,6 +84,8 @@ export class StatusBar {
       'pan': '✋',
       'cable': '🔗',
       'power': '🔌',
+      'text': '🔤',
+      'label': '🏷️',
       'zoom-in': '🔍+',
       'zoom-out': '🔍-',
       'export-area': '📐'

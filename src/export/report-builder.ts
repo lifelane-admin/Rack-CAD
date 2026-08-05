@@ -4,7 +4,7 @@ import {
 import { renderRack } from '../renderers/rack-renderer';
 import { renderDevice } from '../renderers/device-renderer';
 import { getTemplate } from '../library/device-catalog';
-import { getRackPduCount, getRackPowerCapacityWatts, getDevicePowerWatts } from '../utils/power';
+import { getRackPduCount, getRackPowerCapacityWatts, getRackPduLoadWatts, getRackRedundantPowerDeviceCount } from '../utils/power';
 
 export interface ReportMetadata {
   title: string;
@@ -170,14 +170,15 @@ function buildPowerSummaryTable(state: AppState): string {
   }
 
   const rows = state.racks.map(rack => {
-    const pduCount = getRackPduCount(rack);
-    const capacityW = getRackPowerCapacityWatts(rack);
     const rackDevices = state.devices.filter(d => d.rackId === rack.id);
+    const pduCount = getRackPduCount(rack, state.devices);
+    const capacityW = getRackPowerCapacityWatts(rack, state.devices);
     const usedRUs = rackDevices.reduce((sum, d) => {
       const tpl = getTemplate(d.templateId);
       return sum + (tpl?.heightUnits ?? 1);
     }, 0);
-    const usedW  = rackDevices.reduce((sum, d) => sum + getDevicePowerWatts(d), 0);
+    const usedW = getRackPduLoadWatts(rack, state.devices, state.cables);
+    const redundantCount = getRackRedundantPowerDeviceCount(rack, state.devices, state.cables);
     const totalKg = rackDevices.reduce((sum, d) => sum + parseKg(d.description), 0);
     const pct = capacityW > 0 ? Math.round((usedW / capacityW) * 100) : 0;
     const statusColor = pct >= 95 ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#22c55e';
@@ -192,12 +193,13 @@ function buildPowerSummaryTable(state: AppState): string {
       <td>${capacityW > 0 ? `<span class="rpt-badge" style="background:${statusColor}">${statusLabel}</span>` : '—'}</td>
       <td>${usedRUs} / ${rack.units} RU</td>
       <td>${totalKg > 0 ? `${totalKg} kg` : '—'}</td>
+      <td>${redundantCount > 0 ? `⚡ ${redundantCount} device${redundantCount === 1 ? '' : 's'}` : '—'}</td>
     </tr>`;
   }).join('');
 
   return `<table class="power-summary">
     <thead>
-      <tr><th>Rack</th><th>PDUs</th><th>Capacity</th><th>Used</th><th>%</th><th>Status</th><th>RU Usage</th><th>Est. Weight</th></tr>
+      <tr><th>Rack</th><th>PDUs</th><th>Capacity</th><th>Used</th><th>%</th><th>Status</th><th>RU Usage</th><th>Est. Weight</th><th>Redundant Power</th></tr>
     </thead>
     <tbody>${rows}</tbody>
   </table>`;

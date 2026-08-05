@@ -104,23 +104,6 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   });
   group.appendChild(path);
 
-  // Power cable: plug-type label at cable midpoint
-  if (isPowerCable && cable.plugType) {
-    const midX = (sourcePos.x + destPos.x) / 2;
-    const midY = (sourcePos.y + destPos.y) / 2;
-    const plugLabel = createSVGEl('text', {
-      x: midX,
-      y: midY - 5,
-      'font-size': '7',
-      'font-family': 'monospace',
-      fill: powerStrokeColor,
-      'text-anchor': 'middle',
-      'pointer-events': 'none'
-    });
-    plugLabel.textContent = String(cable.plugType);
-    group.appendChild(plugLabel);
-  }
-
   // Preview highlight: yellow glow if cable is in previewDiff
   const previewDiff = stateManager.getState().previewDiff;
   if (previewDiff?.diff) {
@@ -258,12 +241,13 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   // 'general'), which would otherwise fall through to the plain Ethernet connector instead of
   // the C13/C14 plug graphic.
   const cableType = cable.type || 'general';
-  const isSFP = ['sfp', 'sfp-plus', 'sfp28', 'qsfp', 'qsfp28', 'dac-twinax'].some(t => cableType.includes(t));
-  const isFiber = ['om3', 'om4', 'om5', 'fiber', 'lc', 'sc'].some(t => cableType.includes(t));
+  const typeClass = classifyCableConnector(cableType);
+  const isSFP = typeClass.isSFP;
+  const isFiber = typeClass.isFiber;
   const isPower = cable.powerCableType === 'power'
     || !!cable.sourcePortId?.startsWith('outlet-')
     || !!cable.destPortId?.startsWith('outlet-')
-    || ['power', 'pwr', 'c13', 'c14', 'c19', 'c13-power', 'c19-power'].some(t => cableType.includes(t));
+    || typeClass.isPower;
 
   // Compact connector mode: switch ports have tiny 9px sockets — full-size connectors float above them
   const srcPortObj  = cable.sourcePortId ? stateManager.getPort(cable.sourcePortId) : null;
@@ -533,10 +517,10 @@ function createEthernetConnector(pos: Point, color: string, orientation: 'up' | 
   });
   g.appendChild(glare2);
 
-  // ── 8 ultra-thin gold contact pins ───────────────────────────────────────
+  // ── 8 gold contact pins (25% larger than the original "ultra-thin" size) ──
   for (let i = 0; i < 8; i++) {
     const px = 7.2 + i * 1.65;
-    const pin = createRect(px, 2, 0.9, 4.5, {
+    const pin = createRect(px, 2, 0.9 * 1.25, 4.5 * 1.25, {
       fill: '#f5c518',
       stroke: '#b8860b',
       'stroke-width': 0.2,
@@ -740,9 +724,24 @@ function createPowerConnector(pos: Point, color: string, orientation: 'up' | 'do
 }
 
 /**
+ * Classifies a cable TYPE alone (no full CableData needed) into which connector shape it should
+ * draw as — the same substring rules used for real cable endpoints below, factored out so
+ * anything that only knows a `CableType` (e.g. the Cable Types legend, which groups by type
+ * across many cable instances) can pick the identical connector graphic without duplicating
+ * this list. Cable-instance-only signals (`powerCableType`, PDU-outlet port ids) aren't part of
+ * this — see the caller below for where those still apply on top of it.
+ */
+export function classifyCableConnector(cableType: string): { isFiber: boolean; isPower: boolean; isSFP: boolean } {
+  const isSFP = ['sfp', 'sfp-plus', 'sfp28', 'qsfp', 'qsfp28', 'dac-twinax'].some(t => cableType.includes(t));
+  const isFiber = ['om3', 'om4', 'om5', 'fiber', 'lc', 'sc'].some(t => cableType.includes(t));
+  const isPower = ['power', 'pwr', 'c13', 'c14', 'c19', 'c13-power', 'c19-power'].some(t => cableType.includes(t));
+  return { isFiber, isPower, isSFP };
+}
+
+/**
  * Route to correct connector renderer.
  */
-function createConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right', isFiber: boolean, isPower: boolean, isSFP: boolean, compact = false, plugType?: string): SVGGElement {
+export function createConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right', isFiber: boolean, isPower: boolean, isSFP: boolean, compact = false, plugType?: string): SVGGElement {
   if (isSFP) return createSFPConnector(pos, color, orientation);
   if (isFiber) return createFiberConnector(pos, color, orientation);
   if (isPower) return createPowerConnector(pos, color, orientation, plugType);

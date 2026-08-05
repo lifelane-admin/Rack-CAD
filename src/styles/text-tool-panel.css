@@ -1,0 +1,241 @@
+.text-tool-panel {
+  position: absolute;
+  z-index: 95;
+  width: 260px;
+  background: var(--bg-panel);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-float);
+  user-select: none;
+  transform: translateX(-50%);
+}
+
+.ttp-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ttp-drag-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.ttp-drag-handle:active {
+  cursor: grabbing;
+  color: var(--accent-primary);
+}
+
+.ttp-title {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.ttp-context-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 6px;
+  margin-top: 2px;
+}
+
+.ttp-close {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.ttp-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.ttp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.ttp-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 4px 2px;
+}
+
+.ttp-text {
+  width: 100%;
+  resize: vertical;
+  min-height: 40px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 6px 8px;
+  box-sizing: border-box;
+}
+
+.ttp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ttp-font-family {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 11px;
+  padding: 5px 6px;
+}
+
+.ttp-font-size {
+  width: 56px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 11px;
+  padding: 5px 6px;
+}
+
+.ttp-btn {
+  min-width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 6px;
+  transition: all var(--transition-speed) ease;
+}
+
+.ttp-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.ttp-btn.active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.ttp-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border-color);
+  margin: 0 2px;
+}
+
+.ttp-color-label,
+.ttp-checkbox-label,
+.ttp-rotation-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ttp-color-label input[type="color"],
+.ttp-bg-color {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ttp-pos-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.ttp-pos-label input[type="number"] {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 11px;
+  padding: 4px 6px;
+}
+
+.ttp-rotation-label input[type="number"] {
+  width: 44px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 11px;
+  padding: 4px 6px;
+}
+
+.ttp-delete {
+  margin-left: auto;
+  color: #ff8080;
+  border-color: rgba(255, 128, 128, 0.3);
+}
+
+.ttp-delete:hover {
+  background: rgba(255, 128, 128, 0.12);
+  color: #ff8080;
+}
+
+/* Image Tool panel additions */
+.image-tool-panel {
+  width: 220px;
+}
+
+.itp-opacity {
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.itp-opacity-value {
+  font-size: 10px;
+  color: var(--text-muted);
+  width: 32px;
+  text-align: right;
+  flex-shrink: 0;
+}

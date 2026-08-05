@@ -21,6 +21,11 @@ export interface RackData {
   pduCapacityWatts?: number;  // max watts per circuit; default 3600
   leftPduId?: string;    // deviceId of PDU on left wall
   rightPduId?: string;   // deviceId of PDU on right wall
+  /** Manual placement (rack-local coordinates, same convention as export-summary-overlay.ts's
+   *  cardX/cardY) for this rack's export Summary/Cable-Types card pair, set by dragging them in
+   *  the canvas's Summary Card Preview mode. Undefined means "auto" — clear of the rack body and
+   *  any right-side PDU/cable manager (see rackRightEdge in export-summary-overlay.ts). */
+  summaryCardOffset?: { x: number; y: number };
 }
 
 // === Ports ===
@@ -216,7 +221,7 @@ export interface PortData {
 }
 
 // === Devices ===
-export type DeviceCategory = 'server' | 'switch' | 'router' | 'firewall' | 'storage' | 'patch-panel' | 'pdu' | 'ups' | 'blank-panel' | 'cable-manager' | 'cooling' | 'console' | 'nac' | 'ats';
+export type DeviceCategory = 'server' | 'switch' | 'router' | 'firewall' | 'storage' | 'patch-panel' | 'pdu' | 'ups' | 'blank-panel' | 'cable-manager' | 'cooling' | 'console' | 'nac' | 'ats' | 'load-balancer' | 'vpn-concentrator' | 'ids-ips' | 'proxy-waf';
 
 export interface DeviceTemplate {
   id: string;
@@ -231,6 +236,12 @@ export interface DeviceTemplate {
   frontPanelImage?: string;
   deviceConfig?: Record<string, unknown>;  // PDU configurator state
   isCustom?: boolean;
+  // Always uses the generic device Properties panel (front-panel image upload + manual port
+  // add/remove) instead of the category's specialized SDK configurator (renderSwitchProperties /
+  // renderFirewallProperties etc.) — for templates meant to be re-skinned with a real hardware
+  // photo and calibrated port-by-port, where the switch/firewall rj45Count-driven configurator
+  // would fight with (and overwrite) manually placed ports.
+  customLayout?: boolean;
   basedOnTemplateId?: string;
   customDescription?: string;
   createdAt?: string;
@@ -257,9 +268,68 @@ export interface DeviceData {
   powerWatts?: number;  // per-instance override; falls back to template.powerWatts
   sideMountPosition?: 'left' | 'right';  // only for mountType:'side' devices
   portTypes?: Record<number, 'data' | 'power'>;  // port index → type; absent = 'data'
+  // Per-instance "Device Type" override (Properties panel) — only honored when the template is
+  // `customLayout: true` (Custom Server/Switch/Firewall 1U/2U/4U). Lets a blank custom chassis be
+  // relabeled as whatever it actually is (Router, Load Balancer, Switch L2/L3, ...) without
+  // fighting the SDK configurators, which stay keyed off the template's own native category.
+  categoryOverride?: DeviceCategory;
 }
 
-export type CableType = 'idrac' | 'vm-network' | 'ceph-primary' | 'ceph-secondary' | 'live-migration' | 'backup' | 'general' | 'general-a' | 'general-b' | 'power' | 'cat6' | 'cat6a' | 'cat8' | 'om4' | 'om5' | 'dac-twinax' | 'qsfp28' | 'c13-power' | 'c19-power' | 'console' | 'custom';
+// === Text Labels / Annotations ===
+export interface TextLabel {
+  id: string;
+  x: number;  // world coords, top-left anchor
+  y: number;
+  text: string;  // may contain \n for multi-line
+  fontFamily: string;
+  fontSize: number;  // px
+  fontWeight: 'normal' | 'bold';
+  fontStyle: 'normal' | 'italic';
+  underline: boolean;
+  color: string;  // text fill
+  align: 'left' | 'center' | 'right';
+  backgroundColor: string | null;  // null = transparent
+  /** Horizontal/vertical padding (px) between the text and the background box's edge — lets the
+   *  user grow/shrink the box independent of the text itself. Undefined falls back to the
+   *  renderer's tight default (see text-label-renderer.ts). */
+  backgroundPaddingX?: number;
+  backgroundPaddingY?: number;
+  rotation: number;  // degrees
+  locked?: boolean;
+
+  // === Device pointer (callout) — optional connector line to a device ===
+  /** When set, this label has a leader line pointing at a device — still a plain floating label
+   *  otherwise (box drag/style/delete/undo all unchanged), just with an extra connector drawn. */
+  pointerDeviceId?: string;
+  /** Device-local attachment point, same relativeX/relativeY convention as PortData — tracks
+   *  automatically if the device moves since it's resolved fresh on every render. */
+  pointerAnchorX?: number;
+  pointerAnchorY?: number;
+  /** 'elbow' = diagonal-then-straight leader line (matches common rack-diagram callouts).
+   *  'flexible' = user-draggable via-points, same interaction as CableData.anchorPoints. */
+  pointerStyle?: 'elbow' | 'flexible';
+  pointerAnchorPoints?: Point[];
+  pointerLineColor?: string;
+}
+
+/** A user-uploaded raster/vector image dropped onto the canvas as a free-floating annotation —
+ *  logos, reference photos, floor-plan underlays, etc. `src` is a data URL (from FileReader,
+ *  same pattern as DeviceData.frontPanelImage) so it round-trips through project JSON save/load
+ *  with no external file dependency; PNG/GIF/WEBP/SVG alpha transparency is preserved natively
+ *  since it's the real uploaded image bytes, not a re-encoded copy. */
+export interface ImageAsset {
+  id: string;
+  x: number;  // world coords, top-left
+  y: number;
+  width: number;
+  height: number;
+  src: string;  // data URL
+  opacity: number;  // 0-1
+  rotation: number;  // degrees
+  locked?: boolean;
+}
+
+export type CableType = 'idrac' | 'vm-network' | 'ceph-primary' | 'ceph-secondary' | 'live-migration' | 'backup' | 'general' | 'general-a' | 'general-b' | 'power' | 'power-redundant' | 'cat6' | 'cat6a' | 'cat8' | 'om4' | 'om5' | 'dac-twinax' | 'qsfp28' | 'c13-power' | 'c19-power' | 'console' | 'custom';
 
 export const CABLE_COLORS: Record<CableType, string> = {
   'idrac': '#e53935',
@@ -272,6 +342,7 @@ export const CABLE_COLORS: Record<CableType, string> = {
   'general-a': '#00acc1',
   'general-b': '#d81b60',
   'power': '#212529',
+  'power-redundant': '#ffb300',
   'cat6': '#1e88e5',
   'cat6a': '#fb8c00',
   'cat8': '#8e24aa',
@@ -345,15 +416,17 @@ export interface CableData {
 }
 
 // === Application State ===
-export type ToolMode = 'select' | 'pan' | 'cable' | 'power' | 'zoom-in' | 'zoom-out' | 'export-area';
+export type ToolMode = 'select' | 'pan' | 'cable' | 'power' | 'text' | 'label' | 'zoom-in' | 'zoom-out' | 'export-area';
 export type Theme = 'dark' | 'light';
 
-export type SelectableItem = 
+export type SelectableItem =
   | { type: 'rack'; id: string }
   | { type: 'device'; id: string }
   | { type: 'port'; id: string }
   | { type: 'cable'; id: string }
-  | { type: 'bundle'; id: string };
+  | { type: 'bundle'; id: string }
+  | { type: 'text'; id: string }
+  | { type: 'image'; id: string };
 
 export interface LegendItem {
   id: string;
@@ -372,6 +445,8 @@ export interface AppState {
   devices: DeviceData[];
   cables: CableData[];
   bundles: CableBundle[];
+  textLabels: TextLabel[];
+  imageAssets: ImageAsset[];
   validationAlerts: ValidationAlert[];
   selection: SelectableItem[];
   cableInProgress: {
@@ -419,6 +494,7 @@ export interface AppEvents {
   'device:removed': string;
   'device:updated': DeviceData;
   'device:update': { id: string; data: Partial<DeviceData> };
+  'device:remove-port': { deviceId: string; portId: string };
   'port:hover': string | null;
   'port:selected': string;
   'cable:added': CableData;
@@ -470,6 +546,9 @@ export interface AppEvents {
   'view:toggle-theme': void;
   'view:toggle-legends': void;
   'cable:toggle-airdrop-destination': void;
+  'textlabel:update': { id: string; data: Partial<TextLabel> };
+  'image:insert': void;
+  'imageasset:update': { id: string; data: Partial<ImageAsset> };
   'notification': { message: string; type: 'info' | 'success' | 'warning' | 'error' };
   'ai:mode-changed': boolean;
   'ai:provider-changed': AIProviderName;

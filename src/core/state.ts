@@ -37,6 +37,8 @@ class StateManager {
       devices: [],
       cables: [],
       bundles: [],
+      textLabels: [],
+      imageAssets: [],
       validationAlerts: [],
       selection: [],
       cableInProgress: null,
@@ -57,7 +59,7 @@ class StateManager {
       aiMode: false,
       aiProvider: 'rules',
       previewDiff: null,
-      customTemplates: loadCustomTemplates()
+      customTemplates: loadCustomTemplates(),
     };
   }
 
@@ -166,14 +168,16 @@ class StateManager {
       partial.devices = this.prepareDevices(partial.devices);
     }
 
-    const isStructuralChange = partial.racks !== undefined || partial.devices !== undefined || partial.cables !== undefined || partial.bundles !== undefined;
-    
+    const isStructuralChange = partial.racks !== undefined || partial.devices !== undefined || partial.cables !== undefined || partial.bundles !== undefined || partial.textLabels !== undefined || partial.imageAssets !== undefined;
+
     if (isStructuralChange && !skipHistory) {
       const snapshot = JSON.stringify({
         racks: this.state.racks,
         devices: this.state.devices,
         cables: this.state.cables,
-        bundles: this.state.bundles
+        bundles: this.state.bundles,
+        textLabels: this.state.textLabels,
+        imageAssets: this.state.imageAssets
       });
       
       if (this.undoStack.length === 0 || this.undoStack[this.undoStack.length - 1] !== snapshot) {
@@ -225,7 +229,9 @@ class StateManager {
       racks: this.state.racks,
       devices: this.state.devices,
       cables: this.state.cables,
-      bundles: this.state.bundles
+      bundles: this.state.bundles,
+      textLabels: this.state.textLabels,
+      imageAssets: this.state.imageAssets
     });
     this.redoStack.push(currentSnapshot);
 
@@ -236,12 +242,16 @@ class StateManager {
       this.state.devices = this.prepareDevices(data.devices);
       this.state.cables = data.cables;
       this.state.bundles = data.bundles || [];
-      
+      this.state.textLabels = data.textLabels || [];
+      this.state.imageAssets = data.imageAssets || [];
+
       eventBus.emit('state:changed', {
         racks: this.state.racks,
         devices: this.state.devices,
         cables: this.state.cables,
-        bundles: this.state.bundles
+        bundles: this.state.bundles,
+        textLabels: this.state.textLabels,
+        imageAssets: this.state.imageAssets
       });
       this._hasUnsavedChanges = true;
       eventBus.emit('notification', { message: 'Undo successful', type: 'success' });
@@ -260,7 +270,9 @@ class StateManager {
       racks: this.state.racks,
       devices: this.state.devices,
       cables: this.state.cables,
-      bundles: this.state.bundles
+      bundles: this.state.bundles,
+      textLabels: this.state.textLabels,
+      imageAssets: this.state.imageAssets
     });
     this.undoStack.push(currentSnapshot);
 
@@ -271,12 +283,16 @@ class StateManager {
       this.state.devices = this.prepareDevices(data.devices);
       this.state.cables = data.cables;
       this.state.bundles = data.bundles || [];
+      this.state.textLabels = data.textLabels || [];
+      this.state.imageAssets = data.imageAssets || [];
 
       eventBus.emit('state:changed', {
         racks: this.state.racks,
         devices: this.state.devices,
         cables: this.state.cables,
-        bundles: this.state.bundles
+        bundles: this.state.bundles,
+        textLabels: this.state.textLabels,
+        imageAssets: this.state.imageAssets
       });
       this._hasUnsavedChanges = true;
       eventBus.emit('notification', { message: 'Redo successful', type: 'success' });
@@ -370,6 +386,28 @@ class StateManager {
     return { x: deviceX + local.x, y: deviceY + local.y };
   }
 
+  /**
+   * A device's own top-left world position (before any port/anchor relativeX/relativeY offset
+   * is added) — factored out of getPortWorldPosition() so anything else that needs a
+   * device-relative point (e.g. a TextLabel's pointerAnchorX/Y, see types.ts) can resolve it the
+   * same way, kept live from the device's current rackId/startUnit.
+   */
+  getDeviceWorldOrigin(deviceId: string): { x: number; y: number } | null {
+    const device = this.getDevice(deviceId);
+    if (!device) return null;
+    const rack = this.getRack(device.rackId);
+    if (!rack) return null;
+
+    const template = getTemplate(device.templateId);
+    const heightUnits = template ? template.heightUnits : 1;
+    const deviceY = rack.y + RACK_CONSTANTS.RACK_PADDING_TOP + (rack.units - device.startUnit - heightUnits + 1) * RACK_CONSTANTS.RU_HEIGHT;
+    // Match device-renderer.ts: deviceX = innerX + RAIL_WIDTH = (OUTER-INNER)/2 + RAIL_WIDTH
+    const innerX = (RACK_CONSTANTS.RACK_OUTER_WIDTH - RACK_CONSTANTS.RACK_INNER_WIDTH) / 2; // 25
+    const deviceX = rack.x + innerX + RACK_CONSTANTS.RAIL_WIDTH; // rack.x + 50
+
+    return { x: deviceX, y: deviceY };
+  }
+
   getPortWorldPosition(portId: string): { x: number; y: number } | null {
     const outletMatch = /^outlet-(.+)-(\d+)$/.exec(portId);
     if (outletMatch) {
@@ -390,19 +428,12 @@ class StateManager {
 
     if (!targetPort || !targetDevice) return null;
 
-    const rack = this.getRack(targetDevice.rackId);
-    if (!rack) return null;
-    
-    const template = getTemplate(targetDevice.templateId);
-    const heightUnits = template ? template.heightUnits : 1;
-    const deviceY = rack.y + RACK_CONSTANTS.RACK_PADDING_TOP + (rack.units - targetDevice.startUnit - heightUnits + 1) * RACK_CONSTANTS.RU_HEIGHT;
-    // Match device-renderer.ts: deviceX = innerX + RAIL_WIDTH = (OUTER-INNER)/2 + RAIL_WIDTH
-    const innerX = (RACK_CONSTANTS.RACK_OUTER_WIDTH - RACK_CONSTANTS.RACK_INNER_WIDTH) / 2; // 25
-    const deviceX = rack.x + innerX + RACK_CONSTANTS.RAIL_WIDTH; // rack.x + 50
+    const origin = this.getDeviceWorldOrigin(targetDevice.id);
+    if (!origin) return null;
 
     return {
-      x: deviceX + targetPort.relativeX,
-      y: deviceY + targetPort.relativeY
+      x: origin.x + targetPort.relativeX,
+      y: origin.y + targetPort.relativeY
     };
   }
 
@@ -496,6 +527,7 @@ class StateManager {
  * regenerates the device's actual connectable ports — not just the cosmetic SVG.
  */
 export function injectNetworkLocalPorts(deviceId: string, template: DeviceTemplate, deviceConfig: unknown, basePorts: PortData[]): PortData[] {
+  if (template.customLayout) return basePorts;
   const isKvm = template.category === 'console' && template.id.startsWith('kvm');
   const isConsoleServer = template.category === 'console' && !isKvm;
   if (!isKvm && !isConsoleServer) return basePorts;
@@ -527,8 +559,15 @@ export function injectNetworkLocalPorts(deviceId: string, template: DeviceTempla
  * in the properties panel immediately regenerates the device's actual connectable ports. A no-op
  * for any device with no `deviceConfig` (every switch/firewall placed before this feature
  * existed), which keeps their appearance and ports byte-identical to before.
+ *
+ * Always a no-op for `customLayout` devices (Custom Switch/Firewall 1U/2U/4U etc.) even if they
+ * do carry a `deviceConfig` — e.g. the Properties panel's "Device Type" picker stashes `{layer}`
+ * there for a custom-layout switch's L1/L2/L3 badge. Without this guard that would look like a
+ * real SwitchConfig and regenerate the device's ports from `rj45Count`/etc., silently discarding
+ * every manually-placed/calibrated port.
  */
 export function injectConfigurablePorts(deviceId: string, template: DeviceTemplate, deviceConfig: unknown, basePorts: PortData[]): PortData[] {
+  if (template.customLayout) return basePorts;
   const CONFIGURABLE_CATEGORIES = new Set(['switch', 'firewall', 'nac', 'ats']);
   if (!CONFIGURABLE_CATEGORIES.has(template.category)) return basePorts;
   if (!deviceConfig || typeof deviceConfig !== 'object') return basePorts;

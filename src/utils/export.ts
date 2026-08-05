@@ -204,10 +204,11 @@ export function exportSVG(options?: ExportOptions): string {
   const clone = svgEl.cloneNode(true) as SVGSVGElement;
   const vpGroup = clone.querySelector('#viewport-group') as SVGGElement;
 
-  // Bake the floating Rack Load Summary / Cable Types panels into the export clone — they're
-  // real HTML overlays outside this SVG entirely (components/floating-summary-panels.ts), so
-  // without this every export format (they all funnel through here) would silently drop them.
-  // Respects the same "Toggle Legends" visibility flag the floating panels themselves use.
+  // Bake the Rack Load Summary / Cable Types cards into the export clone — same renderer
+  // (renderers/export-summary-overlay.ts) and same rack.summaryCardOffset the live canvas
+  // rendering in app.ts's renderAll() uses, so wherever the user dragged a card to on the
+  // canvas is exactly where it lands in every export format (they all funnel through here).
+  // Respects the same "Toggle Legends" visibility flag the live cards use.
   const s0 = stateManager.getState();
   const overlayRects = (s0.showLegends && vpGroup)
     ? appendExportSummaryOverlay(vpGroup, s0.racks, s0.devices, s0.cables, s0.customLegendItems)
@@ -504,6 +505,8 @@ export function exportJSON(): string {
     devices: s.devices,
     cables: s.cables,
     bundles: s.bundles ?? [],
+    textLabels: s.textLabels ?? [],
+    imageAssets: s.imageAssets ?? [],
     customTemplates: s.customTemplates ?? [],
   };
   return JSON.stringify(project, null, 2);
@@ -533,6 +536,8 @@ export function importJSON(jsonString: string): void {
       devices: project.devices,
       cables: project.cables,
       bundles: project.bundles ?? [],
+      textLabels: project.textLabels ?? [],
+      imageAssets: project.imageAssets ?? [],
       customTemplates: merged,
       selection: [],
     });

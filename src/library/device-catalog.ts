@@ -1,4 +1,4 @@
-import { DeviceTemplate, DeviceCategory, SwitchConfig, FirewallConfig, NacConfig, AtsConfig } from '../core/types';
+import { DeviceTemplate, DeviceData, DeviceCategory, SwitchConfig, FirewallConfig, NacConfig, AtsConfig } from '../core/types';
 import { switchPorts } from '../renderers/switch-renderer';
 import { fortigatePorts, firewallPorts } from '../renderers/firewall-renderer';
 import { networkingPorts } from '../renderers/networking-renderer';
@@ -1024,6 +1024,63 @@ export const deviceCatalog: DeviceTemplate[] = [
     powerWatts: 150,
     ports: [],
   },
+
+  // ─── CUSTOM LAYOUT DEVICES ────────────────────────────────────────────────────
+  // Blank canvases for real hardware that doesn't match any built-in template's look: upload a
+  // photo of the actual front panel (Properties panel → Front Panel Image), then use "+ Add Port"
+  // to add jacks one at a time — position each one with the X/Y inputs (Port Visual Calibration)
+  // right after adding it, before adding the next. Ports intentionally start empty (not
+  // pre-populated): every port added at once would land at the exact same default position with
+  // no way to tell them apart or click any but the topmost, so bulk-adding unpositioned ports is
+  // disabled (see properties.ts) — up to 60 real ports per device, usable as either end of a
+  // cable (source or destination), no restriction. `customLayout: true` routes these to the
+  // generic Properties panel instead of the category's SDK configurator, so nothing
+  // auto-regenerates manually placed ports.
+  {
+    id: 'custom-server-1u', name: 'Custom Server (1U, Custom Layout)', manufacturer: '', model: 'Custom Server 1U',
+    category: 'server', heightUnits: 1, color: '#1a1a1e', icon: '🖥️', powerWatts: 200,
+    customLayout: true, ports: [],
+  },
+  {
+    id: 'custom-server-2u', name: 'Custom Server (2U, Custom Layout)', manufacturer: '', model: 'Custom Server 2U',
+    category: 'server', heightUnits: 2, color: '#1a1a1e', icon: '🖥️', powerWatts: 350,
+    customLayout: true, ports: [],
+  },
+  {
+    id: 'custom-server-4u', name: 'Custom Server (4U, Custom Layout)', manufacturer: '', model: 'Custom Server 4U',
+    category: 'server', heightUnits: 4, color: '#1a1a1e', icon: '🖥️', powerWatts: 600,
+    customLayout: true, ports: [],
+  },
+  {
+    id: 'custom-switch-1u', name: 'Custom Switch (1U, Custom Layout)', manufacturer: '', model: 'Custom Switch 1U',
+    category: 'switch', heightUnits: 1, color: '#1a1e21', icon: '🔀', powerWatts: 40,
+    customLayout: true, ports: [],
+  },
+  {
+    id: 'custom-switch-2u', name: 'Custom Switch (2U, Custom Layout)', manufacturer: '', model: 'Custom Switch 2U',
+    category: 'switch', heightUnits: 2, color: '#1a1e21', icon: '🔀', powerWatts: 60,
+    customLayout: true, ports: [],
+  },
+  {
+    id: 'custom-switch-4u', name: 'Custom Switch (4U, Custom Layout)', manufacturer: '', model: 'Custom Switch 4U',
+    category: 'switch', heightUnits: 4, color: '#1a1e21', icon: '🔀', powerWatts: 100,
+    customLayout: true, ports: [],
+  },
+  {
+    id: 'custom-firewall-1u', name: 'Custom Firewall (1U, Custom Layout)', manufacturer: '', model: 'Custom Firewall 1U',
+    category: 'firewall', heightUnits: 1, color: '#1a1f2e', icon: '🛡️', powerWatts: 45,
+    customLayout: true, ports: [],
+  },
+  {
+    id: 'custom-firewall-2u', name: 'Custom Firewall (2U, Custom Layout)', manufacturer: '', model: 'Custom Firewall 2U',
+    category: 'firewall', heightUnits: 2, color: '#1a1f2e', icon: '🛡️', powerWatts: 75,
+    customLayout: true, ports: [],
+  },
+  {
+    id: 'custom-firewall-4u', name: 'Custom Firewall (4U, Custom Layout)', manufacturer: '', model: 'Custom Firewall 4U',
+    category: 'firewall', heightUnits: 4, color: '#1a1f2e', icon: '🛡️', powerWatts: 120,
+    customLayout: true, ports: [],
+  },
 ];
 
 export function getTemplate(id: string, customTemplates: DeviceTemplate[] = []): DeviceTemplate | undefined {
@@ -1032,4 +1089,14 @@ export function getTemplate(id: string, customTemplates: DeviceTemplate[] = []):
 
 export function getTemplatesByCategory(category: DeviceCategory): DeviceTemplate[] {
   return deviceCatalog.filter(t => t.category === category);
+}
+
+/** A device's real category for rendering/summary purposes — its own `categoryOverride` (set via
+ *  the Properties panel's "Device Type" picker, available on every device) if present, else the
+ *  template's native category. This only ever changes how the device is *labeled and drawn*
+ *  (chassis art, Rack Summary counts) — it never changes which ports a device has or which SDK
+ *  configurator its Properties panel shows, both of which stay keyed off the template's own
+ *  native category so a predefined device's real config/ports are never disturbed by retyping. */
+export function getEffectiveCategory(device: DeviceData, template?: DeviceTemplate | null): DeviceCategory {
+  return device.categoryOverride ?? template?.category ?? 'server';
 }

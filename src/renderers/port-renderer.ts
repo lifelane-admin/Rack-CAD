@@ -72,6 +72,12 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
     label = 'CON';
   }
 
+  // Explicit per-port size override — lets a port calibrated to match a real hardware photo
+  // (e.g. a manually-added "Custom Layout" port) be sized tighter than the type-based default
+  // above, the same way the hasCustomPanel branch below already respects port.portW/portH.
+  if (port.portW !== undefined) w = port.portW;
+  if (port.portH !== undefined) h = port.portH;
+
   const isEarPort = port.id.includes('-ear-');
   if (isEarPort) {
     const isPower = port.type === 'power';
@@ -87,20 +93,30 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
     let fill        = isConnected ? (isPower ? '#e53935' : isHybrid ? '#c837ff' : '#00e676') : '#0d0d10';
     let strokeColor = isConnected ? (isPower ? '#ff5252' : isHybrid ? '#e0a3ff' : '#00e676') : (isHybrid ? '#7b4a94' : '#3a3a42');
 
-    // Neon glow hit target (invisible, larger — receives hover/click events)
+    // Neon glow hit target (invisible — the ONLY element in this port that should receive
+    // hover/click events). This is a DIRECT SVG hit-test, checked before any of the distance-based
+    // proximity-snap fallbacks in app.ts, so its own size is what actually governs "how close is
+    // close enough" for a raw click. At r=6 (original) it was nearly as wide as the 7.5px hole
+    // pitch, so almost any click near a hole landed inside SOME hole's hit target directly. r=1.5
+    // stays well under the 3.75px half-pitch at the tightest (1U, 4-hole) spacing.
     const hitTarget = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     hitTarget.setAttribute('cx', '0');
     hitTarget.setAttribute('cy', '0');
-    hitTarget.setAttribute('r', '6');
+    hitTarget.setAttribute('r', '1.5');
     hitTarget.setAttribute('fill', 'transparent');
     hitTarget.setAttribute('class', 'port-hover-target');
     portGroup.appendChild(hitTarget);
 
-    // Outer metallic bezel — rounded square for hybrid, circular ring for everything else
+    // Outer metallic bezel — rounded square for hybrid, circular ring for everything else.
+    // pointer-events: none — these are real painted (filled) shapes, so without this they're each
+    // independently hit-testable at their own ~2.8-3.2px radius regardless of how small the
+    // hitTarget above is shrunk, which is exactly what made an earlier hitTarget-only shrink
+    // (r=6 -> r=3) barely change the actual clickable area: the bezel was already almost that big.
     if (isHybrid) {
       const bezel = createRect(-bezelRadius, -bezelRadius, bezelRadius * 2, bezelRadius * 2, {
         fill: '#1a1a1e', stroke: '#555560', 'stroke-width': 0.5, rx: bezelRadius * 0.4,
       });
+      bezel.setAttribute('pointer-events', 'none');
       portGroup.appendChild(bezel);
     } else {
       const bezel = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -110,15 +126,17 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
       bezel.setAttribute('fill', '#1a1a1e');
       bezel.setAttribute('stroke', '#555560');
       bezel.setAttribute('stroke-width', '0.5');
+      bezel.setAttribute('pointer-events', 'none');
       portGroup.appendChild(bezel);
     }
 
-    // Inner compact socket hole — same rounded-square-vs-circle split
+    // Inner compact socket hole — same rounded-square-vs-circle split; also non-interactive.
     if (isHybrid) {
       const hole = createRect(-radius, -radius, radius * 2, radius * 2, {
         fill, stroke: strokeColor, 'stroke-width': 0.6, rx: radius * 0.4,
       });
       hole.setAttribute('class', 'ear-port-hole hybrid-port');
+      hole.setAttribute('pointer-events', 'none');
       portGroup.appendChild(hole);
     } else {
       const hole = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -129,15 +147,17 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
       hole.setAttribute('stroke', strokeColor);
       hole.setAttribute('stroke-width', '0.6');
       hole.setAttribute('class', isPower ? 'ear-port-hole power-port' : 'ear-port-hole network-port');
+      hole.setAttribute('pointer-events', 'none');
       portGroup.appendChild(hole);
     }
 
-    // Center socket pin dot
+    // Center socket pin dot — also non-interactive.
     const pin = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     pin.setAttribute('cx', '0');
     pin.setAttribute('cy', '0');
     pin.setAttribute('r', '0.6');
     pin.setAttribute('fill', isConnected ? '#ffffff' : isHybrid ? '#d8a3ff' : '#ffb74d');
+    pin.setAttribute('pointer-events', 'none');
     portGroup.appendChild(pin);
 
     // Neon glow overlay ring (shown via CSS when port is hovered during cable drag). Hugs the
@@ -153,6 +173,7 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
     glowRing.setAttribute('stroke-width', '1');
     glowRing.setAttribute('opacity', '0');
     glowRing.setAttribute('class', 'port-neon-ring');
+    glowRing.setAttribute('pointer-events', 'none'); // opacity:0 alone doesn't disable hit-testing
     portGroup.appendChild(glowRing);
 
   } else {
@@ -196,6 +217,7 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
       glowRect.setAttribute('rx', '1');
       glowRect.setAttribute('opacity', '0');
       glowRect.setAttribute('class', 'port-neon-ring');
+      glowRect.setAttribute('pointer-events', 'none'); // opacity:0 alone doesn't disable hit-testing
       portGroup.appendChild(glowRect);
 
       portGroup.addEventListener('mouseenter', () => blueHl.setAttribute('opacity', '0.14'));
@@ -203,7 +225,14 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
 
     } else {
       // Remaining categories without a dedicated panel renderer (server, storage, ups, pdu, etc.)
-      const hitTarget = createRect(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6, {
+      // — also what a switch/firewall/etc. falls back to once it has a custom front-panel image
+      // (hasCustomPanel above is forced false then), which is exactly the "Custom Layout" devices'
+      // manually-added/calibrated ports. Padding trimmed from 3px/side to 1px/side: real hardware
+      // ports calibrated to match a photo can sit as close as ~9-14px apart (see the Custom
+      // Switch/Firewall screenshots), and the old padding alone (6px added to width/height) was
+      // enough to make neighboring ports' hit-targets overlap and "attract" a cable meant for the
+      // next port over.
+      const hitTarget = createRect(-w / 2 - 1, -h / 2 - 1, w + 2, h + 2, {
         fill: 'transparent',
         'class': 'port-hover-target',
       });
@@ -213,6 +242,10 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
       const portTypeOverride = (portIndex !== undefined && device?.portTypes) ? device.portTypes[portIndex] : undefined;
       const isPowerPortOverride = portTypeOverride === 'power';
 
+      // Every shape below is purely decorative — pointer-events:none so the hitTarget above is
+      // the ONLY thing that can register a click. Without this, each of these real painted
+      // (filled) shapes is independently hit-testable at its own size regardless of how tight the
+      // hitTarget itself is (the same bug already fixed for ear-hole ports).
       if (isPowerPortOverride) {
         // C14 power inlet: dark face plate with purple border + 3 oval IEC contact holes
         // Port center is at (0, 0); face plate size matches w×h
@@ -222,6 +255,7 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
           'stroke-width': '1.5',
           rx: 1,
           ry: 1,
+          'pointer-events': 'none',
         });
         portGroup.appendChild(faceRect);
 
@@ -232,6 +266,7 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
         hole1.setAttribute('rx', '1.5');
         hole1.setAttribute('ry', '2.5');
         hole1.setAttribute('fill', '#050506');
+        hole1.setAttribute('pointer-events', 'none');
         portGroup.appendChild(hole1);
 
         // Hole 2: top-center
@@ -241,6 +276,7 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
         hole2.setAttribute('rx', '1.5');
         hole2.setAttribute('ry', '2.5');
         hole2.setAttribute('fill', '#050506');
+        hole2.setAttribute('pointer-events', 'none');
         portGroup.appendChild(hole2);
 
         // Hole 3: bottom-right
@@ -250,6 +286,7 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
         hole3.setAttribute('rx', '1.5');
         hole3.setAttribute('ry', '2.5');
         hole3.setAttribute('fill', '#050506');
+        hole3.setAttribute('pointer-events', 'none');
         portGroup.appendChild(hole3);
 
         // Neon glow ring for cable-drag snap feedback
@@ -264,6 +301,7 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
         glowRect.setAttribute('rx', '2');
         glowRect.setAttribute('opacity', '0');
         glowRect.setAttribute('class', 'port-neon-ring');
+        glowRect.setAttribute('pointer-events', 'none');
         portGroup.appendChild(glowRect);
       } else {
         const rect = createRect(-w / 2, -h / 2, w, h, {
@@ -272,11 +310,12 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
           'stroke-width': isConnected ? 1.5 : 1,
           rx: 1,
           ry: 1,
+          'pointer-events': 'none',
         });
         portGroup.appendChild(rect);
 
         if (port.type === 'rj45' || port.type === 'management' || port.type === 'console') {
-          const inner = createRect(-w / 2 + 2, -h / 2 + 2, w - 4, h - 4, { fill: '#111' });
+          const inner = createRect(-w / 2 + 2, -h / 2 + 2, w - 4, h - 4, { fill: '#111', 'pointer-events': 'none' });
           portGroup.appendChild(inner);
         }
 
@@ -292,6 +331,7 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
         glowRect.setAttribute('rx', '2');
         glowRect.setAttribute('opacity', '0');
         glowRect.setAttribute('class', 'port-neon-ring');
+        glowRect.setAttribute('pointer-events', 'none');
         portGroup.appendChild(glowRect);
       }
     }

@@ -70,7 +70,7 @@ describe('end-to-end: Airdrop Destination through the real App/canvas', () => {
         ports: [{ id: 's1u-nic1', deviceId: 'd1', name: 'NIC 1', type: 'rj45', relativeX: 320, relativeY: 8, connected: false, cableId: null }],
       } as DeviceData],
     });
-    app.renderAll();
+    (app as any).renderAll();
     eventBus.emit('tool:changed', 'cable');
 
     // Start the cable the normal way: click the real source port.
@@ -107,6 +107,90 @@ describe('end-to-end: Airdrop Destination through the real App/canvas', () => {
     // The source port itself must be marked connected — only the destination is floating.
     const device = stateManager.getDevice('d1')!;
     expect(device.ports[0].connected).toBe(true);
+  });
+
+  it('with Airdrop Destination on, a click near an unrelated real port still lands exactly where clicked instead of snapping to that port', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    // A second, unconnected NIC sitting right next to the source port — close enough that the
+    // ordinary proximity-snap fallback (40px) would normally grab it.
+    stateManager.setState({
+      cabinetViewMode: 'rear',
+      racks: [{ id: 'r1', name: 'Rack 1', units: 42, x: 300, y: 100, showPduLeft: true, showPduRight: true }],
+      devices: [{
+        id: 'd1', templateId: 'server-1u', rackId: 'r1', startUnit: 5, name: '1U Server',
+        hostname: '', managementIp: '', serialNumber: '', description: '',
+        ports: [
+          { id: 's1u-nic1', deviceId: 'd1', name: 'NIC 1', type: 'rj45', relativeX: 320, relativeY: 8, connected: false, cableId: null },
+          { id: 's1u-nic2', deviceId: 'd1', name: 'NIC 2', type: 'rj45', relativeX: 330, relativeY: 8, connected: false, cableId: null },
+        ],
+      } as DeviceData],
+    });
+    (app as any).renderAll();
+    eventBus.emit('tool:changed', 'cable');
+
+    const sourceEl = document.querySelector('[data-port-id="s1u-nic1"]') as SVGElement;
+    sourceEl.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 0, clientY: 0 }));
+    expect(stateManager.getState().cableInProgress?.sourcePortId).toBe('s1u-nic1');
+
+    stateManager.setState({ airdropDestination: true }); // see note above re: setting directly
+
+    const nic2Pos = stateManager.getPortWorldPosition('s1u-nic2')!;
+    // Click well within the 40px proximity-snap radius of NIC 2, but not exactly on it.
+    const clickPoint = { x: nic2Pos.x + 15, y: nic2Pos.y + 10 };
+    const canvasEl = document.getElementById('canvas')!;
+    canvasEl.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: clickPoint.x, clientY: clickPoint.y }));
+
+    const cables = stateManager.getState().cables;
+    expect(cables.length).toBe(1);
+    expect(cables[0].destPortId).toBeNull(); // must NOT have snapped to NIC 2
+    expect(cables[0].floatingDest).toEqual(clickPoint); // lands exactly where clicked
+    expect(stateManager.getDevice('d1')!.ports[1].connected).toBe(false); // NIC 2 untouched
+  });
+
+  it('with Airdrop Destination on, clicking DIRECTLY on another real port\'s element still floats at that point instead of connecting to it', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    // A second unconnected NIC — the click below lands squarely on its own DOM element, which is
+    // the direct SVG hit-test path (checked before any proximity math), not the 40px fallback.
+    stateManager.setState({
+      cabinetViewMode: 'rear',
+      racks: [{ id: 'r1', name: 'Rack 1', units: 42, x: 300, y: 100, showPduLeft: true, showPduRight: true }],
+      devices: [{
+        id: 'd1', templateId: 'server-1u', rackId: 'r1', startUnit: 5, name: '1U Server',
+        hostname: '', managementIp: '', serialNumber: '', description: '',
+        ports: [
+          { id: 's1u-nic1', deviceId: 'd1', name: 'NIC 1', type: 'rj45', relativeX: 320, relativeY: 8, connected: false, cableId: null },
+          { id: 's1u-nic2', deviceId: 'd1', name: 'NIC 2', type: 'rj45', relativeX: 330, relativeY: 8, connected: false, cableId: null },
+        ],
+      } as DeviceData],
+    });
+    (app as any).renderAll();
+    eventBus.emit('tool:changed', 'cable');
+
+    const sourceEl = document.querySelector('[data-port-id="s1u-nic1"]') as SVGElement;
+    sourceEl.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 0, clientY: 0 }));
+    expect(stateManager.getState().cableInProgress?.sourcePortId).toBe('s1u-nic1');
+
+    stateManager.setState({ airdropDestination: true }); // see note above re: setting directly
+
+    const nic2Pos = stateManager.getPortWorldPosition('s1u-nic2')!;
+    const nic2El = document.querySelector('[data-port-id="s1u-nic2"]') as SVGElement;
+    expect(nic2El).toBeTruthy();
+    // Click lands right on NIC 2's own element — a direct hit, not just "nearby".
+    nic2El.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: nic2Pos.x, clientY: nic2Pos.y }));
+
+    const cables = stateManager.getState().cables;
+    expect(cables.length).toBe(1);
+    expect(cables[0].destPortId).toBeNull(); // must NOT have connected to NIC 2
+    expect(cables[0].floatingDest).toEqual(nic2Pos);
+    expect(stateManager.getDevice('d1')!.ports[1].connected).toBe(false); // NIC 2 untouched
   });
 
   it('with Airdrop Destination off (default), clicking empty canvas does nothing — cableInProgress survives', async () => {

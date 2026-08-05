@@ -65,7 +65,7 @@ export class CanvasManager {
     this.viewportGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     this.viewportGroup.setAttribute('id', 'viewport-group');
 
-    const layerNames = ['grid-layer', 'rack-layer', 'cable-layer', 'label-layer', 'interaction-layer'];
+    const layerNames = ['grid-layer', 'rack-layer', 'cable-layer', 'label-layer', 'summary-preview-layer', 'interaction-layer'];
     for (const name of layerNames) {
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       g.setAttribute('id', name);
@@ -101,17 +101,21 @@ export class CanvasManager {
   }
 
   private onMouseDown(e: MouseEvent) {
-    // The export-area tool owns mousedown/mousemove/mouseup entirely itself (app.ts draws the
-    // drag rectangle) — clicking to start that drag on empty canvas background otherwise looks
-    // exactly like "click background to pan", so without this guard the canvas would pan out
-    // from under the user's drag instead of a selection rectangle appearing.
-    if (stateManager.getState().tool === 'export-area') return;
+    // The export-area, text, and label tools own mousedown/mousemove/mouseup entirely
+    // themselves (app.ts places the label / draws the drag rectangle) — clicking on empty
+    // canvas background otherwise looks exactly like "click background to pan", so without this
+    // guard the canvas would pan out from under a placement click instead of placing anything.
+    const ownedTool = stateManager.getState().tool;
+    if (ownedTool === 'export-area' || ownedTool === 'text' || ownedTool === 'label') return;
 
     const isPanTool = stateManager.getState().tool === 'pan';
-    const isInteractiveTarget = (e.target as Element).closest('.rack') || 
-                                 (e.target as Element).closest('.device') || 
-                                 (e.target as Element).closest('.cable-element') || 
-                                 (e.target as Element).closest('.port-element');
+    const isInteractiveTarget = (e.target as Element).closest('.rack') ||
+                                 (e.target as Element).closest('.device') ||
+                                 (e.target as Element).closest('.cable-element') ||
+                                 (e.target as Element).closest('.port-element') ||
+                                 (e.target as Element).closest('[data-text-id]') ||
+                                 (e.target as Element).closest('[data-image-id]') ||
+                                 (e.target as Element).closest('[data-draggable="true"]');
     const isClickedOnBackground = !isInteractiveTarget;
 
     if (e.button === 1 || isPanTool || (e.button === 0 && isClickedOnBackground)) {

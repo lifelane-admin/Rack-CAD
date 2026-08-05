@@ -3,6 +3,7 @@ import { el, g, drawLed, iecShroudPath, IEC_CONTACTS } from './rack-kit';
 import type { DeviceTemplate, DeviceData, SocketType, PduConfig, PduOutletGroup } from '../core/types';
 import { stateManager } from '../core/state';
 import { getTemplate } from '../library/device-catalog';
+import { getPduConnectedLoadWatts } from '../utils/power';
 import {
   normalizeComposition, socketWidth, socketHeight, meterTierFor,
   computeConfiguredPduLayout, computeGenericPduLayout,
@@ -233,26 +234,7 @@ function drawLedStrip(parent: SVGElement, uid: string, x: number, y: number, led
  *  this PDU's `outlet-<deviceId>-<idx>` virtual-port convention (see app.ts's power-cable flow). */
 export function computePduLoad(pduDeviceId: string): { watts: number; connectedOutlets: Set<number> } {
   const state = stateManager.getState();
-  const connectedOutlets = new Set<number>();
-  let watts = 0;
-  const prefix = `outlet-${pduDeviceId}-`;
-  for (const cable of state.cables) {
-    const ends = [cable.sourcePortId, cable.destPortId];
-    const outletEnd = ends.find(p => p && p.startsWith(prefix));
-    if (!outletEnd) continue;
-    const idx = parseInt(outletEnd.slice(prefix.length), 10);
-    if (!Number.isNaN(idx)) connectedOutlets.add(idx);
-    const otherEnd = outletEnd === cable.sourcePortId ? cable.destPortId : cable.sourcePortId;
-    if (otherEnd && !otherEnd.startsWith('outlet-')) {
-      const otherPort = stateManager.getPort(otherEnd);
-      if (otherPort) {
-        const dev = stateManager.getDevice(otherPort.deviceId);
-        const tmpl = dev ? getTemplate(dev.templateId) : undefined;
-        watts += dev?.powerWatts ?? tmpl?.powerWatts ?? 0;
-      }
-    }
-  }
-  return { watts, connectedOutlets };
+  return getPduConnectedLoadWatts(pduDeviceId, state.cables, state.devices);
 }
 
 function makePduDefs(ns: SVGSVGElement, uid: string, finish: FinishPreset): void {

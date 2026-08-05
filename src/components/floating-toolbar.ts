@@ -9,6 +9,7 @@ export class FloatingToolbar {
   private element: HTMLElement | null = null;
   private currentTool: ToolMode = 'select';
   private selectedCableId: string | null = null;
+  private selectedPointerLabelId: string | null = null;
   private activeCableEnd: 'source' | 'dest' = 'dest';
 
   // Toolbar position dragging states
@@ -40,6 +41,11 @@ export class FloatingToolbar {
     EventBus.on('selection:changed', (selection: SelectableItem[]) => {
       const cableSelection = selection.find(item => item.type === 'cable');
       this.selectedCableId = cableSelection ? cableSelection.id : null;
+      // A pointer-carrying text label with pointerStyle 'flexible' reuses the Add/Remove Anchor
+      // buttons below exactly like a cable does — only relevant when no cable is selected.
+      const textSelection = selection.find(item => item.type === 'text');
+      const textLabel = textSelection ? State.getState().textLabels.find(t => t.id === textSelection.id) : null;
+      this.selectedPointerLabelId = (textLabel?.pointerDeviceId && textLabel.pointerStyle === 'flexible') ? textLabel.id : null;
       this.render();
     });
 
@@ -114,12 +120,18 @@ export class FloatingToolbar {
 
     const state = State.getState();
     const cable = this.selectedCableId ? State.getCable(this.selectedCableId) : null;
+    const pointerLabel = this.selectedPointerLabelId ? state.textLabels.find(t => t.id === this.selectedPointerLabelId) : null;
+    // The Add/Remove Anchor buttons operate on whichever of the two is actually selected — a
+    // cable takes priority since a label can't be selected at the same time as a cable anyway.
+    const anchorTarget = cable ?? pointerLabel;
     const isCableActive = this.currentTool === 'cable' || !!cable;
 
     const isSelect = this.currentTool === 'select';
     const isPan = this.currentTool === 'pan';
     const isCableMode = this.currentTool === 'cable';
     const isPowerMode = this.currentTool === 'power';
+    const isTextMode = this.currentTool === 'text';
+    const isLabelMode = this.currentTool === 'label';
     const isAirdropDestination = state.airdropDestination;
     const isSnap = state.snapEnabled;
 
@@ -168,13 +180,35 @@ export class FloatingToolbar {
 
         <div class="ft-separator"></div>
 
-        <!-- Anchor Point Actions -->
+        <!-- Anchor Point Actions — operate on a selected cable OR a selected flexible-style
+             device-pointer label (see anchorTarget above) -->
         <div class="ft-section" id="ft-cable-anchors">
-          <button class="ft-btn" id="ft-cab-add-anchor" ${!cable ? 'disabled' : ''} title="Add Anchor Point">
+          <button class="ft-btn" id="ft-cab-add-anchor" ${!anchorTarget ? 'disabled' : ''} title="Add Anchor Point">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="2.5"/><line x1="9" y1="19" x2="9" y2="7"/><path d="M3 13a6 6 0 0012 0"/><line x1="18" y1="5" x2="18" y2="11"/><line x1="15" y1="8" x2="21" y2="8"/></svg>
           </button>
-          <button class="ft-btn" id="ft-cab-rem-anchor" ${!cable || !cable.anchorPoints?.length ? 'disabled' : ''} title="Remove Last Anchor">
+          <button class="ft-btn" id="ft-cab-rem-anchor" ${(!cable || !cable.anchorPoints?.length) && (!pointerLabel || !pointerLabel.pointerAnchorPoints?.length) ? 'disabled' : ''} title="Remove Last Anchor">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="2.5"/><line x1="9" y1="19" x2="9" y2="7"/><path d="M3 13a6 6 0 0012 0"/><line x1="15" y1="8" x2="21" y2="8"/></svg>
+          </button>
+          <button class="ft-btn ft-btn--accent ${isTextMode ? 'active' : ''}" id="ft-tool-text" title="Add Text Box / Label (T)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 5h16"/>
+              <path d="M12 5v14"/>
+              <path d="M9 19h6"/>
+            </svg>
+          </button>
+          <button class="ft-btn ft-btn--accent ${isLabelMode ? 'active' : ''}" id="ft-tool-label" title="Add Label pointing at a device (L)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="10" y="3" width="11" height="6" rx="1.5"/>
+              <path d="M10 6L3 12"/>
+              <circle cx="3" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+          <button class="ft-btn ft-btn--accent" id="ft-insert-image" title="Insert Image (logo / reference image, PNG transparency supported)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <path d="M21 15l-5-5L5 21"/>
+            </svg>
           </button>
         </div>
       </div>
@@ -259,10 +293,18 @@ export class FloatingToolbar {
     this.element.querySelector('#ft-tool-power')?.addEventListener('click', () => {
       EventBus.emit('tool:changed', 'power');
     });
+    this.element.querySelector('#ft-tool-text')?.addEventListener('click', () => {
+      EventBus.emit('tool:changed', 'text');
+    });
+    this.element.querySelector('#ft-tool-label')?.addEventListener('click', () => {
+      EventBus.emit('tool:changed', 'label');
+    });
+    this.element.querySelector('#ft-insert-image')?.addEventListener('click', () => {
+      EventBus.emit('image:insert' as any, undefined);
+    });
     this.element.querySelector('#ft-toggle-airdrop-dest')?.addEventListener('click', () => {
       EventBus.emit('cable:toggle-airdrop-destination', undefined);
     });
-
     this.element.querySelector('#ft-act-undo')?.addEventListener('click', () => {
       EventBus.emit('edit:undo', undefined);
     });
@@ -305,6 +347,30 @@ export class FloatingToolbar {
           const idx = ORIENTATION_CYCLE.indexOf(current as any);
           const next = ORIENTATION_CYCLE[(idx + 1) % ORIENTATION_CYCLE.length];
           EventBus.emit('cable:update', { id: cableId, data: { [field]: next, anchorPoints: [], anchorsLocked: false } });
+        });
+      }
+    } else if (this.selectedPointerLabelId) {
+      // Same two buttons, retargeted at a selected flexible-style device-pointer label's
+      // pointerAnchorPoints instead of a cable's anchorPoints.
+      const labelId = this.selectedPointerLabelId;
+      const label = State.getState().textLabels.find(t => t.id === labelId);
+
+      if (label && label.pointerDeviceId) {
+        this.element.querySelector('#ft-cab-add-anchor')?.addEventListener('click', () => {
+          const origin = State.getDeviceWorldOrigin(label.pointerDeviceId!);
+          const deviceWorld = origin ? { x: origin.x + (label.pointerAnchorX ?? 0), y: origin.y + (label.pointerAnchorY ?? 0) } : { x: label.x, y: label.y };
+          const currentPts = [...(label.pointerAnchorPoints ?? [])];
+          const lastPt = currentPts[currentPts.length - 1] || deviceWorld;
+          currentPts.push({ x: Math.round(lastPt.x + 25), y: Math.round(lastPt.y + 25) });
+          EventBus.emit('textlabel:update', { id: labelId, data: { pointerAnchorPoints: currentPts } });
+        });
+
+        this.element.querySelector('#ft-cab-rem-anchor')?.addEventListener('click', () => {
+          const currentPts = [...(label.pointerAnchorPoints ?? [])];
+          if (currentPts.length > 0) {
+            currentPts.pop();
+            EventBus.emit('textlabel:update', { id: labelId, data: { pointerAnchorPoints: currentPts } });
+          }
         });
       }
     }

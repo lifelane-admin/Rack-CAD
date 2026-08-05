@@ -1,6 +1,6 @@
-import { DeviceData, DeviceCategory, RACK_CONSTANTS, AppState } from '../core/types';
+import { DeviceData, RACK_CONSTANTS, AppState } from '../core/types';
 import { createGroup, createRect, createCircle, createLinearGradient, createSVGElement, setAttributes } from '../utils/svg-helpers';
-import { getTemplate } from '../library/device-catalog';
+import { getTemplate, getEffectiveCategory } from '../library/device-catalog';
 import { renderPorts } from './port-renderer';
 import { renderFrontPanel } from './panel-renderer';
 import { stateManager } from '../core/state';
@@ -15,7 +15,7 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
   }
 
   const heightUnits = template?.heightUnits ?? 1;
-  const category: DeviceCategory = template?.category ?? 'server';
+  const category = getEffectiveCategory(device, template);
 
   const innerX = rackX + (RACK_CONSTANTS.RACK_OUTER_WIDTH - RACK_CONSTANTS.RACK_INNER_WIDTH) / 2;
   const deviceX = innerX + RACK_CONSTANTS.RAIL_WIDTH;

@@ -1,19 +1,22 @@
 // Shared rack power-capacity math — single source of truth for the PDU-wattage assumption
 // previously duplicated (with a fragile description-text regex instead of the real
 // `powerWatts` field) across validation.ts, report-builder.ts, and state-serializer.ts.
-import { RackData, DeviceData } from '../core/types';
+import { RackData, DeviceData, CableData } from '../core/types';
 import { getTemplate } from '../library/device-catalog';
 
 /** Nameplate capacity of one rack-mount PDU circuit (matches the existing 7200W assumption
  *  used across validation/report/AI-serializer before this was consolidated). */
 export const PDU_WATTS_PER_UNIT = 7200;
 
-export function getRackPduCount(rack: RackData): number {
-  return (rack.showPduLeft ? 1 : 0) + (rack.showPduRight ? 1 : 0);
+/** Counts actual PDU devices (horizontal rack-mount or vertical side-mount) placed in the rack —
+ *  not the legacy `showPduLeft`/`showPduRight` rail checkboxes, which don't track real placement
+ *  and don't move with devices added/removed. */
+export function getRackPduCount(rack: RackData, devices: DeviceData[]): number {
+  return devices.filter(d => d.rackId === rack.id && getTemplate(d.templateId)?.category === 'pdu').length;
 }
 
-export function getRackPowerCapacityWatts(rack: RackData): number {
-  return getRackPduCount(rack) * PDU_WATTS_PER_UNIT;
+export function getRackPowerCapacityWatts(rack: RackData, devices: DeviceData[]): number {
+  return getRackPduCount(rack, devices) * PDU_WATTS_PER_UNIT;
 }
 
 /** A device's real nameplate wattage — its own override if set, else the catalog template's,
@@ -25,10 +28,63 @@ export function getDevicePowerWatts(device: DeviceData): number {
   return template?.powerWatts ?? 0;
 }
 
-export function getRackPowerUsedWatts(rack: RackData, devices: DeviceData[]): number {
-  return devices
-    .filter(d => d.rackId === rack.id)
-    .reduce((sum, d) => sum + getDevicePowerWatts(d), 0);
+/** Real load on one PDU's outlets — walks actual power cables plugged into its
+ *  `outlet-<pduDeviceId>-<idx>` virtual ports and sums the nameplate wattage of whatever's on
+ *  the other end. This is the same reading shown on the PDU's own live meter (pdu-renderer.ts,
+ *  properties.ts); pulled out here as a pure function (cables/devices passed in, not read from
+ *  the stateManager singleton) so rack-wide totals can reuse it without the coupling. */
+export function getPduConnectedLoadWatts(
+  pduDeviceId: string, cables: CableData[], devices: DeviceData[],
+): { watts: number; connectedOutlets: Set<number> } {
+  const connectedOutlets = new Set<number>();
+  let watts = 0;
+  const prefix = `outlet-${pduDeviceId}-`;
+  for (const cable of cables) {
+    const ends = [cable.sourcePortId, cable.destPortId];
+    const outletEnd = ends.find(p => p && p.startsWith(prefix));
+    if (!outletEnd) continue;
+    const idx = parseInt(outletEnd.slice(prefix.length), 10);
+    if (!Number.isNaN(idx)) connectedOutlets.add(idx);
+    const otherEnd = outletEnd === cable.sourcePortId ? cable.destPortId : cable.sourcePortId;
+    if (otherEnd && !otherEnd.startsWith('outlet-')) {
+      const dev = devices.find(d => d.ports.some(p => p.id === otherEnd));
+      if (dev) watts += getDevicePowerWatts(dev);
+    }
+  }
+  return { watts, connectedOutlets };
+}
+
+/** Every power cable that runs from `deviceId`'s own ports to any PDU's outlet — i.e. how many
+ *  cords this device is drawing power through right now. A device on its 2nd (or later) cord is
+ *  dual/multi-corded for redundancy, not drawing extra power — see `isRedundantPowerCable`. */
+export function countDevicePowerCables(deviceId: string, cables: CableData[], devices: DeviceData[]): number {
+  const device = devices.find(d => d.id === deviceId);
+  if (!device) return 0;
+  const portIds = new Set(device.ports.map(p => p.id));
+  return cables.filter(c => {
+    const ends = [c.sourcePortId, c.destPortId];
+    const deviceEnd = ends.find(p => p && portIds.has(p));
+    const outletEnd = ends.find(p => p && p.startsWith('outlet-'));
+    return !!deviceEnd && !!outletEnd;
+  }).length;
+}
+
+/** Sum of every PDU's own real connected-outlet reading in the rack — literally what you'd get
+ *  by adding up each PDU's individual "live load" (getPduConnectedLoadWatts), horizontal and
+ *  vertical alike. A device with redundant power (2 cords into 2 different PDUs) is counted once
+ *  per PDU it's plugged into — matching each PDU's own meter, which has no way to know a second
+ *  cord exists — rather than deduped down to one physical device's wattage. Use
+ *  `getRackRedundantPowerDeviceCount` separately if you need to know how many devices are
+ *  dual-corded; it doesn't change this total. */
+export function getRackPduLoadWatts(rack: RackData, devices: DeviceData[], cables: CableData[]): number {
+  const pduIds = devices.filter(d => d.rackId === rack.id && getTemplate(d.templateId)?.category === 'pdu').map(d => d.id);
+  return pduIds.reduce((sum, id) => sum + getPduConnectedLoadWatts(id, cables, devices).watts, 0);
+}
+
+/** Devices in the rack fed by 2+ power cords — used for the Rack Summary's redundant-power
+ *  count and to decide whether a newly-drawn power cable should auto-tag as `power-redundant`. */
+export function getRackRedundantPowerDeviceCount(rack: RackData, devices: DeviceData[], cables: CableData[]): number {
+  return devices.filter(d => d.rackId === rack.id && countDevicePowerCables(d.id, cables, devices) >= 2).length;
 }
 
 /** Standard power-draw severity thresholds, shared so the dashboard gauge and the

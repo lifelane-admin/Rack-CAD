@@ -2,14 +2,19 @@ import EventBus from '../core/event-bus';
 import { eventBus } from '../core/event-bus';
 import State from '../core/state';
 import { stateManager } from '../core/state';
-import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, PduConfig, PduOutletGroup, SocketType, KvmConfig, SwitchConfig, FirewallConfig, SwitchVendor, FirewallVendor, LedTheme, SwitchLayer, SwitchPortGroup, NacConfig, NacVendor, AtsConfig } from '../core/types';
+import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, DeviceCategory, PduConfig, PduOutletGroup, SocketType, KvmConfig, SwitchConfig, FirewallConfig, SwitchVendor, FirewallVendor, LedTheme, SwitchLayer, SwitchPortGroup, NacConfig, NacVendor, AtsConfig, RACK_CONSTANTS, PortData } from '../core/types';
 import { KVM_LOCAL_PORT_OPTIONS, CONSOLE_LOCAL_PORT_OPTIONS } from '../renderers/networking-renderer';
 import { computePduLoad } from '../renderers/pdu-renderer';
 import { switchVendorSkin, firewallVendorSkin, nacVendorSkin } from '../renderers/vendor-palette';
-import { getTemplate } from '../library/device-catalog';
+import { getTemplate, getEffectiveCategory } from '../library/device-catalog';
+import { generateId } from '../utils/geometry';
 import { CustomAssetModal } from './custom-asset-modal';
 
 const customAssetModal = new CustomAssetModal();
+
+// A device's manually-added/custom ports (Port Visual Calibration) are capped at this many real
+// jacks — the catalog's "Custom Layout" 1U/2U/4U templates ship with exactly this count too.
+const MAX_CUSTOM_PORTS = 60;
 import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
 import { aiService } from '../ai/ai-service';
 import { AIHint } from '../ai/types';
@@ -183,45 +188,119 @@ export class PropertiesPanel {
     });
   }
 
+  /** Every device instance's "Device Type" picker options — a custom device gets fully retyped;
+   *  a predefined vendor device only gets relabeled (see wireDeviceTypeSection for why). */
+  private readonly DEVICE_TYPE_OPTIONS: { value: string; label: string; category: DeviceCategory; layer?: SwitchLayer }[] = [
+    { value: 'server', label: 'Server', category: 'server' },
+    { value: 'firewall', label: 'Firewall', category: 'firewall' },
+    { value: 'router', label: 'Router', category: 'router' },
+    { value: 'switch-l1', label: 'Switch - L1', category: 'switch', layer: 'L1' },
+    { value: 'switch-l2', label: 'Switch - L2', category: 'switch', layer: 'L2' },
+    { value: 'switch-l3', label: 'Switch - L3', category: 'switch', layer: 'L3' },
+    { value: 'load-balancer', label: 'Load Balancer', category: 'load-balancer' },
+    { value: 'vpn-concentrator', label: 'VPN Concentrator', category: 'vpn-concentrator' },
+    { value: 'ids-ips', label: 'IDS / IPS Appliance', category: 'ids-ips' },
+    { value: 'proxy-waf', label: 'Proxy / WAF', category: 'proxy-waf' },
+    { value: 'nac', label: 'NAC / Access Control', category: 'nac' },
+    { value: 'storage', label: 'Storage Appliance', category: 'storage' },
+  ];
+
+  /** Categories whose Properties panel is a dedicated SDK configurator (renderSwitchProperties
+   *  etc.) driving real ports off a real deviceConfig (rj45Count, vendor, outlet composition...).
+   *  wireDeviceTypeSection must never null out or replace that config when relabeling one of
+   *  these devices — only merge in `layer` if retyping it to a switch. */
+  private readonly SDK_CONFIGURED_CATEGORIES = new Set(['switch', 'firewall', 'nac', 'ats', 'pdu', 'console']);
+
+  /** "Device Type" section HTML — shown for every device (predefined and Custom Layout alike).
+   *  For a Custom Layout device this is a real retype (see getEffectiveCategory); for a
+   *  predefined vendor device it only relabels chassis art / Rack Summary counts, since its real
+   *  ports and SDK configurator below stay keyed off the template's own native category. */
+  private renderDeviceTypeSection(device: DeviceData, template: DeviceTemplate | null | undefined): string {
+    const currentCategory = getEffectiveCategory(device, template);
+    const currentLayer = (device.deviceConfig as { layer?: SwitchLayer } | undefined)?.layer;
+    const currentValue = currentCategory === 'switch'
+      ? (currentLayer === 'L1' ? 'switch-l1' : currentLayer === 'L3' ? 'switch-l3' : 'switch-l2')
+      : currentCategory;
+    const note = template?.customLayout
+      ? "Relabels this custom device's role — updates its Rack Summary count and chassis art (and the L1/L2/L3 badge for switches). Your calibrated ports are untouched."
+      : "Relabels this device for Rack Summary counts and chassis art. Its real ports and configuration below are unaffected.";
+    return `
+      <div class="form-group">
+        <label>Device Type</label>
+        <select id="prop-dev-type">
+          ${this.DEVICE_TYPE_OPTIONS.map(o => `<option value="${o.value}" ${o.value === currentValue ? 'selected' : ''}>${o.label}</option>`).join('')}
+        </select>
+        <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">${note}</div>
+      </div>
+    `;
+  }
+
+  private wireDeviceTypeSection(container: HTMLElement, id: string): void {
+    container.querySelector('#prop-dev-type')?.addEventListener('change', (e: any) => {
+      const opt = this.DEVICE_TYPE_OPTIONS.find(o => o.value === e.target.value);
+      if (!opt) return;
+      const state = (State as any).getState?.() || (State as any);
+      const device = state.devices?.find((d: any) => d.id === id) || (State as any).getDevice?.(id);
+      if (!device) return;
+      const template = getTemplate(device.templateId);
+      const isSdkConfigured = !!template && !template.customLayout && this.SDK_CONFIGURED_CATEGORIES.has(template.category);
+      const existingConfig = (device.deviceConfig && typeof device.deviceConfig === 'object') ? device.deviceConfig : {};
+
+      let newDeviceConfig: Record<string, unknown> | undefined;
+      if (opt.category === 'switch') {
+        // Merge, never replace — a predefined switch's real rj45Count/vendor/etc. must survive.
+        newDeviceConfig = { ...existingConfig, layer: opt.layer };
+      } else if (isSdkConfigured) {
+        // Never touch a predefined SDK device's real config — it drives its actual ports.
+        newDeviceConfig = device.deviceConfig;
+      } else {
+        newDeviceConfig = undefined;
+      }
+      EventBus.emit('device:update', { id, data: { categoryOverride: opt.category, deviceConfig: newDeviceConfig } });
+    });
+  }
+
   private renderDeviceProperties(id: string, container: HTMLElement) {
     const state = (State as any).getState?.() || (State as any);
     const device = state.devices?.find((d: any) => d.id === id) || (State as any).getDevice?.(id);
     if (!device) return;
 
     const template = getTemplate(device.templateId);
+    const deviceTypeHtml = this.renderDeviceTypeSection(device, template);
 
-    if (template?.category === 'pdu') {
-      this.renderPduProperties(device, template, container);
-      return;
-    }
-    if (template?.category === 'console') {
-      this.renderKvmProperties(device, template, container);
-      return;
-    }
-    if (template?.category === 'switch') {
-      this.renderSwitchProperties(device, template, container);
-      return;
-    }
-    if (template?.category === 'firewall') {
-      this.renderFirewallProperties(device, template, container);
-      return;
-    }
-    if (template?.category === 'nac') {
-      this.renderNacProperties(device, template, container);
-      return;
-    }
-    if (template?.category === 'ats') {
-      this.renderAtsProperties(device, template, container);
-      return;
+    // "Custom Layout" templates (Custom Server/Switch/Firewall 1U/2U/4U) are meant to be re-skinned
+    // with a real hardware photo and have every port hand-calibrated to match it — the category
+    // SDK configurators below (renderSwitchProperties etc.) drive their ports off an rj45Count
+    // field instead and would silently regenerate/overwrite manually placed ports, so those
+    // devices always get the generic panel (front-panel image upload + port add/remove) instead,
+    // regardless of category. The "Device Type" section is prepended to every panel either way.
+    if (!template?.customLayout) {
+      const specialized: [DeviceCategory, (d: DeviceData, t: DeviceTemplate, c: HTMLElement) => void][] = [
+        ['pdu', this.renderPduProperties.bind(this)],
+        ['console', this.renderKvmProperties.bind(this)],
+        ['switch', this.renderSwitchProperties.bind(this)],
+        ['firewall', this.renderFirewallProperties.bind(this)],
+        ['nac', this.renderNacProperties.bind(this)],
+        ['ats', this.renderAtsProperties.bind(this)],
+      ];
+      const match = specialized.find(([cat]) => template?.category === cat);
+      if (match) {
+        match[1](device, template!, container);
+        container.insertAdjacentHTML('afterbegin', deviceTypeHtml);
+        this.wireDeviceTypeSection(container, id);
+        return;
+      }
     }
     const racks = state.racks || [];
     const rackOptions = racks.map((r: any) => `<option value="${r.id}" ${r.id === device.rackId ? 'selected' : ''}>${r.name}</option>`).join('');
+    const currentEffectiveCategory = getEffectiveCategory(device, template);
 
     container.innerHTML = `
       <div class="form-group">
         <label>Name</label>
         <input type="text" id="prop-dev-name" value="${device.name || ''}" />
       </div>
+      ${deviceTypeHtml}
       <div class="form-group">
         <label>Target Rack</label>
         <select id="prop-dev-rack">${rackOptions}</select>
@@ -277,17 +356,21 @@ export class PropertiesPanel {
         <div style="max-height: 140px; overflow-y: auto; background: rgba(0,0,0,0.25); padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); margin-top: 8px;">
           ${(device.ports || []).map((port: any, idx: number) => `
             <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed rgba(255,255,255,0.05);">
-              <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px;">${port.name}</span>
+              <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px;">${port.name}</span>
               <div style="display: flex; gap: 6px; align-items: center;">
                 X: <input type="number" class="port-coord-x" data-port-idx="${idx}" value="${port.relativeX}" style="width: 48px; font-size: 10px; background: #000; border: 1px solid var(--border-color); color: #fff; padding: 2px; border-radius: 2px;" />
                 Y: <input type="number" class="port-coord-y" data-port-idx="${idx}" value="${port.relativeY}" style="width: 48px; font-size: 10px; background: #000; border: 1px solid var(--border-color); color: #fff; padding: 2px; border-radius: 2px;" />
+                <button class="prop-port-remove" data-port-idx="${idx}" title="Remove this port" style="background: rgba(248, 81, 73, 0.15); border: 1px solid var(--danger-color); color: var(--danger-color); border-radius: 2px; width: 18px; height: 18px; font-size: 10px; line-height: 1; cursor: pointer;">✕</button>
               </div>
             </div>
           `).join('')}
         </div>
+        <div style="display: flex; gap: 6px; margin-top: 8px;">
+          <button id="prop-port-add" title="Add a single custom RJ45 port (max 60 total per device) — position it with the X/Y inputs above before adding another" style="flex: 1; background: var(--border-color); border: 1px solid var(--border-color-focus); border-radius: 4px; padding: 6px; font-size: 11px; cursor: pointer;">+ Add Port</button>
+        </div>
       </div>
 
-      ${template?.category === 'server' ? `
+      ${currentEffectiveCategory === 'server' ? `
         <div style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 12px;">
           <label style="font-weight: bold; color: var(--accent-primary); display: flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 14px;">
             <span>🔌</span> Cable Laying Helper
@@ -342,6 +425,8 @@ export class PropertiesPanel {
         EventBus.emit('device:update', { id, data: { powerWatts: watts } });
       });
     }
+
+    this.wireDeviceTypeSection(container, id);
 
     container.querySelector('#prop-dev-rack')?.addEventListener('change', (e: any) => {
       EventBus.emit('device:update', { id, data: { rackId: e.target.value } });
@@ -406,6 +491,55 @@ export class PropertiesPanel {
         updatedPorts[idx] = { ...updatedPorts[idx], relativeY: val };
         EventBus.emit('device:update', { id, data: { ports: updatedPorts } });
       });
+    });
+
+    // Remove a single custom port — cable cleanup for the removed port happens in app.ts's
+    // 'device:remove-port' handler (mirrors stateManager.removeDevice's cleanup).
+    container.querySelectorAll('.prop-port-remove').forEach(btn => {
+      btn.addEventListener('click', (e: any) => {
+        const idx = parseInt(e.target.getAttribute('data-port-idx'));
+        const port = device.ports[idx];
+        if (!port) return;
+        EventBus.emit('device:remove-port', { deviceId: id, portId: port.id });
+      });
+    });
+
+    // A device may carry at most this many manually-added/custom ports (real jacks only — the
+    // 4/6/8-per-side ear-mount holes injectEarPorts always adds don't count against it).
+    const countRealPorts = (ports: PortData[]) => ports.filter((p: PortData) => !p.id.includes('-ear-')).length;
+
+    // Manually add one RJ45 port — for devices (e.g. a custom front-panel image) whose real port
+    // count doesn't match what the built-in template shipped with. You position it yourself with
+    // the X/Y inputs above. Each new port's default spot is staggered a little from the last one
+    // (rather than a single fixed point) so adding a couple of ports back-to-back without
+    // repositioning the first still leaves them individually visible/clickable, instead of
+    // stacking into one indistinguishable, non-functional blob.
+    container.querySelector('#prop-port-add')?.addEventListener('click', () => {
+      const realCount = countRealPorts(device.ports);
+      if (realCount >= MAX_CUSTOM_PORTS) {
+        EventBus.emit('notification', { message: `Maximum of ${MAX_CUSTOM_PORTS} ports per device reached`, type: 'warning' });
+        return;
+      }
+      const deviceWidth = RACK_CONSTANTS.RACK_INNER_WIDTH - 2 * RACK_CONSTANTS.RAIL_WIDTH;
+      const deviceHeight = (template?.heightUnits ?? 1) * RACK_CONSTANTS.RU_HEIGHT;
+      const stagger = 10;
+      const cols = Math.max(1, Math.floor((deviceWidth - 20) / stagger));
+      const newPort = {
+        id: generateId(),
+        deviceId: id,
+        name: `Port ${device.ports.length + 1}`,
+        type: 'rj45' as const,
+        relativeX: 10 + (realCount % cols) * stagger,
+        relativeY: deviceHeight / 2,
+        // Tighter than the 12x10 type default — real hardware ports calibrated to match a photo
+        // are often packed close enough (~9-14px pitch) that the default size alone would make
+        // adjacent ports' hit-boxes touch or overlap.
+        portW: 9,
+        portH: 9,
+        connected: false,
+        cableId: null,
+      };
+      EventBus.emit('device:update', { id, data: { ports: [...device.ports, newPort] } });
     });
 
     ['name', 'hostname', 'managementIp', 'serialNumber', 'description'].forEach(field => {
@@ -1442,7 +1576,7 @@ export class PropertiesPanel {
     const cable = state.cables?.find((c: any) => c.id === id) || (State as any).getCable?.(id);
     if (!cable) return;
 
-    const cableTypes: CableType[] = ['idrac', 'vm-network', 'ceph-primary', 'ceph-secondary', 'live-migration', 'backup', 'general', 'general-a', 'general-b', 'power', 'custom'];
+    const cableTypes: CableType[] = ['idrac', 'vm-network', 'ceph-primary', 'ceph-secondary', 'live-migration', 'backup', 'general', 'general-a', 'general-b', 'power', 'power-redundant', 'custom'];
     const terminations = ['RJ45 Ethernet', 'SFP+ Fiber Cage', 'QSFP28 Fiber Cage', 'LC-Fiber Connector', 'SC-Fiber Connector', 'C13/C14 Power', 'Console DB9/RJ45', 'Custom Term'];
     const statuses = ['planned', 'ordered', 'pulled', 'terminated', 'tested', 'active', 'inactive'];
     const categories = ['copper-ethernet', 'fiber-optic', 'dac', 'power', 'management', 'storage', 'custom'];
@@ -1854,9 +1988,9 @@ export class PropertiesPanel {
     const selectedCableBend = state.selectedCableBend !== undefined ? state.selectedCableBend : 15;
     const selectedCableTermination = state.selectedCableTermination || 'RJ45 Ethernet';
 
-    const cableTypes: CableType[] = ['idrac', 'vm-network', 'ceph-primary', 'ceph-secondary', 'live-migration', 'backup', 'general', 'general-a', 'general-b', 'power', 'custom'];
+    const cableTypes: CableType[] = ['idrac', 'vm-network', 'ceph-primary', 'ceph-secondary', 'live-migration', 'backup', 'general', 'general-a', 'general-b', 'power', 'power-redundant', 'custom'];
     const terminations = ['RJ45 Ethernet', 'SFP+ Fiber Cage', 'QSFP28 Fiber Cage', 'LC-Fiber Connector', 'SC-Fiber Connector', 'C13/C14 Power', 'Console DB9/RJ45', 'Custom Term'];
-    
+
     const bendRadii = [
       { label: 'Sharp (0px)', val: 0 },
       { label: 'Tight Bend (5px)', val: 5 },
@@ -1876,6 +2010,7 @@ export class PropertiesPanel {
       'general-a': 'General Traffic-A - Cyan',
       'general-b': 'General Traffic-B - Pink',
       'power': 'Power Cord (AC) - Black',
+      'power-redundant': 'Redundant Power (Backup Feed) - Amber',
       'cat6': 'Category 6 U/UTP - Blue',
       'cat6a': 'Category 6A S/FTP - Orange',
       'cat8': 'Category 8.1 40GbE - Purple',

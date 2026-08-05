@@ -89,6 +89,13 @@ export class Toolbar {
         toggle: true
       },
       {
+        id: 'tool-text',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16"></path><path d="M12 5v14"></path><path d="M9 19h6"></path></svg>',
+        title: 'Add Text Box / Label (T)',
+        action: () => this.setTool('text'),
+        toggle: true
+      },
+      {
         id: 'tool-zoomin',
         icon: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/></svg>', 
         title: 'Zoom In', 
