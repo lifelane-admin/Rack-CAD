@@ -223,6 +223,13 @@ export interface PortData {
 // === Devices ===
 export type DeviceCategory = 'server' | 'switch' | 'router' | 'firewall' | 'storage' | 'patch-panel' | 'pdu' | 'ups' | 'blank-panel' | 'cable-manager' | 'cooling' | 'console' | 'nac' | 'ats' | 'load-balancer' | 'vpn-concentrator' | 'ids-ips' | 'proxy-waf';
 
+/** Per-device 3D viewport configuration. All fields optional at the data layer;
+ *  device-builder resolves: device.device3D → template.default3D → built-in defaults. */
+export interface Device3DConfig {
+  depth: number;  // mm-equivalent units; default 500 (standard 1U server depth)
+  width: number;  // mm-equivalent units; default 350 (RACK_INNER_WIDTH − 2×RAIL_WIDTH)
+}
+
 export interface DeviceTemplate {
   id: string;
   name: string;
@@ -249,6 +256,7 @@ export interface DeviceTemplate {
   mountType?: 'rack' | 'side';   // 'rack' is default
   pduWidth?: number;              // px width when side-mounted (e.g. 42)
   outletConfig?: OutletConfig[];  // for side PDUs
+  default3D?: Device3DConfig;
 }
 
 export interface DeviceData {
@@ -273,6 +281,7 @@ export interface DeviceData {
   // relabeled as whatever it actually is (Router, Load Balancer, Switch L2/L3, ...) without
   // fighting the SDK configurators, which stay keyed off the template's own native category.
   categoryOverride?: DeviceCategory;
+  device3D?: Device3DConfig;
 }
 
 // === Text Labels / Annotations ===

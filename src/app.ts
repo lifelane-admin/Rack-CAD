@@ -42,9 +42,11 @@ import {
   RackData, DeviceData, PortData, CableData, LegendItem, TextLabel, ImageAsset,
   RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode, SocketType
 } from './core/types';
+import { ThreeViewport } from './three/ThreeViewport';
 
 export class App {
   private canvas!: CanvasManager;
+  private threeViewport?: ThreeViewport;
   private toolbar!: Toolbar;
   private sidebar!: Sidebar;
   private properties!: PropertiesPanel;
@@ -160,6 +162,23 @@ export class App {
   init() {
     // Initialize canvas
     this.canvas = new CanvasManager('canvas-viewport', 'canvas');
+
+    // Mount 3D viewport — wrapped so a WebGL failure never kills the 2D app
+    const canvas3d = document.getElementById('canvas-3d');
+    if (canvas3d) {
+      try {
+        this.threeViewport = new ThreeViewport();
+        this.threeViewport.mount(canvas3d);
+        this.addCameraPresetButtons(canvas3d);
+        this.addDoorPanel(canvas3d);
+        this.addNavPanel(canvas3d);
+      } catch (err) {
+        console.error('[ThreeViewport] 3D init failed, continuing in 2D-only mode:', err);
+        canvas3d.style.display = 'none';
+        const splitter = document.getElementById('splitter-3d');
+        if (splitter) splitter.style.display = 'none';
+      }
+    }
 
     // Initialize UI components
     const toolbarEl = document.getElementById('toolbar')!;
@@ -4001,5 +4020,166 @@ export class App {
       this.renderAll();
       modal.remove();
     });
+  }
+
+  private addCameraPresetButtons(container: HTMLElement): void {
+    if (!this.threeViewport) return;
+    const bar = document.createElement('div');
+    bar.id = 'three-cam-presets';
+    const presets = ['Front', 'Rear', 'Left', 'Right', 'Top', 'Perspective'] as const;
+    let activeBtn: HTMLButtonElement | null = null;
+
+    for (const label of presets) {
+      const btn = document.createElement('button');
+      btn.textContent = label;
+      btn.addEventListener('click', () => {
+        this.threeViewport!.setPreset(label.toLowerCase() as any);
+        activeBtn?.classList.remove('active');
+        btn.classList.add('active');
+        activeBtn = btn;
+      });
+      bar.appendChild(btn);
+      if (label === 'Perspective') {
+        btn.classList.add('active');
+        activeBtn = btn;
+      }
+    }
+
+    container.appendChild(bar);
+  }
+
+  private addDoorPanel(container: HTMLElement): void {
+    if (!this.threeViewport) return;
+
+    const panel = document.createElement('div');
+    panel.id = 'three-door-panel';
+    panel.style.cssText = [
+      'position:absolute', 'top:12px', 'right:12px', 'z-index:30',
+      'display:flex', 'flex-direction:column', 'gap:6px',
+      'background:#0c1828', 'border:1px solid #2a4a70',
+      'border-radius:7px', 'padding:9px 12px',
+      'box-shadow:0 2px 12px rgba(0,0,0,0.6)',
+    ].join(';');
+
+    const lbl = document.createElement('div');
+    lbl.textContent = 'RACK DOOR';
+    lbl.style.cssText = [
+      'font-size:9px', 'color:#4a7aaa', 'font-family:monospace',
+      'letter-spacing:2px', 'text-align:center', 'user-select:none',
+    ].join(';');
+    panel.appendChild(lbl);
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:4px;';
+
+    type DoorState = 'closed' | 'open' | 'removed';
+    const states: { state: DoorState; label: string }[] = [
+      { state: 'closed',  label: 'Closed'  },
+      { state: 'open',    label: 'Open'    },
+      { state: 'removed', label: 'Removed' },
+    ];
+
+    const BASE_BTN = [
+      'background:#0e2040', 'border:1px solid #254060', 'color:#6aaad8',
+      'border-radius:4px', 'padding:5px 10px', 'font-size:10px',
+      'cursor:pointer', 'font-family:monospace', 'transition:none',
+      'outline:none',
+    ].join(';');
+    const ACTIVE_BTN = [
+      'background:#1a4080', 'border:1px solid #4a90d0', 'color:#ffffff',
+      'border-radius:4px', 'padding:5px 10px', 'font-size:10px',
+      'cursor:pointer', 'font-family:monospace', 'transition:none',
+      'outline:none',
+    ].join(';');
+
+    let activeBtn: HTMLButtonElement | null = null;
+    for (const { state, label } of states) {
+      const btn = document.createElement('button');
+      btn.textContent = label;
+      btn.style.cssText = state === 'closed' ? ACTIVE_BTN : BASE_BTN;
+      btn.addEventListener('click', () => {
+        if (activeBtn) activeBtn.style.cssText = BASE_BTN;
+        btn.style.cssText = ACTIVE_BTN;
+        activeBtn = btn;
+        this.threeViewport!.setDoorState(state);
+      });
+      row.appendChild(btn);
+      if (state === 'closed') activeBtn = btn;
+    }
+
+    panel.appendChild(row);
+    container.appendChild(panel);
+  }
+
+  private addNavPanel(container: HTMLElement): void {
+    if (!this.threeViewport) return;
+
+    const panel = document.createElement('div');
+    panel.id = 'three-nav-panel';
+    panel.style.cssText = [
+      'position:absolute', 'bottom:52px', 'left:12px', 'z-index:30',
+      'display:flex', 'flex-direction:column', 'gap:4px',
+      'background:#0c1828', 'border:1px solid #2a4a70',
+      'border-radius:7px', 'padding:8px 10px',
+      'box-shadow:0 2px 12px rgba(0,0,0,0.6)',
+    ].join(';');
+
+    const lbl = document.createElement('div');
+    lbl.textContent = 'NAVIGATE';
+    lbl.style.cssText = [
+      'font-size:9px', 'color:#4a7aaa', 'font-family:monospace',
+      'letter-spacing:2px', 'text-align:center', 'user-select:none',
+      'margin-bottom:2px',
+    ].join(';');
+    panel.appendChild(lbl);
+
+    const BASE = [
+      'background:#0e2040', 'border:1px solid #254060', 'color:#6aaad8',
+      'border-radius:4px', 'padding:5px 0', 'font-size:13px', 'width:32px',
+      'cursor:pointer', 'font-family:monospace', 'text-align:center',
+      'outline:none', 'display:block',
+    ].join(';');
+    const ACTIVE = BASE.replace('background:#0e2040', 'background:#1a4080')
+                       .replace('border:1px solid #254060', 'border:1px solid #4a90d0')
+                       .replace('color:#6aaad8', 'color:#ffffff');
+
+    // Pan toggle
+    const panBtn = document.createElement('button');
+    panBtn.textContent = '✋';
+    panBtn.title = 'Pan mode (left-drag to pan; click again for orbit)';
+    panBtn.style.cssText = BASE;
+    let panActive = false;
+    panBtn.addEventListener('click', () => {
+      panActive = !panActive;
+      panBtn.style.cssText = panActive ? ACTIVE : BASE;
+      this.threeViewport!.setPanMode(panActive);
+    });
+    panel.appendChild(panBtn);
+
+    // Zoom in
+    const zoomInBtn = document.createElement('button');
+    zoomInBtn.textContent = '+';
+    zoomInBtn.title = 'Zoom in';
+    zoomInBtn.style.cssText = BASE;
+    zoomInBtn.addEventListener('click', () => this.threeViewport!.zoomBy(0.75));
+    panel.appendChild(zoomInBtn);
+
+    // Zoom out
+    const zoomOutBtn = document.createElement('button');
+    zoomOutBtn.textContent = '−';
+    zoomOutBtn.title = 'Zoom out';
+    zoomOutBtn.style.cssText = BASE;
+    zoomOutBtn.addEventListener('click', () => this.threeViewport!.zoomBy(1.35));
+    panel.appendChild(zoomOutBtn);
+
+    // Fit / reset
+    const fitBtn = document.createElement('button');
+    fitBtn.textContent = '⊡';
+    fitBtn.title = 'Fit scene to view';
+    fitBtn.style.cssText = BASE;
+    fitBtn.addEventListener('click', () => this.threeViewport!.fitCameraToScene());
+    panel.appendChild(fitBtn);
+
+    container.appendChild(panel);
   }
 }
