@@ -9,6 +9,7 @@ import { switchVendorSkin, firewallVendorSkin, nacVendorSkin } from '../renderer
 import { getTemplate, getEffectiveCategory } from '../library/device-catalog';
 import { generateId } from '../utils/geometry';
 import { CustomAssetModal } from './custom-asset-modal';
+import { CLOUD_CONNECTOR_PRESETS, CloudConnectorPreset, getCloudConnectorPreset } from '../library/cloud-connector-presets';
 
 const customAssetModal = new CustomAssetModal();
 
@@ -91,7 +92,209 @@ export class PropertiesPanel {
       this.renderDeviceProperties(item.id, content as HTMLElement);
     } else if (item.type === 'cable') {
       this.renderCableProperties(item.id, content as HTMLElement);
+    } else if (item.type === 'cloud-node') {
+      this.renderCloudNodeProperties(item.id, content as HTMLElement);
+    } else if (item.type === 'cloud-container') {
+      this.renderCloudContainerProperties(item.id, content as HTMLElement);
+    } else if (item.type === 'cloud-connector') {
+      this.renderCloudConnectorProperties(item.id, content as HTMLElement);
     }
+  }
+
+  private renderCloudNodeProperties(id: string, container: HTMLElement) {
+    const state = (State as any).getState?.() || (State as any);
+    const node = state.cloudNodes?.find((n: any) => n.id === id);
+    if (!node) return;
+
+    container.innerHTML = `
+      <div class="form-group">
+        <label>Label</label>
+        <input type="text" id="prop-cloudnode-label" value="${node.label || ''}" />
+      </div>
+      <div class="form-group">
+        <label>Provider</label>
+        <input type="text" value="${node.provider.toUpperCase()}" disabled />
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="font-size: 10px;">Width</label>
+          <input type="number" id="prop-cloudnode-width" value="${node.width}" min="24" />
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="font-size: 10px;">Height</label>
+          <input type="number" id="prop-cloudnode-height" value="${node.height}" min="24" />
+        </div>
+      </div>
+      <button id="prop-cloudnode-delete" style="margin-top: 10px; width: 100%; padding: 5px 8px; font-size: 10px; background: rgba(244,67,54,0.12); border: 1px solid #e53935; border-radius: 4px; color: #e53935; cursor: pointer;">🗑 Delete</button>
+    `;
+
+    container.querySelector('#prop-cloudnode-label')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudnode:update', { id, data: { label: e.target.value } });
+    });
+    container.querySelector('#prop-cloudnode-width')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudnode:update', { id, data: { width: parseInt(e.target.value) || node.width } });
+    });
+    container.querySelector('#prop-cloudnode-height')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudnode:update', { id, data: { height: parseInt(e.target.value) || node.height } });
+    });
+    container.querySelector('#prop-cloudnode-delete')?.addEventListener('click', () => {
+      EventBus.emit('edit:delete', undefined as any);
+    });
+  }
+
+  private readonly CLOUD_CONTAINER_KINDS = ['vpc', 'subnet', 'resource-group', 'az', 'region', 'account', 'generic'];
+
+  private readonly CLOUD_ARROW_TYPES: { value: string; label: string }[] = [
+    { value: 'none', label: 'None' },
+    { value: 'arrow', label: 'Arrow' },
+    { value: 'arrow-open', label: 'Open Arrow' },
+    { value: 'arrow-broad', label: 'Broad Arrow' },
+    { value: 'dot', label: 'Dot' },
+    { value: 'diamond', label: 'Diamond' },
+  ];
+
+  private arrowOptions(current: string): string {
+    return this.CLOUD_ARROW_TYPES.map(a => `<option value="${a.value}" ${a.value === current ? 'selected' : ''}>${a.label}</option>`).join('');
+  }
+
+  private renderCloudContainerProperties(id: string, container: HTMLElement) {
+    const state = (State as any).getState?.() || (State as any);
+    const item = state.cloudContainers?.find((c: any) => c.id === id);
+    if (!item) return;
+
+    container.innerHTML = `
+      <div class="form-group">
+        <label>Label</label>
+        <input type="text" id="prop-cloudcontainer-label" value="${item.label || ''}" />
+      </div>
+      <div class="form-group">
+        <label>Kind</label>
+        <select id="prop-cloudcontainer-kind">
+          ${this.CLOUD_CONTAINER_KINDS.map(k => `<option value="${k}" ${item.kind === k ? 'selected' : ''}>${k}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Provider Accent</label>
+        <select id="prop-cloudcontainer-provider">
+          <option value="" ${!item.provider ? 'selected' : ''}>Generic (neutral)</option>
+          <option value="aws" ${item.provider === 'aws' ? 'selected' : ''}>AWS</option>
+          <option value="azure" ${item.provider === 'azure' ? 'selected' : ''}>Azure</option>
+          <option value="gcp" ${item.provider === 'gcp' ? 'selected' : ''}>GCP</option>
+        </select>
+      </div>
+      <button id="prop-cloudcontainer-delete" style="margin-top: 10px; width: 100%; padding: 5px 8px; font-size: 10px; background: rgba(244,67,54,0.12); border: 1px solid #e53935; border-radius: 4px; color: #e53935; cursor: pointer;">🗑 Delete</button>
+    `;
+
+    container.querySelector('#prop-cloudcontainer-label')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudcontainer:update', { id, data: { label: e.target.value } });
+    });
+    container.querySelector('#prop-cloudcontainer-kind')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudcontainer:update', { id, data: { kind: e.target.value } });
+    });
+    container.querySelector('#prop-cloudcontainer-provider')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudcontainer:update', { id, data: { provider: e.target.value || null } });
+    });
+    container.querySelector('#prop-cloudcontainer-delete')?.addEventListener('click', () => {
+      EventBus.emit('edit:delete', undefined as any);
+    });
+  }
+
+  private renderCloudConnectorProperties(id: string, container: HTMLElement) {
+    const state = (State as any).getState?.() || (State as any);
+    const conn = state.cloudConnectors?.find((c: any) => c.id === id);
+    if (!conn) return;
+
+    container.innerHTML = `
+      <div class="form-group">
+        <label>Type Preset</label>
+        <select id="prop-cloudconn-preset">
+          <option value="">Custom</option>
+          ${CLOUD_CONNECTOR_PRESETS.map((p: CloudConnectorPreset) => `<option value="${p.id}">${p.label}</option>`).join('')}
+        </select>
+        <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">One-click sets color/style/weight to match a legend entry — still fully editable below afterward.</div>
+      </div>
+      <div class="form-group">
+        <label>Label</label>
+        <input type="text" id="prop-cloudconn-label" value="${conn.label || ''}" />
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="font-size: 10px;">Color</label>
+          <input type="color" id="prop-cloudconn-color" value="${conn.color || '#8b949e'}" style="width: 100%; height: 28px; padding: 2px; cursor: pointer;" />
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="font-size: 10px;">Weight (px)</label>
+          <input type="number" id="prop-cloudconn-width" value="${conn.width ?? 2}" min="1" max="10" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Line Style</label>
+        <select id="prop-cloudconn-style">
+          <option value="solid" ${(conn.style || 'solid') === 'solid' ? 'selected' : ''}>Solid</option>
+          <option value="dashed" ${conn.style === 'dashed' ? 'selected' : ''}>Dashed</option>
+          <option value="dotted" ${conn.style === 'dotted' ? 'selected' : ''}>Dotted</option>
+          <option value="dash-dot" ${conn.style === 'dash-dot' ? 'selected' : ''}>Dash-Dot</option>
+          <option value="long-dash" ${conn.style === 'long-dash' ? 'selected' : ''}>Long Dash</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Routing</label>
+        <select id="prop-cloudconn-routing">
+          <option value="orthogonal" ${(conn.routing || 'orthogonal') === 'orthogonal' ? 'selected' : ''}>Right-Angle (Orthogonal)</option>
+          <option value="straight" ${conn.routing === 'straight' ? 'selected' : ''}>Straight</option>
+        </select>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="font-size: 10px;">Source Tip</label>
+          <select id="prop-cloudconn-start-arrow">${this.arrowOptions(conn.startArrow ?? 'none')}</select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="font-size: 10px;">Dest Tip</label>
+          <select id="prop-cloudconn-end-arrow">${this.arrowOptions(conn.endArrow ?? 'arrow')}</select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+          <input type="checkbox" id="prop-cloudconn-rounded" ${conn.roundedCorners ? 'checked' : ''} />
+          Round Edges (rounded corners on right-angle bends)
+        </label>
+      </div>
+      <button id="prop-cloudconn-delete" style="margin-top: 10px; width: 100%; padding: 5px 8px; font-size: 10px; background: rgba(244,67,54,0.12); border: 1px solid #e53935; border-radius: 4px; color: #e53935; cursor: pointer;">🗑 Delete</button>
+    `;
+
+    container.querySelector('#prop-cloudconn-preset')?.addEventListener('change', (e: any) => {
+      const preset = getCloudConnectorPreset(e.target.value);
+      if (!preset) return;
+      EventBus.emit('cloudconnector:update', { id, data: { color: preset.color, style: preset.style, width: preset.width } });
+    });
+    container.querySelector('#prop-cloudconn-label')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudconnector:update', { id, data: { label: e.target.value } });
+    });
+    container.querySelector('#prop-cloudconn-color')?.addEventListener('input', (e: any) => {
+      EventBus.emit('cloudconnector:update', { id, data: { color: e.target.value } });
+    });
+    container.querySelector('#prop-cloudconn-width')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudconnector:update', { id, data: { width: parseFloat(e.target.value) || 2 } });
+    });
+    container.querySelector('#prop-cloudconn-style')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudconnector:update', { id, data: { style: e.target.value } });
+    });
+    container.querySelector('#prop-cloudconn-routing')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudconnector:update', { id, data: { routing: e.target.value } });
+    });
+    container.querySelector('#prop-cloudconn-start-arrow')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudconnector:update', { id, data: { startArrow: e.target.value } });
+    });
+    container.querySelector('#prop-cloudconn-end-arrow')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudconnector:update', { id, data: { endArrow: e.target.value } });
+    });
+    container.querySelector('#prop-cloudconn-rounded')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudconnector:update', { id, data: { roundedCorners: e.target.checked } });
+    });
+    container.querySelector('#prop-cloudconn-delete')?.addEventListener('click', () => {
+      EventBus.emit('edit:delete', undefined as any);
+    });
   }
 
   private renderEmpty() {

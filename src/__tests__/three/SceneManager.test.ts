@@ -177,8 +177,9 @@ describe('SceneManager', () => {
   });
 });
 
-// Cable routing in 3D is paused (SceneManager.rebuild() no longer calls syncCables()) — revisit
-// and re-enable this suite when that work resumes.
+// Cable routing in 3D is paused again (SceneManager.rebuild() no longer calls syncCables()) —
+// revisit and re-enable this suite when that work resumes. cable-builder.ts's own routing/lane
+// logic is still covered directly by cable-builder.test.ts.
 describe.skip('SceneManager — syncCables', () => {
   let mgr: SceneManager;
   let materials: MaterialManager;

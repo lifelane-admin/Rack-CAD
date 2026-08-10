@@ -1,0 +1,138 @@
+/* Cloud Architecture canvas — view-switch tabs, icon palette, and canvas object styling.
+   #cloud-viewport / #cloud-canvas grid placement lives in canvas.css alongside #canvas-viewport. */
+
+/* --- Sidebar: top-level workspace navigation tree (On-Prem Infrastructure / Cloud) --- */
+
+.sidebar-nav-tree {
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.nav-tree-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px var(--space-md);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.nav-tree-group-title:hover {
+  color: var(--text-primary);
+}
+
+.nav-tree-caret {
+  display: inline-block;
+  transition: transform var(--transition-speed);
+  font-size: 10px;
+}
+
+.nav-tree-group.collapsed .nav-tree-caret {
+  transform: rotate(-90deg);
+}
+
+.nav-tree-group.collapsed .nav-tree-children {
+  display: none;
+}
+
+.nav-tree-leaf {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px var(--space-md) 7px calc(var(--space-md) + 16px);
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background-color var(--transition-speed);
+}
+
+.nav-tree-leaf:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.nav-tree-leaf.active {
+  background-color: rgba(56, 189, 248, 0.1);
+  border-left-color: var(--accent-primary, #38bdf8);
+  font-weight: 600;
+}
+
+/* --- Sidebar: cloud icon palette --- */
+
+.cloud-icon-thumb {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  margin-right: var(--space-md);
+  flex-shrink: 0;
+  background-color: rgba(255, 255, 255, 0.03);
+  border-radius: var(--border-radius);
+  padding: 2px;
+}
+
+.cloud-icon-category-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cloud-icon-category-title:hover {
+  color: var(--text-primary);
+}
+
+.cloud-icon-category.collapsed .cloud-icon-category-title .nav-tree-caret {
+  transform: rotate(-90deg);
+}
+
+.cloud-icon-category.collapsed .cloud-icon-category-content {
+  display: none;
+}
+
+.catalog-item.cloud-icon-item {
+  border-left: 3px solid transparent;
+}
+
+/* --- Toolbar: Rack View / Cloud Architecture switch --- */
+
+#btn-view-rack.active,
+#btn-view-cloud.active {
+  background-color: var(--accent-primary, #58a6ff);
+  color: #0d1117;
+}
+
+/* --- Cloud canvas objects (rendered as inline SVG attrs mostly; these cover cursor/handles) --- */
+
+#cloud-canvas .cloud-node-resize-handle,
+#cloud-canvas .cloud-container-resize-handle {
+  cursor: nwse-resize;
+}
+
+#cloud-canvas .cloud-connector-hit {
+  cursor: pointer;
+}
+
+/* Connection-point handles — appear once a node is clicked/selected (not always-on, and not
+   hover-gated either) so dragging out a connector from any of a node's 4 sides is discoverable
+   without first switching to the Connect tool, while staying out of the way of unselected nodes.
+   Emphasized further on their own hover so the exact drag start point is unambiguous. */
+#cloud-canvas .cloud-node-connect-handle {
+  transition: opacity 0.1s, r 0.1s;
+}
+
+#cloud-canvas .cloud-node-connect-handle:hover {
+  opacity: 1 !important;
+  r: 7;
+}

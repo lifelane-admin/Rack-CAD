@@ -338,6 +338,83 @@ export interface ImageAsset {
   locked?: boolean;
 }
 
+// === Cloud Architecture canvas (standalone diagram mode, independent of racks) ===
+export type CloudProvider = 'aws' | 'azure' | 'gcp';
+
+/** A single cloud-service icon placed on the Cloud Architecture canvas. `iconId` references an
+ *  entry in src/library/cloud-icon-manifest.json (id -> { path, name, provider, category }). */
+export interface CloudNode {
+  id: string;
+  iconId: string;
+  provider: CloudProvider;
+  x: number;  // world coords, top-left
+  y: number;
+  width: number;
+  height: number;
+  label: string;  // editable display name, defaults to the manifest entry's name
+  locked?: boolean;
+}
+
+/** A background boundary box (VPC/Subnet/Resource-Group/AZ/Region/etc.) — decorative only in
+ *  this phase: dragging a container does not move nodes visually inside it. */
+export interface CloudContainer {
+  id: string;
+  kind: 'vpc' | 'subnet' | 'resource-group' | 'az' | 'region' | 'account' | 'generic';
+  provider?: CloudProvider | null;  // null/undefined = neutral generic styling
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string;
+  color?: string;  // border/accent override
+  locked?: boolean;
+  /** Set when this container was created by dropping a boundary-type palette icon (e.g. Azure
+   *  "Virtual Networks") rather than the generic container tool — drawn as a small icon next to
+   *  the label chip. References cloud-icon-manifest.json's id, same as CloudNode.iconId. */
+  iconId?: string;
+}
+
+/** A freeform line between two cloud nodes, or between a node and a bare point — mirrors
+ *  CableData's floatingSource/floatingDest duality, but with no port system underneath. */
+export type CloudHandleSide = 'top' | 'right' | 'bottom' | 'left';
+
+/** Line-tip style, independently choosable for the source and dest ends — 'none' draws a bare
+ *  line end, the rest render an SVG marker at that tip (see cloud-connector-renderer.ts /
+ *  CloudCanvasManager's marker <defs>). 'arrow' = classic filled triangle, 'arrow-open' = open
+ *  chevron (no fill), 'arrow-broad' = wider/blockier filled triangle, 'dot' = filled circle,
+ *  'diamond' = filled rhombus. */
+export type CloudArrowType = 'none' | 'arrow' | 'arrow-open' | 'arrow-broad' | 'dot' | 'diamond';
+
+export interface CloudConnector {
+  id: string;
+  sourceNodeId?: string | null;
+  sourcePoint?: Point | null;
+  destNodeId?: string | null;
+  destPoint?: Point | null;
+  /** Which side of the source/dest node the line actually exits/enters from — set from the
+   *  connection handle that was dragged (source) and, when the drop landed on a specific dest
+   *  handle, that handle too; otherwise inferred automatically from relative node position (see
+   *  inferBestSide() in cloud-connector-renderer.ts). Undefined for a pre-existing connector
+   *  from before this field existed, or when either end is a bare floating point. */
+  sourceSide?: CloudHandleSide;
+  destSide?: CloudHandleSide;
+  label?: string;
+  style?: 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'long-dash';
+  /** 'orthogonal' (the default for newly created connectors) routes as a right-angle path that
+   *  exits/enters perpendicular to each side (common in official cloud architecture diagrams)
+   *  instead of a single straight line between the two endpoints. */
+  routing?: 'straight' | 'orthogonal';
+  /** Rounds the corners of an orthogonal route with a small arc instead of a sharp 90° turn. */
+  roundedCorners?: boolean;
+  /** Stroke width in px — default 2 when unset. */
+  width?: number;
+  /** Tip style at the source end — default 'none'. */
+  startArrow?: CloudArrowType;
+  /** Tip style at the dest end — default 'arrow'. */
+  endArrow?: CloudArrowType;
+  color?: string;
+}
+
 export type CableType = 'idrac' | 'vm-network' | 'ceph-primary' | 'ceph-secondary' | 'live-migration' | 'backup' | 'general' | 'general-a' | 'general-b' | 'power' | 'power-redundant' | 'cat6' | 'cat6a' | 'cat8' | 'om4' | 'om5' | 'dac-twinax' | 'qsfp28' | 'c13-power' | 'c19-power' | 'console' | 'custom';
 
 export const CABLE_COLORS: Record<CableType, string> = {
@@ -425,7 +502,7 @@ export interface CableData {
 }
 
 // === Application State ===
-export type ToolMode = 'select' | 'pan' | 'cable' | 'power' | 'text' | 'label' | 'zoom-in' | 'zoom-out' | 'export-area';
+export type ToolMode = 'select' | 'pan' | 'cable' | 'power' | 'text' | 'label' | 'zoom-in' | 'zoom-out' | 'export-area' | 'cloud-container' | 'cloud-connect';
 export type Theme = 'dark' | 'light';
 
 export type SelectableItem =
@@ -435,7 +512,10 @@ export type SelectableItem =
   | { type: 'cable'; id: string }
   | { type: 'bundle'; id: string }
   | { type: 'text'; id: string }
-  | { type: 'image'; id: string };
+  | { type: 'image'; id: string }
+  | { type: 'cloud-node'; id: string }
+  | { type: 'cloud-container'; id: string }
+  | { type: 'cloud-connector'; id: string };
 
 export interface LegendItem {
   id: string;
@@ -488,6 +568,12 @@ export interface AppState {
   aiProvider: AIProviderName;
   previewDiff: RackDiff | null;
   customTemplates: DeviceTemplate[];
+  /** Top-level view switch — 'rack' is the existing 2D+3D rack elevation workspace, 'cloud' is
+   *  the standalone Cloud Architecture diagram canvas. Independent surfaces, not layered. */
+  activeView: 'rack' | 'cloud';
+  cloudNodes: CloudNode[];
+  cloudContainers: CloudContainer[];
+  cloudConnectors: CloudConnector[];
 }
 
 // === Events ===
@@ -533,6 +619,8 @@ export interface AppEvents {
   'export:pdf': void;
   'export:html': void;
   'export:json': void;
+  'export:cloud-svg': void;
+  'export:cloud-png': void;
   'export:request-area-selection': void;
   'export:area-selected': { x: number; y: number; width: number; height: number };
   'export:area-selection-cancelled': void;
@@ -558,6 +646,20 @@ export interface AppEvents {
   'textlabel:update': { id: string; data: Partial<TextLabel> };
   'image:insert': void;
   'imageasset:update': { id: string; data: Partial<ImageAsset> };
+  'view:switch': 'rack' | 'cloud';
+  /** Primes the cloud-container draw tool with a specific boundary kind (Region/AZ/VPC/Subnet/
+   *  Resource Group/Account) — the dedicated toolbar shape buttons, as opposed to dropping a
+   *  boundary-type palette icon (which also primes the same tool, see isBoundaryIcon()). */
+  'cloud-shape:prime': CloudContainer['kind'];
+  'view:changed': 'rack' | 'cloud';
+  'cloudnode:added': CloudNode;
+  'cloudnode:update': { id: string; data: Partial<CloudNode> };
+  'cloudcontainer:added': CloudContainer;
+  'cloudcontainer:update': { id: string; data: Partial<CloudContainer> };
+  'cloudconnector:added': CloudConnector;
+  'cloudconnector:update': { id: string; data: Partial<CloudConnector> };
+  'cloud-canvas:transformed': Transform;
+  'cloud-canvas:click': Point;
   'notification': { message: string; type: 'info' | 'success' | 'warning' | 'error' };
   'ai:mode-changed': boolean;
   'ai:provider-changed': AIProviderName;

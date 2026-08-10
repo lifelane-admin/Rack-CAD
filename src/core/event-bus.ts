@@ -29,6 +29,14 @@ class EventBus {
     };
     this.on(event, wrapper);
   }
+
+  /** Test-only escape hatch — this is a module-level singleton, so tests that mount a fresh App
+   *  per `it()` (a common pattern in this suite) otherwise accumulate one listener set per test,
+   *  making `stateManager.getState()` reads inside later handlers reflect whichever stale app's
+   *  handler happened to run first for a given event. Not used by production code. */
+  clear(): void {
+    this.listeners = {};
+  }
 }
 
 export const eventBus = new EventBus();

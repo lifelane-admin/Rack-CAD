@@ -48,6 +48,23 @@
   display: block;
 }
 
+/* Cloud Architecture canvas occupies the same grid cell as #canvas-viewport — the two are
+   never shown at once, toggled via the .hidden class from app.ts's view-switch handler. */
+#cloud-viewport {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--bg-canvas);
+}
+
+#cloud-canvas {
+  width: 100%;
+  height: 100%;
+  cursor: default;
+  display: block;
+}
+
 /* Minimap */
 #minimap {
   position: absolute;

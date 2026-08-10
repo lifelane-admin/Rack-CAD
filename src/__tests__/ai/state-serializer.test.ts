@@ -32,6 +32,10 @@ const minimalState: AppState = {
   aiProvider: 'rules',
   customTemplates: [],
   previewDiff: null,
+  activeView: 'rack',
+  cloudNodes: [],
+  cloudContainers: [],
+  cloudConnectors: [],
 };
 
 describe('serializeState', () => {

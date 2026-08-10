@@ -15,6 +15,7 @@
 }
 
 #sidebar.collapsed .sidebar-header h3,
+#sidebar.collapsed .sidebar-nav-tree,
 #sidebar.collapsed .sidebar-search,
 #sidebar.collapsed .sidebar-catalog {
   display: none;

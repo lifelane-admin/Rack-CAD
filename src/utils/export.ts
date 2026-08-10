@@ -493,6 +493,88 @@ ${svgContent.replace(/<\?xml.*?\?>/, '')}
 }
 
 /**
+ * Export the Cloud Architecture canvas (#cloud-canvas) as a standalone SVG string. A deliberately
+ * simpler sibling of exportSVG() above — no rack-area-selection options, no summary-card overlay
+ * baking, since none of those rack-specific concepts apply to the cloud canvas. Same core
+ * technique though: clone, bbox-fit from the live (attached) viewport group, strip the pan/zoom
+ * transform and the transient interaction layer.
+ */
+export function exportCloudSVG(): string {
+  const svgEl = document.getElementById('cloud-canvas') as unknown as SVGSVGElement;
+  if (!svgEl) throw new Error('Cloud canvas SVG element not found');
+
+  const clone = svgEl.cloneNode(true) as SVGSVGElement;
+  const vpGroup = clone.querySelector('#cloud-viewport-group') as SVGGElement;
+
+  let bbox = { x: 0, y: 0, width: 1200, height: 800 };
+  try {
+    const origViewport = svgEl.querySelector('#cloud-viewport-group') as SVGGElement;
+    const b = origViewport.getBBox();
+    const padding = 40;
+    bbox = { x: b.x - padding, y: b.y - padding, width: b.width + padding * 2, height: b.height + padding * 2 };
+  } catch {
+    // getBBox() throws if there's nothing rendered (empty diagram) — fall back to a blank canvas.
+  }
+
+  clone.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
+  clone.setAttribute('width', String(bbox.width));
+  clone.setAttribute('height', String(bbox.height));
+
+  clone.querySelector('#cloud-grid-layer')?.remove();
+  clone.querySelector('#cloud-interaction-layer')?.remove();
+  if (vpGroup) vpGroup.removeAttribute('transform');
+
+  const styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+  styleEl.textContent = `text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }`;
+  const defs = clone.querySelector('defs');
+  if (defs) defs.appendChild(styleEl); else clone.insertBefore(styleEl, clone.firstChild);
+
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+  const serializer = new XMLSerializer();
+  const svgString = serializer.serializeToString(clone);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${svgString}`;
+}
+
+/**
+ * Export the Cloud Architecture canvas as a high-resolution PNG — same blob-URL/canvas
+ * rasterization technique as exportPNG() above, built on exportCloudSVG() instead of exportSVG().
+ */
+export async function exportCloudPNG(scale = 2): Promise<Blob> {
+  const svgString = exportCloudSVG();
+  const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(svgBlob);
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth * scale;
+      canvas.height = img.naturalHeight * scale;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'));
+        return;
+      }
+      ctx.fillStyle = '#0d1117';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(url);
+        if (blob) resolve(blob); else reject(new Error('Failed to create PNG blob'));
+      }, 'image/png');
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load SVG for PNG export'));
+    };
+    img.src = url;
+  });
+}
+
+/**
  * Export the project as a JSON object.
  */
 export function exportJSON(): string {
@@ -508,6 +590,9 @@ export function exportJSON(): string {
     textLabels: s.textLabels ?? [],
     imageAssets: s.imageAssets ?? [],
     customTemplates: s.customTemplates ?? [],
+    cloudNodes: s.cloudNodes ?? [],
+    cloudContainers: s.cloudContainers ?? [],
+    cloudConnectors: s.cloudConnectors ?? [],
   };
   return JSON.stringify(project, null, 2);
 }
@@ -539,6 +624,9 @@ export function importJSON(jsonString: string): void {
       textLabels: project.textLabels ?? [],
       imageAssets: project.imageAssets ?? [],
       customTemplates: merged,
+      cloudNodes: project.cloudNodes ?? [],
+      cloudContainers: project.cloudContainers ?? [],
+      cloudConnectors: project.cloudConnectors ?? [],
       selection: [],
     });
     stateManager.markSaved();
@@ -582,6 +670,26 @@ export function downloadFile(content: string | Blob, filename: string, mimeType?
 
 // Wire up export events
 export function initExportHandlers(): void {
+  eventBus.on('export:cloud-svg', () => {
+    try {
+      const svgContent = exportCloudSVG();
+      downloadFile(svgContent, 'cloud-architecture.svg', 'image/svg+xml');
+      eventBus.emit('notification', { message: 'Cloud diagram SVG exported successfully', type: 'success' });
+    } catch (err) {
+      eventBus.emit('notification', { message: `Cloud diagram SVG export failed: ${err}`, type: 'error' });
+    }
+  });
+
+  eventBus.on('export:cloud-png', async () => {
+    try {
+      const pngBlob = await exportCloudPNG();
+      downloadFile(pngBlob, 'cloud-architecture.png');
+      eventBus.emit('notification', { message: 'Cloud diagram PNG exported successfully', type: 'success' });
+    } catch (err) {
+      eventBus.emit('notification', { message: `Cloud diagram PNG export failed: ${err}`, type: 'error' });
+    }
+  });
+
   eventBus.on('export:svg', () => {
     showExportOptionsModal('svg', (options) => {
       try {

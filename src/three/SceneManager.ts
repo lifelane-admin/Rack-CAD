@@ -60,8 +60,12 @@ export class SceneManager {
   rebuild(state: AppState): void {
     this.syncRacks(state.racks);
     this.syncDevices(state.racks, state.devices, state.customTemplates ?? []);
-    // Cable routing in 3D is paused for now — revisit later. syncCables()/cable-builder.ts are
-    // left intact, just not called.
+    // Cable routing in 3D is paused again (deliberately deprioritized) — the routing/lane-offset
+    // logic in cable-builder.ts is finished and tested directly (see cable-builder.test.ts), and
+    // ThreeViewport's debounced sync was reverted to not react to cable-only changes either. Just
+    // uncomment this call (and re-add `cables` to ThreeViewport's debouncedSync condition) to
+    // resume.
+    // this.syncCables(state.cables ?? [], state);
   }
 
   private syncRacks(racks: RackData[]): void {

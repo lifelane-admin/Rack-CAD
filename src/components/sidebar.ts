@@ -1,38 +1,93 @@
 import EventBus from '../core/event-bus';
 import State from '../core/state';
 import { deviceCatalog, getTemplate } from '../library/device-catalog';
-import { DeviceCategory, DeviceTemplate } from '../core/types';
+import { DeviceCategory, DeviceTemplate, CloudProvider } from '../core/types';
 import { CustomAssetModal } from './custom-asset-modal';
 import { deleteCustomTemplate, exportCustomLibraryJSON, parseCustomLibraryJSON } from '../library/custom-catalog';
+import { cloudIconManifest, CloudIconEntry } from '../library/cloud-icon-catalog';
+
+const CLOUD_SEARCH_RESULT_CAP = 150;
+let cloudSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+interface NavLeaf {
+  label: string;
+  icon: string;
+  view: 'rack' | 'cloud';
+  provider?: CloudProvider;
+}
+interface NavGroup {
+  label: string;
+  icon: string;
+  children: NavLeaf[];
+}
+
+/** Top-level workspace navigation — the primary way to switch between the On-Prem rack
+ *  elevation workspace and the Cloud Architecture canvas (per-provider entry points). Always
+ *  rendered above the search/catalog, regardless of which view is currently active. */
+const NAV_TREE: NavGroup[] = [
+  {
+    label: 'On-Prem Infrastructure', icon: '🏢', children: [
+      { label: 'Rack Development', icon: '📦', view: 'rack' },
+    ],
+  },
+  {
+    label: 'Cloud', icon: '☁️', children: [
+      { label: 'AWS', icon: '🟧', view: 'cloud', provider: 'aws' },
+      { label: 'Azure', icon: '🔷', view: 'cloud', provider: 'azure' },
+      { label: 'GCP', icon: '🔴', view: 'cloud', provider: 'gcp' },
+    ],
+  },
+];
 
 export class Sidebar {
   private container: HTMLElement;
   private searchTerm: string = '';
   private customAssetModal = new CustomAssetModal();
+  /** Which cloud provider's palette section to auto-expand — set when the user navigates via
+   *  the Cloud > AWS/Azure/GCP tree leaf, so landing on the Cloud Architecture view drops them
+   *  straight into that provider's icons instead of an all-collapsed palette. */
+  private focusedCloudProvider: CloudProvider | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
   }
 
   render() {
+    const isCloud = State.getState().activeView === 'cloud';
+
     this.container.innerHTML = '';
     this.container.className = 'sidebar';
 
     const header = document.createElement('div');
     header.className = 'sidebar-header';
     header.innerHTML = `
-      <h3>Components</h3>
+      <h3>${isCloud ? 'Cloud Services' : 'Components'}</h3>
       <button class="collapse-btn" title="Collapse">«</button>
     `;
-    
+
+    const navTree = document.createElement('div');
+    navTree.className = 'sidebar-nav-tree';
+    this.renderNavTree(navTree);
+
     const searchContainer = document.createElement('div');
     searchContainer.className = 'sidebar-search';
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
-    searchInput.placeholder = 'Search components...';
+    const providerLabels: Record<CloudProvider, string> = { aws: 'AWS', azure: 'Azure', gcp: 'GCP' };
+    searchInput.placeholder = isCloud
+      ? (this.focusedCloudProvider ? `Search ${providerLabels[this.focusedCloudProvider]} services...` : 'Search AWS/Azure/GCP services...')
+      : 'Search components...';
     searchInput.oninput = (e: any) => {
       this.searchTerm = e.target.value.toLowerCase();
-      this.renderCatalog();
+      if (isCloud) {
+        // Debounced — filtering runs across all 1274 manifest entries + a full DOM rebuild on
+        // every keystroke would otherwise feel sluggish at this list size (unlike the ~77-item
+        // device catalog this search box normally filters).
+        if (cloudSearchDebounceTimer) clearTimeout(cloudSearchDebounceTimer);
+        cloudSearchDebounceTimer = setTimeout(() => this.renderCloudPalette(), 150);
+      } else {
+        this.renderCatalog();
+      }
     };
     searchContainer.appendChild(searchInput);
 
@@ -41,6 +96,7 @@ export class Sidebar {
     catalogContainer.id = 'catalog-container';
 
     this.container.appendChild(header);
+    this.container.appendChild(navTree);
     this.container.appendChild(searchContainer);
     this.container.appendChild(catalogContainer);
 
@@ -48,7 +104,11 @@ export class Sidebar {
       this.container.classList.toggle('collapsed');
     });
 
-    this.renderCatalog();
+    if (isCloud) {
+      this.renderCloudPalette();
+    } else {
+      this.renderCatalog();
+    }
   }
 
   private renderMyLibrary(container: HTMLElement): void {
@@ -190,6 +250,158 @@ export class Sidebar {
 
     section.appendChild(content);
     container.appendChild(section);
+  }
+
+  private renderNavTree(container: HTMLElement): void {
+    const state = State.getState();
+    container.innerHTML = '';
+
+    for (const group of NAV_TREE) {
+      const groupEl = document.createElement('div');
+      groupEl.className = 'nav-tree-group';
+
+      const groupTitle = document.createElement('div');
+      groupTitle.className = 'nav-tree-group-title';
+      groupTitle.innerHTML = `<span class="nav-tree-caret">▾</span> ${group.icon} ${group.label}`;
+      groupTitle.onclick = () => groupEl.classList.toggle('collapsed');
+      groupEl.appendChild(groupTitle);
+
+      const childrenEl = document.createElement('div');
+      childrenEl.className = 'nav-tree-children';
+      for (const leaf of group.children) {
+        const isActive = leaf.view === 'rack'
+          ? state.activeView === 'rack'
+          : state.activeView === 'cloud' && (leaf.provider ?? null) === this.focusedCloudProvider;
+
+        const leafEl = document.createElement('div');
+        leafEl.className = `nav-tree-leaf${isActive ? ' active' : ''}`;
+        leafEl.innerHTML = `${leaf.icon} <span>${leaf.label}</span>`;
+        leafEl.onclick = () => {
+          this.focusedCloudProvider = leaf.provider ?? null;
+          this.searchTerm = '';
+          EventBus.emit('view:switch', leaf.view);
+        };
+        childrenEl.appendChild(leafEl);
+      }
+      groupEl.appendChild(childrenEl);
+      container.appendChild(groupEl);
+    }
+  }
+
+  private makeCloudIconItem(icon: CloudIconEntry): HTMLElement {
+    const el = document.createElement('div');
+    el.className = 'catalog-item cloud-icon-item';
+    el.draggable = true;
+    el.title = `${icon.name} (${icon.provider.toUpperCase()})`;
+    el.innerHTML = `
+      <img class="cloud-icon-thumb" src="${icon.path}" alt="" loading="lazy" width="24" height="24" />
+      <div class="item-details" style="min-width:0;overflow:hidden;">
+        <div class="item-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${icon.name}</div>
+        <div class="item-meta">${icon.category}</div>
+      </div>
+    `;
+    el.ondragstart = (e) => {
+      e.dataTransfer?.setData('application/json', JSON.stringify({ iconId: icon.id }));
+    };
+    return el;
+  }
+
+  /** Cloud icon palette (see cloud-icon-catalog.ts) — 1274 official AWS/Azure/GCP icons.
+   *  Provider sections collapsed by default with category sub-groupings inside; typing in the
+   *  search box switches to a flat, capped, cross-provider results list instead. */
+  private renderCloudPalette(): void {
+    const container = this.container.querySelector('#catalog-container') as HTMLElement;
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (this.searchTerm) {
+      // Scoped to whichever provider was entered via the nav tree (Cloud > AWS/Azure/GCP) —
+      // searching "ec2" while under Azure shouldn't surface AWS results. Only unscoped if the
+      // palette was reached some other way (e.g. reopening a project with activeView: 'cloud'
+      // and no tree click yet), matching focusedCloudProvider's existing null default.
+      const scope = this.focusedCloudProvider;
+      const matches = cloudIconManifest.filter(icon =>
+        (!scope || icon.provider === scope) &&
+        (icon.name.toLowerCase().includes(this.searchTerm) || icon.category.toLowerCase().includes(this.searchTerm))
+      );
+
+      const section = document.createElement('div');
+      section.className = 'sidebar-section expanded';
+      const title = document.createElement('div');
+      title.className = 'sidebar-section-title';
+      const scopeLabel = scope ? ` in ${scope.toUpperCase()}` : '';
+      title.textContent = `🔎 Results${scopeLabel} (${matches.length})`;
+      section.appendChild(title);
+
+      const content = document.createElement('div');
+      content.className = 'sidebar-section-content';
+      for (const icon of matches.slice(0, CLOUD_SEARCH_RESULT_CAP)) {
+        content.appendChild(this.makeCloudIconItem(icon));
+      }
+      section.appendChild(content);
+      container.appendChild(section);
+
+      if (matches.length > CLOUD_SEARCH_RESULT_CAP) {
+        const hint = document.createElement('p');
+        hint.style.cssText = 'font-size:11px;color:#8b949e;font-style:italic;padding:6px 8px;margin:0;';
+        hint.textContent = `${matches.length - CLOUD_SEARCH_RESULT_CAP} more match — refine your search to narrow the list.`;
+        container.appendChild(hint);
+      }
+      return;
+    }
+
+    const providers: { id: CloudProvider; label: string; icon: string }[] = [
+      { id: 'aws', label: 'AWS', icon: '🟧' },
+      { id: 'azure', label: 'Azure', icon: '🔷' },
+      { id: 'gcp', label: 'Google Cloud', icon: '🔴' },
+    ];
+
+    for (const provider of providers) {
+      const items = cloudIconManifest.filter(icon => icon.provider === provider.id);
+      if (items.length === 0) continue;
+
+      const section = document.createElement('div');
+      section.className = provider.id === this.focusedCloudProvider ? 'sidebar-section expanded' : 'sidebar-section';
+      const title = document.createElement('div');
+      title.className = 'sidebar-section-title';
+      title.innerHTML = `${provider.icon} ${provider.label} <span style="opacity:0.6;font-weight:normal;">(${items.length})</span>`;
+      title.onclick = () => section.classList.toggle('expanded');
+
+      const content = document.createElement('div');
+      content.className = 'sidebar-section-content';
+
+      const byCategory = new Map<string, CloudIconEntry[]>();
+      for (const icon of items) {
+        if (!byCategory.has(icon.category)) byCategory.set(icon.category, []);
+        byCategory.get(icon.category)!.push(icon);
+      }
+      // Each category folds independently, collapsed by default — expanding a provider used to
+      // dump every one of its icons (up to 714 for Azure) into view at once, grouped under
+      // always-visible plain labels. Now expanding e.g. "Compute" only reveals Compute's items.
+      for (const [category, categoryItems] of [...byCategory.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+        const catGroup = document.createElement('div');
+        catGroup.className = 'cloud-icon-category collapsed';
+
+        const catTitle = document.createElement('div');
+        catTitle.className = 'cloud-icon-category-title';
+        catTitle.innerHTML = `<span class="nav-tree-caret">▾</span> ${category} <span style="opacity:0.6;font-weight:normal;">(${categoryItems.length})</span>`;
+        catTitle.onclick = () => catGroup.classList.toggle('collapsed');
+        catGroup.appendChild(catTitle);
+
+        const catContent = document.createElement('div');
+        catContent.className = 'cloud-icon-category-content';
+        for (const icon of categoryItems) {
+          catContent.appendChild(this.makeCloudIconItem(icon));
+        }
+        catGroup.appendChild(catContent);
+
+        content.appendChild(catGroup);
+      }
+
+      section.appendChild(title);
+      section.appendChild(content);
+      container.appendChild(section);
+    }
   }
 
   private renderCatalog() {

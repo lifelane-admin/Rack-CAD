@@ -1,4 +1,4 @@
-import { AppState, RackData, DeviceData, PortData, CableData, CableType, SelectableItem, Transform, RACK_CONSTANTS, CableBundle, ValidationAlert, PduConfig, KvmConfig, SwitchConfig, FirewallConfig, NacConfig, AtsConfig, DeviceTemplate } from './types';
+import { AppState, RackData, DeviceData, PortData, CableData, CableType, SelectableItem, Transform, RACK_CONSTANTS, CableBundle, ValidationAlert, PduConfig, KvmConfig, SwitchConfig, FirewallConfig, NacConfig, AtsConfig, DeviceTemplate, CloudNode, CloudContainer, CloudConnector } from './types';
 import { eventBus } from './event-bus';
 import { getTemplate } from '../library/device-catalog';
 import { runValidationAlerts } from './validation';
@@ -60,6 +60,10 @@ class StateManager {
       aiProvider: 'rules',
       previewDiff: null,
       customTemplates: loadCustomTemplates(),
+      activeView: 'rack',
+      cloudNodes: [],
+      cloudContainers: [],
+      cloudConnectors: [],
     };
   }
 
@@ -168,7 +172,7 @@ class StateManager {
       partial.devices = this.prepareDevices(partial.devices);
     }
 
-    const isStructuralChange = partial.racks !== undefined || partial.devices !== undefined || partial.cables !== undefined || partial.bundles !== undefined || partial.textLabels !== undefined || partial.imageAssets !== undefined;
+    const isStructuralChange = partial.racks !== undefined || partial.devices !== undefined || partial.cables !== undefined || partial.bundles !== undefined || partial.textLabels !== undefined || partial.imageAssets !== undefined || partial.cloudNodes !== undefined || partial.cloudContainers !== undefined || partial.cloudConnectors !== undefined;
 
     if (isStructuralChange && !skipHistory) {
       const snapshot = JSON.stringify({
@@ -177,7 +181,10 @@ class StateManager {
         cables: this.state.cables,
         bundles: this.state.bundles,
         textLabels: this.state.textLabels,
-        imageAssets: this.state.imageAssets
+        imageAssets: this.state.imageAssets,
+        cloudNodes: this.state.cloudNodes,
+        cloudContainers: this.state.cloudContainers,
+        cloudConnectors: this.state.cloudConnectors
       });
       
       if (this.undoStack.length === 0 || this.undoStack[this.undoStack.length - 1] !== snapshot) {
@@ -231,7 +238,10 @@ class StateManager {
       cables: this.state.cables,
       bundles: this.state.bundles,
       textLabels: this.state.textLabels,
-      imageAssets: this.state.imageAssets
+      imageAssets: this.state.imageAssets,
+      cloudNodes: this.state.cloudNodes,
+      cloudContainers: this.state.cloudContainers,
+      cloudConnectors: this.state.cloudConnectors
     });
     this.redoStack.push(currentSnapshot);
 
@@ -244,6 +254,9 @@ class StateManager {
       this.state.bundles = data.bundles || [];
       this.state.textLabels = data.textLabels || [];
       this.state.imageAssets = data.imageAssets || [];
+      this.state.cloudNodes = data.cloudNodes || [];
+      this.state.cloudContainers = data.cloudContainers || [];
+      this.state.cloudConnectors = data.cloudConnectors || [];
 
       eventBus.emit('state:changed', {
         racks: this.state.racks,
@@ -251,7 +264,10 @@ class StateManager {
         cables: this.state.cables,
         bundles: this.state.bundles,
         textLabels: this.state.textLabels,
-        imageAssets: this.state.imageAssets
+        imageAssets: this.state.imageAssets,
+        cloudNodes: this.state.cloudNodes,
+        cloudContainers: this.state.cloudContainers,
+        cloudConnectors: this.state.cloudConnectors
       });
       this._hasUnsavedChanges = true;
       eventBus.emit('notification', { message: 'Undo successful', type: 'success' });
@@ -272,7 +288,10 @@ class StateManager {
       cables: this.state.cables,
       bundles: this.state.bundles,
       textLabels: this.state.textLabels,
-      imageAssets: this.state.imageAssets
+      imageAssets: this.state.imageAssets,
+      cloudNodes: this.state.cloudNodes,
+      cloudContainers: this.state.cloudContainers,
+      cloudConnectors: this.state.cloudConnectors
     });
     this.undoStack.push(currentSnapshot);
 
@@ -285,6 +304,9 @@ class StateManager {
       this.state.bundles = data.bundles || [];
       this.state.textLabels = data.textLabels || [];
       this.state.imageAssets = data.imageAssets || [];
+      this.state.cloudNodes = data.cloudNodes || [];
+      this.state.cloudContainers = data.cloudContainers || [];
+      this.state.cloudConnectors = data.cloudConnectors || [];
 
       eventBus.emit('state:changed', {
         racks: this.state.racks,
@@ -292,7 +314,10 @@ class StateManager {
         cables: this.state.cables,
         bundles: this.state.bundles,
         textLabels: this.state.textLabels,
-        imageAssets: this.state.imageAssets
+        imageAssets: this.state.imageAssets,
+        cloudNodes: this.state.cloudNodes,
+        cloudContainers: this.state.cloudContainers,
+        cloudConnectors: this.state.cloudConnectors
       });
       this._hasUnsavedChanges = true;
       eventBus.emit('notification', { message: 'Redo successful', type: 'success' });
@@ -469,6 +494,40 @@ class StateManager {
     const devices = this.state.devices.filter(d => d.id !== id);
     this.setState({ devices, cables });
     eventBus.emit('device:removed', id);
+  }
+
+  addCloudNode(data: CloudNode): void {
+    const cloudNodes = [...this.state.cloudNodes, data];
+    this.setState({ cloudNodes });
+    eventBus.emit('cloudnode:added', data);
+  }
+
+  removeCloudNode(id: string): void {
+    const cloudNodes = this.state.cloudNodes.filter(n => n.id !== id);
+    const cloudConnectors = this.state.cloudConnectors.filter(c => c.sourceNodeId !== id && c.destNodeId !== id);
+    this.setState({ cloudNodes, cloudConnectors });
+  }
+
+  addCloudContainer(data: CloudContainer): void {
+    const cloudContainers = [...this.state.cloudContainers, data];
+    this.setState({ cloudContainers });
+    eventBus.emit('cloudcontainer:added', data);
+  }
+
+  removeCloudContainer(id: string): void {
+    const cloudContainers = this.state.cloudContainers.filter(c => c.id !== id);
+    this.setState({ cloudContainers });
+  }
+
+  addCloudConnector(data: CloudConnector): void {
+    const cloudConnectors = [...this.state.cloudConnectors, data];
+    this.setState({ cloudConnectors });
+    eventBus.emit('cloudconnector:added', data);
+  }
+
+  removeCloudConnector(id: string): void {
+    const cloudConnectors = this.state.cloudConnectors.filter(c => c.id !== id);
+    this.setState({ cloudConnectors });
   }
 
   isRUOccupied(rackId: string, unit: number): boolean {

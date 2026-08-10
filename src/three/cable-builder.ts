@@ -15,6 +15,15 @@ const FRONT_Z = RACK_DEPTH / 2 + 5; // just in front of rack face so cables are 
 
 const POWER_TYPES = new Set(['power', 'c13-power', 'c19-power']);
 
+// Small deliberate per-lane Z stagger for cables sharing the same rack+channel side. Without
+// this, two cables whose vertical runs overlap in Y share the exact same X and Z for that whole
+// stretch — literally identical tube geometry — which reads as flicker/z-fighting rather than a
+// neat bundle. Staggering in Z (not X) was chosen because the channel's lateral room is only the
+// ~25mm rail cavity (barely enough for the single base offset already), while Z is open space in
+// front of the rack face with no collision risk.
+const LANE_Z_SPACING = 3;
+const MAX_STAGGERED_LANES = 8; // beyond this, extra cables in one channel just re-share a Z plane
+
 function findPort(portId: string, devices: DeviceData[]) {
   for (const device of devices) {
     const port = device.ports.find(p => p.id === portId);
@@ -55,6 +64,39 @@ function portWorldPos(portId: string, state: AppState): PortWorldPos | null {
   return { x: localX, y: worldY, rackGroupX };
 }
 
+function resolveSide(cable: CableData, devices: DeviceData[]): 'left' | 'right' | null {
+  const srcFound = findPort(cable.sourcePortId, devices);
+  if (!srcFound) return null;
+  const srcPortX = srcFound.port.relativeX ?? 0;
+  const useRight = POWER_TYPES.has(cable.type)
+    || (cable as any).sidePreference === 'right'
+    || srcPortX >= DEFAULT_DEVICE_WIDTH / 2;
+  return useRight ? 'right' : 'left';
+}
+
+/** Deterministic position of `cable` among every other cable sharing the same rack + channel
+ *  side, ordered by source port height (then cable id) so the assignment is stable across
+ *  rebuilds regardless of array order. */
+function laneIndexFor(cable: CableData, rackId: string, side: 'left' | 'right', state: AppState): number {
+  const channelCables = (state.cables ?? []).filter(c => {
+    const found = findPort(c.sourcePortId, state.devices);
+    if (!found || found.device.rackId !== rackId) return false;
+    return resolveSide(c, state.devices) === side;
+  });
+
+  channelCables.sort((a, b) => {
+    const posA = portWorldPos(a.sourcePortId, state);
+    const posB = portWorldPos(b.sourcePortId, state);
+    const yA = posA?.y ?? 0;
+    const yB = posB?.y ?? 0;
+    if (yA !== yB) return yA - yB;
+    return a.id.localeCompare(b.id);
+  });
+
+  const idx = channelCables.findIndex(c => c.id === cable.id);
+  return idx >= 0 ? idx : 0;
+}
+
 export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | THREE.Line | null {
   if ((cable as any).floatingDest && !cable.destPortId) {
     return buildFloatingMesh(cable, state);
@@ -80,18 +122,25 @@ export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | 
   const chSrcX  = srcPos.rackGroupX  + channelX;
   const chDestX = destPos.rackGroupX + channelX;
 
+  const side: 'left' | 'right' = useRight ? 'right' : 'left';
+  const rackId = srcFound?.device.rackId;
+  const lane = rackId ? laneIndexFor(cable, rackId, side, state) % MAX_STAGGERED_LANES : 0;
+  const laneZ = FRONT_Z + lane * LANE_Z_SPACING;
+
   // Direction helpers for routing bends
   const hSign = useRight ? 1 : -1;   // +1 = right channel, -1 = left channel
   const vSign = destPos.y >= srcPos.y ? 1 : -1; // +1 going up, -1 going down
 
   // 6-point rectangular path: horizontal exit → corner → vertical run → corner → horizontal entry
+  // Every point uses this cable's own laneZ (not the shared FRONT_Z) so cables bundled in the
+  // same rack channel stagger slightly in depth instead of sharing identical geometry.
   const pts = [
-    new THREE.Vector3(srcX,                    srcPos.y,              FRONT_Z), // port exit
-    new THREE.Vector3(chSrcX  - hSign * BEND_R, srcPos.y,              FRONT_Z), // approach channel
-    new THREE.Vector3(chSrcX,                   srcPos.y  + vSign * BEND_R, FRONT_Z), // enter channel
-    new THREE.Vector3(chDestX,                  destPos.y - vSign * BEND_R, FRONT_Z), // exit channel
-    new THREE.Vector3(chDestX - hSign * BEND_R, destPos.y,             FRONT_Z), // leave channel
-    new THREE.Vector3(destX,                    destPos.y,             FRONT_Z), // port entry
+    new THREE.Vector3(srcX,                    srcPos.y,              laneZ), // port exit
+    new THREE.Vector3(chSrcX  - hSign * BEND_R, srcPos.y,              laneZ), // approach channel
+    new THREE.Vector3(chSrcX,                   srcPos.y  + vSign * BEND_R, laneZ), // enter channel
+    new THREE.Vector3(chDestX,                  destPos.y - vSign * BEND_R, laneZ), // exit channel
+    new THREE.Vector3(chDestX - hSign * BEND_R, destPos.y,             laneZ), // leave channel
+    new THREE.Vector3(destX,                    destPos.y,             laneZ), // port entry
   ];
 
   const curve = new THREE.CatmullRomCurve3(pts);

@@ -101,13 +101,82 @@ export class Toolbar {
         title: 'Zoom In', 
         action: () => EventBus.emit('view:zoom-in', undefined) 
       },
-      { 
-        id: 'tool-zoomout', 
-        icon: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3M8 11h6"/></svg>', 
-        title: 'Zoom Out', 
-        action: () => EventBus.emit('view:zoom-out', undefined) 
+      {
+        id: 'tool-zoomout',
+        icon: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3M8 11h6"/></svg>',
+        title: 'Zoom Out',
+        action: () => EventBus.emit('view:zoom-out', undefined)
       }
     ]));
+
+    // Cloud Architecture-only tools — hidden while activeView is 'rack' (see the state:changed
+    // listener below, which toggles this group's visibility alongside the workspace switch).
+    const cloudToolsGroup = this.createGroup('Cloud Tools', [
+      {
+        id: 'tool-cloud-container',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
+        title: 'Draw Container (VPC/Subnet/Resource Group)',
+        action: () => this.setTool('cloud-container'),
+        toggle: true,
+      },
+      {
+        id: 'tool-cloud-connect',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h10"/></svg>',
+        title: 'Connect Cloud Services',
+        action: () => this.setTool('cloud-connect'),
+        toggle: true,
+      },
+    ]);
+    cloudToolsGroup.id = 'cloud-tools-group';
+    cloudToolsGroup.style.display = 'none';
+    inner.appendChild(cloudToolsGroup);
+
+    // Dedicated "basic shape" buttons for the boundary concepts every cloud provider has an
+    // equivalent of (Region/AZ/VPC-VNet/Subnet/Resource Group/Account) — each one-click primes
+    // the same container-draw tool as above, pre-labeled and kind-styled, instead of requiring
+    // the user to find and drag the right palette icon (or draw a bare unlabeled box and rename
+    // it by hand). See cloud-shape:prime in app.ts.
+    const cloudShapesGroup = this.createGroup('Cloud Shapes', [
+      {
+        id: 'shape-region',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 010 18 15 15 0 010-18z"/></svg>',
+        title: 'Add Region boundary',
+        action: () => EventBus.emit('cloud-shape:prime' as any, 'region'),
+      },
+      {
+        id: 'shape-az',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="8.5" y="14" width="7" height="7" rx="1"/></svg>',
+        title: 'Add Availability Zone boundary',
+        action: () => EventBus.emit('cloud-shape:prime' as any, 'az'),
+      },
+      {
+        id: 'shape-vpc',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.5" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.5" fill="currentColor" stroke="none"/></svg>',
+        title: 'Add VPC / Virtual Network boundary',
+        action: () => EventBus.emit('cloud-shape:prime' as any, 'vpc'),
+      },
+      {
+        id: 'shape-subnet',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2"><rect x="5" y="7" width="14" height="10" rx="1"/></svg>',
+        title: 'Add Subnet boundary',
+        action: () => EventBus.emit('cloud-shape:prime' as any, 'subnet'),
+      },
+      {
+        id: 'shape-resource-group',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 002-2v-9a2 2 0 00-2-2h-7l-2-2H4a2 2 0 00-2 2v11a2 2 0 002 2z"/></svg>',
+        title: 'Add Resource Group boundary',
+        action: () => EventBus.emit('cloud-shape:prime' as any, 'resource-group'),
+      },
+      {
+        id: 'shape-account',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg>',
+        title: 'Add Account / Subscription / Project boundary',
+        action: () => EventBus.emit('cloud-shape:prime' as any, 'account'),
+      },
+    ]);
+    cloudShapesGroup.id = 'cloud-shapes-group';
+    cloudShapesGroup.style.display = 'none';
+    inner.appendChild(cloudShapesGroup);
 
     inner.appendChild(this.createGroup('Edit', [
       { 
@@ -278,6 +347,26 @@ export class Toolbar {
       }
     ]));
 
+    // Cloud diagram export — same visibility toggle as #cloud-tools-group (see the
+    // state:changed listener below).
+    const cloudExportGroup = this.createGroup('Cloud Export', [
+      {
+        id: 'btn-exp-cloud-svg',
+        icon: '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>',
+        title: 'Export Cloud Diagram as SVG',
+        action: () => EventBus.emit('export:cloud-svg', undefined),
+      },
+      {
+        id: 'btn-exp-cloud-png',
+        icon: '<svg viewBox="0 0 24 24"><path d="M12 22C17.52 22 22 17.52 22 12S17.52 2 12 2 2 6.48 2 12s4.48 10 12 10z"/><path d="M8 12h8M12 8l4 4-4 4"/></svg>',
+        title: 'Export Cloud Diagram as PNG',
+        action: () => EventBus.emit('export:cloud-png', undefined),
+      },
+    ]);
+    cloudExportGroup.id = 'cloud-export-group';
+    cloudExportGroup.style.display = 'none';
+    inner.appendChild(cloudExportGroup);
+
     // AI Mode toggle — standalone button after all groups
     inner.appendChild(this.createAiToggle());
 
@@ -292,7 +381,15 @@ export class Toolbar {
     // Listen to view states change and update active button highlighting
     EventBus.on('state:changed', (partial: any) => {
       const s = State.getState();
-      
+
+      const cloudToolsGroup = this.container.querySelector('#cloud-tools-group') as HTMLElement | null;
+      const cloudShapesGroup = this.container.querySelector('#cloud-shapes-group') as HTMLElement | null;
+      const cloudExportGroup = this.container.querySelector('#cloud-export-group') as HTMLElement | null;
+      const isCloud = s.activeView === 'cloud';
+      if (cloudToolsGroup) cloudToolsGroup.style.display = isCloud ? '' : 'none';
+      if (cloudShapesGroup) cloudShapesGroup.style.display = isCloud ? '' : 'none';
+      if (cloudExportGroup) cloudExportGroup.style.display = isCloud ? '' : 'none';
+
       const btnSide = this.container.querySelector('#btn-view-side');
       if (btnSide) {
         if (s.cabinetViewMode === 'rear') btnSide.classList.add('active');

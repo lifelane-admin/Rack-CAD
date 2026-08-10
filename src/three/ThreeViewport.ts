@@ -33,6 +33,9 @@ export class ThreeViewport {
   private stateHandler: ((partial: Partial<AppState>) => void) | null = null;
 
   private debouncedSync = debounce((partial: Partial<AppState>) => {
+    // Cable routing in 3D is paused — SceneManager.rebuild() doesn't render cables right now, so
+    // there's no point reacting to cable-only state changes here either. Re-add
+    // `|| partial.cables !== undefined` when that work resumes.
     if (partial.racks !== undefined || partial.devices !== undefined) {
       this.sceneManager.rebuild(stateManager.getState());
     }

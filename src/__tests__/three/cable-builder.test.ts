@@ -119,4 +119,37 @@ describe('buildCableMesh', () => {
     const [[params]] = vi.mocked(MeshStandardMaterial).mock.calls;
     expect((params as any).color).toBeTruthy();
   });
+
+  it('a single cable in a channel uses the base front-Z for its whole path', async () => {
+    const { CatmullRomCurve3 } = await import('three');
+    buildCableMesh(cable, makeState(cable));
+    const points = vi.mocked(CatmullRomCurve3).mock.calls[0]![0] as any[];
+    const zs = new Set(points.map((p: any) => p.z));
+    expect(zs.size).toBe(1);
+  });
+
+  it('two cables sharing the same rack+channel side get distinct Z lanes (no overlapping geometry)', async () => {
+    const { CatmullRomCurve3 } = await import('three');
+    const cableA = { ...cable, id: 'c1' };
+    const cableB = {
+      id: 'c2', name: 'Cable 2', type: 'cat6', color: '#43a047',
+      sourcePortId: 'p3', destPortId: 'p4',
+      bendPoints: [], thickness: 2, bendRadius: 10, bundleId: null, notes: '',
+    } as any;
+
+    const state = makeState(cableA);
+    // Add a second source/dest port pair on the same (left) side of the same rack.
+    state.devices[0].ports.push({ id: 'p3', deviceId: 'd1', relativeX: 60, relativeY: 15, type: 'rj45', connected: true, cableId: 'c2' });
+    state.devices[1].ports.push({ id: 'p4', deviceId: 'd2', relativeX: 60, relativeY: 15, type: 'rj45', connected: true, cableId: 'c2' });
+    state.cables = [cableA, cableB];
+
+    buildCableMesh(cableA, state);
+    const pointsA = vi.mocked(CatmullRomCurve3).mock.calls[0]![0] as any[];
+    vi.mocked(CatmullRomCurve3).mockClear();
+
+    buildCableMesh(cableB, state);
+    const pointsB = vi.mocked(CatmullRomCurve3).mock.calls[0]![0] as any[];
+
+    expect(pointsA[0].z).not.toBe(pointsB[0].z);
+  });
 });

@@ -19,6 +19,7 @@ import { StatusBar } from './components/statusbar';
 import { ContextMenu, MenuItem } from './components/context-menu';
 import { ReportsPanel } from './components/reports-panel';
 import { FloatingToolbar } from './components/floating-toolbar';
+import { CloudFloatingToolbar } from './components/cloud-floating-toolbar';
 import { NotificationCenter } from './components/notifications';
 import { TextToolPanel } from './components/text-tool-panel';
 import { ImageToolPanel } from './components/image-tool-panel';
@@ -40,9 +41,15 @@ import { countDevicePowerCables } from './utils/power';
 import { appendExportSummaryOverlay, getAutoSummaryCardOffset } from './renderers/export-summary-overlay';
 import {
   RackData, DeviceData, PortData, CableData, LegendItem, TextLabel, ImageAsset,
-  RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode, SocketType
+  RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode, SocketType,
+  CloudNode, CloudContainer, CloudConnector, CloudHandleSide
 } from './core/types';
 import { ThreeViewport } from './three/ThreeViewport';
+import { CloudCanvasManager } from './core/cloud-canvas';
+import { renderCloudNode, nodeEdgeWorldPoint, nodeCenterWorldPoint } from './renderers/cloud-node-renderer';
+import { renderCloudContainer } from './renderers/cloud-container-renderer';
+import { renderCloudConnector, inferBestSide } from './renderers/cloud-connector-renderer';
+import { getCloudIcon, isBoundaryIcon, inferContainerKind, CLOUD_SHAPE_KINDS } from './library/cloud-icon-catalog';
 
 export class App {
   private canvas!: CanvasManager;
@@ -53,6 +60,7 @@ export class App {
   private statusbar!: StatusBar;
   private contextMenu!: ContextMenu;
   private floatingToolbar!: FloatingToolbar;
+  private cloudFloatingToolbar!: CloudFloatingToolbar;
   private presenterDashboard!: PresenterDashboard;
 
   // Clipboard for copy/paste
@@ -159,6 +167,80 @@ export class App {
   private exportAreaStartScreen: { x: number; y: number } = { x: 0, y: 0 };
   private exportAreaEl: SVGRectElement | null = null;
 
+  // === Cloud Architecture canvas (standalone diagram mode) ===
+  // Nullable + wrapped in try/catch at mount (see init()) — mirrors the 3D-viewport fallback
+  // pattern above: a handful of test skeletons (and, in principle, any future host page) mount
+  // #canvas-viewport without #cloud-viewport/#cloud-canvas, and CloudCanvasManager's constructor
+  // throws if those elements are missing. renderCloudAll() no-ops when this is null; everything
+  // else that touches it only runs from inside the same successful-mount branch.
+  private cloudCanvas: CloudCanvasManager | null = null;
+
+  // Cloud node/container drag+resize state (shared drag-start fields, discriminated by which
+  // of draggedCloudNodeId/draggedCloudContainerId is set, mirrors ImageAsset's single-flow
+  // drag+resize pattern above but for two object kinds at once).
+  private draggedCloudNodeId: string | null = null;
+  private isResizingCloudNode = false;
+  private draggedCloudContainerId: string | null = null;
+  private isResizingCloudContainer = false;
+  private dragStartCloudWorldPos: Point = { x: 0, y: 0 };
+  private dragStartCloudX = 0;
+  private dragStartCloudY = 0;
+  private dragStartCloudWidth = 0;
+  private dragStartCloudHeight = 0;
+  private dragStartCloudNodesState: CloudNode[] | null = null;
+  private dragStartCloudContainersState: CloudContainer[] | null = null;
+
+  // Container-draw tool (mirrors export-area's mousedown-drag-mouseup rectangle tool)
+  private isDrawingCloudContainer = false;
+  private cloudContainerDrawStart: Point = { x: 0, y: 0 };
+  private cloudContainerDrawEl: SVGRectElement | null = null;
+  /** Set when the container-draw tool was auto-triggered either by dropping a boundary-type
+   *  palette icon (e.g. Azure "Virtual Networks" — iconId/provider populated) or by one of the
+   *  dedicated toolbar shape buttons (Region/AZ/VPC/Subnet/Resource Group/Account — kind+label
+   *  only, no icon) instead of the generic manual container tool. The next draw gesture uses
+   *  this instead of the generic defaults. Cleared after one draw (or on cancel), so a manual
+   *  container tool use right after isn't affected. */
+  private pendingCloudContainerSpec: { kind: CloudContainer['kind']; iconId?: string; provider?: CloudNode['provider'] | null; label: string } | null = null;
+
+  // Connect tool — supports both click-source-then-click-dest (mirrors the cable tool) AND a
+  // natural press-drag-release gesture in one motion (see the mouseup handler in
+  // setupCloudCanvasInteractions()): cloudConnectMouseDownScreen records where the source click
+  // happened so a mouseup can tell "released after a real drag onto another node" apart from
+  // "released in place, waiting for a separate second click".
+  private cloudConnectSourceId: string | null = null;
+  /** Which side of the source node the drag actually started from (set when it began on a
+   *  connection handle; undefined when started via the Connect tool's node-body click, which has
+   *  no specific side — the renderer infers one automatically in that case, see
+   *  inferBestSide() in cloud-connector-renderer.ts). */
+  private cloudConnectSourceSide: CloudHandleSide | undefined = undefined;
+  private cloudConnectMouseDownScreen: { x: number; y: number } | null = null;
+  /** Node id currently under the cursor while dragging a connector, tracked from mousemove's own
+   *  event target (a real DOM hit-test from event dispatch) rather than looked up on mouseup via
+   *  document.elementFromPoint — same result in a real browser, but avoids a geometric
+   *  point-lookup API that has known quirks with layered/transformed SVG and isn't implementable
+   *  in a layout-less test DOM. null means "over empty canvas" (still a valid drop target for a
+   *  floating-point connector end), undefined means "not tracked yet this drag". */
+  private cloudConnectHoverNodeId: string | null | undefined = undefined;
+  /** Tracks whichever cloud node the mouse is idly resting over (no drag/tool gesture active) so
+   *  its connection handles reveal on hover alone — matching common diagram-tool conventions and
+   *  removing the "click to select first" step that made both starting and, especially, landing
+   *  a connector hard to discover. */
+  private hoveredCloudNodeId: string | null = null;
+  /** Which specific handle (if any) is under the cursor — set only when hovering an exact
+   *  connection dot on the target node, so dropping there routes into that exact side instead of
+   *  an auto-inferred one. */
+  private cloudConnectHoverSide: CloudHandleSide | undefined = undefined;
+  private cloudConnectPreviewEl: SVGLineElement | null = null;
+
+  private dragStartCloudConnectorsState: CloudConnector[] | null = null;
+
+  // Connector endpoint (tip) dragging — re-dragging an already-drawn connector's source or dest
+  // end onto a different node (or empty canvas, becoming a floating point), mirrors the rack
+  // canvas's cable-end drag (isDraggingCableEnd/draggedCableId/draggedHandleType). Reuses
+  // cloudConnectHoverNodeId/cloudConnectHoverSide for hover tracking during the drag, same as
+  // drawing a brand-new connector, since the two gestures never happen at once.
+  private draggedConnectorEndpoint: { connectorId: string; end: 'source' | 'dest' } | null = null;
+
   init() {
     // Initialize canvas
     this.canvas = new CanvasManager('canvas-viewport', 'canvas');
@@ -180,6 +262,18 @@ export class App {
       }
     }
 
+    // Mount the Cloud Architecture canvas — independent of the rack canvas/3D viewport above
+    // (see core/cloud-canvas.ts for why it's not a second CanvasManager instance). Wrapped so a
+    // missing #cloud-viewport/#cloud-canvas (e.g. a test skeleton without it) never kills the
+    // rest of app init, same reasoning as the 3D viewport's try/catch just above.
+    try {
+      this.cloudCanvas = new CloudCanvasManager('cloud-viewport', 'cloud-canvas');
+      this.setupCloudCanvasInteractions();
+      this.setupCloudDragDrop();
+    } catch (err) {
+      console.error('[CloudCanvas] init failed, Cloud Architecture view will be unavailable:', err);
+    }
+
     // Initialize UI components
     const toolbarEl = document.getElementById('toolbar')!;
     const sidebarEl = document.getElementById('sidebar')!;
@@ -198,6 +292,9 @@ export class App {
 
     // Initialize Floating Quick Access Toolbar
     this.floatingToolbar = new FloatingToolbar();
+    // Its Cloud Architecture counterpart — mounted inside #cloud-viewport, so it's naturally
+    // hidden/shown alongside the rest of that view (see setActiveView()'s .hidden toggling).
+    this.cloudFloatingToolbar = new CloudFloatingToolbar();
 
     // Initialize Presenter Mode Dashboard
     this.presenterDashboard = new PresenterDashboard();
@@ -243,10 +340,12 @@ export class App {
     // runs first and this renders the NEW state, not the stale pre-import one.
     (eventBus as any).on('project:load', () => {
       this.renderAll();
+      this.renderCloudAll();
     });
 
     // Initial render
     this.renderAll();
+    this.renderCloudAll();
 
     // Listen for state changes that require re-render
     eventBus.on('rack:added', () => this.renderAll());
@@ -333,6 +432,21 @@ export class App {
       const imageAssets = stateManager.getState().imageAssets.map(a => a.id === id ? { ...a, ...data } : a);
       stateManager.setState({ imageAssets });
       this.renderAll();
+    });
+    eventBus.on('cloudnode:update', ({ id, data }) => {
+      const cloudNodes = stateManager.getState().cloudNodes.map(n => n.id === id ? { ...n, ...data } : n);
+      stateManager.setState({ cloudNodes });
+      this.renderCloudAll();
+    });
+    eventBus.on('cloudcontainer:update', ({ id, data }) => {
+      const cloudContainers = stateManager.getState().cloudContainers.map(c => c.id === id ? { ...c, ...data } : c);
+      stateManager.setState({ cloudContainers });
+      this.renderCloudAll();
+    });
+    eventBus.on('cloudconnector:update', ({ id, data }) => {
+      const cloudConnectors = stateManager.getState().cloudConnectors.map(c => c.id === id ? { ...c, ...data } : c);
+      stateManager.setState({ cloudConnectors });
+      this.renderCloudAll();
     });
     eventBus.on('cable:batch-generate', ({ deviceId, side, type, color, count }) => {
       const s = stateManager.getState();
@@ -442,6 +556,16 @@ export class App {
         this.isDrawingExportArea = false;
         this.exportAreaEl = null;
         eventBus.emit('export:area-selection-cancelled', undefined);
+      }
+      // Switching away from the cloud-container tool by any path (not just Escape) — e.g.
+      // clicking a different tool button directly while a boundary-icon drop primed it — drops
+      // any pending draw-preview and the primed icon so a later manual container draw isn't
+      // silently mislabeled with a stale dropped icon.
+      if (prevTool === 'cloud-container' && mode !== 'cloud-container') {
+        this.cancelCloudContainerDraw();
+      }
+      if (prevTool === 'cloud-connect' && mode !== 'cloud-connect') {
+        this.cancelCloudConnect();
       }
       stateManager.setState({ tool: mode });
       this.updateCanvasCursor(mode);
@@ -586,6 +710,17 @@ export class App {
       this.renderAll();
     });
 
+    (eventBus as any).on('view:switch', (view: 'rack' | 'cloud') => {
+      this.setActiveView(view);
+    });
+
+    eventBus.on('cloud-shape:prime', (kind) => {
+      const shape = CLOUD_SHAPE_KINDS.find(s => s.kind === kind);
+      this.pendingCloudContainerSpec = { kind, label: shape?.label ?? kind };
+      eventBus.emit('tool:changed', 'cloud-container');
+      eventBus.emit('notification', { message: `Drag on the canvas to draw the ${shape?.label ?? kind}`, type: 'info' });
+    });
+
     (eventBus as any).on('view:toggle-3d', () => {
       const s = stateManager.getState();
       stateManager.setState({ isometricMode: !s.isometricMode });
@@ -659,11 +794,13 @@ export class App {
     (eventBus as any).on('edit:undo', () => {
       stateManager.undo();
       this.renderAll();
+      this.renderCloudAll();
       this.properties.update(stateManager.getState().selection);
     });
     (eventBus as any).on('edit:redo', () => {
       stateManager.redo();
       this.renderAll();
+      this.renderCloudAll();
       this.properties.update(stateManager.getState().selection);
     });
     (eventBus as any).on('edit:delete', () => this.deleteSelection());
@@ -2742,12 +2879,25 @@ export class App {
         if (stateManager.getState().tool === 'export-area') {
           eventBus.emit('tool:changed', 'select');
         }
+        if (stateManager.getState().tool === 'cloud-container' || stateManager.getState().tool === 'cloud-connect') {
+          eventBus.emit('tool:changed', 'select');
+        }
+        this.cancelCloudContainerDraw();
+        this.cancelCloudConnect();
+        if (this.draggedConnectorEndpoint && this.dragStartCloudConnectorsState) {
+          stateManager.setState({ cloudConnectors: this.dragStartCloudConnectorsState }, true);
+          this.draggedConnectorEndpoint = null;
+          this.dragStartCloudConnectorsState = null;
+          this.renderCloudAll();
+        }
         resetPreviewDirection();
         stateManager.setState({ selection: [], cableInProgress: null });
         eventBus.emit('selection:changed', []);
         this.clearHighlights();
         const interactionLayer = this.canvas.getLayer('interaction-layer');
         if (interactionLayer) interactionLayer.innerHTML = '';
+        const cloudInteractionLayer = this.cloudCanvas?.getLayer('cloud-interaction-layer');
+        if (cloudInteractionLayer) cloudInteractionLayer.innerHTML = '';
       }
 
       // Ctrl+A = Select all devices and cables
@@ -3520,6 +3670,12 @@ export class App {
         stateManager.setState({
           imageAssets: stateManager.getState().imageAssets.filter(a => a.id !== item.id)
         });
+      } else if (item.type === 'cloud-node') {
+        stateManager.removeCloudNode(item.id);
+      } else if (item.type === 'cloud-container') {
+        stateManager.removeCloudContainer(item.id);
+      } else if (item.type === 'cloud-connector') {
+        stateManager.removeCloudConnector(item.id);
       } else if ((item as any).type === 'vertical-mgr') {
         const side = (item as any).side;
         const prop = side === 'left' ? 'leftCableManagerWidth' : 'rightCableManagerWidth';
@@ -3535,6 +3691,7 @@ export class App {
     stateManager.setState({ selection: [] });
     eventBus.emit('selection:changed', []);
     this.renderAll();
+    this.renderCloudAll();
   }
 
   /**
@@ -3877,6 +4034,8 @@ export class App {
       'zoom-in': 'zoom-in',
       'zoom-out': 'zoom-out',
       'export-area': 'crosshair',
+      'cloud-container': 'crosshair',
+      'cloud-connect': 'crosshair',
     };
     viewport.style.cursor = cursorMap[mode] || 'default';
   }
@@ -4253,4 +4412,694 @@ export class App {
 
     container.appendChild(panel);
   }
+
+  // ============================================================================================
+  // Cloud Architecture canvas — standalone diagram mode, independent of the rack canvas above.
+  // ============================================================================================
+
+  /** Switches the top-level workspace between the rack elevation view (2D+3D, unchanged) and
+   *  the Cloud Architecture canvas. The two are never shown at once. */
+  setActiveView(view: 'rack' | 'cloud'): void {
+    stateManager.setState({ activeView: view });
+
+    const rackViewport = document.getElementById('canvas-viewport');
+    const cloudViewport = document.getElementById('cloud-viewport');
+    const splitter = document.getElementById('splitter-3d');
+    const rulerCorner = document.getElementById('ruler-corner');
+    const rulerH = document.getElementById('ruler-horizontal');
+    const rulerV = document.getElementById('ruler-vertical');
+    const minimap = document.getElementById('minimap');
+    const isCloud = view === 'cloud';
+
+    rackViewport?.classList.toggle('hidden', isCloud);
+    cloudViewport?.classList.toggle('hidden', !isCloud);
+    rulerCorner?.classList.toggle('hidden', isCloud);
+    rulerH?.classList.toggle('hidden', isCloud);
+    rulerV?.classList.toggle('hidden', isCloud);
+    minimap?.classList.toggle('hidden', isCloud);
+    if (splitter) {
+      if (isCloud) {
+        splitter.classList.add('hidden');
+      } else if (splitter.style.display !== 'none') {
+        // Only re-show if it wasn't permanently hidden by the WebGL-init-failure fallback in
+        // init() (that sets inline style, not the .hidden class) — see init()'s try/catch.
+        splitter.classList.remove('hidden');
+      }
+    }
+
+    eventBus.emit('view:changed', view);
+    this.sidebar.render();
+    if (isCloud) this.renderCloudAll();
+  }
+
+  /** Re-renders every CloudContainer/CloudNode/CloudConnector from current state. Mirrors
+   *  renderAll()'s clear-and-rebuild pattern but scoped to the cloud canvas's own layers. */
+  private renderCloudAll(): void {
+    if (!this.cloudCanvas) return;
+    const s = stateManager.getState();
+    const containerLayer = this.cloudCanvas!.getLayer('cloud-container-layer');
+    const nodeLayer = this.cloudCanvas!.getLayer('cloud-node-layer');
+    const connectorLayer = this.cloudCanvas!.getLayer('cloud-connector-layer');
+    if (!containerLayer || !nodeLayer || !connectorLayer) return;
+
+    containerLayer.innerHTML = '';
+    nodeLayer.innerHTML = '';
+    connectorLayer.innerHTML = '';
+
+    const selectedContainerIds = new Set(s.selection.filter(i => i.type === 'cloud-container').map(i => i.id));
+    for (const container of s.cloudContainers) {
+      const iconPath = container.iconId ? getCloudIcon(container.iconId)?.path : undefined;
+      renderCloudContainer(container, containerLayer, selectedContainerIds.has(container.id), iconPath);
+    }
+
+    const selectedNodeIds = new Set(s.selection.filter(i => i.type === 'cloud-node').map(i => i.id));
+    // While a connector is being drawn (cloudConnectSourceId) or an existing tip re-dragged
+    // (draggedConnectorEndpoint), the node currently under the cursor shows its connection
+    // handles too, even if it isn't selected — otherwise a destination node you haven't already
+    // clicked has no visible drop target at all. See renderCloudNode's showHandles param.
+    const connectDragActive = !!(this.cloudConnectSourceId || this.draggedConnectorEndpoint);
+    const hoverNodeId = connectDragActive ? this.cloudConnectHoverNodeId : this.hoveredCloudNodeId;
+    for (const node of s.cloudNodes) {
+      const icon = getCloudIcon(node.iconId);
+      if (!icon) continue;
+      const selected = selectedNodeIds.has(node.id);
+      const showHandles = selected || node.id === hoverNodeId;
+      renderCloudNode(node, icon.path, nodeLayer, selected, showHandles);
+    }
+
+    const selectedConnIds = new Set(s.selection.filter(i => i.type === 'cloud-connector').map(i => i.id));
+    for (const conn of s.cloudConnectors) {
+      const resolved = this.resolveCloudConnectorEndpoints(conn);
+      if (!resolved) continue;
+      const { from, to, fromSide, toSide } = resolved;
+      renderCloudConnector(conn, from, to, connectorLayer, selectedConnIds.has(conn.id), fromSide, toSide);
+    }
+  }
+
+  /** Resolves a CloudConnector's exact source/dest points and sides against current node
+   *  positions — used by renderCloudAll() to draw it. Returns null if a referenced node no
+   *  longer exists (e.g. deleted out from under the connector). */
+  private resolveCloudConnectorEndpoints(conn: CloudConnector): { from: Point; to: Point; fromSide?: CloudHandleSide; toSide?: CloudHandleSide } | null {
+    const s = stateManager.getState();
+    const sourceNode = conn.sourceNodeId ? s.cloudNodes.find(n => n.id === conn.sourceNodeId) : undefined;
+    const destNode = conn.destNodeId ? s.cloudNodes.find(n => n.id === conn.destNodeId) : undefined;
+    if (conn.sourceNodeId && !sourceNode) return null;
+    if (conn.destNodeId && !destNode) return null;
+
+    // "Towards" reference point for inferring a missing side — the other end's node center, or
+    // its floating point when there's no node there.
+    const destRef = destNode ? nodeCenterWorldPoint(destNode) : conn.destPoint;
+    const sourceRef = sourceNode ? nodeCenterWorldPoint(sourceNode) : conn.sourcePoint;
+
+    const fromSide = sourceNode ? (conn.sourceSide ?? (destRef ? inferBestSide(nodeCenterWorldPoint(sourceNode), destRef) : undefined)) : undefined;
+    const toSide = destNode ? (conn.destSide ?? (sourceRef ? inferBestSide(nodeCenterWorldPoint(destNode), sourceRef) : undefined)) : undefined;
+
+    const from = sourceNode ? (fromSide ? nodeEdgeWorldPoint(sourceNode, fromSide) : nodeCenterWorldPoint(sourceNode)) : conn.sourcePoint;
+    const to = destNode ? (toSide ? nodeEdgeWorldPoint(destNode, toSide) : nodeCenterWorldPoint(destNode)) : conn.destPoint;
+    if (!from || !to) return null;
+
+    return { from, to, fromSide, toSide };
+  }
+
+  /** Drag-drop from the sidebar's cloud icon palette (see sidebar.ts) onto the cloud canvas —
+   *  mirrors setupDragDrop()'s device-template drop handler, but the payload is { iconId }
+   *  (a cloud-icon-manifest.json id) instead of { templateId }, and placement is free-floating
+   *  at the drop point rather than snapped into a rack unit slot. */
+  private setupCloudDragDrop(): void {
+    const viewport = document.getElementById('cloud-viewport');
+    if (!viewport) return;
+
+    viewport.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    });
+
+    viewport.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const jsonData = e.dataTransfer?.getData('application/json');
+      if (!jsonData) return;
+
+      try {
+        const { iconId } = JSON.parse(jsonData);
+        if (!iconId) return;
+        const icon = getCloudIcon(iconId);
+        if (!icon) return;
+
+        // Boundary-type icons (VPC, Subnet, Resource Group, Region, Azure "Virtual Networks", ...)
+        // represent an area to draw, not a point resource — dropping one primes the
+        // container-draw tool instead of placing a small icon node. The user then drags out the
+        // actual boundary on the canvas (finishCloudContainerDraw() picks up pendingCloudContainerSpec).
+        if (isBoundaryIcon(icon)) {
+          this.pendingCloudContainerSpec = { kind: inferContainerKind(icon), iconId, provider: icon.provider, label: icon.name };
+          eventBus.emit('tool:changed', 'cloud-container');
+          eventBus.emit('notification', { message: `Drag on the canvas to draw the ${icon.name} boundary`, type: 'info' });
+          return;
+        }
+
+        const worldPos = this.cloudCanvas!.screenToWorld({ x: e.clientX, y: e.clientY });
+        const size = 64;
+        const node: CloudNode = {
+          id: generateId(),
+          iconId,
+          provider: icon.provider,
+          x: worldPos.x - size / 2,
+          y: worldPos.y - size / 2,
+          width: size,
+          height: size,
+          label: icon.name,
+        };
+        stateManager.addCloudNode(node);
+        const selection: SelectableItem[] = [{ type: 'cloud-node', id: node.id }];
+        stateManager.setState({ selection });
+        eventBus.emit('selection:changed', selection);
+        this.renderCloudAll();
+      } catch (err) {
+        console.error('Cloud icon drop failed', err);
+      }
+    });
+  }
+
+  /** Draws/updates the live rectangle preview for the cloud-container draw tool into
+   *  cloud-interaction-layer (mirrors the export-area tool's mousedown-drag-mouseup rectangle,
+   *  see the 'export-area' branch in setupCanvasInteractions()'s mousedown handler). */
+  private renderCloudContainerDrawPreview(start: Point, current: Point): void {
+    if (!this.cloudContainerDrawEl) {
+      const layer = this.cloudCanvas!.getLayer('cloud-interaction-layer');
+      if (!layer) return;
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect') as SVGRectElement;
+      rect.setAttribute('fill', 'rgba(88,166,255,0.08)');
+      rect.setAttribute('stroke', '#58a6ff');
+      rect.setAttribute('stroke-width', '1.5');
+      rect.setAttribute('stroke-dasharray', '6,4');
+      rect.setAttribute('pointer-events', 'none');
+      layer.appendChild(rect);
+      this.cloudContainerDrawEl = rect;
+    }
+    const x = Math.min(start.x, current.x);
+    const y = Math.min(start.y, current.y);
+    const w = Math.abs(current.x - start.x);
+    const h = Math.abs(current.y - start.y);
+    this.cloudContainerDrawEl.setAttribute('x', String(x));
+    this.cloudContainerDrawEl.setAttribute('y', String(y));
+    this.cloudContainerDrawEl.setAttribute('width', String(w));
+    this.cloudContainerDrawEl.setAttribute('height', String(h));
+  }
+
+  private cancelCloudContainerDraw(): void {
+    this.isDrawingCloudContainer = false;
+    this.cloudContainerDrawEl?.remove();
+    this.cloudContainerDrawEl = null;
+    this.pendingCloudContainerSpec = null;
+  }
+
+  private finishCloudContainerDraw(current: Point): void {
+    const start = this.cloudContainerDrawStart;
+    // Captured before cancelCloudContainerDraw() clears it below.
+    const pending = this.pendingCloudContainerSpec;
+    this.cancelCloudContainerDraw();
+
+    const x = Math.min(start.x, current.x);
+    const y = Math.min(start.y, current.y);
+    const w = Math.abs(current.x - start.x);
+    const h = Math.abs(current.y - start.y);
+    if (w < 20 || h < 20) {
+      if (pending) {
+        eventBus.emit('notification', { message: 'Drag out a larger area to draw the boundary', type: 'warning' });
+      }
+      return; // too small to be an intentional container — ignore accidental clicks
+    }
+
+    const container: CloudContainer = {
+      id: generateId(),
+      kind: pending?.kind ?? 'generic',
+      provider: pending?.provider ?? null,
+      iconId: pending?.iconId,
+      x, y, width: w, height: h,
+      label: pending?.label ?? 'Container',
+    };
+    stateManager.addCloudContainer(container);
+    const selection: SelectableItem[] = [{ type: 'cloud-container', id: container.id }];
+    stateManager.setState({ selection });
+    eventBus.emit('selection:changed', selection);
+    eventBus.emit('tool:changed', 'select');
+    this.renderCloudAll();
+  }
+
+  /** Draws/updates the live connector-preview line for the cloud-connect tool (mirrors the
+   *  cable tool's in-progress preview line). */
+  private renderCloudConnectPreview(sourceNodeId: string, current: Point): void {
+    const s = stateManager.getState();
+    const source = s.cloudNodes.find(n => n.id === sourceNodeId);
+    if (!source) return;
+    const from = this.cloudConnectSourceSide ? nodeEdgeWorldPoint(source, this.cloudConnectSourceSide) : nodeCenterWorldPoint(source);
+
+    if (!this.cloudConnectPreviewEl) {
+      const layer = this.cloudCanvas!.getLayer('cloud-interaction-layer');
+      if (!layer) return;
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line') as SVGLineElement;
+      line.setAttribute('stroke', '#58a6ff');
+      line.setAttribute('stroke-width', '2');
+      line.setAttribute('stroke-dasharray', '6,4');
+      line.setAttribute('pointer-events', 'none');
+      layer.appendChild(line);
+      this.cloudConnectPreviewEl = line;
+    }
+    this.cloudConnectPreviewEl.setAttribute('x1', String(from.x));
+    this.cloudConnectPreviewEl.setAttribute('y1', String(from.y));
+    this.cloudConnectPreviewEl.setAttribute('x2', String(current.x));
+    this.cloudConnectPreviewEl.setAttribute('y2', String(current.y));
+  }
+
+  private cancelCloudConnect(): void {
+    this.cloudConnectSourceId = null;
+    this.cloudConnectSourceSide = undefined;
+    this.cloudConnectMouseDownScreen = null;
+    this.cloudConnectHoverNodeId = undefined;
+    this.cloudConnectHoverSide = undefined;
+    this.cloudConnectPreviewEl?.remove();
+    this.cloudConnectPreviewEl = null;
+  }
+
+  /** Finishes a connector from `sourceNodeId` to either another node (`destNodeId`) or a bare
+   *  point (`destPoint`, mirrors CableData's floatingDest for the Airdrop Destination cable
+   *  mode) — clicking empty canvas still creates a usable connector rather than requiring a
+   *  second real node. */
+  private commitCloudConnector(sourceNodeId: string, dest: { nodeId: string } | { point: Point }): void {
+    // Captured before cancelCloudConnect() clears them below.
+    const sourceSide = this.cloudConnectSourceSide;
+    const destSide = this.cloudConnectHoverSide;
+    this.cancelCloudConnect();
+    if ('nodeId' in dest && dest.nodeId === sourceNodeId) return; // no self-connectors
+
+    const connector: CloudConnector = {
+      id: generateId(),
+      sourceNodeId,
+      destNodeId: 'nodeId' in dest ? dest.nodeId : null,
+      destPoint: 'point' in dest ? dest.point : null,
+      sourceSide,
+      // Only meaningful when landing on a node — a floating point has no "side" to enter from,
+      // and an unrecognized destSide is left undefined so the renderer infers a sensible one
+      // from relative position (see inferBestSide() in cloud-connector-renderer.ts).
+      destSide: 'nodeId' in dest ? destSide : undefined,
+      style: 'solid',
+      routing: 'orthogonal',
+      // A freshly drawn connector defaults to a plain dest-end arrow (renderCloudConnector's own
+      // ?? 'arrow' default already gives this — set explicitly here anyway so it's visible in
+      // the object literal) so it's immediately readable as directional, not a bare line that
+      // reads as "did this even work?" — every tip style is a one-click change afterward.
+      endArrow: 'arrow',
+    };
+    stateManager.addCloudConnector(connector);
+    const selection: SelectableItem[] = [{ type: 'cloud-connector', id: connector.id }];
+    stateManager.setState({ selection });
+    eventBus.emit('selection:changed', selection);
+    this.renderCloudAll();
+  }
+
+  private commitCloudNodeDrag(): void {
+    const nodeId = this.draggedCloudNodeId!;
+    const wasResizing = this.isResizingCloudNode;
+    this.draggedCloudNodeId = null;
+    this.isResizingCloudNode = false;
+
+    const finalNode = stateManager.getState().cloudNodes.find(n => n.id === nodeId);
+    if (finalNode && this.dragStartCloudNodesState) {
+      stateManager.setState({ cloudNodes: this.dragStartCloudNodesState }, true);
+      this.dragStartCloudNodesState = null;
+      const data = wasResizing
+        ? { width: finalNode.width, height: finalNode.height }
+        : { x: finalNode.x, y: finalNode.y };
+      eventBus.emit('cloudnode:update', { id: nodeId, data });
+    }
+  }
+
+  private commitCloudContainerDrag(): void {
+    const containerId = this.draggedCloudContainerId!;
+    const wasResizing = this.isResizingCloudContainer;
+    this.draggedCloudContainerId = null;
+    this.isResizingCloudContainer = false;
+
+    const finalContainer = stateManager.getState().cloudContainers.find(c => c.id === containerId);
+    if (finalContainer && this.dragStartCloudContainersState) {
+      stateManager.setState({ cloudContainers: this.dragStartCloudContainersState }, true);
+      this.dragStartCloudContainersState = null;
+      const data = wasResizing
+        ? { width: finalContainer.width, height: finalContainer.height }
+        : { x: finalContainer.x, y: finalContainer.y };
+      eventBus.emit('cloudcontainer:update', { id: containerId, data });
+    }
+  }
+
+  /** Binds all mouse interaction on the cloud canvas: select/drag/resize (default 'select'
+   *  tool), the cloud-container draw tool, and the cloud-connect tool. A separate, dedicated
+   *  handler from setupCanvasInteractions() above (which owns the rack canvas's `#canvas`) —
+   *  see core/cloud-canvas.ts's doc comment for why these two canvases stay fully independent. */
+  private setupCloudCanvasInteractions(): void {
+    const svgEl = document.getElementById('cloud-canvas') as unknown as SVGSVGElement;
+    if (!svgEl) return;
+
+    svgEl.addEventListener('mousedown', (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const worldPos = this.cloudCanvas!.screenToWorld({ x: e.clientX, y: e.clientY });
+      const tool = stateManager.getState().tool;
+      const target = e.target as Element;
+
+      // Connection handles (4-directional dots that appear on hover/selection, see
+      // cloud-node-renderer.ts) start a connector drag regardless of the active tool — the
+      // primary, discoverable way to draw a connector, so the user never has to find/activate
+      // the separate "Connect" tool first. Takes priority over everything except an
+      // already-in-progress container draw.
+      if (!this.isDrawingCloudContainer) {
+        const handleEl = target.closest('.cloud-node-connect-handle, .cloud-node-connect-handle-hit') as SVGElement | null;
+        if (handleEl) {
+          const handleNodeId = handleEl.getAttribute('data-cloud-node-id');
+          // A connection is already pending (from an earlier click, or the source press of a
+          // drag-in-progress) and this handle belongs to a DIFFERENT node — land on it and
+          // complete the connector, using this exact dot as the dest side. Without this check,
+          // clicking straight onto the destination's own dot (now the easiest, most obvious spot
+          // to aim for, since dots reveal on hover) would instead blow away the pending
+          // connection and start a brand new one from that node, which read as "the line
+          // disappears and restarts as if it were the source."
+          if (this.cloudConnectSourceId && handleNodeId !== this.cloudConnectSourceId) {
+            this.cloudConnectHoverSide = handleEl.getAttribute('data-handle-side') as CloudHandleSide;
+            this.commitCloudConnector(this.cloudConnectSourceId, { nodeId: handleNodeId! });
+            return;
+          }
+          if (!this.cloudConnectSourceId) {
+            this.cloudConnectSourceId = handleNodeId;
+            this.cloudConnectSourceSide = handleEl.getAttribute('data-handle-side') as CloudHandleSide;
+            this.cloudConnectMouseDownScreen = { x: e.clientX, y: e.clientY };
+            this.cloudConnectHoverNodeId = undefined;
+            this.cloudConnectHoverSide = undefined;
+          }
+          return;
+        }
+      }
+
+      if (tool === 'cloud-container') {
+        this.isDrawingCloudContainer = true;
+        this.cloudContainerDrawStart = worldPos;
+        return;
+      }
+
+      if (tool === 'cloud-connect') {
+        const nodeEl = target.closest('[data-cloud-node-id]') as SVGElement | null;
+        if (nodeEl) {
+          const nodeId = nodeEl.getAttribute('data-cloud-node-id')!;
+          if (!this.cloudConnectSourceId) {
+            this.cloudConnectSourceId = nodeId;
+            this.cloudConnectMouseDownScreen = { x: e.clientX, y: e.clientY };
+            this.cloudConnectHoverNodeId = undefined;
+          } else if (nodeId !== this.cloudConnectSourceId) {
+            this.commitCloudConnector(this.cloudConnectSourceId, { nodeId });
+          }
+        } else if (this.cloudConnectSourceId) {
+          this.commitCloudConnector(this.cloudConnectSourceId, { point: worldPos });
+        }
+        return;
+      }
+
+      // A connector is pending (started via a connection-handle drag while some other tool like
+      // 'select' was active — handles work regardless of tool, see above) that didn't complete
+      // as a drag and this second click didn't land on another handle either — complete it the
+      // same way the explicit Connect tool's second click would, rather than falling through to
+      // normal select/drag behavior below (which would otherwise leave it dangling forever).
+      if (this.cloudConnectSourceId) {
+        const nodeEl = target.closest('[data-cloud-node-id]') as SVGElement | null;
+        if (nodeEl) {
+          const nodeId = nodeEl.getAttribute('data-cloud-node-id')!;
+          if (nodeId !== this.cloudConnectSourceId) this.commitCloudConnector(this.cloudConnectSourceId, { nodeId });
+        } else {
+          this.commitCloudConnector(this.cloudConnectSourceId, { point: worldPos });
+        }
+        return;
+      }
+
+      // 'select' tool: endpoint handle > resize handle > node body > container body > connector > background.
+      const endpointHandle = target.closest('.cloud-connector-endpoint-handle') as SVGElement | null;
+      if (endpointHandle) {
+        const connectorId = endpointHandle.getAttribute('data-cloud-connector-id')!;
+        const end = endpointHandle.getAttribute('data-end') as 'source' | 'dest';
+        this.draggedConnectorEndpoint = { connectorId, end };
+        this.dragStartCloudConnectorsState = stateManager.getState().cloudConnectors;
+        this.cloudConnectHoverNodeId = undefined;
+        this.cloudConnectHoverSide = undefined;
+        return;
+      }
+
+      const resizeHandle = target.closest('.cloud-node-resize-handle, .cloud-container-resize-handle') as SVGElement | null;
+      if (resizeHandle) {
+        const nodeId = resizeHandle.getAttribute('data-cloud-node-id');
+        const containerId = resizeHandle.getAttribute('data-cloud-container-id');
+        if (nodeId) {
+          const node = stateManager.getState().cloudNodes.find(n => n.id === nodeId);
+          if (node && !node.locked) {
+            this.isResizingCloudNode = true;
+            this.draggedCloudNodeId = nodeId;
+            this.dragStartCloudWorldPos = worldPos;
+            this.dragStartCloudWidth = node.width;
+            this.dragStartCloudHeight = node.height;
+            this.dragStartCloudNodesState = stateManager.getState().cloudNodes;
+          }
+        } else if (containerId) {
+          const container = stateManager.getState().cloudContainers.find(c => c.id === containerId);
+          if (container && !container.locked) {
+            this.isResizingCloudContainer = true;
+            this.draggedCloudContainerId = containerId;
+            this.dragStartCloudWorldPos = worldPos;
+            this.dragStartCloudWidth = container.width;
+            this.dragStartCloudHeight = container.height;
+            this.dragStartCloudContainersState = stateManager.getState().cloudContainers;
+          }
+        }
+        return;
+      }
+
+      const nodeEl = target.closest('[data-cloud-node-id]') as SVGElement | null;
+      if (nodeEl) {
+        const nodeId = nodeEl.getAttribute('data-cloud-node-id')!;
+        const node = stateManager.getState().cloudNodes.find(n => n.id === nodeId);
+        const selection: SelectableItem[] = [{ type: 'cloud-node', id: nodeId }];
+        stateManager.setState({ selection });
+        eventBus.emit('selection:changed', selection);
+        if (node && !node.locked) {
+          this.draggedCloudNodeId = nodeId;
+          this.dragStartCloudWorldPos = worldPos;
+          this.dragStartCloudX = node.x;
+          this.dragStartCloudY = node.y;
+          this.dragStartCloudNodesState = stateManager.getState().cloudNodes;
+        }
+        this.renderCloudAll();
+        return;
+      }
+
+      const containerEl = target.closest('[data-cloud-container-id]') as SVGElement | null;
+      if (containerEl) {
+        const containerId = containerEl.getAttribute('data-cloud-container-id')!;
+        const container = stateManager.getState().cloudContainers.find(c => c.id === containerId);
+        const selection: SelectableItem[] = [{ type: 'cloud-container', id: containerId }];
+        stateManager.setState({ selection });
+        eventBus.emit('selection:changed', selection);
+        if (container && !container.locked) {
+          this.draggedCloudContainerId = containerId;
+          this.dragStartCloudWorldPos = worldPos;
+          this.dragStartCloudX = container.x;
+          this.dragStartCloudY = container.y;
+          this.dragStartCloudContainersState = stateManager.getState().cloudContainers;
+        }
+        this.renderCloudAll();
+        return;
+      }
+
+      const connEl = target.closest('[data-cloud-connector-id]') as SVGElement | null;
+      if (connEl) {
+        const connId = connEl.getAttribute('data-cloud-connector-id')!;
+        const selection: SelectableItem[] = [{ type: 'cloud-connector', id: connId }];
+        stateManager.setState({ selection });
+        eventBus.emit('selection:changed', selection);
+        this.renderCloudAll();
+        return;
+      }
+
+      // Background — deselect (actual panning is handled independently by CloudCanvasManager).
+      if (stateManager.getState().selection.length > 0) {
+        stateManager.setState({ selection: [] });
+        eventBus.emit('selection:changed', []);
+        this.renderCloudAll();
+      }
+    });
+
+    svgEl.addEventListener('mousemove', (e: MouseEvent) => {
+      const worldPos = this.cloudCanvas!.screenToWorld({ x: e.clientX, y: e.clientY });
+
+      if (this.isDrawingCloudContainer) {
+        this.renderCloudContainerDrawPreview(this.cloudContainerDrawStart, worldPos);
+        return;
+      }
+
+      // Tool-agnostic: cloudConnectSourceId is set either by the "Connect" tool's first click
+      // or by starting a drag from a node's connection handle (see the mousedown handler above)
+      // — either way, a source is pending and the preview/hover-tracking below applies.
+      if (this.cloudConnectSourceId) {
+        const hoverEl = (e.target as Element).closest('[data-cloud-node-id]');
+        const newHoverNodeId = hoverEl ? hoverEl.getAttribute('data-cloud-node-id') : null;
+        const hoverHandleEl = (e.target as Element).closest('.cloud-node-connect-handle, .cloud-node-connect-handle-hit');
+        this.cloudConnectHoverSide = hoverHandleEl ? (hoverHandleEl.getAttribute('data-handle-side') as CloudHandleSide) : undefined;
+        // Only the (cheap) preview line needs to redraw every tick; the full node/connector
+        // re-render (which is what makes the hovered node light up as a drop target — see
+        // renderCloudAll()'s showHandles computation) only needs to run when the hovered node
+        // actually changes, not on every pixel of mouse movement over the same node.
+        if (newHoverNodeId !== this.cloudConnectHoverNodeId) {
+          this.cloudConnectHoverNodeId = newHoverNodeId;
+          this.renderCloudAll();
+        }
+        this.renderCloudConnectPreview(this.cloudConnectSourceId, worldPos);
+        return;
+      }
+
+      if (this.draggedConnectorEndpoint) {
+        const { connectorId, end } = this.draggedConnectorEndpoint;
+        const hoverEl = (e.target as Element).closest('[data-cloud-node-id]');
+        this.cloudConnectHoverNodeId = hoverEl ? hoverEl.getAttribute('data-cloud-node-id') : null;
+        const hoverHandleEl = (e.target as Element).closest('.cloud-node-connect-handle, .cloud-node-connect-handle-hit');
+        this.cloudConnectHoverSide = hoverHandleEl ? (hoverHandleEl.getAttribute('data-handle-side') as CloudHandleSide) : undefined;
+
+        const cloudConnectors = stateManager.getState().cloudConnectors.map(c => {
+          if (c.id !== connectorId) return c;
+          return end === 'source'
+            ? { ...c, sourceNodeId: null, sourceSide: undefined, sourcePoint: worldPos }
+            : { ...c, destNodeId: null, destSide: undefined, destPoint: worldPos };
+        });
+        stateManager.setState({ cloudConnectors }, true);
+        this.renderCloudAll();
+        return;
+      }
+
+      if (this.draggedCloudNodeId) {
+        const dx = worldPos.x - this.dragStartCloudWorldPos.x;
+        const dy = worldPos.y - this.dragStartCloudWorldPos.y;
+        const nodeId = this.draggedCloudNodeId;
+        if (this.isResizingCloudNode) {
+          const width = Math.max(24, this.dragStartCloudWidth + dx);
+          const height = Math.max(24, this.dragStartCloudHeight + dy);
+          const cloudNodes = stateManager.getState().cloudNodes.map(n => n.id === nodeId ? { ...n, width, height } : n);
+          stateManager.setState({ cloudNodes }, true);
+        } else {
+          const x = this.dragStartCloudX + dx;
+          const y = this.dragStartCloudY + dy;
+          const cloudNodes = stateManager.getState().cloudNodes.map(n => n.id === nodeId ? { ...n, x, y } : n);
+          stateManager.setState({ cloudNodes }, true);
+        }
+        this.renderCloudAll();
+        return;
+      }
+
+      if (this.draggedCloudContainerId) {
+        const dx = worldPos.x - this.dragStartCloudWorldPos.x;
+        const dy = worldPos.y - this.dragStartCloudWorldPos.y;
+        const containerId = this.draggedCloudContainerId;
+        if (this.isResizingCloudContainer) {
+          const width = Math.max(40, this.dragStartCloudWidth + dx);
+          const height = Math.max(40, this.dragStartCloudHeight + dy);
+          const cloudContainers = stateManager.getState().cloudContainers.map(c => c.id === containerId ? { ...c, width, height } : c);
+          stateManager.setState({ cloudContainers }, true);
+        } else {
+          const x = this.dragStartCloudX + dx;
+          const y = this.dragStartCloudY + dy;
+          const cloudContainers = stateManager.getState().cloudContainers.map(c => c.id === containerId ? { ...c, x, y } : c);
+          stateManager.setState({ cloudContainers }, true);
+        }
+        this.renderCloudAll();
+        return;
+      }
+
+      // Idle hover (no drag/tool gesture in progress, handled by the branches above) — reveal a
+      // node's connection handles just from resting the mouse over it, same as any other diagram
+      // tool, rather than requiring a click-to-select first.
+      const idleHoverEl = (e.target as Element).closest('[data-cloud-node-id]');
+      const newIdleHoverId = idleHoverEl ? idleHoverEl.getAttribute('data-cloud-node-id') : null;
+      if (newIdleHoverId !== this.hoveredCloudNodeId) {
+        this.hoveredCloudNodeId = newIdleHoverId;
+        this.renderCloudAll();
+      }
+    });
+
+    window.addEventListener('mouseup', (e: MouseEvent) => {
+      if (this.isDrawingCloudContainer) {
+        const worldPos = this.cloudCanvas!.screenToWorld({ x: e.clientX, y: e.clientY });
+        this.finishCloudContainerDraw(worldPos);
+        return;
+      }
+      // Connect tool, drag-release completion — a press-drag-release gesture in one motion
+      // (as opposed to two separate clicks, which the mousedown handler above already handles)
+      // used to silently do nothing: the source stayed pending and the preview line just froze
+      // wherever the mouse let go. DRAG_THRESHOLD tells an intentional drag-onto-another-node
+      // apart from "released right where it was pressed, waiting for a separate second click".
+      if (this.cloudConnectSourceId && this.cloudConnectMouseDownScreen) {
+        const DRAG_THRESHOLD = 6;
+        const dx = e.clientX - this.cloudConnectMouseDownScreen.x;
+        const dy = e.clientY - this.cloudConnectMouseDownScreen.y;
+        if (Math.hypot(dx, dy) >= DRAG_THRESHOLD && this.cloudConnectHoverNodeId !== undefined) {
+          const sourceId = this.cloudConnectSourceId;
+          if (this.cloudConnectHoverNodeId !== null) {
+            if (this.cloudConnectHoverNodeId !== sourceId) this.commitCloudConnector(sourceId, { nodeId: this.cloudConnectHoverNodeId });
+          } else {
+            const worldPos = this.cloudCanvas!.screenToWorld({ x: e.clientX, y: e.clientY });
+            this.commitCloudConnector(sourceId, { point: worldPos });
+          }
+        }
+        // A short release near the mousedown point is a genuine click — leave the source
+        // pending so the existing click-then-click flow in the mousedown handler still works.
+      }
+      if (this.draggedCloudNodeId) {
+        this.commitCloudNodeDrag();
+      }
+      if (this.draggedCloudContainerId) {
+        this.commitCloudContainerDrag();
+      }
+      if (this.draggedConnectorEndpoint) {
+        this.commitConnectorEndpointDrag();
+      }
+    });
+  }
+
+  /** Finishes re-dragging a connector's source or dest tip: reattaches to whatever node was
+   *  under the cursor at release (unless that's the connector's OTHER end, which would make a
+   *  degenerate self-loop — dropped as a floating point instead), or keeps it as the floating
+   *  point already tracked live during the drag. One undo entry for the whole drag. */
+  private commitConnectorEndpointDrag(): void {
+    const { connectorId, end } = this.draggedConnectorEndpoint!;
+    this.draggedConnectorEndpoint = null;
+    const hoverNodeId = this.cloudConnectHoverNodeId;
+    const hoverSide = this.cloudConnectHoverSide;
+    this.cloudConnectHoverNodeId = undefined;
+    this.cloudConnectHoverSide = undefined;
+
+    const liveConnector = stateManager.getState().cloudConnectors.find(c => c.id === connectorId);
+    const snapshot = this.dragStartCloudConnectorsState;
+    this.dragStartCloudConnectorsState = null;
+    if (!liveConnector || !snapshot) return;
+
+    // hoverNodeId stays 'undefined' (as opposed to null = "hovering empty canvas") only when no
+    // mousemove fired between mousedown and mouseup at all — a plain click on the handle, not a
+    // drag. Leave the connector completely untouched rather than "detaching" it to nothing.
+    if (hoverNodeId === undefined) {
+      stateManager.setState({ cloudConnectors: snapshot }, true);
+      return;
+    }
+
+    const otherEndNodeId = end === 'source' ? liveConnector.destNodeId : liveConnector.sourceNodeId;
+    stateManager.setState({ cloudConnectors: snapshot }, true);
+
+    const validReattach = hoverNodeId !== null && hoverNodeId !== otherEndNodeId;
+    const data = end === 'source'
+      ? (validReattach
+          ? { sourceNodeId: hoverNodeId, sourceSide: hoverSide, sourcePoint: null }
+          : { sourceNodeId: null, sourceSide: undefined, sourcePoint: liveConnector.sourcePoint })
+      : (validReattach
+          ? { destNodeId: hoverNodeId, destSide: hoverSide, destPoint: null }
+          : { destNodeId: null, destSide: undefined, destPoint: liveConnector.destPoint });
+    eventBus.emit('cloudconnector:update', { id: connectorId, data });
+  }
+
 }

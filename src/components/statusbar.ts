@@ -88,7 +88,9 @@ export class StatusBar {
       'label': '🏷️',
       'zoom-in': '🔍+',
       'zoom-out': '🔍-',
-      'export-area': '📐'
+      'export-area': '📐',
+      'cloud-container': '⬚',
+      'cloud-connect': '📡'
     };
 
     if (toolEl) {
