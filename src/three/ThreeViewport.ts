@@ -8,6 +8,7 @@ import { AssetManager } from './AssetManager';
 import { CameraManager, type CameraPreset } from './CameraManager';
 import { PostProcessingManager } from './PostProcessingManager';
 import { SceneManager, type DoorState } from './SceneManager';
+import type { RackColorKey } from './rack-builder';
 
 function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): T {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -117,6 +118,14 @@ export class ThreeViewport {
 
   setDoorState(state: DoorState): void {
     this.sceneManager.setDoorState(state);
+  }
+
+  setRackColor(colorKey: RackColorKey): void {
+    this.sceneManager.setRackColor(colorKey);
+  }
+
+  setPanelOpacity(opacity: number): void {
+    this.sceneManager.setPanelOpacity(opacity);
   }
 
   zoomBy(factor: number): void {

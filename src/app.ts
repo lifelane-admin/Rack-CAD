@@ -4106,8 +4106,79 @@ export class App {
       row.appendChild(btn);
       if (state === 'closed') activeBtn = btn;
     }
-
     panel.appendChild(row);
+
+    // ── Rack Colour — swatch buttons ──────────────────────────────────────────
+    const colorLbl = document.createElement('div');
+    colorLbl.textContent = 'RACK COLOUR';
+    colorLbl.style.cssText = lbl.style.cssText;
+    panel.appendChild(colorLbl);
+
+    const colorRow = document.createElement('div');
+    colorRow.style.cssText = 'display:flex;gap:5px;';
+
+    // Keep in sync with rack-builder.ts's RACK_COLOR_PRESETS (key + label + swatch color).
+    const colorPresets: { key: 'white' | 'grey' | 'ivory' | 'black' | 'matte-black'; label: string; swatch: string }[] = [
+      { key: 'white',       label: 'White',       swatch: '#e8e8e4' },
+      { key: 'grey',        label: 'Grey',        swatch: '#8a8d90' },
+      { key: 'ivory',       label: 'Ivory',       swatch: '#efe7d0' },
+      { key: 'black',       label: 'Black',       swatch: '#0c0e12' },
+      { key: 'matte-black', label: 'Matte Black', swatch: '#131416' },
+    ];
+
+    let activeSwatchBtn: HTMLButtonElement | null = null;
+    for (const { key, label, swatch } of colorPresets) {
+      const btn = document.createElement('button');
+      btn.title = label;
+      btn.style.cssText = [
+        'width:20px', 'height:20px', 'border-radius:4px', 'cursor:pointer',
+        `background:${swatch}`,
+        key === 'black' ? 'border:2px solid #4a90d0' : 'border:1px solid #254060',
+        'outline:none', 'padding:0',
+      ].join(';');
+      btn.addEventListener('click', () => {
+        if (activeSwatchBtn) activeSwatchBtn.style.borderColor = '#254060';
+        if (activeSwatchBtn) activeSwatchBtn.style.borderWidth = '1px';
+        btn.style.borderColor = '#4a90d0';
+        btn.style.borderWidth = '2px';
+        activeSwatchBtn = btn;
+        this.threeViewport!.setRackColor(key);
+      });
+      colorRow.appendChild(btn);
+      if (key === 'black') activeSwatchBtn = btn;
+    }
+    panel.appendChild(colorRow);
+
+    // ── Transparency Threshold — side/back panel opacity slider ────────────────
+    const opacityLbl = document.createElement('div');
+    opacityLbl.textContent = 'TRANSPARENCY THRESHOLD';
+    opacityLbl.style.cssText = lbl.style.cssText;
+    panel.appendChild(opacityLbl);
+
+    const opacityRow = document.createElement('div');
+    opacityRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+
+    const opacitySlider = document.createElement('input');
+    opacitySlider.type = 'range';
+    opacitySlider.min = '0';
+    opacitySlider.max = '100';
+    opacitySlider.value = '100';
+    opacitySlider.style.cssText = 'width:90px;accent-color:#4a90d0;';
+
+    const opacityValueLbl = document.createElement('span');
+    opacityValueLbl.textContent = '100%';
+    opacityValueLbl.style.cssText = 'font-size:10px;color:#6aaad8;font-family:monospace;width:32px;text-align:right;';
+
+    opacitySlider.addEventListener('input', () => {
+      const pct = Number(opacitySlider.value);
+      opacityValueLbl.textContent = `${pct}%`;
+      this.threeViewport!.setPanelOpacity(pct / 100);
+    });
+
+    opacityRow.appendChild(opacitySlider);
+    opacityRow.appendChild(opacityValueLbl);
+    panel.appendChild(opacityRow);
+
     container.appendChild(panel);
   }
 

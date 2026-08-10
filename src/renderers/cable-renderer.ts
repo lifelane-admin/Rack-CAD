@@ -465,8 +465,10 @@ function createEthernetConnector(pos: Point, color: string, orientation: 'up' | 
   else if (orientation === 'right') rot = -90;
   else if (orientation === 'left')  rot = 90;
 
-  // compact=true (switch 1U ports ~9px): scale 0.14.  compact=false (servers): scale 0.28.
-  const S = compact ? 0.14 : 0.28;
+  // compact=true (switch 1U ports ~9px): scale 0.14.  compact=false (servers): scale 0.35
+  // (25% larger than the original 0.28, per explicit request — the switch-port compact scale is
+  // deliberately left alone since those sit tightly packed and a 25% bump risks them overlapping).
+  const S = compact ? 0.14 : 0.35;
   const TAIL_Y = 38;     // native y of boot end (cable exit point)
   const CRYSTAL_Y = 17;  // native y of crystal/boot junction
 

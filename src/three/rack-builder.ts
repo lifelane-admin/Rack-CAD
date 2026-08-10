@@ -1,18 +1,47 @@
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { RackData } from '../core/types';
 import { RACK_CONSTANTS } from '../core/types';
 import type { MaterialManager } from './MaterialManager';
-import { buildRackInternals } from './rack-internals';
+// buildRackInternals import paused along with its call below — see that comment.
+// import { buildRackInternals } from './rack-internals';
 
 const { RU_HEIGHT, RACK_OUTER_WIDTH, RACK_INNER_WIDTH, RAIL_WIDTH, RACK_PADDING_TOP, RACK_PADDING_BOTTOM } = RACK_CONSTANTS;
 
 export const RACK_DEPTH = 600;
 
+// ── Rack shell color presets ────────────────────────────────────────────────
+// "Black" and "Matte Black" are deliberately different finishes (glossier/more metallic vs.
+// flat/high-roughness), not just the same color — matches how those are actually distinct SKUs
+// on real rack enclosures.
+export type RackColorKey = 'white' | 'grey' | 'ivory' | 'black' | 'matte-black';
+
+export const RACK_COLOR_PRESETS: Record<RackColorKey, { label: string; color: string; roughness: number; metalness: number }> = {
+  white:         { label: 'White',       color: '#e8e8e4', roughness: 0.45, metalness: 0.15 },
+  grey:          { label: 'Grey',        color: '#8a8d90', roughness: 0.50, metalness: 0.25 },
+  ivory:         { label: 'Ivory',       color: '#efe7d0', roughness: 0.48, metalness: 0.12 },
+  black:         { label: 'Black',       color: '#0c0e12', roughness: 0.35, metalness: 0.40 },
+  'matte-black': { label: 'Matte Black', color: '#131416', roughness: 0.92, metalness: 0.10 },
+};
+
+const DEFAULT_RACK_COLOR: RackColorKey = 'black';
+
+/** Additively lighten (positive amt) or darken (negative amt) a hex color, clamped to 0-255. */
+function shade(hex: string, amt: number): string {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.max(0, Math.min(255, (num >> 16) + amt));
+  const g = Math.max(0, Math.min(255, ((num >> 8) & 0xff) + amt));
+  const b = Math.max(0, Math.min(255, (num & 0xff) + amt));
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
 // ── Shared geometry ───────────────────────────────────────────────────────────
 
 const FAN_SIZE  = 120;   // 120mm fan
 const FAN_DEPTH = 28;    // fan assembly thickness
+// Visual sheet-metal thickness of the top cap mesh itself — deliberately much thinner than
+// RACK_PADDING_TOP (which stays the overall top headroom/allowance used elsewhere for totalH,
+// vent header, U-label, and fan placement — a shared 2D/3D constant, not just this mesh's depth).
+export const TOP_PLATE_THICKNESS = 2; // ~1mm real-world scale
 
 // Fan positions in rack-group local space (X, Z)
 const FAN_POSITIONS: [number, number][] = [
@@ -22,12 +51,51 @@ const FAN_POSITIONS: [number, number][] = [
   [ 90,  100],
 ];
 
+/** Top panel with an actual through-cut circular hole above each of the 4 fans — a solid lid
+ *  (even a "vent" texture with no real geometry holes) sat directly over/inside the fan
+ *  assemblies (which are recessed FAN_DEPTH into the panel's thickness), sealing them in and
+ *  hiding the spinning blades. Built via Shape+holes / ExtrudeGeometry (no CSG needed). */
+function buildTopCapGeometry(): THREE.BufferGeometry {
+  const hw = RACK_OUTER_WIDTH / 2;
+  const hd = RACK_DEPTH / 2;
+
+  const shape = new THREE.Shape();
+  shape.moveTo(-hw, -hd);
+  shape.lineTo(hw, -hd);
+  shape.lineTo(hw, hd);
+  shape.lineTo(-hw, hd);
+  shape.lineTo(-hw, -hd);
+
+  // Round holes matching the 120mm fan spec exactly (radius = FAN_SIZE / 2). This is smaller
+  // than the fan housing's square footprint at the corners (diagonal ~85 vs radius 60), so the
+  // fan assembly is mounted flush against the panel's UNDERSIDE (see FAN_POSITIONS loop below)
+  // rather than embedded inside the panel's own thickness — real vented rack lids work the same
+  // way. That keeps the housing's square corners entirely below the panel, with zero vertical
+  // overlap against the solid (uncut) material regardless of the hole being round-not-square.
+  const FAN_HOLE_R = FAN_SIZE / 2;
+  for (const [fx, fz] of FAN_POSITIONS) {
+    const hole = new THREE.Path();
+    hole.absarc(fx, fz, FAN_HOLE_R, 0, Math.PI * 2, false);
+    shape.holes.push(hole);
+  }
+
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: TOP_PLATE_THICKNESS,
+    bevelEnabled: false,
+    curveSegments: 24,
+  });
+  // Shape lives in the XY plane, extruded along Z — rotate so the flat face is horizontal
+  // (rack-local XZ) and the extrusion runs along Y (the panel's thickness), then re-center
+  // vertically so this drops into a position.set(...) call the same way a centered box would.
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, -TOP_PLATE_THICKNESS / 2, 0);
+  return geo;
+}
+
 // ── Canvas material factories ─────────────────────────────────────────────────
 
-function makeBlackBodyMat(): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
-    color: 0x07090c, metalness: 0.25, roughness: 0.90,
-  });
+function makeBodyMat(color: string, roughness: number, metalness: number): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({ color, metalness, roughness, transparent: false, opacity: 1 });
 }
 
 function makePerforatedMat(panelW: number, panelH: number): THREE.MeshStandardMaterial {
@@ -86,19 +154,20 @@ function makeVentHeaderMat(): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ map: tex, metalness: 0.3, roughness: 0.75 });
 }
 
-function makeSidePanelMat(): THREE.MeshStandardMaterial {
+function makeSidePanelMat(color: string, roughness: number, metalness: number): THREE.MeshStandardMaterial {
   const TW = 128, TH = 256;
   const canvas = document.createElement('canvas');
   canvas.width = TW; canvas.height = TH;
   const ctx = canvas.getContext('2d');
-  if (!ctx) return new THREE.MeshStandardMaterial({ color: 0x05080b, metalness: 0.55, roughness: 0.75 });
+  if (!ctx) return new THREE.MeshStandardMaterial({ color, metalness, roughness, transparent: false, opacity: 1 });
 
-  // Near-black body with very subtle horizontal sheen
+  // Body color with very subtle horizontal sheen (lighter band down the middle)
+  const sheen = shade(color, 12);
   const g = ctx.createLinearGradient(0, 0, TW, 0);
-  g.addColorStop(0, '#05080b');
-  g.addColorStop(0.45, '#090d12');
-  g.addColorStop(0.55, '#090d12');
-  g.addColorStop(1, '#05080b');
+  g.addColorStop(0, color);
+  g.addColorStop(0.45, sheen);
+  g.addColorStop(0.55, sheen);
+  g.addColorStop(1, color);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, TW, TH);
 
@@ -121,7 +190,21 @@ function makeSidePanelMat(): THREE.MeshStandardMaterial {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(1, 4);
-  return new THREE.MeshStandardMaterial({ map: tex, metalness: 0.25, roughness: 0.88 });
+  // Explicitly opaque — side panels are a solid outer skin; PANEL OPACITY control overrides this.
+  return new THREE.MeshStandardMaterial({ map: tex, metalness, roughness, transparent: false, opacity: 1 });
+}
+
+/** Fresh shell (side panel + body) materials for a given rack color preset — used both by
+ *  buildRackGroup and by SceneManager for live color swaps on already-built racks. */
+export function buildShellMaterials(colorKey: RackColorKey): {
+  bodyMat: THREE.MeshStandardMaterial;
+  sideMat: THREE.MeshStandardMaterial;
+} {
+  const preset = RACK_COLOR_PRESETS[colorKey] ?? RACK_COLOR_PRESETS[DEFAULT_RACK_COLOR];
+  return {
+    bodyMat: makeBodyMat(preset.color, preset.roughness, preset.metalness),
+    sideMat: makeSidePanelMat(preset.color, preset.roughness, preset.metalness),
+  };
 }
 
 // ── Fan assembly ──────────────────────────────────────────────────────────────
@@ -251,14 +334,26 @@ function buildFanAssembly(): THREE.Group {
   const frameMat  = new THREE.MeshStandardMaterial({ color: 0x060a10, metalness: 0.25, roughness: 0.85 });
   const guardMat  = makeFanGuardMat();
   const bladeMat  = makeFanBladeMat();
+  // The frame's top face is left unrendered (not a solid cap over the whole square) — a separate
+  // round ring below fills in the guard look while leaving its center open, so the top-cap's
+  // through-cut actually reveals the spinning blade instead of hitting another solid lid.
+  const openMat = new THREE.MeshBasicMaterial({ visible: false });
 
-  // Outer shroud frame
+  // Outer shroud frame — square housing; its corners sit outside the round guard ring below
   const frameGeo = new THREE.BoxGeometry(FAN_SIZE, FAN_DEPTH, FAN_SIZE);
-  // Per-face: sides use frameMat, top (+Y) uses guardMat
-  const frameMats = [frameMat, frameMat, guardMat, frameMat, frameMat, frameMat];
+  const frameMats = [frameMat, frameMat, openMat, frameMat, frameMat, frameMat];
   const frame = new THREE.Mesh(frameGeo, frameMats);
   frame.name = 'fan-frame';
   fan.add(frame);
+
+  // Round wire guard — a flat ring (open center) sitting right at the shroud's top opening, an
+  // actual through-cut rather than a texture painted on a solid face.
+  const guardGeo = new THREE.RingGeometry(42, 58, 32);
+  guardGeo.rotateX(-Math.PI / 2);
+  const guard = new THREE.Mesh(guardGeo, guardMat);
+  guard.name = 'fan-guard';
+  guard.position.set(0, FAN_DEPTH / 2, 0);
+  fan.add(guard);
 
   // Spinning blade disc (slightly below top face, above center)
   const bladeGeo = new THREE.BoxGeometry(FAN_SIZE - 10, 3, FAN_SIZE - 10);
@@ -296,7 +391,11 @@ function makeULabel(u: number): THREE.Sprite {
 
 // ── Main build function ───────────────────────────────────────────────────────
 
-export function buildRackGroup(rack: RackData, materials: MaterialManager): THREE.Group {
+export function buildRackGroup(
+  rack: RackData,
+  materials: MaterialManager,
+  colorKey: RackColorKey = DEFAULT_RACK_COLOR
+): THREE.Group {
   const group = new THREE.Group();
   group.name = `rack-${rack.id}`;
 
@@ -314,9 +413,8 @@ export function buildRackGroup(rack: RackData, materials: MaterialManager): THRE
   const PERF_CX    = (PERF_START + PERF_END) / 2; // 150
 
   // Materials
-  const bodyMat   = makeBlackBodyMat();
+  const { bodyMat, sideMat } = buildShellMaterials(colorKey);
   const railMat   = materials.get('rail');
-  const sideMat   = makeSidePanelMat();
   const perfMat   = makePerforatedMat(PERF_W, bodyH);
   const ventMat   = makeVentHeaderMat();
   const glassMat  = new THREE.MeshStandardMaterial({
@@ -330,30 +428,40 @@ export function buildRackGroup(rack: RackData, materials: MaterialManager): THRE
   const handleMat = new THREE.MeshStandardMaterial({ color: 0x6080a0, metalness: 0.55, roughness: 0.45 });
   const hingeMat  = new THREE.MeshStandardMaterial({ color: 0x708090, metalness: 0.50, roughness: 0.50 });
 
+  // Side walls and the back panel fill exactly the "body" zone between the top cap and bottom
+  // plinth — NOT the full totalH. Both of those already own the top/bottom edge slices (see
+  // their position.set calls below); spanning totalH here as well made every one of these panels
+  // volumetrically overlap the top cap's (and bottom plinth's) full width/depth at those edges,
+  // which is genuine z-fighting (the "brushed"/dithered seam), not just a rendering trick.
+  const shellH = totalH - TOP_PLATE_THICKNESS - RACK_PADDING_BOTTOM;
+  const shellCenterY = (RACK_PADDING_BOTTOM - TOP_PLATE_THICKNESS) / 2;
+
   // ── Side outer panels ──────────────────────────────────────────────────────
-  const sideGeo = new THREE.BoxGeometry(SIDE_T, totalH, RACK_DEPTH);
+  const sideGeo = new THREE.BoxGeometry(SIDE_T, shellH, RACK_DEPTH);
   const leftSide = new THREE.Mesh(sideGeo, sideMat);
   leftSide.name = 'rack-side-L';
-  leftSide.position.set(-(RACK_OUTER_WIDTH / 2 - SIDE_T / 2), 0, 0);
+  leftSide.position.set(-(RACK_OUTER_WIDTH / 2 - SIDE_T / 2), shellCenterY, 0);
   group.add(leftSide);
 
   const rightSide = new THREE.Mesh(sideGeo, sideMat);
   rightSide.name = 'rack-side-R';
-  rightSide.position.set(RACK_OUTER_WIDTH / 2 - SIDE_T / 2, 0, 0);
+  rightSide.position.set(RACK_OUTER_WIDTH / 2 - SIDE_T / 2, shellCenterY, 0);
   group.add(rightSide);
 
   // ── Back panel ─────────────────────────────────────────────────────────────
-  const backGeo  = new THREE.BoxGeometry(RACK_OUTER_WIDTH, totalH, 10);
+  const backGeo  = new THREE.BoxGeometry(RACK_OUTER_WIDTH, shellH, 10);
   const backPanel = new THREE.Mesh(backGeo, bodyMat);
   backPanel.name  = 'rack-back';
-  backPanel.position.set(0, 0, -fz + 5);
+  backPanel.position.set(0, shellCenterY, -fz + 5);
   group.add(backPanel);
 
-  // ── Top cap — rounded edges (12mm radius) ─────────────────────────────────
-  const topGeo  = new RoundedBoxGeometry(RACK_OUTER_WIDTH, RACK_PADDING_TOP, RACK_DEPTH, 4, 12);
+  // ── Top cap — thin sheet-metal plate, through-cut circular vents above each fan ──────────
+  // Top surface stays flush with the cabinet's actual top (totalH/2); only the plate's own
+  // thickness shrank, not RACK_PADDING_TOP's overall headroom allowance.
+  const topGeo  = buildTopCapGeometry();
   const topCap  = new THREE.Mesh(topGeo, bodyMat);
   topCap.name   = 'rack-top';
-  topCap.position.set(0, (totalH - RACK_PADDING_TOP) / 2, 0);
+  topCap.position.set(0, totalH / 2 - TOP_PLATE_THICKNESS / 2, 0);
   group.add(topCap);
 
   // ── Bottom plinth ──────────────────────────────────────────────────────────
@@ -370,6 +478,22 @@ export function buildRackGroup(rack: RackData, materials: MaterialManager): THRE
   vent.name     = 'rack-vent-header';
   vent.position.set(0, bodyH / 2 - ventH / 2, fz - 3);
   group.add(vent);
+
+  // ── Front header trim — closes the gap between the vent header's top and the top cap's
+  // underside. The door/vent assembly is sized off bodyH, not "totalH minus cap thickness", so
+  // shrinking the top cap to a thin sheet (TOP_PLATE_THICKNESS) opened a real hole here that
+  // didn't exist when the cap was RACK_PADDING_TOP-thick (which happened to reach exactly down
+  // to bodyH/2, since RACK_PADDING_TOP === RACK_PADDING_BOTTOM in this constant set).
+  const frontHeaderTop = totalH / 2 - TOP_PLATE_THICKNESS;
+  const frontHeaderBottom = bodyH / 2;
+  const frontHeaderH = frontHeaderTop - frontHeaderBottom;
+  if (frontHeaderH > 0) {
+    const frontHeaderGeo = new THREE.BoxGeometry(RACK_OUTER_WIDTH, frontHeaderH, 6);
+    const frontHeader = new THREE.Mesh(frontHeaderGeo, bodyMat);
+    frontHeader.name = 'rack-front-header';
+    frontHeader.position.set(0, (frontHeaderTop + frontHeaderBottom) / 2, fz - 3);
+    group.add(frontHeader);
+  }
 
   // ── Door group (hinge pivot at right outer edge of door assembly) ────────────
   // Pivot = PERF_END (x=200) — the right edge where door meets the side wall.
@@ -422,8 +546,15 @@ export function buildRackGroup(rack: RackData, materials: MaterialManager): THRE
 
   group.add(doorGroup);
 
-  // ── 4-post L-angle rails, EIA-310 holes, depth bars ──────────────────────
-  group.add(buildRackInternals(rack, bodyH, materials));
+  // ── 4-post L-angle rails, EIA-310 holes, depth bars — currently paused ────────────────
+  // rack-internals.ts's posts sit at x=±212.5, almost entirely inside the solid outer side
+  // wall's footprint (x 203-225 — see makeSidePanelMat's caller below), which z-fights along
+  // nearly the rack's full depth (the "brushed"/dithered seam visible while orbiting). Since
+  // they're already fully hidden behind that wall, not rendering them costs no visible detail
+  // and removes the glitch outright. Revisit as a dedicated pass if the posts need to be made
+  // genuinely visible later — that requires moving them AND the interior bay box AND the ear
+  // brackets together (see git history), not a one-line change.
+  // group.add(buildRackInternals(rack, bodyH, materials));
 
   // ── Bay interior ───────────────────────────────────────────────────────────
   const bayD   = RACK_DEPTH - 40;
@@ -434,12 +565,15 @@ export function buildRackGroup(rack: RackData, materials: MaterialManager): THRE
   bay.position.set(0, 0, -15);
   group.add(bay);
 
-  // ── 4 × 120mm fan assemblies on top panel ─────────────────────────────────
+  // ── 4 × 120mm fan assemblies, mounted flush to the underside of the (thin) top panel ─────
+  // (not embedded inside its thickness — see buildTopCapGeometry's comment: the round 120mm
+  // vent hole is smaller than the fan housing's square footprint at the corners, so the housing
+  // has to sit entirely below the panel to avoid overlapping the solid, uncut material.)
   const topFaceY = totalH / 2;  // top face Y in group-local space
+  const panelUnderside = topFaceY - TOP_PLATE_THICKNESS;
   for (const [fx, fz2] of FAN_POSITIONS) {
     const fanGroup = buildFanAssembly();
-    // Embed slightly below top face so guard is flush with panel surface
-    fanGroup.position.set(fx, topFaceY - FAN_DEPTH / 2, fz2);
+    fanGroup.position.set(fx, panelUnderside - FAN_DEPTH / 2, fz2);
     group.add(fanGroup);
   }
 

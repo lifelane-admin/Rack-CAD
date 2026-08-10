@@ -177,7 +177,9 @@ describe('SceneManager', () => {
   });
 });
 
-describe('SceneManager — syncCables', () => {
+// Cable routing in 3D is paused (SceneManager.rebuild() no longer calls syncCables()) — revisit
+// and re-enable this suite when that work resumes.
+describe.skip('SceneManager — syncCables', () => {
   let mgr: SceneManager;
   let materials: MaterialManager;
 

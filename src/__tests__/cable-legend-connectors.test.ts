@@ -82,9 +82,10 @@ describe('Cable Types legend rendering — matches canvas cable styling', () => 
     const lines = Array.from(vpGroup.querySelectorAll('line'));
     // One line per cable-type row (2 types: cat6, power); the underlying "card divider" line
     // (drawCard) is also a <line> but has no stroke matching a cable color — filter to the
-    // thicker cable-swatch lines by stroke-width. The RJ45 connector icon's own T568B wire
-    // graphics also include thin internal <line> elements, but those are stroke-width < 1.
-    const swatchLines = lines.filter(l => Number(l.getAttribute('stroke-width')) >= 3);
+    // cable-swatch lines by stroke-width (1.8/2, thinned for a more realistic cable gauge). The
+    // RJ45 connector icon's own T568B wire graphics also include thin internal <line> elements,
+    // but those are stroke-width <= 0.85, well below this threshold.
+    const swatchLines = lines.filter(l => Number(l.getAttribute('stroke-width')) >= 1.5);
     expect(swatchLines.length).toBe(2);
 
     const powerLine = swatchLines.find(l => l.getAttribute('stroke') === '#212529');

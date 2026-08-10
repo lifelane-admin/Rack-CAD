@@ -20,17 +20,41 @@ vi.mock('three', () => {
   function MeshStandardMaterial(this: any, p: any) {
     Object.assign(this, p); this.dispose = vi.fn(); this.isMaterial = true;
   }
+  function MeshBasicMaterial(this: any, p: any) {
+    Object.assign(this, p); this.dispose = vi.fn(); this.isMaterial = true;
+  }
+  const RingGeometry = vi.fn().mockImplementation(function(this: any, innerRadius: number, outerRadius: number, segments: number) {
+    this.parameters = { innerRadius, outerRadius, segments };
+    this.rotateX = vi.fn().mockReturnThis();
+    this.dispose = vi.fn();
+  });
   function Sprite(this: any, mat: any) {
     this.material = mat; this.scale = { set: vi.fn() }; this.position = { set: vi.fn() };
     this.isSprite = true;
   }
   function SpriteMaterial(this: any, p: any) { Object.assign(this, p); this.dispose = vi.fn(); }
   function CanvasTexture(this: any) { this.dispose = vi.fn(); this.repeat = { set: vi.fn() }; this.wrapS = 0; this.wrapT = 0; }
+  function Shape(this: any) {
+    this.holes = [] as any[];
+    this.moveTo = vi.fn().mockReturnThis();
+    this.lineTo = vi.fn().mockReturnThis();
+  }
+  function Path(this: any) {
+    this.moveTo = vi.fn().mockReturnThis();
+    this.lineTo = vi.fn().mockReturnThis();
+    this.absarc = vi.fn().mockReturnThis();
+  }
+  const ExtrudeGeometry = vi.fn().mockImplementation(function(this: any, shape: any, options: any) {
+    this.parameters = { shapes: shape, options };
+    this.rotateX = vi.fn().mockReturnThis();
+    this.translate = vi.fn().mockReturnThis();
+    this.dispose = vi.fn();
+  });
   const BackSide = 1;
   const DoubleSide = 2;
   const RepeatWrapping = 1000;
   const ClampToEdgeWrapping = 1001;
-  return { Group, Mesh, BoxGeometry, MeshStandardMaterial, Sprite, SpriteMaterial, CanvasTexture, BackSide, DoubleSide, RepeatWrapping, ClampToEdgeWrapping };
+  return { Group, Mesh, BoxGeometry, MeshStandardMaterial, MeshBasicMaterial, RingGeometry, Sprite, SpriteMaterial, CanvasTexture, Shape, Path, ExtrudeGeometry, BackSide, DoubleSide, RepeatWrapping, ClampToEdgeWrapping };
 });
 
 vi.mock('../../three/MaterialManager', () => {
@@ -40,24 +64,7 @@ vi.mock('../../three/MaterialManager', () => {
   return { MaterialManager };
 });
 
-vi.mock('../../three/rack-internals', () => {
-  return {
-    buildRackInternals: vi.fn().mockImplementation(() => {
-      const g: any = { name: 'rack-internals', children: [], position: { set: vi.fn() }, add(c: any) { this.children.push(c); } };
-      return g;
-    }),
-  };
-});
-
-vi.mock('three/addons/geometries/RoundedBoxGeometry.js', () => {
-  const RoundedBoxGeometry = vi.fn().mockImplementation(function(this: any, w: number, h: number, d: number) {
-    this.parameters = { width: w, height: h, depth: d };
-    this.dispose = vi.fn();
-  });
-  return { RoundedBoxGeometry };
-});
-
-import { buildRackGroup } from '../../three/rack-builder';
+import { buildRackGroup, TOP_PLATE_THICKNESS } from '../../three/rack-builder';
 import { MaterialManager } from '../../three/MaterialManager';
 import { RACK_CONSTANTS } from '../../core/types';
 
@@ -87,13 +94,18 @@ describe('buildRackGroup', () => {
     expect(group.children.length).toBeGreaterThanOrEqual(9);
   });
 
-  it('uses totalH in at least one BoxGeometry', async () => {
+  it('side/back shell panels are sized to the body zone (totalH minus top plate and bottom plinth), not the full totalH', async () => {
     const { BoxGeometry } = await import('three');
     const rack = { id: 'r2', name: 'Rack 2', units: 42, x: 0, y: 0 } as any;
     buildRackGroup(rack, materials);
     const totalH = RACK_PADDING_TOP + 42 * RU_HEIGHT + RACK_PADDING_BOTTOM;
-    const found = vi.mocked(BoxGeometry).mock.calls.some(([, h]) => h === totalH);
-    expect(found).toBe(true);
+    const shellH = totalH - TOP_PLATE_THICKNESS - RACK_PADDING_BOTTOM;
+    // Spanning the full totalH here would volumetrically overlap the top cap / bottom plinth,
+    // which own those edge slices — that's genuine z-fighting, not just redundant geometry.
+    const usesFullTotalH = vi.mocked(BoxGeometry).mock.calls.some(([, h]) => h === totalH);
+    const usesShellH = vi.mocked(BoxGeometry).mock.calls.some(([, h]) => h === shellH);
+    expect(usesFullTotalH).toBe(false);
+    expect(usesShellH).toBe(true);
   });
 
   it('adds exactly rack.units U-number sprites', () => {
@@ -112,7 +124,11 @@ describe('buildRackGroup', () => {
     }
   });
 
-  it('includes a rack-internals group as a direct child', () => {
+  // Rail internals (buildRackInternals) are paused — their posts sit almost entirely inside the
+  // solid outer side wall's footprint and z-fight against it; see rack-builder.ts's comment at
+  // the (commented-out) call site. Revisit once the posts/bay/ear-brackets are repositioned
+  // together as a dedicated pass.
+  it.skip('includes a rack-internals group as a direct child', () => {
     const rack = { id: 'r5', name: 'Rack 5', units: 42, x: 0, y: 0 } as any;
     const group = buildRackGroup(rack, materials);
     const internals = group.children.find((c: any) => c.name === 'rack-internals');

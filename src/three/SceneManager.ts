@@ -3,7 +3,7 @@ import type { AppState, RackData, DeviceData, DeviceTemplate, CableData } from '
 import { RACK_CONSTANTS } from '../core/types';
 import { getTemplate } from '../library/device-catalog';
 import type { MaterialManager } from './MaterialManager';
-import { buildRackGroup } from './rack-builder';
+import { buildRackGroup, buildShellMaterials, type RackColorKey } from './rack-builder';
 import { buildDeviceMesh } from './device-builder';
 import { buildCableMesh } from './cable-builder';
 import { getDeviceFrontMaterial, disposeSVGTextures } from './svg-texture';
@@ -37,43 +37,31 @@ export class SceneManager {
   private cableMeshes = new Map<string, THREE.Mesh | THREE.Line>();
   private materials: MaterialManager;
   private doorTargetAngle = 0;  // 0 = closed, Math.PI * 0.7 = open
+  private rackColor: RackColorKey = 'black';
+  private panelOpacity = 1;  // 1 = fully opaque; applies to side/back panel shell materials
   constructor(materials: MaterialManager) {
     this.materials = materials;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x060809);
 
-    // Low ambient — just enough to prevent pitch-black shadows
-    const ambient = new THREE.AmbientLight(0x1a2535, 2.8);
-    this.scene.add(ambient);
+    // Natural lighting only: a soft sky/ground hemisphere fill (no directional hotspots, so no
+    // hard specular glare on the rack's metal/glass) plus a single gentle "sun" directional light
+    // for a faint natural gradient. Replaces the old 4-directional studio-light rig, which put
+    // strong, differently-tinted highlights on the glossy device/rack materials from four angles
+    // at once — that's what read as glare.
+    const hemi = new THREE.HemisphereLight(0xdfe8f5, 0x30322e, 1.6);
+    this.scene.add(hemi);
 
-    // 4 diagonal studio lights — all at mid-height (Y=600), projecting inward at the rack.
-    // No top-down component so there are no ceiling reflections or specular glare from above.
-
-    // NE — front-right (main key, warm white)
-    const ne = new THREE.DirectionalLight(0xe8f0ff, 4.5);
-    ne.position.set(3000, 600, 3000);
-    this.scene.add(ne);
-
-    // NW — front-left (secondary fill, slightly cooler)
-    const nw = new THREE.DirectionalLight(0xd0dcf0, 3.0);
-    nw.position.set(-3000, 600, 3000);
-    this.scene.add(nw);
-
-    // SE — back-right (rim/separation, muted blue-grey)
-    const se = new THREE.DirectionalLight(0x6878a0, 2.0);
-    se.position.set(3000, 600, -3000);
-    this.scene.add(se);
-
-    // SW — back-left (rim/separation, muted blue-grey)
-    const sw = new THREE.DirectionalLight(0x5a6a90, 1.5);
-    sw.position.set(-3000, 600, -3000);
-    this.scene.add(sw);
+    const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+    sun.position.set(1500, 2500, 1800);
+    this.scene.add(sun);
   }
 
   rebuild(state: AppState): void {
     this.syncRacks(state.racks);
     this.syncDevices(state.racks, state.devices, state.customTemplates ?? []);
-    this.syncCables(state.cables ?? [], state);
+    // Cable routing in 3D is paused for now — revisit later. syncCables()/cable-builder.ts are
+    // left intact, just not called.
   }
 
   private syncRacks(racks: RackData[]): void {
@@ -89,7 +77,8 @@ export class SceneManager {
     for (const rack of racks) {
       const totalH = RACK_PADDING_TOP + rack.units * RU_HEIGHT + RACK_PADDING_BOTTOM;
       if (!this.rackGroups.has(rack.id)) {
-        const group = buildRackGroup(rack, this.materials);
+        const group = buildRackGroup(rack, this.materials, this.rackColor);
+        this.applyPanelOpacity(group, this.panelOpacity);
         this.scene.add(group);
         this.rackGroups.set(rack.id, group);
       } else {
@@ -201,6 +190,53 @@ export class SceneManager {
         door.visible = visible;
         // Snap when removing/restoring; animate open/close
         if (!visible || state === 'closed') door.rotation.y = this.doorTargetAngle;
+      }
+    }
+  }
+
+  /** Rack shell color (side panels + back panel + top cap + bottom plinth). Applies to every
+   *  rack currently in the scene, and is remembered for any rack built after this call too. */
+  setRackColor(colorKey: RackColorKey): void {
+    this.rackColor = colorKey;
+    for (const group of this.rackGroups.values()) {
+      const { bodyMat, sideMat } = buildShellMaterials(colorKey);
+      bodyMat.transparent = this.panelOpacity < 1;
+      bodyMat.opacity = this.panelOpacity;
+      sideMat.transparent = this.panelOpacity < 1;
+      sideMat.opacity = this.panelOpacity;
+
+      for (const child of group.children) {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh) continue;
+        if (mesh.name === 'rack-side-L' || mesh.name === 'rack-side-R') {
+          (mesh.material as THREE.Material).dispose();
+          mesh.material = sideMat;
+        } else if (mesh.name === 'rack-back' || mesh.name === 'rack-top' || mesh.name === 'rack-base') {
+          (mesh.material as THREE.Material).dispose();
+          mesh.material = bodyMat;
+        }
+      }
+    }
+  }
+
+  /** Explicit opacity control for the outer shell (side panels + back panel) — 1 = fully opaque
+   *  (default), lower values let the user see through the enclosure to inspect the interior. */
+  setPanelOpacity(opacity: number): void {
+    this.panelOpacity = Math.max(0, Math.min(1, opacity));
+    for (const group of this.rackGroups.values()) {
+      this.applyPanelOpacity(group, this.panelOpacity);
+    }
+  }
+
+  private applyPanelOpacity(group: THREE.Group, opacity: number): void {
+    for (const child of group.children) {
+      const mesh = child as THREE.Mesh;
+      if (!(mesh as any).isMesh) continue;
+      if (mesh.name === 'rack-side-L' || mesh.name === 'rack-side-R' || mesh.name === 'rack-back') {
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        mat.transparent = opacity < 1;
+        mat.opacity = opacity;
+        mat.needsUpdate = true;
       }
     }
   }

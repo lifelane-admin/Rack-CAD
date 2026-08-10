@@ -135,36 +135,42 @@ export function appendExportSummaryOverlay(
         const rowY = cardY + 52 + i * ROW_H;
         const { isFiber, isPower, isSFP } = type ? classifyCableConnector(type) : { isFiber: false, isPower: false, isSFP: false };
 
-        // Connector icon sits at the row's left corner, with the cable line running FROM it —
-        // createConnector's own orientation='right' geometry places the connector's cable-exit
-        // point (the boot/tail end) exactly at the given pos, so starting the line's x1 at that
-        // same pos (not some arbitrary offset past it) is what makes them touch instead of
-        // leaving a visible gap between icon and line.
+        // Connector icon sits at the row's left corner. createEthernetConnector pre-shifts its
+        // own anchor (see its TAIL_OFFSET) so pos.x IS both its cable-exit point AND its
+        // rendered body sits entirely at/left of pos.x — but createPowerConnector does no such
+        // pre-shift, so passing it the same pos.x renders its body noticeably further right,
+        // visibly misaligning the two icon columns (reported: power/idrac rows don't start at
+        // the same X). POWER_ICON_LEFT_SHIFT pulls the power connector's own pos.x left so its
+        // rendered LEFT edge lines up with the Ethernet connector's; POWER_CABLE_EXIT_OFFSET is
+        // the distance from that shifted pos.x to the power connector's own boot/cable-exit
+        // point (traced through its transform chain: translate(pos) rotate(-90) scale(0.38)
+        // translate(-15,-10)), which is where its line should actually start touching. Both
+        // values were derived analytically, not visually — small residual gaps here would just
+        // need adjusting these two constants, not the whole approach.
         const iconX = cardX + 14;
+        const POWER_ICON_LEFT_SHIFT = 11;
+        const POWER_CABLE_EXIT_OFFSET = 10.26;
+        const POWER_PIN_CLEARANCE = 3; // small extra margin so the line's round cap can't touch the pins
+        const connectorX = isPower ? iconX - POWER_ICON_LEFT_SHIFT : iconX;
         if (type) {
-          dashGroup.appendChild(createConnector({ x: iconX, y: rowY }, color, 'right', isFiber, isPower, isSFP));
+          dashGroup.appendChild(createConnector({ x: connectorX, y: rowY }, color, 'right', isFiber, isPower, isSFP));
         }
 
-        // Power specifically needs a pull-back on its start point on top of the normal touch
-        // point: with stroke-linecap 'round', the line's own start cap is a filled semicircle
-        // sitting exactly at the plug icon's anchor point — it was drawn right on top of the
-        // IEC connector's 3 copper pins (Live/Neutral/Earth), covering one of them. Pulling the
-        // line's x1 clear of the whole pin spread leaves all 3 pins visible while it still reads
-        // as touching, not disconnected.
-        const POWER_PULLBACK = 9;
         const LINE_LENGTH = 40; // same nominal cable length for every row regardless of type
-        const lineX1 = type ? iconX + (isPower ? POWER_PULLBACK : 0) : cardX + 16;
-        // Power's line therefore ends further right than a data row's (its later start is offset
-        // by extending, not shrinking, its own length) — both are still exactly LINE_LENGTH long,
-        // so the cables themselves read as the same length; only the text column (below) has to
-        // clear the longer of the two, uniformly, so every row's label still lines up.
+        const lineX1 = !type
+          ? cardX + 16
+          : isPower ? connectorX + POWER_CABLE_EXIT_OFFSET + POWER_PIN_CLEARANCE : connectorX;
         const lineX2 = lineX1 + LINE_LENGTH;
+        // Thinner strokes read as more realistic cable gauge than the earlier thicker ones.
         dashGroup.appendChild(createSVGElement('line', {
-          x1: lineX1, y1: rowY, x2: lineX2, y2: rowY, stroke: color, 'stroke-width': isPower ? 3 : 3.5,
+          x1: lineX1, y1: rowY, x2: lineX2, y2: rowY, stroke: color, 'stroke-width': isPower ? 1.8 : 2,
           'stroke-linecap': 'round', ...(isPower ? { 'stroke-dasharray': '6 3' } : {}),
         }));
 
-        const textX = cardX + 16 + POWER_PULLBACK + LINE_LENGTH + 6; // clears the longest (power) line
+        // Text column clears the longer of the two possible line ends (power's, since it starts
+        // further right) — computed from the same constants above rather than hardcoded, so it
+        // can't quietly drift out of sync if those change.
+        const textX = iconX + POWER_CABLE_EXIT_OFFSET + POWER_PIN_CLEARANCE - POWER_ICON_LEFT_SHIFT + LINE_LENGTH + 6;
         dashGroup.appendChild(createText(textX, rowY + 3.5, label, { fill: '#c9d1d9', 'font-size': 9, 'font-family': 'Inter, sans-serif' }));
         if (count !== null) {
           dashGroup.appendChild(createText(cardX + cardW - 16, rowY + 3.5, `× ${count}`, {
