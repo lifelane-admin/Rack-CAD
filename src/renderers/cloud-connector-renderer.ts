@@ -10,6 +10,7 @@ import { createCircle, createGroup, createPath, createText, setAttributes } from
 
 const DEFAULT_COLOR = '#8b949e';
 const ENDPOINT_HANDLE_R = 5.5;
+const CROSSBAR_HANDLE_R = 4.5;
 
 /** How far a route runs straight out of a node before its first bend — long enough to clearly
  *  read as "leaving perpendicular to this side" rather than cutting a diagonal corner. */
@@ -41,21 +42,29 @@ function dedupe(pts: Point[]): Point[] {
   return pts.filter((p, i) => i === 0 || p.x !== pts[i - 1].x || p.y !== pts[i - 1].y);
 }
 
-/** Auto-computed route point list (before any manual anchors are applied). 'orthogonal' stubs
- *  straight out from the source side, straight into the dest side, and joins the two stubs with
- *  a single bend on whichever axis the source side determines — the common simple auto-route
- *  look in official cloud architecture diagrams, not true obstacle-avoiding pathfinding. Falls
- *  back to a single generic elbow when a side is missing (e.g. a floating, non-node endpoint).
- *  'straight' ignores sides entirely and returns just the two endpoints. */
+/** Auto-computed route point list, optionally with a manual `crossbarOffset` override (see
+ *  CloudConnector.crossbarOffset). 'orthogonal' stubs straight out from the source side, straight
+ *  into the dest side, and joins the two stubs with a single bend on whichever axis the source
+ *  side determines — the common simple auto-route look in official cloud architecture diagrams,
+ *  not true obstacle-avoiding pathfinding. Falls back to a single generic elbow when a side is
+ *  missing (e.g. a floating, non-node endpoint). 'straight' ignores sides entirely and returns
+ *  just the two endpoints.
+ *
+ *  `crossbarOffset` only applies when there's a genuine free interior coordinate to move — both
+ *  sides known and the same orientation (both left/right or both top/bottom), or no sides known
+ *  at all (the `!fromSide` branch). A single known side has no free coordinate: the interior
+ *  bend's non-stub coordinate is pinned directly to the dest point, and moving it would make the
+ *  final segment diagonal instead of axis-aligned — see crossbarHandleFor()'s matching exclusion. */
 function autoRoutePoints(
   from: Point, fromSide: CloudHandleSide | undefined,
   to: Point, toSide: CloudHandleSide | undefined,
-  routing: CloudConnector['routing']
+  routing: CloudConnector['routing'],
+  crossbarOffset?: number
 ): Point[] {
   if (routing !== 'orthogonal') return [from, to];
 
   if (!fromSide) {
-    const midX = (from.x + to.x) / 2;
+    const midX = crossbarOffset ?? (from.x + to.x) / 2;
     return dedupe([from, { x: midX, y: from.y }, { x: midX, y: to.y }, to]);
   }
 
@@ -68,19 +77,42 @@ function autoRoutePoints(
   }
 
   const v2 = SIDE_VECTOR[toSide];
-  const p2 = { x: to.x + v2.x * STUB, y: to.y + v2.y * STUB };
+  const sameOrientation = isHorizontal(fromSide) === isHorizontal(toSide);
+  const p2 = sameOrientation && crossbarOffset !== undefined
+    ? (isHorizontal(fromSide) ? { x: crossbarOffset, y: to.y } : { x: to.x, y: crossbarOffset })
+    : { x: to.x + v2.x * STUB, y: to.y + v2.y * STUB };
   const bend = isHorizontal(fromSide) ? { x: p2.x, y: p1.y } : { x: p1.x, y: p2.y };
   return dedupe([from, p1, bend, p2, to]);
 }
 
-/** Final route point list — always auto-computed from the two endpoints/sides; there is no
- *  manual override. 'orthogonal' routing keeps every segment horizontal or vertical. */
+/** Final route point list — auto-computed from the two endpoints/sides, plus the connector's
+ *  `crossbarOffset` manual override when one applies. 'orthogonal' routing keeps every segment
+ *  horizontal or vertical. */
 export function resolveRoutePoints(
   from: Point, fromSide: CloudHandleSide | undefined,
   to: Point, toSide: CloudHandleSide | undefined,
-  routing: CloudConnector['routing']
+  routing: CloudConnector['routing'],
+  crossbarOffset?: number
 ): Point[] {
-  return autoRoutePoints(from, fromSide, to, toSide, routing);
+  return autoRoutePoints(from, fromSide, to, toSide, routing, crossbarOffset);
+}
+
+/** The draggable "crossbar" segment of an orthogonal route — the one interior segment whose line
+ *  position is a free coordinate (see autoRoutePoints' doc comment for exactly which side
+ *  combinations qualify). Returns the segment's two endpoints and which world-space axis dragging
+ *  its midpoint should move. `null` when this route has no such free segment (perpendicular
+ *  sides, or only one side known) or routing isn't 'orthogonal'. */
+export function crossbarHandleFor(
+  pts: Point[], fromSide: CloudHandleSide | undefined, toSide: CloudHandleSide | undefined,
+  routing: CloudConnector['routing']
+): { a: Point; b: Point; axis: 'x' | 'y' } | null {
+  if (routing !== 'orthogonal') return null;
+  if (!fromSide) {
+    return pts.length === 4 ? { a: pts[1], b: pts[2], axis: 'x' } : null;
+  }
+  if (!toSide || isHorizontal(fromSide) !== isHorizontal(toSide)) return null;
+  if (pts.length !== 5) return null;
+  return { a: pts[2], b: pts[3], axis: isHorizontal(fromSide) ? 'x' : 'y' };
 }
 
 function sub(a: Point, b: Point): Point { return { x: a.x - b.x, y: a.y - b.y }; }
@@ -126,8 +158,11 @@ const DASH_BY_STYLE: Record<string, string> = {
  * <g data-cloud-connector-id="...">. When selected, also includes draggable endpoint handles
  * (class "cloud-connector-endpoint-handle", carrying data-cloud-connector-id +
  * data-end="source"|"dest") at the two line tips, so either end can be re-dragged onto a
- * different node (or empty canvas) after the connector already exists. The path itself is always
- * auto-routed — see resolveRoutePoints() — there's no manual bend-point editing.
+ * different node (or empty canvas) after the connector already exists, plus — when the route has
+ * one (see crossbarHandleFor()) — a small dot handle (class "cloud-connector-crossbar-handle",
+ * carrying data-cloud-connector-id + data-axis="x"|"y") at the midpoint of the route's one free
+ * interior segment, letting that horizontal or vertical line be dragged directly rather than only
+ * re-aiming the two tips.
  */
 export function renderCloudConnector(
   connector: CloudConnector,
@@ -140,7 +175,7 @@ export function renderCloudConnector(
 
   const color = connector.color || DEFAULT_COLOR;
   const width = connector.width ?? 2;
-  const pts = resolveRoutePoints(from, fromSide, to, toSide, connector.routing);
+  const pts = resolveRoutePoints(from, fromSide, to, toSide, connector.routing, connector.crossbarOffset);
   const d = pointsToPathD(pts, !!connector.roundedCorners);
   const labelPoint = pathMidpoint(pts);
 
@@ -182,6 +217,17 @@ export function renderCloudConnector(
     });
     setAttributes(destHandle, { 'data-cloud-connector-id': connector.id, 'data-end': 'dest' });
     group.appendChild(destHandle);
+
+    const crossbar = crossbarHandleFor(pts, fromSide, toSide, connector.routing);
+    if (crossbar) {
+      const mid = { x: (crossbar.a.x + crossbar.b.x) / 2, y: (crossbar.a.y + crossbar.b.y) / 2 };
+      const crossbarHandle = createCircle(mid.x, mid.y, CROSSBAR_HANDLE_R, {
+        class: 'cloud-connector-crossbar-handle', fill: '#58a6ff', stroke: '#0d1117', 'stroke-width': 1.5,
+        cursor: crossbar.axis === 'x' ? 'ew-resize' : 'ns-resize',
+      });
+      setAttributes(crossbarHandle, { 'data-cloud-connector-id': connector.id, 'data-axis': crossbar.axis });
+      group.appendChild(crossbarHandle);
+    }
   }
 
   layer.appendChild(group);

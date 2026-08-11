@@ -173,4 +173,38 @@ describe('Cloud Architecture canvas — connector path editing', () => {
     expect(conn.destNodeId).toBe('n2');
     expect(conn.destSide).toBe('left');
   });
+
+  it('dragging the crossbar dot moves the connector\'s vertical run to the dragged X, as one undo entry', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    stateManager.setState({
+      cloudNodes: [
+        { id: 'n1', iconId: 'aws-amazon-ec2', provider: 'aws', x: 0, y: 0, width: 64, height: 64, label: 'EC2' },
+        { id: 'n2', iconId: 'aws-amazon-athena', provider: 'aws', x: 400, y: 300, width: 64, height: 64, label: 'Athena' },
+      ],
+      cloudConnectors: [{ id: 'conn1', sourceNodeId: 'n1', destNodeId: 'n2', sourceSide: 'right', destSide: 'left', routing: 'orthogonal' }],
+      selection: [{ type: 'cloud-connector', id: 'conn1' }],
+    });
+    app.setActiveView('cloud');
+
+    const crossbarHandle = document.querySelector('.cloud-connector-crossbar-handle[data-cloud-connector-id="conn1"]')!;
+    expect(crossbarHandle.getAttribute('data-axis')).toBe('x');
+    const svgEl = document.getElementById('cloud-canvas')!;
+
+    crossbarHandle.dispatchEvent(mouseEvent('mousedown', 200, 150));
+    svgEl.dispatchEvent(mouseEvent('mousemove', 250, 150));
+    window.dispatchEvent(mouseEvent('mouseup', 250, 150));
+
+    const conn = stateManager.getState().cloudConnectors.find(c => c.id === 'conn1')!;
+    expect(conn.crossbarOffset).toBe(250);
+    // Endpoints untouched — only the crossbar moved.
+    expect(conn.sourceNodeId).toBe('n1');
+    expect(conn.destNodeId).toBe('n2');
+
+    stateManager.undo();
+    expect(stateManager.getState().cloudConnectors.find(c => c.id === 'conn1')!.crossbarOffset).toBeFalsy();
+  });
 });

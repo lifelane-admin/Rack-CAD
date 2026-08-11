@@ -241,6 +241,12 @@ export class App {
   // drawing a brand-new connector, since the two gestures never happen at once.
   private draggedConnectorEndpoint: { connectorId: string; end: 'source' | 'dest' } | null = null;
 
+  /** Dragging a connector's crossbar dot (see crossbarHandleFor() in cloud-connector-renderer.ts)
+   *  — the simple "move this horizontal/vertical line" gesture, distinct from re-aiming a tip.
+   *  Reuses dragStartCloudConnectorsState for its undo-snapshot, same as draggedConnectorEndpoint,
+   *  since the two drags never happen at once. */
+  private draggedConnectorCrossbar: { connectorId: string; axis: 'x' | 'y' } | null = null;
+
   init() {
     // Initialize canvas
     this.canvas = new CanvasManager('canvas-viewport', 'canvas');
@@ -2884,9 +2890,10 @@ export class App {
         }
         this.cancelCloudContainerDraw();
         this.cancelCloudConnect();
-        if (this.draggedConnectorEndpoint && this.dragStartCloudConnectorsState) {
+        if ((this.draggedConnectorEndpoint || this.draggedConnectorCrossbar) && this.dragStartCloudConnectorsState) {
           stateManager.setState({ cloudConnectors: this.dragStartCloudConnectorsState }, true);
           this.draggedConnectorEndpoint = null;
+          this.draggedConnectorCrossbar = null;
           this.dragStartCloudConnectorsState = null;
           this.renderCloudAll();
         }
@@ -4835,7 +4842,16 @@ export class App {
         return;
       }
 
-      // 'select' tool: endpoint handle > resize handle > node body > container body > connector > background.
+      // 'select' tool: crossbar handle > endpoint handle > resize handle > node body > container body > connector > background.
+      const crossbarHandle = target.closest('.cloud-connector-crossbar-handle') as SVGElement | null;
+      if (crossbarHandle) {
+        const connectorId = crossbarHandle.getAttribute('data-cloud-connector-id')!;
+        const axis = crossbarHandle.getAttribute('data-axis') as 'x' | 'y';
+        this.draggedConnectorCrossbar = { connectorId, axis };
+        this.dragStartCloudConnectorsState = stateManager.getState().cloudConnectors;
+        return;
+      }
+
       const endpointHandle = target.closest('.cloud-connector-endpoint-handle') as SVGElement | null;
       if (endpointHandle) {
         const connectorId = endpointHandle.getAttribute('data-cloud-connector-id')!;
@@ -4957,6 +4973,16 @@ export class App {
         return;
       }
 
+      if (this.draggedConnectorCrossbar) {
+        const { connectorId, axis } = this.draggedConnectorCrossbar;
+        const cloudConnectors = stateManager.getState().cloudConnectors.map(c =>
+          c.id === connectorId ? { ...c, crossbarOffset: axis === 'x' ? worldPos.x : worldPos.y } : c
+        );
+        stateManager.setState({ cloudConnectors }, true);
+        this.renderCloudAll();
+        return;
+      }
+
       if (this.draggedConnectorEndpoint) {
         const { connectorId, end } = this.draggedConnectorEndpoint;
         const hoverEl = (e.target as Element).closest('[data-cloud-node-id]');
@@ -5060,6 +5086,9 @@ export class App {
       if (this.draggedConnectorEndpoint) {
         this.commitConnectorEndpointDrag();
       }
+      if (this.draggedConnectorCrossbar) {
+        this.commitConnectorCrossbarDrag();
+      }
     });
   }
 
@@ -5100,6 +5129,24 @@ export class App {
           ? { destNodeId: hoverNodeId, destSide: hoverSide, destPoint: null }
           : { destNodeId: null, destSide: undefined, destPoint: liveConnector.destPoint });
     eventBus.emit('cloudconnector:update', { id: connectorId, data });
+  }
+
+  /** Finishes dragging a connector's crossbar dot: the live drag already wrote each intermediate
+   *  `crossbarOffset` as a transient update (see setupCloudCanvasInteractions()'s mousemove), so
+   *  this just restores the pre-drag snapshot and re-applies the final value through the normal
+   *  event path — collapsing the whole drag into one undo entry, same pattern as
+   *  commitConnectorEndpointDrag(). */
+  private commitConnectorCrossbarDrag(): void {
+    const { connectorId } = this.draggedConnectorCrossbar!;
+    this.draggedConnectorCrossbar = null;
+
+    const liveConnector = stateManager.getState().cloudConnectors.find(c => c.id === connectorId);
+    const snapshot = this.dragStartCloudConnectorsState;
+    this.dragStartCloudConnectorsState = null;
+    if (!liveConnector || !snapshot) return;
+
+    stateManager.setState({ cloudConnectors: snapshot }, true);
+    eventBus.emit('cloudconnector:update', { id: connectorId, data: { crossbarOffset: liveConnector.crossbarOffset } });
   }
 
 }

@@ -406,6 +406,15 @@ export interface CloudConnector {
   routing?: 'straight' | 'orthogonal';
   /** Rounds the corners of an orthogonal route with a small arc instead of a sharp 90° turn. */
   roundedCorners?: boolean;
+  /** Manual override for the orthogonal route's crossbar — the single interior segment shared by
+   *  both bends when the source/dest sides are the same orientation (both left/right or both
+   *  top/bottom), or when neither side is known. An absolute world-space X (same-orientation
+   *  horizontal sides, or no sides known) or Y (same-orientation vertical sides) coordinate,
+   *  dragged via the small dot handle at the crossbar's midpoint — see crossbarHandleFor() in
+   *  cloud-connector-renderer.ts. Unset means "use the auto-computed default". Not offered for
+   *  perpendicular sides or a single known side — those routes have no free interior coordinate
+   *  to drag without introducing a non-orthogonal segment. */
+  crossbarOffset?: number;
   /** Stroke width in px — default 2 when unset. */
   width?: number;
   /** Tip style at the source end — default 'none'. */

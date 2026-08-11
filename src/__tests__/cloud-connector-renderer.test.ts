@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderCloudConnector, inferBestSide, resolveRoutePoints } from '../renderers/cloud-connector-renderer';
+import { renderCloudConnector, inferBestSide, resolveRoutePoints, crossbarHandleFor } from '../renderers/cloud-connector-renderer';
 import type { CloudConnector } from '../core/types';
 
 function baseConnector(overrides: Partial<CloudConnector> = {}): CloudConnector {
@@ -165,9 +165,102 @@ describe('renderCloudConnector', () => {
   });
 
   describe('resolveRoutePoints', () => {
-    it('always returns the auto-computed orthogonal route (no manual override)', () => {
+    it('returns the auto-computed orthogonal route when no crossbarOffset is given', () => {
       const pts = resolveRoutePoints({ x: 0, y: 0 }, 'right', { x: 100, y: 50 }, 'left', 'orthogonal');
       expect(pts.length).toBeGreaterThan(2); // the stub-bend-stub route, not a 2-point line
+    });
+
+    it('applies crossbarOffset as the vertical run\'s X when both sides are the same (horizontal) orientation', () => {
+      const pts = resolveRoutePoints({ x: 0, y: 0 }, 'right', { x: 200, y: 100 }, 'left', 'orthogonal', 60);
+      expect(pts.some(p => p.x === 60)).toBe(true);
+    });
+
+    it('applies crossbarOffset as the horizontal run\'s Y when both sides are the same (vertical) orientation', () => {
+      const pts = resolveRoutePoints({ x: 0, y: 0 }, 'bottom', { x: 200, y: 100 }, 'top', 'orthogonal', 40);
+      expect(pts.some(p => p.y === 40)).toBe(true);
+    });
+
+    it('applies crossbarOffset as the midpoint X when neither side is known', () => {
+      const pts = resolveRoutePoints({ x: 0, y: 0 }, undefined, { x: 200, y: 100 }, undefined, 'orthogonal', 60);
+      expect(pts.some(p => p.x === 60)).toBe(true);
+    });
+
+    it('ignores crossbarOffset when the sides are perpendicular (no free coordinate)', () => {
+      const withOffset = resolveRoutePoints({ x: 0, y: 0 }, 'right', { x: 200, y: 100 }, 'top', 'orthogonal', 999);
+      const withoutOffset = resolveRoutePoints({ x: 0, y: 0 }, 'right', { x: 200, y: 100 }, 'top', 'orthogonal');
+      expect(withOffset).toEqual(withoutOffset);
+    });
+
+    it('ignores crossbarOffset when only one side is known', () => {
+      const withOffset = resolveRoutePoints({ x: 0, y: 0 }, 'right', { x: 200, y: 100 }, undefined, 'orthogonal', 999);
+      const withoutOffset = resolveRoutePoints({ x: 0, y: 0 }, 'right', { x: 200, y: 100 }, undefined, 'orthogonal');
+      expect(withOffset).toEqual(withoutOffset);
+    });
+  });
+
+  describe('crossbarHandleFor', () => {
+    it('returns an X-axis crossbar segment for two same-orientation (horizontal) sides', () => {
+      const pts = resolveRoutePoints({ x: 0, y: 0 }, 'right', { x: 200, y: 100 }, 'left', 'orthogonal');
+      expect(crossbarHandleFor(pts, 'right', 'left', 'orthogonal')).toMatchObject({ axis: 'x' });
+    });
+
+    it('returns a Y-axis crossbar segment for two same-orientation (vertical) sides', () => {
+      const pts = resolveRoutePoints({ x: 0, y: 0 }, 'bottom', { x: 200, y: 100 }, 'top', 'orthogonal');
+      expect(crossbarHandleFor(pts, 'bottom', 'top', 'orthogonal')).toMatchObject({ axis: 'y' });
+    });
+
+    it('returns an X-axis crossbar segment when neither side is known', () => {
+      const pts = resolveRoutePoints({ x: 0, y: 0 }, undefined, { x: 200, y: 100 }, undefined, 'orthogonal');
+      expect(crossbarHandleFor(pts, undefined, undefined, 'orthogonal')).toMatchObject({ axis: 'x' });
+    });
+
+    it('returns null for perpendicular sides, a single known side, or straight routing', () => {
+      const perp = resolveRoutePoints({ x: 0, y: 0 }, 'right', { x: 200, y: 100 }, 'top', 'orthogonal');
+      expect(crossbarHandleFor(perp, 'right', 'top', 'orthogonal')).toBeNull();
+
+      const oneSide = resolveRoutePoints({ x: 0, y: 0 }, 'right', { x: 200, y: 100 }, undefined, 'orthogonal');
+      expect(crossbarHandleFor(oneSide, 'right', undefined, 'orthogonal')).toBeNull();
+
+      const straight = resolveRoutePoints({ x: 0, y: 0 }, 'right', { x: 200, y: 100 }, 'left', 'straight');
+      expect(crossbarHandleFor(straight, 'right', 'left', 'straight')).toBeNull();
+    });
+  });
+
+  describe('crossbar dot handle rendering', () => {
+    it('renders a crossbar handle when selected, with the correct data-axis, for a same-orientation route', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(
+        baseConnector({ routing: 'orthogonal' }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', 'left'
+      );
+      const handle = group.querySelector('.cloud-connector-crossbar-handle');
+      expect(handle).not.toBeNull();
+      expect(handle?.getAttribute('data-cloud-connector-id')).toBe('conn1');
+      expect(handle?.getAttribute('data-axis')).toBe('x');
+    });
+
+    it('omits the crossbar handle when not selected', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(
+        baseConnector({ routing: 'orthogonal' }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, false, 'right', 'left'
+      );
+      expect(group.querySelector('.cloud-connector-crossbar-handle')).toBeNull();
+    });
+
+    it('omits the crossbar handle for perpendicular sides (no free coordinate to drag)', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(
+        baseConnector({ routing: 'orthogonal' }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', 'top'
+      );
+      expect(group.querySelector('.cloud-connector-crossbar-handle')).toBeNull();
+    });
+
+    it('positions the crossbar handle using the connector\'s existing crossbarOffset', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(
+        baseConnector({ routing: 'orthogonal', crossbarOffset: 77 }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', 'left'
+      );
+      const handle = group.querySelector('.cloud-connector-crossbar-handle')!;
+      expect(handle.getAttribute('cx')).toBe('77');
     });
   });
 
