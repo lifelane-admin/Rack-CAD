@@ -2,7 +2,7 @@ import EventBus from '../core/event-bus';
 import { eventBus } from '../core/event-bus';
 import State from '../core/state';
 import { stateManager } from '../core/state';
-import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, DeviceCategory, PduConfig, PduOutletGroup, SocketType, KvmConfig, SwitchConfig, FirewallConfig, SwitchVendor, FirewallVendor, LedTheme, SwitchLayer, SwitchPortGroup, NacConfig, NacVendor, AtsConfig, RACK_CONSTANTS, PortData } from '../core/types';
+import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, DeviceCategory, PduConfig, PduOutletGroup, SocketType, KvmConfig, SwitchConfig, FirewallConfig, SwitchVendor, FirewallVendor, LedTheme, SwitchLayer, SwitchPortGroup, NacConfig, NacVendor, AtsConfig, RACK_CONSTANTS, PortData, CloudConnector } from '../core/types';
 import { KVM_LOCAL_PORT_OPTIONS, CONSOLE_LOCAL_PORT_OPTIONS } from '../renderers/networking-renderer';
 import { computePduLoad } from '../renderers/pdu-renderer';
 import { switchVendorSkin, firewallVendorSkin, nacVendorSkin } from '../renderers/vendor-palette';
@@ -10,6 +10,7 @@ import { getTemplate, getEffectiveCategory } from '../library/device-catalog';
 import { generateId } from '../utils/geometry';
 import { CustomAssetModal } from './custom-asset-modal';
 import { CLOUD_CONNECTOR_PRESETS, CloudConnectorPreset, getCloudConnectorPreset } from '../library/cloud-connector-presets';
+import { CLOUD_CONNECTOR_LINE_STYLES, DASH_BY_STYLE, DOUBLE_INNER_STYLE, isDoubleLineStyle } from '../renderers/cloud-connector-renderer';
 
 const customAssetModal = new CustomAssetModal();
 
@@ -157,6 +158,44 @@ export class PropertiesPanel {
     return this.CLOUD_ARROW_TYPES.map(a => `<option value="${a.value}" ${a.value === current ? 'selected' : ''}>${a.label}</option>`).join('');
   }
 
+  /** A short (44x14) inline SVG sample of one connector line style, reusing the renderer's own
+   *  DASH_BY_STYLE/DOUBLE_INNER_STYLE/isDoubleLineStyle rather than a hand-maintained duplicate,
+   *  so the preview stays exactly in sync with what the connector will actually look like on
+   *  canvas — and so every double-family style automatically gets a correct preview the moment
+   *  it's added to DOUBLE_INNER_STYLE, with nothing to update here. */
+  private lineStylePreviewSvg(style: string): string {
+    const w = 44, h = 14, cy = h / 2, color = '#c9d1d9';
+    if (isDoubleLineStyle(style)) {
+      const innerStyle = DOUBLE_INNER_STYLE[style];
+      const dashAttr = innerStyle ? ` stroke-dasharray="${DASH_BY_STYLE[innerStyle]}"` : '';
+      return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" class="line-style-swatch">
+        <line x1="2" y1="${cy - 2.5}" x2="${w - 2}" y2="${cy - 2.5}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"${dashAttr}></line>
+        <line x1="2" y1="${cy + 2.5}" x2="${w - 2}" y2="${cy + 2.5}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"${dashAttr}></line>
+      </svg>`;
+    }
+    const dashAttr = DASH_BY_STYLE[style] ? ` stroke-dasharray="${DASH_BY_STYLE[style]}"` : '';
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" class="line-style-swatch">
+      <line x1="2" y1="${cy}" x2="${w - 2}" y2="${cy}" stroke="${color}" stroke-width="2" stroke-linecap="round"${dashAttr}></line>
+    </svg>`;
+  }
+
+  /** A <details>-based popover picker for CloudConnector.style — a plain <select> can't render
+   *  inline SVG previews inside its <option>s, so this hand-rolls the trigger/menu instead. Native
+   *  <details> gives free open/close + outside-click-to-close behavior with no extra JS state. */
+  private lineStylePickerMarkup(current: string): string {
+    const label = CLOUD_CONNECTOR_LINE_STYLES.find(s => s.value === current)?.label ?? current;
+    return `
+      <details class="line-style-picker" id="prop-cloudconn-style-picker">
+        <summary class="line-style-trigger" id="prop-cloudconn-style-trigger">${this.lineStylePreviewSvg(current)}<span>${label}</span></summary>
+        <div class="line-style-menu">
+          ${CLOUD_CONNECTOR_LINE_STYLES.map(s => `
+            <div class="line-style-option" data-value="${s.value}">${this.lineStylePreviewSvg(s.value)}<span>${s.label}</span></div>
+          `).join('')}
+        </div>
+      </details>
+    `;
+  }
+
   private renderCloudContainerProperties(id: string, container: HTMLElement) {
     const state = (State as any).getState?.() || (State as any);
     const item = state.cloudContainers?.find((c: any) => c.id === id);
@@ -229,13 +268,7 @@ export class PropertiesPanel {
       </div>
       <div class="form-group">
         <label>Line Style</label>
-        <select id="prop-cloudconn-style">
-          <option value="solid" ${(conn.style || 'solid') === 'solid' ? 'selected' : ''}>Solid</option>
-          <option value="dashed" ${conn.style === 'dashed' ? 'selected' : ''}>Dashed</option>
-          <option value="dotted" ${conn.style === 'dotted' ? 'selected' : ''}>Dotted</option>
-          <option value="dash-dot" ${conn.style === 'dash-dot' ? 'selected' : ''}>Dash-Dot</option>
-          <option value="long-dash" ${conn.style === 'long-dash' ? 'selected' : ''}>Long Dash</option>
-        </select>
+        ${this.lineStylePickerMarkup(conn.style || 'solid')}
       </div>
       <div class="form-group">
         <label>Routing</label>
@@ -277,8 +310,19 @@ export class PropertiesPanel {
     container.querySelector('#prop-cloudconn-width')?.addEventListener('change', (e: any) => {
       EventBus.emit('cloudconnector:update', { id, data: { width: parseFloat(e.target.value) || 2 } });
     });
-    container.querySelector('#prop-cloudconn-style')?.addEventListener('change', (e: any) => {
-      EventBus.emit('cloudconnector:update', { id, data: { style: e.target.value } });
+    container.querySelectorAll('#prop-cloudconn-style-picker .line-style-option').forEach(el => {
+      el.addEventListener('click', () => {
+        const value = (el as HTMLElement).dataset.value as NonNullable<CloudConnector['style']>;
+        const label = CLOUD_CONNECTOR_LINE_STYLES.find(s => s.value === value)?.label ?? value;
+        EventBus.emit('cloudconnector:update', { id, data: { style: value } });
+        // Picker doesn't live-refresh on cloudconnector:update (this panel only rebuilds on
+        // selection/tool change — see the constructor — so the trigger's own swatch+label is
+        // updated directly here rather than relying on a full re-render).
+        const trigger = container.querySelector('#prop-cloudconn-style-trigger');
+        if (trigger) trigger.innerHTML = `${this.lineStylePreviewSvg(value)}<span>${label}</span>`;
+        const picker = container.querySelector('#prop-cloudconn-style-picker') as HTMLDetailsElement | null;
+        if (picker) picker.open = false;
+      });
     });
     container.querySelector('#prop-cloudconn-routing')?.addEventListener('change', (e: any) => {
       EventBus.emit('cloudconnector:update', { id, data: { routing: e.target.value } });

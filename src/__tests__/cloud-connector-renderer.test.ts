@@ -164,6 +164,85 @@ describe('renderCloudConnector', () => {
     expect(visible2?.getAttribute('d')).toContain('Q'); // replaced with quadratic-curve corners
   });
 
+  describe('double-family line styles', () => {
+    it('renders two parallel stroked paths (plus the hit path) for "double", instead of one', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(baseConnector({ style: 'double' }), { x: 0, y: 0 }, { x: 100, y: 0 }, layer, false);
+      const visible = [...group.querySelectorAll('path')].filter(l => l.getAttribute('stroke') === '#8b949e');
+      expect(visible.length).toBe(2);
+      // Straight horizontal line offset perpendicular (vertically) to either side of y=0 —
+      // half-gap = width/2 + 2 = 2/2 + 2 = 3 for the default width (2).
+      const ys = visible.map(p => p.getAttribute('d')!.match(/M 0 (-?[\d.]+)/)![1]);
+      expect(ys.sort()).toEqual(['-3', '3']);
+    });
+
+    it('leaves both parallel strokes solid (no dasharray) for plain "double"', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(baseConnector({ style: 'double' }), { x: 0, y: 0 }, { x: 100, y: 0 }, layer, false);
+      const visible = [...group.querySelectorAll('path')].filter(l => l.getAttribute('stroke') === '#8b949e');
+      for (const p of visible) expect(p.getAttribute('stroke-dasharray')).toBeNull();
+    });
+
+    it('applies the dashed pattern to both strokes for "double-dashed", distinct from "double-dotted"', () => {
+      const layer1 = makeLayer();
+      const dashedGroup = renderCloudConnector(baseConnector({ style: 'double-dashed' }), { x: 0, y: 0 }, { x: 100, y: 0 }, layer1, false);
+      const dashedVisible = [...dashedGroup.querySelectorAll('path')].filter(l => l.getAttribute('stroke') === '#8b949e');
+      expect(dashedVisible.length).toBe(2);
+      for (const p of dashedVisible) expect(p.getAttribute('stroke-dasharray')).toBe('8,5');
+
+      const layer2 = makeLayer();
+      const dottedGroup = renderCloudConnector(baseConnector({ style: 'double-dotted' }), { x: 0, y: 0 }, { x: 100, y: 0 }, layer2, false);
+      const dottedVisible = [...dottedGroup.querySelectorAll('path')].filter(l => l.getAttribute('stroke') === '#8b949e');
+      for (const p of dottedVisible) expect(p.getAttribute('stroke-dasharray')).toBe('2,3');
+    });
+
+    it('applies the dash-dot pattern to both strokes for "double-dash-dot", and the long-dash pattern for "double-long-dash"', () => {
+      const layer1 = makeLayer();
+      const dashDotGroup = renderCloudConnector(baseConnector({ style: 'double-dash-dot' }), { x: 0, y: 0 }, { x: 100, y: 0 }, layer1, false);
+      const dashDotVisible = [...dashDotGroup.querySelectorAll('path')].filter(l => l.getAttribute('stroke') === '#8b949e');
+      expect(dashDotVisible.length).toBe(2);
+      for (const p of dashDotVisible) expect(p.getAttribute('stroke-dasharray')).toBe('10,3,2,3');
+
+      const layer2 = makeLayer();
+      const longDashGroup = renderCloudConnector(baseConnector({ style: 'double-long-dash' }), { x: 0, y: 0 }, { x: 100, y: 0 }, layer2, false);
+      const longDashVisible = [...longDashGroup.querySelectorAll('path')].filter(l => l.getAttribute('stroke') === '#8b949e');
+      expect(longDashVisible.length).toBe(2);
+      for (const p of longDashVisible) expect(p.getAttribute('stroke-dasharray')).toBe('16,6');
+    });
+
+    it('hosts the end-arrow marker on a separate centerline path when double-styled, not on either parallel stroke', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(baseConnector({ style: 'double', endArrow: 'arrow' }), { x: 0, y: 0 }, { x: 100, y: 0 }, layer, false);
+      const strokedPaths = [...group.querySelectorAll('path')].filter(l => l.getAttribute('stroke') === '#8b949e');
+      for (const p of strokedPaths) expect(p.getAttribute('marker-end')).toBeNull();
+      const markerHost = [...group.querySelectorAll('path')].find(l => l.getAttribute('marker-end'));
+      expect(markerHost?.getAttribute('d')).toBe('M 0 0 L 100 0'); // the true centerline, not an offset stroke
+    });
+
+    it('omits the marker-hosting path entirely when both tips are "none"', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(baseConnector({ style: 'double', startArrow: 'none', endArrow: 'none' }), { x: 0, y: 0 }, { x: 100, y: 0 }, layer, false);
+      expect([...group.querySelectorAll('path')].some(l => l.hasAttribute('marker-end') || l.hasAttribute('marker-start'))).toBe(false);
+    });
+
+    it('keeps the double-line offset correctly parallel through an orthogonal right-angle bend', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(
+        baseConnector({ style: 'double', routing: 'orthogonal' }), { x: 32, y: 64 }, { x: 300, y: 200 }, layer, false, 'bottom', 'top'
+      );
+      const visible = [...group.querySelectorAll('path')].filter(l => l.getAttribute('stroke') === '#8b949e');
+      expect(visible.length).toBe(2);
+      // Both offset paths are real, distinct, well-formed multi-point paths (no NaN from a bad
+      // corner-normal computation) — the fine-grained per-coordinate correctness of the corner
+      // offset is exercised indirectly via not producing garbage here.
+      for (const p of visible) {
+        const d = p.getAttribute('d')!;
+        expect(d).not.toContain('NaN');
+        expect(d.split(' L ').length).toBeGreaterThan(1);
+      }
+    });
+  });
+
   describe('resolveRoutePoints', () => {
     it('returns the auto-computed orthogonal route when no crossbarOffset is given', () => {
       const pts = resolveRoutePoints({ x: 0, y: 0 }, 'right', { x: 100, y: 50 }, 'left', 'orthogonal');

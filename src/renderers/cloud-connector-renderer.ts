@@ -145,12 +145,70 @@ function pathMidpoint(pts: Point[]): Point {
   return pts[Math.floor(pts.length / 2)];
 }
 
-const DASH_BY_STYLE: Record<string, string> = {
+/** Dash pattern per line style — omitted entries (solid, double, and the *carrier* dash used by
+ *  every double-family style, looked up via DOUBLE_INNER_STYLE below) render a plain solid
+ *  stroke. Exported so the properties-panel picker can render a real, in-sync preview swatch
+ *  instead of a hand-maintained duplicate of these patterns. */
+export const DASH_BY_STYLE: Record<string, string> = {
   dashed: '8,5',
   dotted: '2,3',
   'dash-dot': '10,3,2,3',
   'long-dash': '16,6',
 };
+
+/** For each double-family style, which single-line style's dash pattern each of the two parallel
+ *  strokes uses ('double' itself has no entry — both strokes are solid). Exported alongside
+ *  DASH_BY_STYLE so the properties-panel preview swatch looks this up the same way the renderer
+ *  does, rather than re-deriving it — the exact bug that left 'double-long-dash'/'double-dash-dot'
+ *  out of the picker the first time this map only lived here. */
+export const DOUBLE_INNER_STYLE: Record<string, string> = {
+  'double-dashed': 'dashed',
+  'double-dotted': 'dotted',
+  'double-dash-dot': 'dash-dot',
+  'double-long-dash': 'long-dash',
+};
+
+export function isDoubleLineStyle(style: string | undefined): boolean {
+  return style === 'double' || (!!style && style in DOUBLE_INNER_STYLE);
+}
+
+/** The full picker catalog for CloudConnector.style, in display order — single source of truth
+ *  for both validation and the properties-panel line-style picker's option list. */
+export const CLOUD_CONNECTOR_LINE_STYLES: { value: NonNullable<CloudConnector['style']>; label: string }[] = [
+  { value: 'solid', label: 'Solid' },
+  { value: 'dashed', label: 'Dashed' },
+  { value: 'dotted', label: 'Dotted' },
+  { value: 'dash-dot', label: 'Dash-Dot' },
+  { value: 'long-dash', label: 'Long Dash' },
+  { value: 'double', label: 'Double' },
+  { value: 'double-dashed', label: 'Double Dashed' },
+  { value: 'double-dotted', label: 'Double Dotted' },
+  { value: 'double-dash-dot', label: 'Double Dash-Dot' },
+  { value: 'double-long-dash', label: 'Double Long Dash' },
+];
+
+/** Offsets every point of a polyline perpendicular to its local direction by `dist` (signed —
+ *  opposite signs offset to opposite sides), producing the second parallel line for a
+ *  'double'-family stroke. Segments are assumed either collinear or meeting at a right angle (true
+ *  for every route this renderer produces — 'straight' is a single segment, 'orthogonal' only
+ *  turns 90°): at a vertex between two collinear segments the shared normal is reused as-is; at a
+ *  real corner the two segments' normals are summed, which for perpendicular axes lands exactly on
+ *  the correct corner point with no extra miter geometry needed. */
+function offsetPolyline(pts: Point[], dist: number): Point[] {
+  if (pts.length < 2 || dist === 0) return pts;
+  const normals: Point[] = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const dir = norm(sub(pts[i + 1], pts[i]));
+    normals.push({ x: -dir.y, y: dir.x });
+  }
+  return pts.map((p, i) => {
+    const nBefore = i > 0 ? normals[i - 1] : normals[0];
+    const nAfter = i < normals.length ? normals[i] : normals[normals.length - 1];
+    const collinear = nBefore.x * nAfter.x + nBefore.y * nAfter.y > 0.99;
+    const n = collinear ? nBefore : { x: nBefore.x + nAfter.x, y: nBefore.y + nAfter.y };
+    return { x: p.x + n.x * dist, y: p.y + n.y * dist };
+  });
+}
 
 /**
  * Renders one CloudConnector between already-resolved `from`/`to` edge points (with their
@@ -188,16 +246,36 @@ export function renderCloudConnector(
   // Wide, invisible hit path — a plain thin stroke is hard to click precisely.
   group.appendChild(createPath(d, { fill: 'none', stroke: 'transparent', 'stroke-width': 12, class: 'cloud-connector-hit' }));
 
-  const pathAttrs: Record<string, string | number> = {
-    fill: 'none', stroke: color, 'stroke-width': width, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
-  };
-  const dash = connector.style ? DASH_BY_STYLE[connector.style] : undefined;
-  if (dash) pathAttrs['stroke-dasharray'] = dash;
   const startArrow = connector.startArrow ?? 'none';
   const endArrow = connector.endArrow ?? 'arrow';
-  if (startArrow !== 'none') pathAttrs['marker-start'] = `url(#cloud-arrow-${startArrow})`;
-  if (endArrow !== 'none') pathAttrs['marker-end'] = `url(#cloud-arrow-${endArrow})`;
-  group.appendChild(createPath(d, pathAttrs));
+
+  if (isDoubleLineStyle(connector.style)) {
+    const dash = DASH_BY_STYLE[DOUBLE_INNER_STYLE[connector.style!]];
+    const linePathAttrs: Record<string, string | number> = {
+      fill: 'none', stroke: color, 'stroke-width': width, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+    };
+    if (dash) linePathAttrs['stroke-dasharray'] = dash;
+    const half = width / 2 + 2;
+    group.appendChild(createPath(pointsToPathD(offsetPolyline(pts, half), !!connector.roundedCorners), linePathAttrs));
+    group.appendChild(createPath(pointsToPathD(offsetPolyline(pts, -half), !!connector.roundedCorners), linePathAttrs));
+    // Hosts the arrow markers at the true centerline tip — a path's markers render from its own
+    // geometry independent of its own stroke paint, so 'none' here doesn't hide them.
+    if (startArrow !== 'none' || endArrow !== 'none') {
+      const markerAttrs: Record<string, string | number> = { fill: 'none', stroke: 'none' };
+      if (startArrow !== 'none') markerAttrs['marker-start'] = `url(#cloud-arrow-${startArrow})`;
+      if (endArrow !== 'none') markerAttrs['marker-end'] = `url(#cloud-arrow-${endArrow})`;
+      group.appendChild(createPath(d, markerAttrs));
+    }
+  } else {
+    const pathAttrs: Record<string, string | number> = {
+      fill: 'none', stroke: color, 'stroke-width': width, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+    };
+    const dash = connector.style ? DASH_BY_STYLE[connector.style] : undefined;
+    if (dash) pathAttrs['stroke-dasharray'] = dash;
+    if (startArrow !== 'none') pathAttrs['marker-start'] = `url(#cloud-arrow-${startArrow})`;
+    if (endArrow !== 'none') pathAttrs['marker-end'] = `url(#cloud-arrow-${endArrow})`;
+    group.appendChild(createPath(d, pathAttrs));
+  }
 
   if (connector.label) {
     group.appendChild(createText(labelPoint.x, labelPoint.y - 6, connector.label, {

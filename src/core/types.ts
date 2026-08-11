@@ -399,7 +399,7 @@ export interface CloudConnector {
   sourceSide?: CloudHandleSide;
   destSide?: CloudHandleSide;
   label?: string;
-  style?: 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'long-dash';
+  style?: 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'long-dash' | 'double' | 'double-dashed' | 'double-dotted' | 'double-dash-dot' | 'double-long-dash';
   /** 'orthogonal' (the default for newly created connectors) routes as a right-angle path that
    *  exits/enters perpendicular to each side (common in official cloud architecture diagrams)
    *  instead of a single straight line between the two endpoints. */

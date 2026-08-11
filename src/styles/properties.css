@@ -97,6 +97,77 @@
   font-family: inherit;
 }
 
+/* Line-style picker (e.g. cloud connector "Line Style") — a <details> popover instead of a plain
+ * <select>, since <option> can't host an inline SVG preview of the actual dash/double pattern. */
+.line-style-picker {
+  position: relative;
+}
+
+.line-style-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+
+.line-style-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.line-style-trigger::after {
+  content: '\25BE';
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.line-style-picker[open] > .line-style-trigger {
+  border-color: var(--border-color-focus);
+}
+
+.line-style-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  background-color: #10161d;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+}
+
+.line-style-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+}
+
+.line-style-option:hover {
+  background-color: rgba(56, 189, 248, 0.12);
+}
+
+.line-style-swatch {
+  flex-shrink: 0;
+}
+
 .properties-info {
   margin-top: var(--space-lg);
   padding: var(--space-md);
