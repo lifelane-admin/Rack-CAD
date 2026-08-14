@@ -35,6 +35,7 @@ const NAV_TREE: NavGroup[] = [
       { label: 'AWS', icon: '🟧', view: 'cloud', provider: 'aws' },
       { label: 'Azure', icon: '🔷', view: 'cloud', provider: 'azure' },
       { label: 'GCP', icon: '🔴', view: 'cloud', provider: 'gcp' },
+      { label: 'Local Resources', icon: '🏠', view: 'cloud', provider: 'onprem' },
     ],
   },
 ];
@@ -50,6 +51,15 @@ export class Sidebar {
 
   constructor(container: HTMLElement) {
     this.container = container;
+  }
+
+  /** Sets which cloud provider's palette section auto-expands, from outside the nav-tree click
+   *  itself — used by the startup screen (see startup-modal.ts) to land the sidebar in the same
+   *  state a manual Cloud > AWS/Azure/GCP/Local Resources click would, or fully unscoped (null)
+   *  for the Hybrid choice, which shows every section collapsed with unscoped search. */
+  focusCloudProvider(provider: CloudProvider | null): void {
+    this.focusedCloudProvider = provider;
+    this.searchTerm = '';
   }
 
   render() {
@@ -73,9 +83,9 @@ export class Sidebar {
     searchContainer.className = 'sidebar-search';
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
-    const providerLabels: Record<CloudProvider, string> = { aws: 'AWS', azure: 'Azure', gcp: 'GCP' };
+    const providerLabels: Record<CloudProvider, string> = { aws: 'AWS', azure: 'Azure', gcp: 'GCP', onprem: 'Local Resources' };
     searchInput.placeholder = isCloud
-      ? (this.focusedCloudProvider ? `Search ${providerLabels[this.focusedCloudProvider]} services...` : 'Search AWS/Azure/GCP services...')
+      ? (this.focusedCloudProvider ? `Search ${providerLabels[this.focusedCloudProvider]} services...` : 'Search AWS/Azure/GCP/Local services...')
       : 'Search components...';
     searchInput.oninput = (e: any) => {
       this.searchTerm = e.target.value.toLowerCase();
@@ -351,6 +361,7 @@ export class Sidebar {
     }
 
     const providers: { id: CloudProvider; label: string; icon: string }[] = [
+      { id: 'onprem', label: 'Local Resources', icon: '🏠' },
       { id: 'aws', label: 'AWS', icon: '🟧' },
       { id: 'azure', label: 'Azure', icon: '🔷' },
       { id: 'gcp', label: 'Google Cloud', icon: '🔴' },

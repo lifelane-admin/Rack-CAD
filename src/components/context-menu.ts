@@ -32,6 +32,13 @@ export class ContextMenu {
   }
 
   show(x: number, y: number, items: MenuItem[]) {
+    // The outer container (#context-menu in index.html) starts with class="hidden" —
+    // `.hidden { display: none !important; }` collapses the ENTIRE subtree regardless of
+    // this.menuEl's own display value below, so nothing this method does to menuEl alone can
+    // ever make it visible without also clearing this on the ancestor. Every trigger of this
+    // menu (rack canvas cable/device/port menus, and both cloud canvas ones) was silently
+    // producing a fully-built, correctly-positioned, permanently invisible menu.
+    this.container.classList.remove('hidden');
     this.menuEl.innerHTML = '';
     this.menuEl.style.display = 'block';
 

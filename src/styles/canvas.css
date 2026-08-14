@@ -63,6 +63,17 @@
   height: 100%;
   cursor: default;
   display: block;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Node icons are SVG <image> elements — natively drag-ghostable in some browsers, which would
+   hijack the move/resize/connect/export-area mouse-drag gestures mid-gesture (see the dragstart
+   listener in app.ts's setupCloudCanvasInteractions()). Belt-and-suspenders alongside
+   draggable="false" (set in cloud-node-renderer.ts) for engines that only honor the CSS form. */
+#cloud-canvas image {
+  -webkit-user-drag: none;
+  user-drag: none;
 }
 
 /* Minimap */

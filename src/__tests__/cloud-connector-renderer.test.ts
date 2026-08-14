@@ -305,19 +305,19 @@ describe('renderCloudConnector', () => {
     });
   });
 
-  describe('crossbar dot handle rendering', () => {
+  describe('crossbar/entry/exit dot handle rendering', () => {
     it('renders a crossbar handle when selected, with the correct data-axis, for a same-orientation route', () => {
       const layer = makeLayer();
       const group = renderCloudConnector(
         baseConnector({ routing: 'orthogonal' }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', 'left'
       );
-      const handle = group.querySelector('.cloud-connector-crossbar-handle');
+      const handle = group.querySelector('.cloud-connector-crossbar-handle[data-kind="crossbar"]');
       expect(handle).not.toBeNull();
       expect(handle?.getAttribute('data-cloud-connector-id')).toBe('conn1');
       expect(handle?.getAttribute('data-axis')).toBe('x');
     });
 
-    it('omits the crossbar handle when not selected', () => {
+    it('omits all segment handles when not selected', () => {
       const layer = makeLayer();
       const group = renderCloudConnector(
         baseConnector({ routing: 'orthogonal' }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, false, 'right', 'left'
@@ -325,12 +325,78 @@ describe('renderCloudConnector', () => {
       expect(group.querySelector('.cloud-connector-crossbar-handle')).toBeNull();
     });
 
-    it('omits the crossbar handle for perpendicular sides (no free coordinate to drag)', () => {
+    it('a same-orientation route with no manual overrides gets entry + crossbar handles, but no exit handle yet (its corner coincides exactly with the fixed final stub)', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(
+        baseConnector({ routing: 'orthogonal' }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', 'left'
+      );
+      expect(group.querySelector('[data-kind="entry"]')).not.toBeNull();
+      expect(group.querySelector('[data-kind="crossbar"]')).not.toBeNull();
+      expect(group.querySelector('[data-kind="exit"]')).toBeNull();
+    });
+
+    it('a same-orientation route gets all three independent handles (entry + crossbar + exit) once crossbarOffset is set — the case that matters, since dragging the crossbar is exactly what makes the exit segment a real, separately-draggable line', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(
+        baseConnector({ routing: 'orthogonal', crossbarOffset: 77 }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', 'left'
+      );
+      const entry = group.querySelector('[data-kind="entry"]');
+      const crossbar = group.querySelector('[data-kind="crossbar"]');
+      const exit = group.querySelector('[data-kind="exit"]');
+      expect(entry).not.toBeNull();
+      expect(crossbar).not.toBeNull();
+      expect(exit).not.toBeNull();
+      // All three sit on genuinely different lines, not stacked on top of each other.
+      expect(crossbar!.getAttribute('cx')).toBe('77');
+      expect(entry!.getAttribute('cx')).not.toBe('77');
+      expect(exit!.getAttribute('cx')).not.toBe('77');
+    });
+
+    it('perpendicular sides get entry + exit handles instead of a crossbar handle (no shared-bend segment exists there)', () => {
       const layer = makeLayer();
       const group = renderCloudConnector(
         baseConnector({ routing: 'orthogonal' }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', 'top'
       );
-      expect(group.querySelector('.cloud-connector-crossbar-handle')).toBeNull();
+      expect(group.querySelector('[data-kind="crossbar"]')).toBeNull();
+      expect(group.querySelector('[data-kind="entry"]')).not.toBeNull();
+      expect(group.querySelector('[data-kind="exit"]')).not.toBeNull();
+    });
+
+    it('the entryStub/exitStub jog handles are absent by default and appear only once entry/exitOffset has actually moved the run away from a straight stub-out', () => {
+      const layer = makeLayer();
+      const noJogs = renderCloudConnector(
+        baseConnector({ routing: 'orthogonal' }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', 'top'
+      );
+      expect(noJogs.querySelector('[data-kind="entryStub"]')).toBeNull();
+      expect(noJogs.querySelector('[data-kind="exitStub"]')).toBeNull();
+
+      const withJogs = renderCloudConnector(
+        baseConnector({ routing: 'orthogonal', entryOffset: 40, exitOffset: 60 }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', 'top'
+      );
+      const entryStub = withJogs.querySelector('[data-kind="entryStub"]');
+      const exitStub = withJogs.querySelector('[data-kind="exitStub"]');
+      expect(entryStub).not.toBeNull();
+      expect(exitStub).not.toBeNull();
+    });
+
+    it('positions the entryStub handle using the connector\'s existing entryStubOffset', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(
+        baseConnector({ routing: 'orthogonal', entryOffset: 40, entryStubOffset: 55 }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', 'top'
+      );
+      const handle = group.querySelector('[data-kind="entryStub"]')!;
+      // fromSide 'right' is horizontal, so entryStubOffset is an X coordinate.
+      expect(handle.getAttribute('cx')).toBe('55');
+    });
+
+    it('a single known side gets only an entry handle', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(
+        baseConnector({ routing: 'orthogonal' }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', undefined
+      );
+      expect(group.querySelector('[data-kind="entry"]')).not.toBeNull();
+      expect(group.querySelector('[data-kind="crossbar"]')).toBeNull();
+      expect(group.querySelector('[data-kind="exit"]')).toBeNull();
     });
 
     it('positions the crossbar handle using the connector\'s existing crossbarOffset', () => {
@@ -338,8 +404,26 @@ describe('renderCloudConnector', () => {
       const group = renderCloudConnector(
         baseConnector({ routing: 'orthogonal', crossbarOffset: 77 }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', 'left'
       );
-      const handle = group.querySelector('.cloud-connector-crossbar-handle')!;
+      const handle = group.querySelector('[data-kind="crossbar"]')!;
       expect(handle.getAttribute('cx')).toBe('77');
+    });
+
+    it('positions the entry handle using the connector\'s existing entryOffset', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(
+        baseConnector({ routing: 'orthogonal', entryOffset: 40 }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', 'left'
+      );
+      const handle = group.querySelector('[data-kind="entry"]')!;
+      expect(handle.getAttribute('cy')).toBe('40');
+    });
+
+    it('positions the exit handle using the connector\'s existing exitOffset, for a perpendicular route', () => {
+      const layer = makeLayer();
+      const group = renderCloudConnector(
+        baseConnector({ routing: 'orthogonal', exitOffset: 150 }), { x: 0, y: 0 }, { x: 200, y: 100 }, layer, true, 'right', 'top'
+      );
+      const handle = group.querySelector('[data-kind="exit"]')!;
+      expect(handle.getAttribute('cx')).toBe('150');
     });
   });
 

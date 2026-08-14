@@ -32,10 +32,10 @@ describe('Sidebar navigation tree', () => {
     });
   }
 
-  it('renders both top-level groups with all four leaves', () => {
+  it('renders both top-level groups with all five leaves', () => {
     mountSidebar();
     const labels = [...document.querySelectorAll('.nav-tree-leaf span')].map(el => el.textContent);
-    expect(labels).toEqual(['Rack Development', 'AWS', 'Azure', 'GCP']);
+    expect(labels).toEqual(['Rack Development', 'AWS', 'Azure', 'GCP', 'Local Resources']);
   });
 
   it('"Rack Development" is active by default (activeView starts as rack)', () => {

@@ -63,6 +63,11 @@ export function renderCloudNode(node: CloudNode, iconPath: string, layer: SVGGEl
   }) as SVGImageElement;
   img.setAttribute('href', iconPath);
   img.setAttributeNS(XLINK_NS, 'xlink:href', iconPath);
+  // Some browsers natively drag SVG <image> elements out (as an OS-level image drag) on a
+  // mousedown-drag, which hijacks any custom drag gesture that happens to start on top of a node
+  // icon — the select/move drag, connector drag, and the export-area rectangle tool all rely on
+  // ordinary mousemove/mouseup instead, so native image drag must never engage here.
+  img.setAttribute('draggable', 'false');
   group.appendChild(img);
 
   if (node.label) {

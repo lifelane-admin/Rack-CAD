@@ -199,8 +199,8 @@ export class Toolbar {
       }
     ]));
 
-    inner.appendChild(this.createGroup('View', [
-      { 
+    const rackViewGroup = this.createGroup('View', [
+      {
         id: 'btn-grid', 
         icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>', 
         title: 'Toggle Grid', 
@@ -291,11 +291,13 @@ export class Toolbar {
         action: () => EventBus.emit('view:toggle-cable-tray-mode' as any, undefined),
         toggle: true
       }
-    ]));
+    ]);
+    rackViewGroup.id = 'rack-view-group';
+    inner.appendChild(rackViewGroup);
 
-    inner.appendChild(this.createGroup('Add', [
-      { 
-        id: 'btn-add-42u', 
+    const rackAddGroup = this.createGroup('Add', [
+      {
+        id: 'btn-add-42u',
         icon: '<svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M4 7h16M4 12h16M4 17h16M8 4.5h8"/></svg>', 
         title: 'Add 42U Server Cabinet', 
         action: () => EventBus.emit('rack:add', { units: 42 }) 
@@ -304,13 +306,15 @@ export class Toolbar {
         id: 'btn-add-48u', 
         icon: '<svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M4 7h16M4 12h16M4 17h16M8 4.5h8"/></svg>', 
         title: 'Add 48U Server Cabinet', 
-        action: () => EventBus.emit('rack:add', { units: 48 }) 
+        action: () => EventBus.emit('rack:add', { units: 48 })
       }
-    ]));
+    ]);
+    rackAddGroup.id = 'rack-add-group';
+    inner.appendChild(rackAddGroup);
 
-    inner.appendChild(this.createGroup('Export', [
-      { 
-        id: 'btn-exp-svg', 
+    const rackExportGroup = this.createGroup('Export', [
+      {
+        id: 'btn-exp-svg',
         icon: '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>', 
         title: 'Export SVG Layout...', 
         action: () => EventBus.emit('export:svg', undefined) 
@@ -345,7 +349,9 @@ export class Toolbar {
         title: 'Export Design Report (HTML/PDF)...',
         action: () => EventBus.emit('export:report' as any, undefined)
       }
-    ]));
+    ]);
+    rackExportGroup.id = 'rack-export-group';
+    inner.appendChild(rackExportGroup);
 
     // Cloud diagram export — same visibility toggle as #cloud-tools-group (see the
     // state:changed listener below).
@@ -353,13 +359,13 @@ export class Toolbar {
       {
         id: 'btn-exp-cloud-svg',
         icon: '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>',
-        title: 'Export Cloud Diagram as SVG',
+        title: 'Export Cloud Diagram as SVG...',
         action: () => EventBus.emit('export:cloud-svg', undefined),
       },
       {
         id: 'btn-exp-cloud-png',
         icon: '<svg viewBox="0 0 24 24"><path d="M12 22C17.52 22 22 17.52 22 12S17.52 2 12 2 2 6.48 2 12s4.48 10 12 10z"/><path d="M8 12h8M12 8l4 4-4 4"/></svg>',
-        title: 'Export Cloud Diagram as PNG',
+        title: 'Export Cloud Diagram as PNG...',
         action: () => EventBus.emit('export:cloud-png', undefined),
       },
     ]);
@@ -385,10 +391,25 @@ export class Toolbar {
       const cloudToolsGroup = this.container.querySelector('#cloud-tools-group') as HTMLElement | null;
       const cloudShapesGroup = this.container.querySelector('#cloud-shapes-group') as HTMLElement | null;
       const cloudExportGroup = this.container.querySelector('#cloud-export-group') as HTMLElement | null;
+      const rackExportGroup = this.container.querySelector('#rack-export-group') as HTMLElement | null;
+      const rackViewGroup = this.container.querySelector('#rack-view-group') as HTMLElement | null;
+      const rackAddGroup = this.container.querySelector('#rack-add-group') as HTMLElement | null;
       const isCloud = s.activeView === 'cloud';
       if (cloudToolsGroup) cloudToolsGroup.style.display = isCloud ? '' : 'none';
       if (cloudShapesGroup) cloudShapesGroup.style.display = isCloud ? '' : 'none';
       if (cloudExportGroup) cloudExportGroup.style.display = isCloud ? '' : 'none';
+      // The rack canvas's own Export group (SVG/PNG/JPEG/PDF/HTML/Report) was never hidden while
+      // in Cloud view — its "Export SVG" button looks identical to the Cloud Export one but drives
+      // the RACK canvas's export-area tool, which is bound to the (now-hidden, non-interactive)
+      // #canvas element. Clicking it while on the cloud canvas armed the wrong drag tool: the
+      // notification fired ("Drag a rectangle on the canvas...", no "cloud" in the text — the
+      // giveaway) but dragging on the visible #cloud-canvas never reached that listener at all.
+      if (rackExportGroup) rackExportGroup.style.display = isCloud ? 'none' : '';
+      // Same class of bug as rack-export-group above: View (grid/rulers/3D/skeleton/cable-tray
+      // toggles) and Add (rack cabinet buttons) are rack-canvas-only concepts that stayed visible
+      // and clickable in Cloud view — silently inert there since they all act on the hidden #canvas.
+      if (rackViewGroup) rackViewGroup.style.display = isCloud ? 'none' : '';
+      if (rackAddGroup) rackAddGroup.style.display = isCloud ? 'none' : '';
 
       const btnSide = this.container.querySelector('#btn-view-side');
       if (btnSide) {

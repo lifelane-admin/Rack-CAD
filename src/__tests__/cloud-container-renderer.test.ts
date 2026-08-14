@@ -88,6 +88,66 @@ describe('renderCloudContainer', () => {
     expect(group.querySelector('image')).toBeNull();
   });
 
+  it('an explicit style overrides the kind\'s own default dasharray', () => {
+    const layer = makeLayer();
+    // subnet's kind default is dashed ('6,4') — dotted should win instead.
+    const group = renderCloudContainer(baseContainer({ kind: 'subnet', style: 'dotted' }), layer, false);
+    const rect = group.querySelector('rect')!;
+    expect(rect.getAttribute('stroke-dasharray')).toBe('2,3');
+  });
+
+  it('"solid" style explicitly clears a dashed kind default', () => {
+    const layer = makeLayer();
+    const group = renderCloudContainer(baseContainer({ kind: 'subnet', style: 'solid' }), layer, false);
+    const rect = group.querySelector('rect')!;
+    expect(rect.getAttribute('stroke-dasharray')).toBeNull();
+  });
+
+  it('a double-family style draws a second, inset rect with the inner dash pattern', () => {
+    const layer = makeLayer();
+    // label: '' — baseContainer's default label would add a 3rd (chip) <rect>, unrelated to the border.
+    const group = renderCloudContainer(baseContainer({ kind: 'vpc', style: 'double-dashed', color: '#123456', label: '' }), layer, false);
+    const rects = group.querySelectorAll('rect');
+    expect(rects.length).toBe(2);
+    expect(rects[0].getAttribute('stroke-dasharray')).toBe('8,5'); // dashed's own pattern
+    expect(rects[1].getAttribute('fill')).toBe('none');
+    expect(rects[1].getAttribute('stroke')).toBe('#123456');
+    expect(rects[1].getAttribute('stroke-dasharray')).toBe('8,5');
+    // Inset, not the same box.
+    expect(Number(rects[1].getAttribute('x'))).toBeGreaterThan(0);
+    expect(Number(rects[1].getAttribute('width'))).toBeLessThan(300);
+  });
+
+  it('a plain "double" style draws a second inset rect with no dasharray (solid inner line)', () => {
+    const layer = makeLayer();
+    const group = renderCloudContainer(baseContainer({ kind: 'vpc', style: 'double', label: '' }), layer, false);
+    const rects = group.querySelectorAll('rect');
+    expect(rects.length).toBe(2);
+    expect(rects[0].getAttribute('stroke-dasharray')).toBeNull();
+    expect(rects[1].getAttribute('stroke-dasharray')).toBeNull();
+  });
+
+  it('defaults to the original ~8% background fill opacity when backgroundOpacity is unset', () => {
+    const layer = makeLayer();
+    const group = renderCloudContainer(baseContainer(), layer, false);
+    const rect = group.querySelector('rect')!;
+    expect(rect.getAttribute('fill-opacity')).toBe('0.08');
+  });
+
+  it('backgroundOpacity: 0 disables the background fill entirely (border-only)', () => {
+    const layer = makeLayer();
+    const group = renderCloudContainer(baseContainer({ backgroundOpacity: 0 }), layer, false);
+    const rect = group.querySelector('rect')!;
+    expect(rect.getAttribute('fill-opacity')).toBe('0');
+  });
+
+  it('backgroundOpacity accepts any custom value up to fully opaque', () => {
+    const layer = makeLayer();
+    const group = renderCloudContainer(baseContainer({ backgroundOpacity: 0.5 }), layer, false);
+    const rect = group.querySelector('rect')!;
+    expect(rect.getAttribute('fill-opacity')).toBe('0.5');
+  });
+
   it('adds a resize handle only when selected and unlocked', () => {
     const layer = makeLayer();
     const unselected = renderCloudContainer(baseContainer(), layer, false);

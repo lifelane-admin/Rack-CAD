@@ -42,24 +42,29 @@ function dedupe(pts: Point[]): Point[] {
   return pts.filter((p, i) => i === 0 || p.x !== pts[i - 1].x || p.y !== pts[i - 1].y);
 }
 
-/** Auto-computed route point list, optionally with a manual `crossbarOffset` override (see
- *  CloudConnector.crossbarOffset). 'orthogonal' stubs straight out from the source side, straight
- *  into the dest side, and joins the two stubs with a single bend on whichever axis the source
- *  side determines — the common simple auto-route look in official cloud architecture diagrams,
- *  not true obstacle-avoiding pathfinding. Falls back to a single generic elbow when a side is
- *  missing (e.g. a floating, non-node endpoint). 'straight' ignores sides entirely and returns
- *  just the two endpoints.
+type SegmentHandle = { a: Point; b: Point; axis: 'x' | 'y' };
+
+/** Auto-computed route point list, optionally with manual overrides (see CloudConnector's
+ *  crossbarOffset/entryOffset/exitOffset). 'orthogonal' stubs straight out from the source side,
+ *  straight into the dest side, and joins the two stubs with a single bend on whichever axis the
+ *  source side determines — the common simple auto-route look in official cloud architecture
+ *  diagrams, not true obstacle-avoiding pathfinding. Falls back to a single generic elbow when a
+ *  side is missing (e.g. a floating, non-node endpoint). 'straight' ignores sides entirely and
+ *  returns just the two endpoints.
  *
  *  `crossbarOffset` only applies when there's a genuine free interior coordinate to move — both
  *  sides known and the same orientation (both left/right or both top/bottom), or no sides known
- *  at all (the `!fromSide` branch). A single known side has no free coordinate: the interior
- *  bend's non-stub coordinate is pinned directly to the dest point, and moving it would make the
- *  final segment diagonal instead of axis-aligned — see crossbarHandleFor()'s matching exclusion. */
+ *  at all (the `!fromSide` branch). `entryOffset`/`exitOffset` instead jog the run immediately
+ *  after the source's (resp. before the dest's) perpendicular stub-out/in — these apply whenever
+ *  that side is known at all, independent of the other side's orientation, which is what gives
+ *  perpendicular-side and single-known-side routes (no crossbar available) a draggable segment
+ *  too. See routeHandlesFor()/crossbarHandleFor() for the matching handle geometry. */
 function autoRoutePoints(
   from: Point, fromSide: CloudHandleSide | undefined,
   to: Point, toSide: CloudHandleSide | undefined,
   routing: CloudConnector['routing'],
-  crossbarOffset?: number
+  crossbarOffset?: number, entryOffset?: number, exitOffset?: number,
+  entryStubOffset?: number, exitStubOffset?: number
 ): Point[] {
   if (routing !== 'orthogonal') return [from, to];
 
@@ -69,43 +74,75 @@ function autoRoutePoints(
   }
 
   const v1 = SIDE_VECTOR[fromSide];
-  const p1 = { x: from.x + v1.x * STUB, y: from.y + v1.y * STUB };
+  const p1 = entryStubOffset === undefined
+    ? { x: from.x + v1.x * STUB, y: from.y + v1.y * STUB }
+    : (isHorizontal(fromSide) ? { x: entryStubOffset, y: from.y } : { x: from.x, y: entryStubOffset });
+  const afterEntry = entryOffset === undefined ? p1
+    : (isHorizontal(fromSide) ? { x: p1.x, y: entryOffset } : { x: entryOffset, y: p1.y });
 
   if (!toSide) {
-    const bend = isHorizontal(fromSide) ? { x: to.x, y: p1.y } : { x: p1.x, y: to.y };
-    return dedupe([from, p1, bend, to]);
+    const bend = isHorizontal(fromSide) ? { x: to.x, y: afterEntry.y } : { x: afterEntry.x, y: to.y };
+    return dedupe([from, p1, afterEntry, bend, to]);
   }
 
   const v2 = SIDE_VECTOR[toSide];
   const sameOrientation = isHorizontal(fromSide) === isHorizontal(toSide);
-  const p2 = sameOrientation && crossbarOffset !== undefined
-    ? (isHorizontal(fromSide) ? { x: crossbarOffset, y: to.y } : { x: to.x, y: crossbarOffset })
-    : { x: to.x + v2.x * STUB, y: to.y + v2.y * STUB };
-  const bend = isHorizontal(fromSide) ? { x: p2.x, y: p1.y } : { x: p1.x, y: p2.y };
-  return dedupe([from, p1, bend, p2, to]);
+  const pEnd = exitStubOffset === undefined
+    ? { x: to.x + v2.x * STUB, y: to.y + v2.y * STUB }
+    : (isHorizontal(toSide) ? { x: exitStubOffset, y: to.y } : { x: to.x, y: exitStubOffset });
+  const beforeExit = exitOffset === undefined ? pEnd
+    : (isHorizontal(toSide) ? { x: pEnd.x, y: exitOffset } : { x: exitOffset, y: pEnd.y });
+
+  if (!sameOrientation) {
+    // Perpendicular sides: the entry and exit runs meet directly at one shared corner — there's
+    // no single shared axis both could pivot around independently, so no separate crossbar exists.
+    const bend = isHorizontal(fromSide) ? { x: beforeExit.x, y: afterEntry.y } : { x: afterEntry.x, y: beforeExit.y };
+    return dedupe([from, p1, afterEntry, bend, beforeExit, pEnd, to]);
+  }
+
+  // Same orientation: three genuinely independent segments (entry run, crossbar, exit run) each
+  // with their own override, meeting at two distinct corners. Default crossbarCoord (unset)
+  // matches pEnd's own coordinate on that axis, which collapses this to exactly today's route —
+  // corner 2 lands exactly on pEnd, corner 1 on the same point the old single-bend formula used.
+  const crossbarCoord = crossbarOffset ?? (isHorizontal(fromSide) ? pEnd.x : pEnd.y);
+  const corner1 = isHorizontal(fromSide) ? { x: crossbarCoord, y: afterEntry.y } : { x: afterEntry.x, y: crossbarCoord };
+  const corner2 = isHorizontal(fromSide) ? { x: crossbarCoord, y: beforeExit.y } : { x: beforeExit.x, y: crossbarCoord };
+  return dedupe([from, p1, afterEntry, corner1, corner2, beforeExit, pEnd, to]);
 }
 
-/** Final route point list — auto-computed from the two endpoints/sides, plus the connector's
- *  `crossbarOffset` manual override when one applies. 'orthogonal' routing keeps every segment
- *  horizontal or vertical. */
+/** Final route point list — a fully manual `waypoints` list (see CloudConnector.waypoints) takes
+ *  absolute priority when present and non-empty, straight through `from`, each waypoint in
+ *  order, then `to`, bypassing 'orthogonal' auto-routing and every offset override entirely.
+ *  Otherwise auto-computed from the two endpoints/sides, plus the connector's manual overrides
+ *  (crossbarOffset/entryOffset/exitOffset/entryStubOffset/exitStubOffset) when one applies —
+ *  'orthogonal' routing keeps every segment horizontal or vertical. */
 export function resolveRoutePoints(
   from: Point, fromSide: CloudHandleSide | undefined,
   to: Point, toSide: CloudHandleSide | undefined,
   routing: CloudConnector['routing'],
-  crossbarOffset?: number
+  crossbarOffset?: number, entryOffset?: number, exitOffset?: number,
+  entryStubOffset?: number, exitStubOffset?: number, waypoints?: Point[]
 ): Point[] {
-  return autoRoutePoints(from, fromSide, to, toSide, routing, crossbarOffset);
+  if (waypoints && waypoints.length > 0) return [from, ...waypoints, to];
+  return autoRoutePoints(from, fromSide, to, toSide, routing, crossbarOffset, entryOffset, exitOffset, entryStubOffset, exitStubOffset);
 }
 
 /** The draggable "crossbar" segment of an orthogonal route — the one interior segment whose line
  *  position is a free coordinate (see autoRoutePoints' doc comment for exactly which side
  *  combinations qualify). Returns the segment's two endpoints and which world-space axis dragging
  *  its midpoint should move. `null` when this route has no such free segment (perpendicular
- *  sides, or only one side known) or routing isn't 'orthogonal'. */
+ *  sides, or only one side known) or routing isn't 'orthogonal'.
+ *
+ *  Kept for backward compatibility (pattern-matches a plain `pts` array) — only correct when
+ *  `pts` came from a call to resolveRoutePoints() with entryOffset/exitOffset both omitted, since
+ *  those change how many points the array collapses to and this function has no other way to
+ *  tell a jogged corner apart from a topology with no crossbar at all. renderCloudConnector()
+ *  itself uses routeHandlesFor() below instead, which computes all three handles directly from
+ *  the endpoint geometry and stays correct regardless of which offsets are set. */
 export function crossbarHandleFor(
   pts: Point[], fromSide: CloudHandleSide | undefined, toSide: CloudHandleSide | undefined,
   routing: CloudConnector['routing']
-): { a: Point; b: Point; axis: 'x' | 'y' } | null {
+): SegmentHandle | null {
   if (routing !== 'orthogonal') return null;
   if (!fromSide) {
     return pts.length === 4 ? { a: pts[1], b: pts[2], axis: 'x' } : null;
@@ -113,6 +150,95 @@ export function crossbarHandleFor(
   if (!toSide || isHorizontal(fromSide) !== isHorizontal(toSide)) return null;
   if (pts.length !== 5) return null;
   return { a: pts[2], b: pts[3], axis: isHorizontal(fromSide) ? 'x' : 'y' };
+}
+
+/** The draggable "entryStub"/"entry"/"crossbar"/"exit"/"exitStub" segments of an orthogonal
+ *  route — up to five, computed directly from the endpoint geometry (not pattern-matched out of
+ *  a `pts` array, since how many points that collapses to depends on which offsets are already
+ *  set — see crossbarHandleFor()'s doc comment). "entry" is the run right after the source's
+ *  perpendicular stub-out; "exit" is the run right before the dest's stub-in; "crossbar" is the
+ *  segment between them when the sides are the same orientation — genuinely independent of
+ *  entry/exit there (its own crossbarOffset), unlike perpendicular sides where entry and exit
+ *  runs meet directly at one shared corner with no room for a third segment in between.
+ *  "entryStub"/"exitStub" are the short perpendicular jog segments that appear right next to the
+ *  source/dest node once entry/exitOffset has actually moved that run away from a straight line
+ *  out of the node — the segment that keeps the stub perpendicular while the run sits elsewhere.
+ *  Any slot is `null` when that segment doesn't apply to this topology (has zero length), or
+ *  routing isn't 'orthogonal'. */
+export function routeHandlesFor(
+  from: Point, fromSide: CloudHandleSide | undefined,
+  to: Point, toSide: CloudHandleSide | undefined,
+  routing: CloudConnector['routing'],
+  crossbarOffset?: number, entryOffset?: number, exitOffset?: number,
+  entryStubOffset?: number, exitStubOffset?: number, waypoints?: Point[]
+): {
+  entryStub: SegmentHandle | null; entry: SegmentHandle | null; crossbar: SegmentHandle | null;
+  exit: SegmentHandle | null; exitStub: SegmentHandle | null;
+} {
+  const none = { entryStub: null, entry: null, crossbar: null, exit: null, exitStub: null };
+  // A manual waypoint route gets its own per-point handles (see renderCloudConnector()) instead —
+  // none of these segment-offset handles apply once the user has taken over routing entirely.
+  if ((waypoints && waypoints.length > 0) || routing !== 'orthogonal') return none;
+
+  if (!fromSide) {
+    const midX = crossbarOffset ?? (from.x + to.x) / 2;
+    const a = { x: midX, y: from.y }, b = { x: midX, y: to.y };
+    const crossbar = pointsDiffer(a, b) ? { a, b, axis: 'x' as const } : null;
+    return { ...none, crossbar };
+  }
+
+  const v1 = SIDE_VECTOR[fromSide];
+  const p1 = entryStubOffset === undefined
+    ? { x: from.x + v1.x * STUB, y: from.y + v1.y * STUB }
+    : (isHorizontal(fromSide) ? { x: entryStubOffset, y: from.y } : { x: from.x, y: entryStubOffset });
+  const afterEntry = entryOffset === undefined ? p1
+    : (isHorizontal(fromSide) ? { x: p1.x, y: entryOffset } : { x: entryOffset, y: p1.y });
+  const entryAxis: 'x' | 'y' = isHorizontal(fromSide) ? 'y' : 'x';
+  // entryStub's axis is the STUB's own travel axis (opposite of entry's), since it's the segment
+  // connecting the fixed-direction stub-out to wherever entryOffset jogged the run.
+  const entryStubAxis: 'x' | 'y' = isHorizontal(fromSide) ? 'x' : 'y';
+  const entryStub = pointsDiffer(p1, afterEntry) ? { a: p1, b: afterEntry, axis: entryStubAxis } : null;
+
+  if (!toSide) {
+    const bend = isHorizontal(fromSide) ? { x: to.x, y: afterEntry.y } : { x: afterEntry.x, y: to.y };
+    const entry = pointsDiffer(afterEntry, bend) ? { a: afterEntry, b: bend, axis: entryAxis } : null;
+    return { ...none, entryStub, entry };
+  }
+
+  const v2 = SIDE_VECTOR[toSide];
+  const sameOrientation = isHorizontal(fromSide) === isHorizontal(toSide);
+  const pEnd = exitStubOffset === undefined
+    ? { x: to.x + v2.x * STUB, y: to.y + v2.y * STUB }
+    : (isHorizontal(toSide) ? { x: exitStubOffset, y: to.y } : { x: to.x, y: exitStubOffset });
+  const beforeExit = exitOffset === undefined ? pEnd
+    : (isHorizontal(toSide) ? { x: pEnd.x, y: exitOffset } : { x: exitOffset, y: pEnd.y });
+  const exitAxis: 'x' | 'y' = isHorizontal(toSide) ? 'y' : 'x';
+  const exitStubAxis: 'x' | 'y' = isHorizontal(toSide) ? 'x' : 'y';
+  const exitStub = pointsDiffer(beforeExit, pEnd) ? { a: beforeExit, b: pEnd, axis: exitStubAxis } : null;
+
+  if (!sameOrientation) {
+    const bend = isHorizontal(fromSide) ? { x: beforeExit.x, y: afterEntry.y } : { x: afterEntry.x, y: beforeExit.y };
+    const entry = pointsDiffer(afterEntry, bend) ? { a: afterEntry, b: bend, axis: entryAxis } : null;
+    const exit = pointsDiffer(bend, beforeExit) ? { a: bend, b: beforeExit, axis: exitAxis } : null;
+    return { entryStub, entry, crossbar: null, exit, exitStub };
+  }
+
+  // Same orientation: entry, crossbar, and exit are three independently-draggable segments —
+  // see autoRoutePoints' matching corner1/corner2 construction, which this mirrors exactly so
+  // each handle's dot lands precisely on the line actually being rendered.
+  const crossbarCoord = crossbarOffset ?? (isHorizontal(fromSide) ? pEnd.x : pEnd.y);
+  const corner1 = isHorizontal(fromSide) ? { x: crossbarCoord, y: afterEntry.y } : { x: afterEntry.x, y: crossbarCoord };
+  const corner2 = isHorizontal(fromSide) ? { x: crossbarCoord, y: beforeExit.y } : { x: beforeExit.x, y: crossbarCoord };
+  const crossbarAxis: 'x' | 'y' = isHorizontal(fromSide) ? 'x' : 'y';
+
+  const entry = pointsDiffer(afterEntry, corner1) ? { a: afterEntry, b: corner1, axis: entryAxis } : null;
+  const crossbar = pointsDiffer(corner1, corner2) ? { a: corner1, b: corner2, axis: crossbarAxis } : null;
+  const exit = pointsDiffer(corner2, beforeExit) ? { a: corner2, b: beforeExit, axis: exitAxis } : null;
+  return { entryStub, entry, crossbar, exit, exitStub };
+}
+
+function pointsDiffer(a: Point, b: Point): boolean {
+  return a.x !== b.x || a.y !== b.y;
 }
 
 function sub(a: Point, b: Point): Point { return { x: a.x - b.x, y: a.y - b.y }; }
@@ -233,7 +359,11 @@ export function renderCloudConnector(
 
   const color = connector.color || DEFAULT_COLOR;
   const width = connector.width ?? 2;
-  const pts = resolveRoutePoints(from, fromSide, to, toSide, connector.routing, connector.crossbarOffset);
+  const pts = resolveRoutePoints(
+    from, fromSide, to, toSide, connector.routing,
+    connector.crossbarOffset, connector.entryOffset, connector.exitOffset,
+    connector.entryStubOffset, connector.exitStubOffset, connector.waypoints
+  );
   const d = pointsToPathD(pts, !!connector.roundedCorners);
   const labelPoint = pathMidpoint(pts);
 
@@ -296,16 +426,55 @@ export function renderCloudConnector(
     setAttributes(destHandle, { 'data-cloud-connector-id': connector.id, 'data-end': 'dest' });
     group.appendChild(destHandle);
 
-    const crossbar = crossbarHandleFor(pts, fromSide, toSide, connector.routing);
-    if (crossbar) {
-      const mid = { x: (crossbar.a.x + crossbar.b.x) / 2, y: (crossbar.a.y + crossbar.b.y) / 2 };
-      const crossbarHandle = createCircle(mid.x, mid.y, CROSSBAR_HANDLE_R, {
-        class: 'cloud-connector-crossbar-handle', fill: '#58a6ff', stroke: '#0d1117', 'stroke-width': 1.5,
-        cursor: crossbar.axis === 'x' ? 'ew-resize' : 'ns-resize',
+    // Up to five draggable segment handles — entryStub/exitStub (the short perpendicular jogs
+    // that appear once entry/exitOffset has moved a run away from a straight stub-out), entry
+    // (right after the source stub-out), crossbar (independent for same-orientation sides), exit
+    // (right before the dest stub-in) — see routeHandlesFor()'s doc comment for exactly which
+    // combination applies to a given topology.
+    const { entryStub, entry, crossbar, exit, exitStub } = routeHandlesFor(
+      from, fromSide, to, toSide, connector.routing,
+      connector.crossbarOffset, connector.entryOffset, connector.exitOffset,
+      connector.entryStubOffset, connector.exitStubOffset, connector.waypoints
+    );
+    const segmentHandles: { seg: SegmentHandle; kind: 'entryStub' | 'entry' | 'crossbar' | 'exit' | 'exitStub'; color: string }[] = [
+      ...(entryStub ? [{ seg: entryStub, kind: 'entryStub' as const, color: '#d29922' }] : []),
+      ...(entry ? [{ seg: entry, kind: 'entry' as const, color: '#3fb950' }] : []),
+      ...(crossbar ? [{ seg: crossbar, kind: 'crossbar' as const, color: '#58a6ff' }] : []),
+      ...(exit ? [{ seg: exit, kind: 'exit' as const, color: '#f85149' }] : []),
+      ...(exitStub ? [{ seg: exitStub, kind: 'exitStub' as const, color: '#d29922' }] : []),
+    ];
+    for (const { seg, kind, color: handleColor } of segmentHandles) {
+      const mid = { x: (seg.a.x + seg.b.x) / 2, y: (seg.a.y + seg.b.y) / 2 };
+      // A same-class, same-data-attributes invisible circle roughly triples the effective click
+      // radius (visible dot stays small/tidy) — these dots sit close together and close to the
+      // endpoint tips, and app.ts's mousedown handler just does target.closest(this class), so
+      // whichever of the two concentric circles actually receives the click resolves identically.
+      const hitArea = createCircle(mid.x, mid.y, CROSSBAR_HANDLE_R * 3, {
+        class: 'cloud-connector-crossbar-handle', fill: 'transparent',
+        cursor: seg.axis === 'x' ? 'ew-resize' : 'ns-resize',
       });
-      setAttributes(crossbarHandle, { 'data-cloud-connector-id': connector.id, 'data-axis': crossbar.axis });
-      group.appendChild(crossbarHandle);
+      setAttributes(hitArea, { 'data-cloud-connector-id': connector.id, 'data-axis': seg.axis, 'data-kind': kind });
+      group.appendChild(hitArea);
+
+      const segmentHandle = createCircle(mid.x, mid.y, CROSSBAR_HANDLE_R, {
+        class: 'cloud-connector-crossbar-handle', fill: handleColor, stroke: '#0d1117', 'stroke-width': 1.5,
+        cursor: seg.axis === 'x' ? 'ew-resize' : 'ns-resize',
+      });
+      setAttributes(segmentHandle, { 'data-cloud-connector-id': connector.id, 'data-axis': seg.axis, 'data-kind': kind });
+      group.appendChild(segmentHandle);
     }
+
+    // A fully manual waypoint route (see CloudConnector.waypoints) gets one draggable handle per
+    // waypoint instead of the segment handles above — mirrors cable-renderer.ts's anchor handles,
+    // but one per point rather than capped at 3, since a connector's waypoint list is expected to
+    // stay short (added one at a time via right-click "Add Waypoint Here").
+    (connector.waypoints ?? []).forEach((wp, index) => {
+      const waypointHandle = createCircle(wp.x, wp.y, CROSSBAR_HANDLE_R, {
+        class: 'cloud-connector-waypoint-handle', fill: '#d2a8ff', stroke: '#0d1117', 'stroke-width': 1.5, cursor: 'grab',
+      });
+      setAttributes(waypointHandle, { 'data-cloud-connector-id': connector.id, 'data-waypoint-index': String(index) });
+      group.appendChild(waypointHandle);
+    });
   }
 
   layer.appendChild(group);

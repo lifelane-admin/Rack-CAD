@@ -522,6 +522,66 @@ describe('Cloud Architecture canvas', () => {
     }
   });
 
+  it('the cloud-export-area tool draws a rectangle from mousedown-drag to mouseup and emits export:cloud-area-selected', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    eventBus.emit('tool:changed', 'cloud-export-area');
+    expect(stateManager.getState().tool).toBe('cloud-export-area');
+
+    let selectedRect: any = null;
+    eventBus.on('export:cloud-area-selected', (rect: any) => { selectedRect = rect; });
+
+    const svgEl = document.getElementById('cloud-canvas')!;
+    svgEl.dispatchEvent(mouseEvent('mousedown', 20, 20));
+    // Mid-drag: the preview rect should exist and track the drag (mousemove is bound to the
+    // svg element itself, same as the container-draw preview, not window).
+    svgEl.dispatchEvent(mouseEvent('mousemove', 60, 55));
+    const previewRect = document.getElementById('cloud-export-area-rect');
+    expect(previewRect).not.toBeNull();
+    expect(previewRect!.getAttribute('width')).toBe('40');
+    expect(previewRect!.getAttribute('height')).toBe('35');
+
+    window.dispatchEvent(mouseEvent('mouseup', 120, 90));
+
+    expect(selectedRect).toEqual({ x: 20, y: 20, width: 100, height: 70 });
+    // Finishing the draw returns to the select tool and removes the preview rect.
+    expect(stateManager.getState().tool).toBe('select');
+    expect(document.getElementById('cloud-export-area-rect')).toBeNull();
+  });
+
+  it('the full user-facing flow (toolbar button -> modal -> Draw Custom Area -> drag) actually exports the drawn rect', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+    app.setActiveView('cloud');
+
+    document.getElementById('btn-exp-cloud-svg')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const modal = document.getElementById('cloud-export-settings-modal');
+    expect(modal).not.toBeNull();
+
+    const customRadio = modal!.querySelector('input[name="cloud-export-area"][value="custom"]') as HTMLInputElement;
+    expect(customRadio).not.toBeNull();
+    customRadio.checked = true;
+
+    document.getElementById('cloud-export-modal-confirm')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    // Modal closes and the tool arms for a canvas drag.
+    expect(document.getElementById('cloud-export-settings-modal')).toBeNull();
+    expect(stateManager.getState().tool).toBe('cloud-export-area');
+
+    const svgEl = document.getElementById('cloud-canvas')!;
+    svgEl.dispatchEvent(mouseEvent('mousedown', 20, 20));
+    svgEl.dispatchEvent(mouseEvent('mousemove', 120, 90));
+    window.dispatchEvent(mouseEvent('mouseup', 120, 90));
+
+    expect(stateManager.getState().tool).toBe('select');
+  });
+
   it('deleting a selected CloudNode removes it and any connector referencing it', async () => {
     mountAppSkeleton();
     const { App } = await import('../app');

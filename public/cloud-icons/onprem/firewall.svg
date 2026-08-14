@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Firewall</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <path fill="#FFFFFF" d="M40,12 L62,20 L62,38 C62,52 52,62 40,68 C28,62 18,52 18,38 L18,20 Z"></path>
+        <g fill="#586069">
+            <rect x="24" y="26" width="12" height="7"></rect>
+            <rect x="38" y="26" width="12" height="7"></rect>
+            <rect x="31" y="35" width="12" height="7"></rect>
+            <rect x="24" y="44" width="12" height="7"></rect>
+            <rect x="38" y="44" width="12" height="7"></rect>
+        </g>
+    </g>
+</svg>

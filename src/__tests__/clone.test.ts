@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { cloneDevice } from '../utils/clone';
-import { DeviceData } from '../core/types';
+import { cloneDevice, cloneCloudConnector } from '../utils/clone';
+import { DeviceData, CloudConnector } from '../core/types';
 
 const baseDevice: DeviceData = {
   id: 'dev-original',
@@ -61,5 +61,68 @@ describe('cloneDevice', () => {
     expect(clone.startUnit).toBe(baseDevice.startUnit);
     expect(clone.name).toBe(baseDevice.name);
     expect(clone.description).toBe(baseDevice.description);
+  });
+});
+
+const baseConnector: CloudConnector = {
+  id: 'conn-original',
+  sourceNodeId: 'n1',
+  destNodeId: 'n2',
+  sourceSide: 'right',
+  destSide: 'left',
+  label: 'Data Flow',
+  style: 'dashed',
+  routing: 'orthogonal',
+  roundedCorners: true,
+  crossbarOffset: 250,
+  entryOffset: 60,
+  exitOffset: 320,
+  entryStubOffset: 55,
+  exitStubOffset: 400,
+  width: 3,
+  startArrow: 'dot',
+  endArrow: 'arrow-broad',
+  color: '#58a6ff',
+};
+
+describe('cloneCloudConnector', () => {
+  const from = { x: 100, y: 200 };
+  const to = { x: 400, y: 500 };
+
+  it('returns a new object (not the same reference) with a different id', () => {
+    const clone = cloneCloudConnector(baseConnector, from, to);
+    expect(clone).not.toBe(baseConnector);
+    expect(clone.id).not.toBe(baseConnector.id);
+  });
+
+  it('detaches both ends from their nodes, offsetting near the original resolved position', () => {
+    const clone = cloneCloudConnector(baseConnector, from, to);
+    expect(clone.sourceNodeId).toBeNull();
+    expect(clone.destNodeId).toBeNull();
+    expect(clone.sourcePoint).toEqual({ x: 120, y: 220 });
+    expect(clone.destPoint).toEqual({ x: 420, y: 520 });
+    expect(clone.sourceSide).toBeUndefined();
+    expect(clone.destSide).toBeUndefined();
+  });
+
+  it('clears manual route overrides tuned for the original (now-stale) endpoints', () => {
+    const clone = cloneCloudConnector(baseConnector, from, to);
+    expect(clone.crossbarOffset).toBeUndefined();
+    expect(clone.entryOffset).toBeUndefined();
+    expect(clone.exitOffset).toBeUndefined();
+    expect(clone.entryStubOffset).toBeUndefined();
+    expect(clone.exitStubOffset).toBeUndefined();
+  });
+
+  it('preserves visual styling (label, style, routing, roundedCorners, width, arrows, color)', () => {
+    const clone = cloneCloudConnector(baseConnector, from, to);
+    expect(clone.label).toBe('Data Flow');
+    expect(clone.style).toBe('dashed');
+    expect(clone.routing).toBe('orthogonal');
+    expect(clone.roundedCorners).toBe(true);
+    expect(clone.width).toBe(3);
+    expect(clone.startArrow).toBe('dot');
+    expect(clone.endArrow).toBe('arrow-broad');
+    expect(clone.color).toBe('#58a6ff');
   });
 });

@@ -90,7 +90,8 @@ export class StatusBar {
       'zoom-out': '🔍-',
       'export-area': '📐',
       'cloud-container': '⬚',
-      'cloud-connect': '📡'
+      'cloud-connect': '📡',
+      'cloud-export-area': '📐'
     };
 
     if (toolEl) {

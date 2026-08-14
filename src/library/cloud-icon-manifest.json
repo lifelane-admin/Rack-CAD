@@ -10190,5 +10190,93 @@
     "name": "Web3",
     "kind": "category",
     "path": "/cloud-icons/gcp/web3.svg"
+  },
+  {
+    "id": "onprem-server",
+    "provider": "onprem",
+    "category": "Local Resources",
+    "name": "Server",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/server.svg"
+  },
+  {
+    "id": "onprem-rack-cabinet",
+    "provider": "onprem",
+    "category": "Local Resources",
+    "name": "Rack Cabinet",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/rack-cabinet.svg"
+  },
+  {
+    "id": "onprem-router",
+    "provider": "onprem",
+    "category": "Local Resources",
+    "name": "Router",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/router.svg"
+  },
+  {
+    "id": "onprem-network-switch",
+    "provider": "onprem",
+    "category": "Local Resources",
+    "name": "Network Switch",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/network-switch.svg"
+  },
+  {
+    "id": "onprem-firewall",
+    "provider": "onprem",
+    "category": "Local Resources",
+    "name": "Firewall",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/firewall.svg"
+  },
+  {
+    "id": "onprem-load-balancer",
+    "provider": "onprem",
+    "category": "Local Resources",
+    "name": "Load Balancer",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/load-balancer.svg"
+  },
+  {
+    "id": "onprem-database",
+    "provider": "onprem",
+    "category": "Local Resources",
+    "name": "Database",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/database.svg"
+  },
+  {
+    "id": "onprem-storage-array",
+    "provider": "onprem",
+    "category": "Local Resources",
+    "name": "Storage Array",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/storage-array.svg"
+  },
+  {
+    "id": "onprem-workstation",
+    "provider": "onprem",
+    "category": "Local Resources",
+    "name": "Workstation",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/workstation.svg"
+  },
+  {
+    "id": "onprem-wireless-access-point",
+    "provider": "onprem",
+    "category": "Local Resources",
+    "name": "Wireless Access Point",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/wireless-access-point.svg"
+  },
+  {
+    "id": "onprem-gateway",
+    "provider": "onprem",
+    "category": "Local Resources",
+    "name": "Gateway",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/gateway.svg"
   }
 ]

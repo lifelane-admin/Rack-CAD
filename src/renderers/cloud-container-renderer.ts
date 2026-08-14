@@ -5,6 +5,7 @@
 // vendor's pixel-exact official boundary conventions.
 import { CloudContainer, CloudProvider } from '../core/types';
 import { createGroup, createRect, createSVGElement, createText, setAttributes } from '../utils/svg-helpers';
+import { DASH_BY_STYLE, DOUBLE_INNER_STYLE, isDoubleLineStyle } from './cloud-connector-renderer';
 
 const XLINK_NS = 'http://www.w3.org/1999/xlink';
 const HANDLE_SIZE = 12;
@@ -14,8 +15,12 @@ const PROVIDER_ACCENT: Record<CloudProvider, string> = {
   aws: '#FF9900',
   azure: '#0078D4',
   gcp: '#4285F4',
+  onprem: '#8b949e',
 };
 const GENERIC_ACCENT = '#8b949e';
+/** Default background fill opacity when CloudContainer.backgroundOpacity is unset — matches the
+ *  original hardcoded `${accent}14` hex-alpha tint (0x14 / 255 ≈ 0.078). */
+const DEFAULT_BG_OPACITY = 0.08;
 
 /** Border treatment per boundary kind — a lightweight nod to real diagramming convention (outer
  *  boundaries read as more solid/heavier, inner ones as lighter/dashed) without attempting each
@@ -53,11 +58,30 @@ export function renderCloudContainer(container: CloudContainer, layer: SVGGEleme
     cursor: container.locked ? 'default' : 'move',
   });
 
+  // A manually chosen style (properties panel / right-click menu) overrides the kind's own
+  // default dasharray — width still comes from the kind (containers have no separate weight
+  // picker, unlike CloudConnector.width). 'double'-family styles draw a second, inset rect
+  // instead of the offset-polyline trick CloudConnector uses, since a rectangle's four sides
+  // don't need path-offset math — just a smaller concentric rect a few px in.
+  const isDouble = isDoubleLineStyle(container.style);
+  const dasharray = container.style
+    ? (isDouble ? DASH_BY_STYLE[DOUBLE_INNER_STYLE[container.style]] : DASH_BY_STYLE[container.style])
+    : border.dasharray;
+
   const rectAttrs: Record<string, string | number> = {
-    fill: `${accent}14`, stroke: accent, 'stroke-width': border.width, rx: 8, ry: 8,
+    fill: accent, 'fill-opacity': container.backgroundOpacity ?? DEFAULT_BG_OPACITY,
+    stroke: accent, 'stroke-width': border.width, rx: 8, ry: 8,
   };
-  if (border.dasharray) rectAttrs['stroke-dasharray'] = border.dasharray;
+  if (dasharray) rectAttrs['stroke-dasharray'] = dasharray;
   group.appendChild(createRect(0, 0, container.width, container.height, rectAttrs));
+
+  if (isDouble) {
+    const inset = border.width + 3;
+    group.appendChild(createRect(inset, inset, Math.max(0, container.width - inset * 2), Math.max(0, container.height - inset * 2), {
+      fill: 'none', stroke: accent, 'stroke-width': border.width, rx: 4, ry: 4,
+      ...(dasharray ? { 'stroke-dasharray': dasharray } : {}),
+    }));
+  }
 
   if (container.label) {
     const hasIcon = !!iconPath;

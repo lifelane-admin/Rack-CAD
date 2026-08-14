@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Storage-Array</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <g transform="translate(16, 18)" fill="#FFFFFF">
+            <rect x="0" y="0" width="48" height="10" rx="2"></rect>
+            <rect x="0" y="13" width="48" height="10" rx="2"></rect>
+            <rect x="0" y="26" width="48" height="10" rx="2"></rect>
+            <rect x="0" y="39" width="48" height="10" rx="2"></rect>
+            <circle fill="#586069" cx="41" cy="5" r="2"></circle>
+            <circle fill="#586069" cx="41" cy="18" r="2"></circle>
+            <circle fill="#586069" cx="41" cy="31" r="2"></circle>
+            <circle fill="#586069" cx="41" cy="44" r="2"></circle>
+        </g>
+    </g>
+</svg>

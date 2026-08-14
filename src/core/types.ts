@@ -339,7 +339,7 @@ export interface ImageAsset {
 }
 
 // === Cloud Architecture canvas (standalone diagram mode, independent of racks) ===
-export type CloudProvider = 'aws' | 'azure' | 'gcp';
+export type CloudProvider = 'aws' | 'azure' | 'gcp' | 'onprem';
 
 /** A single cloud-service icon placed on the Cloud Architecture canvas. `iconId` references an
  *  entry in src/library/cloud-icon-manifest.json (id -> { path, name, provider, category }). */
@@ -355,6 +355,12 @@ export interface CloudNode {
   locked?: boolean;
 }
 
+/** The full border/line dash-pattern catalog — shared by CloudConnector.style and
+ *  CloudContainer.style so both pickers (properties.ts's lineStylePickerMarkup()) and both
+ *  renderers (cloud-connector-renderer.ts's DASH_BY_STYLE/DOUBLE_INNER_STYLE/isDoubleLineStyle,
+ *  reused as-is by cloud-container-renderer.ts) stay in sync off one definition. */
+export type CloudLineStyle = 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'long-dash' | 'double' | 'double-dashed' | 'double-dotted' | 'double-dash-dot' | 'double-long-dash';
+
 /** A background boundary box (VPC/Subnet/Resource-Group/AZ/Region/etc.) — decorative only in
  *  this phase: dragging a container does not move nodes visually inside it. */
 export interface CloudContainer {
@@ -367,6 +373,16 @@ export interface CloudContainer {
   height: number;
   label: string;
   color?: string;  // border/accent override
+  /** Border dash pattern — unset means "use kind's own default" (see BORDER_STYLE_BY_KIND in
+   *  cloud-container-renderer.ts, e.g. subnet defaults to dashed, az to dotted). A 'double'-family
+   *  value draws a second, inset parallel rect border rather than an offset polyline (which is
+   *  how CloudConnector does it) — a rectangle's four sides don't need path-offset math. */
+  style?: CloudLineStyle;
+  /** Background fill opacity, 0 (no fill at all — border only) to 1 (fully opaque). Unset means
+   *  "use the default" (~8%, the original hardcoded translucent-tint look). 0 is the "disable
+   *  background" case — same field drives both "how transparent" and "on/off", rather than a
+   *  separate boolean the opacity would have to agree with. */
+  backgroundOpacity?: number;
   locked?: boolean;
   /** Set when this container was created by dropping a boundary-type palette icon (e.g. Azure
    *  "Virtual Networks") rather than the generic container tool — drawn as a small icon next to
@@ -399,7 +415,7 @@ export interface CloudConnector {
   sourceSide?: CloudHandleSide;
   destSide?: CloudHandleSide;
   label?: string;
-  style?: 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'long-dash' | 'double' | 'double-dashed' | 'double-dotted' | 'double-dash-dot' | 'double-long-dash';
+  style?: CloudLineStyle;
   /** 'orthogonal' (the default for newly created connectors) routes as a right-angle path that
    *  exits/enters perpendicular to each side (common in official cloud architecture diagrams)
    *  instead of a single straight line between the two endpoints. */
@@ -415,6 +431,37 @@ export interface CloudConnector {
    *  perpendicular sides or a single known side — those routes have no free interior coordinate
    *  to drag without introducing a non-orthogonal segment. */
   crossbarOffset?: number;
+  /** Manual override for the short run immediately after the route leaves the SOURCE side (the
+   *  segment right after its perpendicular stub-out) — an absolute world-space Y (horizontal
+   *  source side) or X (vertical source side) coordinate. Present alongside crossbarOffset lets
+   *  every orthogonal route — including perpendicular-side ones, which have no crossbar — get a
+   *  draggable entry segment; see routeHandlesFor() in cloud-connector-renderer.ts. Unset
+   *  means "use the auto-computed default" (a perfectly straight stub-out, no jog). */
+  entryOffset?: number;
+  /** Same idea as entryOffset, mirrored at the DEST side's stub-in. */
+  exitOffset?: number;
+  /** Manual override for the short perpendicular "jog" segment that appears right next to the
+   *  SOURCE node once entryOffset has actually moved the entry run sideways (it's what keeps the
+   *  stub-out exactly perpendicular to the node while the run itself sits elsewhere) — an
+   *  absolute world-space X (horizontal source side) or Y (vertical source side) coordinate for
+   *  where that jog sits, same convention as entryOffset. Only produces a visible, non-degenerate
+   *  segment (and matching handle) once entryOffset is also set — with entryOffset unset there's
+   *  nothing to jog away from in the first place. */
+  entryStubOffset?: number;
+  /** Same idea as entryStubOffset, mirrored at the DEST side's jog (only visible once exitOffset
+   *  is set). */
+  exitStubOffset?: number;
+  /** Fully manual interior route — mirrors CableData.anchorPoints (see cable-renderer.ts):
+   *  ordered free points the line passes through between `from` and `to`, added via the
+   *  connector's right-click "Add Waypoint Here" (nearest point on the clicked segment, see
+   *  distToSegment() in utils/geometry.ts) and removed the same way a cable anchor is. When
+   *  present (non-empty), this completely overrides crossbarOffset/entryOffset/exitOffset/
+   *  entryStubOffset/exitStubOffset and the whole auto-route/'orthogonal' perpendicular-stub
+   *  logic — the path is drawn straight through `from`, each waypoint in order, then `to`,
+   *  optionally corner-rounded by `roundedCorners` exactly like the auto-routed case. Manually
+   *  placed waypoints are NOT forced back onto horizontal/vertical alignment (same as cable
+   *  anchors) — the user is taking over routing entirely at that point. */
+  waypoints?: Point[];
   /** Stroke width in px — default 2 when unset. */
   width?: number;
   /** Tip style at the source end — default 'none'. */
@@ -511,7 +558,7 @@ export interface CableData {
 }
 
 // === Application State ===
-export type ToolMode = 'select' | 'pan' | 'cable' | 'power' | 'text' | 'label' | 'zoom-in' | 'zoom-out' | 'export-area' | 'cloud-container' | 'cloud-connect';
+export type ToolMode = 'select' | 'pan' | 'cable' | 'power' | 'text' | 'label' | 'zoom-in' | 'zoom-out' | 'export-area' | 'cloud-container' | 'cloud-connect' | 'cloud-export-area';
 export type Theme = 'dark' | 'light';
 
 export type SelectableItem =
@@ -633,6 +680,9 @@ export interface AppEvents {
   'export:request-area-selection': void;
   'export:area-selected': { x: number; y: number; width: number; height: number };
   'export:area-selection-cancelled': void;
+  'export:cloud-request-area-selection': void;
+  'export:cloud-area-selected': { x: number; y: number; width: number; height: number };
+  'export:cloud-area-selection-cancelled': void;
   'cable:batch-generate': { deviceId: string; side: 'left' | 'right'; type: CableType; color: string; count: number };
   'project:save': void;
   'project:load': string;
@@ -669,6 +719,7 @@ export interface AppEvents {
   'cloudconnector:update': { id: string; data: Partial<CloudConnector> };
   'cloud-canvas:transformed': Transform;
   'cloud-canvas:click': Point;
+  'cloud-canvas:rightclick': { point: Point; target: EventTarget | null; screenPoint: Point };
   'notification': { message: string; type: 'info' | 'success' | 'warning' | 'error' };
   'ai:mode-changed': boolean;
   'ai:provider-changed': AIProviderName;

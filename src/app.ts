@@ -35,21 +35,33 @@ import { deviceCatalog, getTemplate } from './library/device-catalog';
 import { generateId, distToSegment } from './utils/geometry';
 import { initExportHandlers, downloadFile, exportJSON } from './utils/export';
 import { computeSmartRouting, get3DefaultAnchors } from './utils/routing';
-import { cloneDevice } from './utils/clone';
+import { cloneDevice, cloneCloudConnector } from './utils/clone';
 import { socketTypeAtOutletIndex } from './renderers/pdu-layout';
 import { countDevicePowerCables } from './utils/power';
 import { appendExportSummaryOverlay, getAutoSummaryCardOffset } from './renderers/export-summary-overlay';
 import {
   RackData, DeviceData, PortData, CableData, LegendItem, TextLabel, ImageAsset,
   RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode, SocketType,
-  CloudNode, CloudContainer, CloudConnector, CloudHandleSide
+  CloudNode, CloudContainer, CloudConnector, CloudHandleSide, CloudArrowType
 } from './core/types';
 import { ThreeViewport } from './three/ThreeViewport';
 import { CloudCanvasManager } from './core/cloud-canvas';
 import { renderCloudNode, nodeEdgeWorldPoint, nodeCenterWorldPoint } from './renderers/cloud-node-renderer';
 import { renderCloudContainer } from './renderers/cloud-container-renderer';
-import { renderCloudConnector, inferBestSide } from './renderers/cloud-connector-renderer';
+import { renderCloudConnector, inferBestSide, CLOUD_CONNECTOR_LINE_STYLES } from './renderers/cloud-connector-renderer';
 import { getCloudIcon, isBoundaryIcon, inferContainerKind, CLOUD_SHAPE_KINDS } from './library/cloud-icon-catalog';
+import { showStartupModal, StartupChoice } from './components/startup-modal';
+
+type CloudConnectorSegmentKind = 'entryStub' | 'entry' | 'crossbar' | 'exit' | 'exitStub';
+/** Maps a dragged segment's `kind` (see routeHandlesFor() in cloud-connector-renderer.ts) to the
+ *  CloudConnector field the drag writes. */
+const SEGMENT_KIND_FIELD: Record<CloudConnectorSegmentKind, 'entryStubOffset' | 'entryOffset' | 'crossbarOffset' | 'exitOffset' | 'exitStubOffset'> = {
+  entryStub: 'entryStubOffset',
+  entry: 'entryOffset',
+  crossbar: 'crossbarOffset',
+  exit: 'exitOffset',
+  exitStub: 'exitStubOffset',
+};
 
 export class App {
   private canvas!: CanvasManager;
@@ -202,6 +214,12 @@ export class App {
    *  container tool use right after isn't affected. */
   private pendingCloudContainerSpec: { kind: CloudContainer['kind']; iconId?: string; provider?: CloudNode['provider'] | null; label: string } | null = null;
 
+  // Cloud export-area draw tool (mirrors the rack canvas's isDrawingExportArea/exportAreaEl above)
+  private isDrawingCloudExportArea = false;
+  private cloudExportAreaStart: Point = { x: 0, y: 0 };
+  private cloudExportAreaStartScreen: { x: number; y: number } = { x: 0, y: 0 };
+  private cloudExportAreaEl: SVGRectElement | null = null;
+
   // Connect tool — supports both click-source-then-click-dest (mirrors the cable tool) AND a
   // natural press-drag-release gesture in one motion (see the mouseup handler in
   // setupCloudCanvasInteractions()): cloudConnectMouseDownScreen records where the source click
@@ -241,11 +259,18 @@ export class App {
   // drawing a brand-new connector, since the two gestures never happen at once.
   private draggedConnectorEndpoint: { connectorId: string; end: 'source' | 'dest' } | null = null;
 
-  /** Dragging a connector's crossbar dot (see crossbarHandleFor() in cloud-connector-renderer.ts)
-   *  — the simple "move this horizontal/vertical line" gesture, distinct from re-aiming a tip.
-   *  Reuses dragStartCloudConnectorsState for its undo-snapshot, same as draggedConnectorEndpoint,
-   *  since the two drags never happen at once. */
-  private draggedConnectorCrossbar: { connectorId: string; axis: 'x' | 'y' } | null = null;
+  /** Dragging one point of a connector's fully-manual waypoint list (see CloudConnector.waypoints
+   *  and the "Add Waypoint Here" / "Remove Waypoint" context-menu actions in
+   *  setupCloudContextMenu()) — mirrors draggedConnectorSegment's undo-collapsing pattern, one
+   *  entry for the whole drag via dragStartCloudConnectorsState. */
+  private draggedConnectorWaypoint: { connectorId: string; index: number } | null = null;
+
+  /** Dragging one of a connector's up to 3 segment dots — entry/crossbar/exit, see
+   *  routeHandlesFor() in cloud-connector-renderer.ts — the simple "move this horizontal/vertical
+   *  line" gesture, distinct from re-aiming a tip. `kind` selects which CloudConnector field the
+   *  drag writes (entryOffset/crossbarOffset/exitOffset). Reuses dragStartCloudConnectorsState for
+   *  its undo-snapshot, same as draggedConnectorEndpoint, since the two drags never happen at once. */
+  private draggedConnectorSegment: { connectorId: string; axis: 'x' | 'y'; kind: CloudConnectorSegmentKind } | null = null;
 
   init() {
     // Initialize canvas
@@ -276,6 +301,7 @@ export class App {
       this.cloudCanvas = new CloudCanvasManager('cloud-viewport', 'cloud-canvas');
       this.setupCloudCanvasInteractions();
       this.setupCloudDragDrop();
+      this.setupCloudContextMenu();
     } catch (err) {
       console.error('[CloudCanvas] init failed, Cloud Architecture view will be unavailable:', err);
     }
@@ -547,7 +573,30 @@ export class App {
     // Set dark theme on body
     document.body.setAttribute('data-theme', stateManager.getState().theme);
 
+    this.showStartupModal();
+
     console.log('Rack Slicer initialized');
+  }
+
+  /** Startup landing screen (see components/startup-modal.ts) — shown on every load, letting the
+   *  user pick Rack Design / AWS / Azure / GCP / Hybrid before landing on a canvas. A pure
+   *  navigation shortcut: each choice does exactly what its sidebar nav-tree equivalent does
+   *  (see sidebar.ts's NAV_TREE + focusCloudProvider()) and never touches project data, so it's
+   *  safe to show even when reopening a project that already has content. Dismissing without a
+   *  choice (✕ / Escape) leaves the view exactly as it already was. */
+  private showStartupModal(): void {
+    showStartupModal((choice: StartupChoice | null) => {
+      if (!choice) return;
+      if (choice === 'rack') {
+        eventBus.emit('view:switch', 'rack');
+        return;
+      }
+      // 'hybrid' lands unscoped (every provider section collapsed, search unscoped) so Local
+      // Resources/On-Prem/AWS/Azure/GCP are all equally reachable; aws/azure/gcp focus their own
+      // section, same as clicking that provider in the sidebar's Cloud nav group.
+      this.sidebar.focusCloudProvider(choice === 'hybrid' ? null : choice);
+      eventBus.emit('view:switch', 'cloud');
+    });
   }
 
   /**
@@ -562,6 +611,12 @@ export class App {
         this.isDrawingExportArea = false;
         this.exportAreaEl = null;
         eventBus.emit('export:area-selection-cancelled', undefined);
+      }
+      if (prevTool === 'cloud-export-area' && mode !== 'cloud-export-area' && this.isDrawingCloudExportArea) {
+        this.cloudExportAreaEl?.remove();
+        this.isDrawingCloudExportArea = false;
+        this.cloudExportAreaEl = null;
+        eventBus.emit('export:cloud-area-selection-cancelled', undefined);
       }
       // Switching away from the cloud-container tool by any path (not just Escape) — e.g.
       // clicking a different tool button directly while a boundary-icon drop primed it — drops
@@ -580,6 +635,9 @@ export class App {
     // Export flow requests the user draw a custom area on the canvas
     eventBus.on('export:request-area-selection', () => {
       eventBus.emit('tool:changed', 'export-area');
+    });
+    eventBus.on('export:cloud-request-area-selection', () => {
+      eventBus.emit('tool:changed', 'cloud-export-area');
     });
 
     // File operations — no background auto-save; Save/Save As/Open are real file downloads/
@@ -2885,15 +2943,16 @@ export class App {
         if (stateManager.getState().tool === 'export-area') {
           eventBus.emit('tool:changed', 'select');
         }
-        if (stateManager.getState().tool === 'cloud-container' || stateManager.getState().tool === 'cloud-connect') {
+        if (stateManager.getState().tool === 'cloud-container' || stateManager.getState().tool === 'cloud-connect' || stateManager.getState().tool === 'cloud-export-area') {
           eventBus.emit('tool:changed', 'select');
         }
         this.cancelCloudContainerDraw();
         this.cancelCloudConnect();
-        if ((this.draggedConnectorEndpoint || this.draggedConnectorCrossbar) && this.dragStartCloudConnectorsState) {
+        if ((this.draggedConnectorEndpoint || this.draggedConnectorSegment || this.draggedConnectorWaypoint) && this.dragStartCloudConnectorsState) {
           stateManager.setState({ cloudConnectors: this.dragStartCloudConnectorsState }, true);
           this.draggedConnectorEndpoint = null;
-          this.draggedConnectorCrossbar = null;
+          this.draggedConnectorSegment = null;
+          this.draggedConnectorWaypoint = null;
           this.dragStartCloudConnectorsState = null;
           this.renderCloudAll();
         }
@@ -2974,6 +3033,22 @@ export class App {
             stateManager.addDevice(cloned);
             stateManager.setState({ selection: [{ type: 'device', id: cloned.id }] });
             eventBus.emit('selection:changed', [{ type: 'device', id: cloned.id }]);
+          }
+        }
+
+        // Ctrl+D = Duplicate selected cloud connector — a detached copy near the original (see
+        // cloneCloudConnector()'s doc comment for why it doesn't just reattach to the same nodes).
+        const connSel = s.selection.find(sel => sel.type === 'cloud-connector');
+        if (connSel) {
+          const conn = stateManager.getState().cloudConnectors.find(c => c.id === connSel.id);
+          const resolved = conn ? this.resolveCloudConnectorEndpoints(conn) : null;
+          if (conn && resolved) {
+            const cloned = cloneCloudConnector(conn, resolved.from, resolved.to);
+            stateManager.addCloudConnector(cloned);
+            const selection: SelectableItem[] = [{ type: 'cloud-connector', id: cloned.id }];
+            stateManager.setState({ selection });
+            eventBus.emit('selection:changed', selection);
+            this.renderCloudAll();
           }
         }
       }
@@ -4028,9 +4103,6 @@ export class App {
    * Update canvas cursor based on current tool.
    */
   private updateCanvasCursor(mode: ToolMode) {
-    const viewport = document.getElementById('canvas-viewport');
-    if (!viewport) return;
-
     const cursorMap: Record<ToolMode, string> = {
       'select': 'default',
       'pan': 'grab',
@@ -4043,8 +4115,19 @@ export class App {
       'export-area': 'crosshair',
       'cloud-container': 'crosshair',
       'cloud-connect': 'crosshair',
+      'cloud-export-area': 'crosshair',
     };
-    viewport.style.cursor = cursorMap[mode] || 'default';
+    const cursor = cursorMap[mode] || 'default';
+
+    const viewport = document.getElementById('canvas-viewport');
+    if (viewport) viewport.style.cursor = cursor;
+
+    // #cloud-canvas sits in its own #cloud-viewport, a sibling of #canvas-viewport (see
+    // canvas.css) — its default cursor (set in cloud-canvas.css) is never touched by the rule
+    // above, so cloud-only tools (container/connect/export-area) need their own explicit update
+    // here or the cursor silently stays 'default' even while a draw tool is armed.
+    const cloudCanvasEl = document.getElementById('cloud-canvas');
+    if (cloudCanvasEl) cloudCanvasEl.style.cursor = cursor;
   }
 
   /**
@@ -4499,7 +4582,17 @@ export class App {
       const resolved = this.resolveCloudConnectorEndpoints(conn);
       if (!resolved) continue;
       const { from, to, fromSide, toSide } = resolved;
-      renderCloudConnector(conn, from, to, connectorLayer, selectedConnIds.has(conn.id), fromSide, toSide);
+      const connGroup = renderCloudConnector(conn, from, to, connectorLayer, selectedConnIds.has(conn.id), fromSide, toSide);
+      // While THIS connector's own tip is being re-dragged, its rendered line/hit-path sits on
+      // the connector layer — painted ABOVE the node layer — and can shadow the very node
+      // underneath it from hover/hit-testing, especially right at its current attachment point
+      // (exactly where a user re-aiming it toward a nearby side would naturally pass the cursor).
+      // That silently ate the "show 4 connection dots to snap onto" feedback and the eventual
+      // drop, reading as "changing the direction doesn't snap". Let pointer events pass through
+      // to whatever's underneath for the whole duration of its own drag.
+      if (this.draggedConnectorEndpoint?.connectorId === conn.id) {
+        connGroup.style.pointerEvents = 'none';
+      }
     }
   }
 
@@ -4584,6 +4677,217 @@ export class App {
         console.error('Cloud icon drop failed', err);
       }
     });
+  }
+
+  /** Right-click menu for the Cloud Architecture canvas — CloudConnectors (delete, duplicate,
+   *  add/remove waypoint, reset routing, line style/arrows/color/rounded corners) and
+   *  CloudContainers (delete, line style, color, kind), mirroring the rack canvas's cable context
+   *  menu (see setupContextMenuHandling()). Nodes and empty background still have no menu —
+   *  right-clicking them is a no-op. */
+  private setupCloudContextMenu(): void {
+    eventBus.on('cloud-canvas:rightclick', ({ point, target, screenPoint }) => {
+      const targetEl = target as unknown as SVGElement | null;
+      const waypointHandleEl = targetEl?.closest?.('.cloud-connector-waypoint-handle') as SVGElement | null;
+      const connectorEl = (waypointHandleEl ?? targetEl?.closest?.('[data-cloud-connector-id]')) as SVGElement | null;
+      const connectorId = connectorEl?.getAttribute('data-cloud-connector-id');
+
+      if (!connectorId) {
+        this.showCloudContainerContextMenu(targetEl, screenPoint);
+        return;
+      }
+
+      const connector = stateManager.getState().cloudConnectors.find(c => c.id === connectorId);
+      if (!connector) return;
+
+      const selection: SelectableItem[] = [{ type: 'cloud-connector', id: connectorId }];
+      stateManager.setState({ selection });
+      eventBus.emit('selection:changed', selection);
+      this.renderCloudAll();
+
+      const waypointIndex = waypointHandleEl ? Number(waypointHandleEl.getAttribute('data-waypoint-index')) : null;
+
+      const colorItems: MenuItem[] = [
+        { label: '🟠 Orange', action: () => eventBus.emit('cloudconnector:update', { id: connectorId, data: { color: '#FF9900' } }) },
+        { label: '🔷 Azure Blue', action: () => eventBus.emit('cloudconnector:update', { id: connectorId, data: { color: '#0078D4' } }) },
+        { label: '🔴 GCP Red', action: () => eventBus.emit('cloudconnector:update', { id: connectorId, data: { color: '#4285F4' } }) },
+        { label: '🟢 Green', action: () => eventBus.emit('cloudconnector:update', { id: connectorId, data: { color: '#3fb950' } }) },
+        { label: '🟣 Purple', action: () => eventBus.emit('cloudconnector:update', { id: connectorId, data: { color: '#8e24aa' } }) },
+        { label: '⚪ Grey (default)', action: () => eventBus.emit('cloudconnector:update', { id: connectorId, data: { color: undefined } }) },
+      ];
+
+      const styleItems: MenuItem[] = CLOUD_CONNECTOR_LINE_STYLES.map(({ value, label }) => ({
+        label: (connector.style ?? 'solid') === value ? `● ${label}` : label,
+        action: () => eventBus.emit('cloudconnector:update', { id: connectorId, data: { style: value } }),
+      }));
+
+      const arrowOptions: { value: CloudArrowType; label: string }[] = [
+        { value: 'none', label: 'None' },
+        { value: 'arrow', label: 'Arrow' },
+        { value: 'arrow-open', label: 'Open Arrow' },
+        { value: 'arrow-broad', label: 'Broad Arrow' },
+        { value: 'dot', label: 'Dot' },
+        { value: 'diamond', label: 'Diamond' },
+      ];
+      const startArrowItems: MenuItem[] = arrowOptions.map(({ value, label }) => ({
+        label: (connector.startArrow ?? 'none') === value ? `● ${label}` : label,
+        action: () => eventBus.emit('cloudconnector:update', { id: connectorId, data: { startArrow: value } }),
+      }));
+      const endArrowItems: MenuItem[] = arrowOptions.map(({ value, label }) => ({
+        label: (connector.endArrow ?? 'arrow') === value ? `● ${label}` : label,
+        action: () => eventBus.emit('cloudconnector:update', { id: connectorId, data: { endArrow: value } }),
+      }));
+
+      const clearOffsets = {
+        crossbarOffset: undefined, entryOffset: undefined, exitOffset: undefined,
+        entryStubOffset: undefined, exitStubOffset: undefined,
+      };
+
+      const items: MenuItem[] = [
+        { label: `🔗 ${connector.label || 'Connector'}`, disabled: true },
+        { separator: true, label: '' },
+        { label: 'Line Style', icon: '〰️', submenu: styleItems },
+        { label: 'Start Arrow', icon: '⬅️', submenu: startArrowItems },
+        { label: 'End Arrow', icon: '➡️', submenu: endArrowItems },
+        { label: 'Color', icon: '🎨', submenu: colorItems },
+        {
+          label: connector.roundedCorners ? 'Sharp Corners' : 'Rounded Corners',
+          icon: '⭕',
+          action: () => eventBus.emit('cloudconnector:update', { id: connectorId, data: { roundedCorners: !connector.roundedCorners } }),
+        },
+        { separator: true, label: '' },
+        waypointIndex !== null
+          ? {
+              label: '🗑 Remove Waypoint',
+              action: () => {
+                const waypoints = (connector.waypoints ?? []).filter((_, i) => i !== waypointIndex);
+                eventBus.emit('cloudconnector:update', { id: connectorId, data: { waypoints } });
+              },
+            }
+          : {
+              label: '📍 Add Waypoint Here',
+              action: () => {
+                const existing = connector.waypoints ?? [];
+                const newPoint: Point = { x: Math.round(point.x), y: Math.round(point.y) };
+                let waypoints: Point[];
+                if (existing.length === 0) {
+                  // First manual point on an otherwise auto-routed connector — takes over routing
+                  // entirely from here (see CloudConnector.waypoints' doc comment).
+                  waypoints = [newPoint];
+                } else {
+                  const resolved = this.resolveCloudConnectorEndpoints(connector);
+                  const pts = resolved ? [resolved.from, ...existing, resolved.to] : [newPoint, ...existing, newPoint];
+                  let minDist = Infinity, insertIdx = existing.length;
+                  for (let i = 0; i < pts.length - 1; i++) {
+                    const d = distToSegment(point, pts[i], pts[i + 1]);
+                    if (d < minDist) { minDist = d; insertIdx = i; }
+                  }
+                  waypoints = [...existing];
+                  waypoints.splice(insertIdx, 0, newPoint);
+                }
+                eventBus.emit('cloudconnector:update', { id: connectorId, data: { waypoints } });
+              },
+            },
+        ...(connector.waypoints && connector.waypoints.length > 0
+          ? [{
+              label: '↺ Reset Routing',
+              icon: '↺',
+              action: () => eventBus.emit('cloudconnector:update', { id: connectorId, data: { waypoints: undefined, ...clearOffsets } }),
+            }]
+          : []),
+        { separator: true, label: '' },
+        {
+          label: '⧉ Duplicate Connector',
+          icon: '⧉',
+          shortcut: 'Ctrl+D',
+          action: () => {
+            const resolved = this.resolveCloudConnectorEndpoints(connector);
+            if (!resolved) return;
+            const cloned = cloneCloudConnector(connector, resolved.from, resolved.to);
+            stateManager.addCloudConnector(cloned);
+            const sel: SelectableItem[] = [{ type: 'cloud-connector', id: cloned.id }];
+            stateManager.setState({ selection: sel });
+            eventBus.emit('selection:changed', sel);
+            this.renderCloudAll();
+          },
+        },
+        {
+          label: '🗑 Delete Connector',
+          icon: '🗑',
+          shortcut: 'Del',
+          action: () => {
+            stateManager.removeCloudConnector(connectorId);
+            stateManager.setState({ selection: [] });
+            eventBus.emit('selection:changed', []);
+            this.renderCloudAll();
+          },
+        },
+      ];
+
+      this.contextMenu.show(screenPoint.x, screenPoint.y, items);
+    });
+  }
+
+  /** Right-click menu for a CloudContainer (VPC/Subnet/AZ/Region/Resource-Group/Account boundary
+   *  box) — line style + color, same CLOUD_CONNECTOR_LINE_STYLES catalog CloudConnector uses (see
+   *  CloudContainer.style's doc comment for why 'double'-family styles look different there), plus
+   *  Delete. Called from setupCloudContextMenu() whenever the right-click didn't land on a
+   *  connector; a no-op if it didn't land on a container either (e.g. empty background, a node). */
+  private showCloudContainerContextMenu(targetEl: SVGElement | null, screenPoint: Point): void {
+    const containerEl = targetEl?.closest?.('[data-cloud-container-id]') as SVGElement | null;
+    const containerId = containerEl?.getAttribute('data-cloud-container-id');
+    if (!containerId) return;
+
+    const item = stateManager.getState().cloudContainers.find(c => c.id === containerId);
+    if (!item) return;
+
+    const selection: SelectableItem[] = [{ type: 'cloud-container', id: containerId }];
+    stateManager.setState({ selection });
+    eventBus.emit('selection:changed', selection);
+    this.renderCloudAll();
+
+    const colorItems: MenuItem[] = [
+      { label: '🟠 Orange', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { color: '#FF9900' } }) },
+      { label: '🔷 Azure Blue', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { color: '#0078D4' } }) },
+      { label: '🔴 GCP Red', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { color: '#4285F4' } }) },
+      { label: '🟢 Green', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { color: '#3fb950' } }) },
+      { label: '🟣 Purple', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { color: '#8e24aa' } }) },
+      { label: '⚪ Grey (neutral)', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { color: undefined } }) },
+    ];
+
+    const styleItems: MenuItem[] = [
+      { label: !item.style ? '● Kind Default' : 'Kind Default', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { style: undefined } }) },
+      ...CLOUD_CONNECTOR_LINE_STYLES.map(({ value, label }) => ({
+        label: item.style === value ? `● ${label}` : label,
+        action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { style: value } }),
+      })),
+    ];
+
+    const bgOn = (item.backgroundOpacity ?? 0.08) > 0;
+    const items: MenuItem[] = [
+      { label: `⬚ ${item.label || 'Boundary'}`, disabled: true },
+      { separator: true, label: '' },
+      { label: 'Border Line Style', icon: '〰️', submenu: styleItems },
+      { label: 'Border Color', icon: '🎨', submenu: colorItems },
+      {
+        label: bgOn ? 'Disable Background Fill' : 'Enable Background Fill',
+        icon: bgOn ? '◻️' : '◼️',
+        action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { backgroundOpacity: bgOn ? 0 : 0.08 } }),
+      },
+      { separator: true, label: '' },
+      {
+        label: '🗑 Delete',
+        icon: '🗑',
+        shortcut: 'Del',
+        action: () => {
+          stateManager.removeCloudContainer(containerId);
+          stateManager.setState({ selection: [] });
+          eventBus.emit('selection:changed', []);
+          this.renderCloudAll();
+        },
+      },
+    ];
+
+    this.contextMenu.show(screenPoint.x, screenPoint.y, items);
   }
 
   /** Draws/updates the live rectangle preview for the cloud-container draw tool into
@@ -4765,11 +5069,48 @@ export class App {
     const svgEl = document.getElementById('cloud-canvas') as unknown as SVGSVGElement;
     if (!svgEl) return;
 
+    // Blanket native-drag suppression for anything living ON the cloud canvas (mainly node
+    // <image> icons — see cloud-node-renderer.ts). Browsers that start an HTML5 drag session
+    // despite draggable="false"/preventDefault() on mousedown stop dispatching ordinary
+    // mousemove/mouseup to the dragged element entirely (replaced by drag/dragover/drop/dragend),
+    // which would silently break every custom mouse-drag gesture below (move, resize, connect,
+    // the export-area rectangle) with no error and no visible feedback. Doesn't affect dropping a
+    // NEW icon from the sidebar palette onto the canvas — that's a 'drop' starting from a
+    // 'dragstart' on the SIDEBAR item, not on this canvas.
+    svgEl.addEventListener('dragstart', (e) => e.preventDefault());
+
     svgEl.addEventListener('mousedown', (e: MouseEvent) => {
       if (e.button !== 0) return;
       const worldPos = this.cloudCanvas!.screenToWorld({ x: e.clientX, y: e.clientY });
       const tool = stateManager.getState().tool;
       const target = e.target as Element;
+
+      // Cloud export-area drawing takes absolute priority — mirrors the rack canvas's
+      // 'export-area' branch in setupCanvasInteractions()'s mousedown handler: no hit-testing
+      // against nodes/containers/connectors while picking an export rectangle.
+      if (tool === 'cloud-export-area') {
+        this.cloudExportAreaStart = worldPos;
+        this.cloudExportAreaStartScreen = { x: e.clientX, y: e.clientY };
+        const layer = this.cloudCanvas!.getLayer('cloud-interaction-layer');
+        if (layer) {
+          const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          rect.id = 'cloud-export-area-rect';
+          rect.setAttribute('fill', 'rgba(251,140,0,0.08)');
+          rect.setAttribute('stroke', '#fb8c00');
+          rect.setAttribute('stroke-width', '1');
+          rect.setAttribute('stroke-dasharray', '4,2');
+          rect.setAttribute('pointer-events', 'none');
+          layer.appendChild(rect);
+          this.cloudExportAreaEl = rect;
+          this.isDrawingCloudExportArea = true;
+        }
+        // Cloud nodes render as SVG <image> elements (see cloud-node-renderer.ts), which browsers
+        // can natively drag-ghost on a mousedown-drag; preventDefault stops that from hijacking
+        // this gesture when the rectangle happens to start on top of a node icon.
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
 
       // Connection handles (4-directional dots that appear on hover/selection, see
       // cloud-node-renderer.ts) start a connector drag regardless of the active tool — the
@@ -4842,12 +5183,13 @@ export class App {
         return;
       }
 
-      // 'select' tool: crossbar handle > endpoint handle > resize handle > node body > container body > connector > background.
+      // 'select' tool: segment handle (entry/crossbar/exit) > endpoint handle > resize handle > node body > container body > connector > background.
       const crossbarHandle = target.closest('.cloud-connector-crossbar-handle') as SVGElement | null;
       if (crossbarHandle) {
         const connectorId = crossbarHandle.getAttribute('data-cloud-connector-id')!;
         const axis = crossbarHandle.getAttribute('data-axis') as 'x' | 'y';
-        this.draggedConnectorCrossbar = { connectorId, axis };
+        const kind = (crossbarHandle.getAttribute('data-kind') as CloudConnectorSegmentKind) ?? 'crossbar';
+        this.draggedConnectorSegment = { connectorId, axis, kind };
         this.dragStartCloudConnectorsState = stateManager.getState().cloudConnectors;
         return;
       }
@@ -4860,6 +5202,15 @@ export class App {
         this.dragStartCloudConnectorsState = stateManager.getState().cloudConnectors;
         this.cloudConnectHoverNodeId = undefined;
         this.cloudConnectHoverSide = undefined;
+        return;
+      }
+
+      const waypointHandle = target.closest('.cloud-connector-waypoint-handle') as SVGElement | null;
+      if (waypointHandle) {
+        const connectorId = waypointHandle.getAttribute('data-cloud-connector-id')!;
+        const index = Number(waypointHandle.getAttribute('data-waypoint-index'));
+        this.draggedConnectorWaypoint = { connectorId, index };
+        this.dragStartCloudConnectorsState = stateManager.getState().cloudConnectors;
         return;
       }
 
@@ -4948,6 +5299,18 @@ export class App {
     svgEl.addEventListener('mousemove', (e: MouseEvent) => {
       const worldPos = this.cloudCanvas!.screenToWorld({ x: e.clientX, y: e.clientY });
 
+      if (this.isDrawingCloudExportArea && this.cloudExportAreaEl) {
+        const x = Math.min(worldPos.x, this.cloudExportAreaStart.x);
+        const y = Math.min(worldPos.y, this.cloudExportAreaStart.y);
+        const w = Math.abs(worldPos.x - this.cloudExportAreaStart.x);
+        const h = Math.abs(worldPos.y - this.cloudExportAreaStart.y);
+        this.cloudExportAreaEl.setAttribute('x', String(x));
+        this.cloudExportAreaEl.setAttribute('y', String(y));
+        this.cloudExportAreaEl.setAttribute('width', String(w));
+        this.cloudExportAreaEl.setAttribute('height', String(h));
+        return;
+      }
+
       if (this.isDrawingCloudContainer) {
         this.renderCloudContainerDrawPreview(this.cloudContainerDrawStart, worldPos);
         return;
@@ -4973,11 +5336,25 @@ export class App {
         return;
       }
 
-      if (this.draggedConnectorCrossbar) {
-        const { connectorId, axis } = this.draggedConnectorCrossbar;
+      if (this.draggedConnectorSegment) {
+        const { connectorId, axis, kind } = this.draggedConnectorSegment;
+        const value = axis === 'x' ? worldPos.x : worldPos.y;
+        const field = SEGMENT_KIND_FIELD[kind];
         const cloudConnectors = stateManager.getState().cloudConnectors.map(c =>
-          c.id === connectorId ? { ...c, crossbarOffset: axis === 'x' ? worldPos.x : worldPos.y } : c
+          c.id === connectorId ? { ...c, [field]: value } : c
         );
+        stateManager.setState({ cloudConnectors }, true);
+        this.renderCloudAll();
+        return;
+      }
+
+      if (this.draggedConnectorWaypoint) {
+        const { connectorId, index } = this.draggedConnectorWaypoint;
+        const cloudConnectors = stateManager.getState().cloudConnectors.map(c => {
+          if (c.id !== connectorId || !c.waypoints) return c;
+          const waypoints = c.waypoints.map((wp, i) => i === index ? worldPos : wp);
+          return { ...c, waypoints };
+        });
         stateManager.setState({ cloudConnectors }, true);
         this.renderCloudAll();
         return;
@@ -5051,6 +5428,27 @@ export class App {
     });
 
     window.addEventListener('mouseup', (e: MouseEvent) => {
+      if (this.isDrawingCloudExportArea) {
+        this.isDrawingCloudExportArea = false;
+        this.cloudExportAreaEl?.remove();
+        this.cloudExportAreaEl = null;
+
+        const worldPos = this.cloudCanvas!.screenToWorld({ x: e.clientX, y: e.clientY });
+        const selX = Math.min(worldPos.x, this.cloudExportAreaStart.x);
+        const selY = Math.min(worldPos.y, this.cloudExportAreaStart.y);
+        const selW = Math.abs(worldPos.x - this.cloudExportAreaStart.x);
+        const selH = Math.abs(worldPos.y - this.cloudExportAreaStart.y);
+
+        const screenDx = Math.abs(e.clientX - this.cloudExportAreaStartScreen.x);
+        const screenDy = Math.abs(e.clientY - this.cloudExportAreaStartScreen.y);
+        const draggedEnough = screenDx > 4 || screenDy > 4;
+
+        eventBus.emit('tool:changed', 'select');
+        if (draggedEnough) {
+          eventBus.emit('export:cloud-area-selected', { x: selX, y: selY, width: selW, height: selH });
+        }
+        return;
+      }
       if (this.isDrawingCloudContainer) {
         const worldPos = this.cloudCanvas!.screenToWorld({ x: e.clientX, y: e.clientY });
         this.finishCloudContainerDraw(worldPos);
@@ -5086,8 +5484,11 @@ export class App {
       if (this.draggedConnectorEndpoint) {
         this.commitConnectorEndpointDrag();
       }
-      if (this.draggedConnectorCrossbar) {
-        this.commitConnectorCrossbarDrag();
+      if (this.draggedConnectorSegment) {
+        this.commitConnectorSegmentDrag();
+      }
+      if (this.draggedConnectorWaypoint) {
+        this.commitConnectorWaypointDrag();
       }
     });
   }
@@ -5121,24 +5522,51 @@ export class App {
     stateManager.setState({ cloudConnectors: snapshot }, true);
 
     const validReattach = hoverNodeId !== null && hoverNodeId !== otherEndNodeId;
-    const data = end === 'source'
+    const endData = end === 'source'
       ? (validReattach
           ? { sourceNodeId: hoverNodeId, sourceSide: hoverSide, sourcePoint: null }
           : { sourceNodeId: null, sourceSide: undefined, sourcePoint: liveConnector.sourcePoint })
       : (validReattach
           ? { destNodeId: hoverNodeId, destSide: hoverSide, destPoint: null }
           : { destNodeId: null, destSide: undefined, destPoint: liveConnector.destPoint });
+    // Re-aiming an endpoint (new side, new node, or detaching to a floating point) changes the
+    // route's topology — same reasoning as cloneCloudConnector() clearing these on a detached
+    // copy: crossbarOffset/entryOffset/exitOffset/entryStubOffset/exitStubOffset are absolute
+    // world coordinates tuned for the OLD endpoint/side combination. Left in place, they'd render
+    // a path that visually ignores the new direction (still bending toward where the old side
+    // used to be) — exactly the "changing the pointer direction doesn't align" symptom reported.
+    const data = {
+      ...endData,
+      crossbarOffset: undefined, entryOffset: undefined, exitOffset: undefined,
+      entryStubOffset: undefined, exitStubOffset: undefined,
+    };
     eventBus.emit('cloudconnector:update', { id: connectorId, data });
   }
 
-  /** Finishes dragging a connector's crossbar dot: the live drag already wrote each intermediate
-   *  `crossbarOffset` as a transient update (see setupCloudCanvasInteractions()'s mousemove), so
-   *  this just restores the pre-drag snapshot and re-applies the final value through the normal
-   *  event path — collapsing the whole drag into one undo entry, same pattern as
-   *  commitConnectorEndpointDrag(). */
-  private commitConnectorCrossbarDrag(): void {
-    const { connectorId } = this.draggedConnectorCrossbar!;
-    this.draggedConnectorCrossbar = null;
+  /** Finishes dragging one of a connector's segment dots (entry/crossbar/exit): the live drag
+   *  already wrote each intermediate offset as a transient update (see
+   *  setupCloudCanvasInteractions()'s mousemove), so this just restores the pre-drag snapshot and
+   *  re-applies the final value through the normal event path — collapsing the whole drag into
+   *  one undo entry, same pattern as commitConnectorEndpointDrag(). */
+  private commitConnectorSegmentDrag(): void {
+    const { connectorId, kind } = this.draggedConnectorSegment!;
+    this.draggedConnectorSegment = null;
+
+    const liveConnector = stateManager.getState().cloudConnectors.find(c => c.id === connectorId);
+    const snapshot = this.dragStartCloudConnectorsState;
+    this.dragStartCloudConnectorsState = null;
+    if (!liveConnector || !snapshot) return;
+
+    const field = SEGMENT_KIND_FIELD[kind];
+    stateManager.setState({ cloudConnectors: snapshot }, true);
+    eventBus.emit('cloudconnector:update', { id: connectorId, data: { [field]: liveConnector[field] } });
+  }
+
+  /** Finishes dragging one waypoint of a connector's manual route — same undo-collapsing pattern
+   *  as commitConnectorSegmentDrag(). */
+  private commitConnectorWaypointDrag(): void {
+    const { connectorId } = this.draggedConnectorWaypoint!;
+    this.draggedConnectorWaypoint = null;
 
     const liveConnector = stateManager.getState().cloudConnectors.find(c => c.id === connectorId);
     const snapshot = this.dragStartCloudConnectorsState;
@@ -5146,7 +5574,7 @@ export class App {
     if (!liveConnector || !snapshot) return;
 
     stateManager.setState({ cloudConnectors: snapshot }, true);
-    eventBus.emit('cloudconnector:update', { id: connectorId, data: { crossbarOffset: liveConnector.crossbarOffset } });
+    eventBus.emit('cloudconnector:update', { id: connectorId, data: { waypoints: liveConnector.waypoints } });
   }
 
 }

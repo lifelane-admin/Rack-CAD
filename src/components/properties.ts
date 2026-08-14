@@ -2,7 +2,7 @@ import EventBus from '../core/event-bus';
 import { eventBus } from '../core/event-bus';
 import State from '../core/state';
 import { stateManager } from '../core/state';
-import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, DeviceCategory, PduConfig, PduOutletGroup, SocketType, KvmConfig, SwitchConfig, FirewallConfig, SwitchVendor, FirewallVendor, LedTheme, SwitchLayer, SwitchPortGroup, NacConfig, NacVendor, AtsConfig, RACK_CONSTANTS, PortData, CloudConnector } from '../core/types';
+import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, DeviceCategory, PduConfig, PduOutletGroup, SocketType, KvmConfig, SwitchConfig, FirewallConfig, SwitchVendor, FirewallVendor, LedTheme, SwitchLayer, SwitchPortGroup, NacConfig, NacVendor, AtsConfig, RACK_CONSTANTS, PortData, CloudConnector, CloudContainer } from '../core/types';
 import { KVM_LOCAL_PORT_OPTIONS, CONSOLE_LOCAL_PORT_OPTIONS } from '../renderers/networking-renderer';
 import { computePduLoad } from '../renderers/pdu-renderer';
 import { switchVendorSkin, firewallVendorSkin, nacVendorSkin } from '../renderers/vendor-palette';
@@ -179,14 +179,17 @@ export class PropertiesPanel {
     </svg>`;
   }
 
-  /** A <details>-based popover picker for CloudConnector.style — a plain <select> can't render
+  /** A <details>-based popover picker for a CloudLineStyle value — a plain <select> can't render
    *  inline SVG previews inside its <option>s, so this hand-rolls the trigger/menu instead. Native
-   *  <details> gives free open/close + outside-click-to-close behavior with no extra JS state. */
-  private lineStylePickerMarkup(current: string): string {
+   *  <details> gives free open/close + outside-click-to-close behavior with no extra JS state.
+   *  `idPrefix` namespaces the element ids so the same markup+wiring (see
+   *  wireLineStylePicker() below) can drive more than one property panel — CloudConnector.style
+   *  originally, CloudContainer.style reusing it as-is rather than a hand-duplicated copy. */
+  private lineStylePickerMarkup(current: string, idPrefix: string = 'prop-cloudconn-style'): string {
     const label = CLOUD_CONNECTOR_LINE_STYLES.find(s => s.value === current)?.label ?? current;
     return `
-      <details class="line-style-picker" id="prop-cloudconn-style-picker">
-        <summary class="line-style-trigger" id="prop-cloudconn-style-trigger">${this.lineStylePreviewSvg(current)}<span>${label}</span></summary>
+      <details class="line-style-picker" id="${idPrefix}-picker">
+        <summary class="line-style-trigger" id="${idPrefix}-trigger">${this.lineStylePreviewSvg(current)}<span>${label}</span></summary>
         <div class="line-style-menu">
           ${CLOUD_CONNECTOR_LINE_STYLES.map(s => `
             <div class="line-style-option" data-value="${s.value}">${this.lineStylePreviewSvg(s.value)}<span>${s.label}</span></div>
@@ -194,6 +197,24 @@ export class PropertiesPanel {
         </div>
       </details>
     `;
+  }
+
+  /** Wires click handling for a lineStylePickerMarkup() instance — updates the entity via
+   *  `emitEvent` (typically `cloudconnector:update`/`cloudcontainer:update`) and refreshes the
+   *  trigger's own swatch+label directly (this panel only rebuilds on selection/tool change, see
+   *  the constructor, so a plain re-render wouldn't reflect the new value without this). */
+  private wireLineStylePicker(container: HTMLElement, idPrefix: string, onSelect: (value: string) => void): void {
+    container.querySelectorAll(`#${idPrefix}-picker .line-style-option`).forEach(el => {
+      el.addEventListener('click', () => {
+        const value = (el as HTMLElement).dataset.value!;
+        const label = CLOUD_CONNECTOR_LINE_STYLES.find(s => s.value === value)?.label ?? value;
+        onSelect(value);
+        const trigger = container.querySelector(`#${idPrefix}-trigger`);
+        if (trigger) trigger.innerHTML = `${this.lineStylePreviewSvg(value)}<span>${label}</span>`;
+        const picker = container.querySelector(`#${idPrefix}-picker`) as HTMLDetailsElement | null;
+        if (picker) picker.open = false;
+      });
+    });
   }
 
   private renderCloudContainerProperties(id: string, container: HTMLElement) {
@@ -221,6 +242,25 @@ export class PropertiesPanel {
           <option value="gcp" ${item.provider === 'gcp' ? 'selected' : ''}>GCP</option>
         </select>
       </div>
+      <div class="form-group">
+        <label style="font-size: 10px;">Border Color (overrides Provider Accent above)</label>
+        <input type="color" id="prop-cloudcontainer-color" value="${item.color || '#8b949e'}" style="width: 100%; height: 28px; padding: 2px; cursor: pointer;" />
+      </div>
+      <div class="form-group">
+        <label>Border Line Style</label>
+        ${this.lineStylePickerMarkup(item.style || 'solid', 'prop-cloudcontainer-style')}
+        <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Unset uses this Kind's own default (e.g. Subnet = dashed, AZ = dotted).</div>
+      </div>
+      <div class="form-group">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+          <input type="checkbox" id="prop-cloudcontainer-bg-enabled" ${(item.backgroundOpacity ?? 0.08) > 0 ? 'checked' : ''} />
+          Background Fill
+        </label>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px; ${(item.backgroundOpacity ?? 0.08) > 0 ? '' : 'opacity: 0.4; pointer-events: none;'}" id="prop-cloudcontainer-bg-opacity-row">
+          <input type="range" id="prop-cloudcontainer-bg-opacity" min="1" max="100" value="${Math.round((item.backgroundOpacity ?? 0.08) * 100) || 1}" style="flex: 1;" />
+          <span id="prop-cloudcontainer-bg-opacity-value" style="font-size: 10px; color: var(--text-muted); width: 34px; text-align: right;">${Math.round((item.backgroundOpacity ?? 0.08) * 100)}%</span>
+        </div>
+      </div>
       <button id="prop-cloudcontainer-delete" style="margin-top: 10px; width: 100%; padding: 5px 8px; font-size: 10px; background: rgba(244,67,54,0.12); border: 1px solid #e53935; border-radius: 4px; color: #e53935; cursor: pointer;">🗑 Delete</button>
     `;
 
@@ -232,6 +272,33 @@ export class PropertiesPanel {
     });
     container.querySelector('#prop-cloudcontainer-provider')?.addEventListener('change', (e: any) => {
       EventBus.emit('cloudcontainer:update', { id, data: { provider: e.target.value || null } });
+    });
+    container.querySelector('#prop-cloudcontainer-color')?.addEventListener('input', (e: any) => {
+      EventBus.emit('cloudcontainer:update', { id, data: { color: e.target.value } });
+    });
+    this.wireLineStylePicker(container, 'prop-cloudcontainer-style', (value) => {
+      EventBus.emit('cloudcontainer:update', { id, data: { style: value as CloudContainer['style'] } });
+    });
+    container.querySelector('#prop-cloudcontainer-bg-enabled')?.addEventListener('change', (e: any) => {
+      const row = container.querySelector('#prop-cloudcontainer-bg-opacity-row') as HTMLElement | null;
+      if (e.target.checked) {
+        if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
+        // Re-enabling doesn't try to recall whatever custom value was in place before disabling
+        // (0 doesn't carry that information) — resets to the slider's own current position,
+        // which is the last value the user themselves picked while it was still enabled.
+        const slider = container.querySelector('#prop-cloudcontainer-bg-opacity') as HTMLInputElement | null;
+        const pct = slider ? Number(slider.value) : 8;
+        EventBus.emit('cloudcontainer:update', { id, data: { backgroundOpacity: pct / 100 } });
+      } else {
+        if (row) { row.style.opacity = '0.4'; row.style.pointerEvents = 'none'; }
+        EventBus.emit('cloudcontainer:update', { id, data: { backgroundOpacity: 0 } });
+      }
+    });
+    container.querySelector('#prop-cloudcontainer-bg-opacity')?.addEventListener('input', (e: any) => {
+      const pct = Number(e.target.value);
+      const label = container.querySelector('#prop-cloudcontainer-bg-opacity-value');
+      if (label) label.textContent = `${pct}%`;
+      EventBus.emit('cloudcontainer:update', { id, data: { backgroundOpacity: pct / 100 } });
     });
     container.querySelector('#prop-cloudcontainer-delete')?.addEventListener('click', () => {
       EventBus.emit('edit:delete', undefined as any);
@@ -310,19 +377,8 @@ export class PropertiesPanel {
     container.querySelector('#prop-cloudconn-width')?.addEventListener('change', (e: any) => {
       EventBus.emit('cloudconnector:update', { id, data: { width: parseFloat(e.target.value) || 2 } });
     });
-    container.querySelectorAll('#prop-cloudconn-style-picker .line-style-option').forEach(el => {
-      el.addEventListener('click', () => {
-        const value = (el as HTMLElement).dataset.value as NonNullable<CloudConnector['style']>;
-        const label = CLOUD_CONNECTOR_LINE_STYLES.find(s => s.value === value)?.label ?? value;
-        EventBus.emit('cloudconnector:update', { id, data: { style: value } });
-        // Picker doesn't live-refresh on cloudconnector:update (this panel only rebuilds on
-        // selection/tool change — see the constructor — so the trigger's own swatch+label is
-        // updated directly here rather than relying on a full re-render).
-        const trigger = container.querySelector('#prop-cloudconn-style-trigger');
-        if (trigger) trigger.innerHTML = `${this.lineStylePreviewSvg(value)}<span>${label}</span>`;
-        const picker = container.querySelector('#prop-cloudconn-style-picker') as HTMLDetailsElement | null;
-        if (picker) picker.open = false;
-      });
+    this.wireLineStylePicker(container, 'prop-cloudconn-style', (value) => {
+      EventBus.emit('cloudconnector:update', { id, data: { style: value as NonNullable<CloudConnector['style']> } });
     });
     container.querySelector('#prop-cloudconn-routing')?.addEventListener('change', (e: any) => {
       EventBus.emit('cloudconnector:update', { id, data: { routing: e.target.value } });

@@ -29,6 +29,9 @@ describe('renderCloudNode', () => {
     const img = group.querySelector('image');
     expect(img).not.toBeNull();
     expect(img!.getAttribute('href')).toBe('/cloud-icons/aws/amazon-ec2.svg');
+    // Not natively draggable — a browser-initiated image drag would hijack the custom
+    // move/resize/connect/export-area mouse gestures mid-drag (see app.ts's dragstart guard).
+    expect(img!.getAttribute('draggable')).toBe('false');
   });
 
   it('renders the label text when selected and unselected alike', () => {

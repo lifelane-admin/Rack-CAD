@@ -27,6 +27,119 @@ export interface ExportOptions {
 /** Pending format-specific export awaiting a canvas area selection. */
 let pendingAreaExport: { onConfirm: (options: ExportOptions) => void; baseOptions: ExportOptions } | null = null;
 
+export interface CloudExportOptions {
+  area: 'full' | 'viewport' | 'custom';
+  customRect?: { x: number; y: number; width: number; height: number };
+  scale?: number;
+}
+
+/** Pending cloud-diagram export awaiting a canvas area selection — separate from
+ *  pendingAreaExport above so a rack-canvas custom-area export in flight can never be confused
+ *  with a cloud-canvas one (they use their own dedicated 'export:cloud-*' events, see below). */
+let pendingCloudAreaExport: { onConfirm: (options: CloudExportOptions) => void; baseOptions: CloudExportOptions } | null = null;
+
+/**
+ * Show a trimmed export settings dialog for the Cloud Architecture canvas — same Export Area
+ * concept as showExportOptionsModal() above (Full Canvas / Visible Viewport / Draw Custom Area)
+ * minus the rack-specific "Focus on Specific Cabinet" option and the PDF/page-layout/grid
+ * settings, none of which apply to the cloud diagram.
+ */
+export function showCloudExportOptionsModal(
+  format: 'svg' | 'png',
+  onConfirm: (options: CloudExportOptions) => void
+) {
+  const existing = document.getElementById('cloud-export-settings-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'cloud-export-settings-modal';
+  modal.style.cssText = `
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(10, 12, 16, 0.7); backdrop-filter: blur(12px);
+    z-index: 10000; display: flex; align-items: center; justify-content: center;
+    font-family: 'Inter', system-ui, sans-serif; color: #fff;
+  `;
+
+  const isRaster = format === 'png';
+
+  modal.innerHTML = `
+    <div style="background: rgba(22, 27, 34, 0.85); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; width: 420px; max-width: 90vw; padding: 24px; box-shadow: 0 20px 45px rgba(0,0,0,0.65);">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 14px;">
+        <h3 style="margin: 0; font-size: 15px; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
+          📤 Export Cloud Diagram (${format.toUpperCase()})
+        </h3>
+        <button id="cloud-export-modal-close" style="background: none; border: none; color: #8b949e; font-size: 18px; cursor: pointer;">✕</button>
+      </div>
+
+      <div style="margin-top: 18px; display: flex; flex-direction: column; gap: 16px;">
+        <div>
+          <label style="font-size: 11px; font-weight: 700; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;">Export Area</label>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+              <input type="radio" name="cloud-export-area" value="full" checked /> Full Diagram (Fit all content)
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+              <input type="radio" name="cloud-export-area" value="viewport" /> Visible Viewport (Active zoom/pan)
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+              <input type="radio" name="cloud-export-area" value="custom" /> 🖱️ Draw Custom Area on Canvas
+            </label>
+          </div>
+        </div>
+
+        ${isRaster ? `
+        <div>
+          <label style="font-size: 11px; font-weight: 700; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;">Resolution / Quality</label>
+          <div style="display: flex; gap: 12px; margin-top: 8px;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+              <input type="radio" name="cloud-export-scale" value="1" /> 1x (Normal)
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+              <input type="radio" name="cloud-export-scale" value="2" checked /> 2x (High-Res)
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+              <input type="radio" name="cloud-export-scale" value="3" /> 3x (Ultra-HD)
+            </label>
+          </div>
+        </div>
+        ` : ''}
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 16px;">
+        <button id="cloud-export-modal-cancel" style="padding: 6px 14px; font-size: 12px; background: transparent; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; cursor: pointer;">Cancel</button>
+        <button id="cloud-export-modal-confirm" style="padding: 6px 18px; font-size: 12px; background: #fb8c00; border: none; color: #fff; font-weight: bold; border-radius: 4px; cursor: pointer;">Export Diagram</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  modal.querySelector('#cloud-export-modal-close')?.addEventListener('click', closeModal);
+  modal.querySelector('#cloud-export-modal-cancel')?.addEventListener('click', closeModal);
+
+  modal.querySelector('#cloud-export-modal-confirm')?.addEventListener('click', () => {
+    const selectedArea = (modal.querySelector('input[name="cloud-export-area"]:checked') as HTMLInputElement).value as CloudExportOptions['area'];
+
+    const options: CloudExportOptions = { area: selectedArea };
+
+    if (isRaster) {
+      options.scale = parseInt((modal.querySelector('input[name="cloud-export-scale"]:checked') as HTMLInputElement).value);
+    }
+
+    closeModal();
+
+    if (selectedArea === 'custom') {
+      pendingCloudAreaExport = { onConfirm, baseOptions: options };
+      eventBus.emit('export:cloud-request-area-selection', undefined);
+      eventBus.emit('notification', { message: 'Drag a rectangle on the cloud canvas to select the export area — Esc to cancel', type: 'info' });
+      return;
+    }
+
+    onConfirm(options);
+  });
+}
+
 /**
  * Show modern export settings dialog modal.
  */
@@ -492,6 +605,50 @@ ${svgContent.replace(/<\?xml.*?\?>/, '')}
 </html>`;
 }
 
+const XLINK_NS = 'http://www.w3.org/1999/xlink';
+
+/** Fetches a same-origin URL and returns it as a base64 data: URI. */
+async function urlToDataURI(url: string): Promise<string> {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Inlines every <image> element's href/xlink:href as a base64 data: URI, in place, on a detached
+ * SVG clone — cloud node/container icons (cloud-node-renderer.ts, cloud-container-renderer.ts)
+ * reference the official AWS/Azure/GCP/onprem icon packs by server-relative path
+ * (`/cloud-icons/<provider>/...svg`), which only resolves while the exported file is viewed from
+ * this exact dev/prod origin. A downloaded .svg opened standalone (double-clicked, emailed,
+ * opened on another machine) has no such origin to resolve against, so those icons rendered as
+ * broken-image placeholders — this makes every export fully self-contained regardless of where
+ * it's later opened. Fetches each distinct path once even if referenced by many nodes.
+ */
+async function inlineImageHrefs(root: SVGElement): Promise<void> {
+  const images = Array.from(root.querySelectorAll('image')) as SVGImageElement[];
+  const cache = new Map<string, string>();
+
+  await Promise.all(images.map(async (img) => {
+    const href = img.getAttribute('href') || img.getAttributeNS(XLINK_NS, 'href');
+    if (!href || href.startsWith('data:')) return;
+    try {
+      if (!cache.has(href)) cache.set(href, await urlToDataURI(href));
+      const dataUri = cache.get(href)!;
+      img.setAttribute('href', dataUri);
+      img.setAttributeNS(XLINK_NS, 'xlink:href', dataUri);
+    } catch (err) {
+      // Leave the original (server-relative) href in place rather than failing the whole
+      // export — a broken-image icon for one unreachable asset beats no export at all.
+      console.warn(`[export] Failed to inline icon ${href}:`, err);
+    }
+  }));
+}
+
 /**
  * Export the Cloud Architecture canvas (#cloud-canvas) as a standalone SVG string. A deliberately
  * simpler sibling of exportSVG() above — no rack-area-selection options, no summary-card overlay
@@ -499,7 +656,7 @@ ${svgContent.replace(/<\?xml.*?\?>/, '')}
  * technique though: clone, bbox-fit from the live (attached) viewport group, strip the pan/zoom
  * transform and the transient interaction layer.
  */
-export function exportCloudSVG(): string {
+export async function exportCloudSVG(options?: CloudExportOptions): Promise<string> {
   const svgEl = document.getElementById('cloud-canvas') as unknown as SVGSVGElement;
   if (!svgEl) throw new Error('Cloud canvas SVG element not found');
 
@@ -507,13 +664,36 @@ export function exportCloudSVG(): string {
   const vpGroup = clone.querySelector('#cloud-viewport-group') as SVGGElement;
 
   let bbox = { x: 0, y: 0, width: 1200, height: 800 };
-  try {
+  let appliedBox = false;
+
+  if (options && options.area === 'custom' && options.customRect) {
+    bbox = { ...options.customRect };
+    appliedBox = true;
+  } else if (options && options.area === 'viewport') {
+    // The live (attached) viewport group's own SVG transform matrix — the cloud canvas keeps its
+    // pan/zoom transform only as a DOM attribute (see CloudCanvasManager), not in shared app
+    // state like the rack canvas's stateManager.getState().transform, so it's read straight off
+    // the transform that's actually on screen right now.
     const origViewport = svgEl.querySelector('#cloud-viewport-group') as SVGGElement;
-    const b = origViewport.getBBox();
-    const padding = 40;
-    bbox = { x: b.x - padding, y: b.y - padding, width: b.width + padding * 2, height: b.height + padding * 2 };
-  } catch {
-    // getBBox() throws if there's nothing rendered (empty diagram) — fall back to a blank canvas.
+    const matrix = origViewport.transform.baseVal.consolidate()?.matrix;
+    const scale = matrix ? matrix.a : 1;
+    const tx = matrix ? matrix.e : 0;
+    const ty = matrix ? matrix.f : 0;
+    const clientWidth = svgEl.clientWidth || 1200;
+    const clientHeight = svgEl.clientHeight || 800;
+    bbox = { x: -tx / scale, y: -ty / scale, width: clientWidth / scale, height: clientHeight / scale };
+    appliedBox = true;
+  }
+
+  if (!appliedBox) {
+    try {
+      const origViewport = svgEl.querySelector('#cloud-viewport-group') as SVGGElement;
+      const b = origViewport.getBBox();
+      const padding = 40;
+      bbox = { x: b.x - padding, y: b.y - padding, width: b.width + padding * 2, height: b.height + padding * 2 };
+    } catch {
+      // getBBox() throws if there's nothing rendered (empty diagram) — fall back to a blank canvas.
+    }
   }
 
   clone.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
@@ -532,6 +712,8 @@ export function exportCloudSVG(): string {
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
   clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
 
+  await inlineImageHrefs(clone);
+
   const serializer = new XMLSerializer();
   const svgString = serializer.serializeToString(clone);
   return `<?xml version="1.0" encoding="UTF-8"?>\n${svgString}`;
@@ -541,8 +723,9 @@ export function exportCloudSVG(): string {
  * Export the Cloud Architecture canvas as a high-resolution PNG — same blob-URL/canvas
  * rasterization technique as exportPNG() above, built on exportCloudSVG() instead of exportSVG().
  */
-export async function exportCloudPNG(scale = 2): Promise<Blob> {
-  const svgString = exportCloudSVG();
+export async function exportCloudPNG(options?: CloudExportOptions): Promise<Blob> {
+  const scale = options?.scale || 2;
+  const svgString = await exportCloudSVG(options);
   const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(svgBlob);
 
@@ -671,23 +854,38 @@ export function downloadFile(content: string | Blob, filename: string, mimeType?
 // Wire up export events
 export function initExportHandlers(): void {
   eventBus.on('export:cloud-svg', () => {
-    try {
-      const svgContent = exportCloudSVG();
-      downloadFile(svgContent, 'cloud-architecture.svg', 'image/svg+xml');
-      eventBus.emit('notification', { message: 'Cloud diagram SVG exported successfully', type: 'success' });
-    } catch (err) {
-      eventBus.emit('notification', { message: `Cloud diagram SVG export failed: ${err}`, type: 'error' });
+    showCloudExportOptionsModal('svg', async (options) => {
+      try {
+        const svgContent = await exportCloudSVG(options);
+        downloadFile(svgContent, 'cloud-architecture.svg', 'image/svg+xml');
+        eventBus.emit('notification', { message: 'Cloud diagram SVG exported successfully', type: 'success' });
+      } catch (err) {
+        eventBus.emit('notification', { message: `Cloud diagram SVG export failed: ${err}`, type: 'error' });
+      }
+    });
+  });
+
+  eventBus.on('export:cloud-png', () => {
+    showCloudExportOptionsModal('png', async (options) => {
+      try {
+        const pngBlob = await exportCloudPNG(options);
+        downloadFile(pngBlob, 'cloud-architecture.png');
+        eventBus.emit('notification', { message: 'Cloud diagram PNG exported successfully', type: 'success' });
+      } catch (err) {
+        eventBus.emit('notification', { message: `Cloud diagram PNG export failed: ${err}`, type: 'error' });
+      }
+    });
+  });
+
+  eventBus.on('export:cloud-area-selected', (rect) => {
+    if (pendingCloudAreaExport) {
+      pendingCloudAreaExport.onConfirm({ ...pendingCloudAreaExport.baseOptions, area: 'custom', customRect: rect });
+      pendingCloudAreaExport = null;
     }
   });
 
-  eventBus.on('export:cloud-png', async () => {
-    try {
-      const pngBlob = await exportCloudPNG();
-      downloadFile(pngBlob, 'cloud-architecture.png');
-      eventBus.emit('notification', { message: 'Cloud diagram PNG exported successfully', type: 'success' });
-    } catch (err) {
-      eventBus.emit('notification', { message: `Cloud diagram PNG export failed: ${err}`, type: 'error' });
-    }
+  eventBus.on('export:cloud-area-selection-cancelled', () => {
+    pendingCloudAreaExport = null;
   });
 
   eventBus.on('export:svg', () => {

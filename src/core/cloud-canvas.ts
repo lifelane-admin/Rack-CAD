@@ -120,6 +120,11 @@ export class CloudCanvasManager {
     window.addEventListener('mousemove', this.onMouseMove.bind(this));
     window.addEventListener('mouseup', this.onMouseUp.bind(this));
     this.svg.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
+    this.svg.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      const pt = this.screenToWorld({ x: e.clientX, y: e.clientY });
+      eventBus.emit('cloud-canvas:rightclick', { point: pt, target: e.target, screenPoint: { x: e.clientX, y: e.clientY } });
+    });
   }
 
   private onMouseDown(e: MouseEvent) {
@@ -127,7 +132,7 @@ export class CloudCanvasManager {
     // (app.ts draws the rectangle / connector line) — without this bypass, clicking empty cloud
     // canvas to start one of those gestures would just pan the canvas instead.
     const ownedTool = stateManager.getState().tool;
-    if (ownedTool === 'cloud-container' || ownedTool === 'cloud-connect') return;
+    if (ownedTool === 'cloud-container' || ownedTool === 'cloud-connect' || ownedTool === 'cloud-export-area') return;
 
     const isPanTool = ownedTool === 'pan';
     const isInteractiveTarget = (e.target as Element).closest('[data-cloud-node-id]') ||
