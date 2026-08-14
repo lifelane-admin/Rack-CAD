@@ -87,6 +87,101 @@ describe('Cloud Architecture canvas', () => {
     expect(s.selection).toEqual([{ type: 'cloud-node', id: s.cloudNodes[0].id }]);
   });
 
+  it('dropping a "True Scale" local-resource icon sizes the node from its real rack dimensions instead of the generic 64x64 default, and snaps to the RU grid', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    const viewport = document.getElementById('cloud-viewport')!;
+    // 1U server: 400 wide (RACK_INNER_WIDTH) x 30 tall (1 x RU_HEIGHT) — see cloud-icon-manifest.json.
+    dispatchDrop(viewport, { iconId: 'onprem-server-1u-true' }, 150, 200);
+
+    const s = stateManager.getState();
+    expect(s.cloudNodes).toHaveLength(1);
+    expect(s.cloudNodes[0].width).toBe(400);
+    expect(s.cloudNodes[0].height).toBe(30);
+    expect(s.cloudNodes[0].trueScale).toBe(true);
+    // Unsnapped center would be (150-200, 200-15) = (-50, 185) — both snap to the nearest
+    // multiple of RU_HEIGHT (30) since there's no cabinet nearby to snap into instead.
+    expect(s.cloudNodes[0].x).toBe(-60);
+    expect(s.cloudNodes[0].y).toBe(180);
+  });
+
+  it('dropping a True Scale device near a True Scale Rack Cabinet snaps it flush into the nearest rack-unit slot', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    stateManager.setState({
+      cloudNodes: [{
+        id: 'cab1', iconId: 'onprem-rack-cabinet-42u-true', provider: 'onprem',
+        x: 100, y: 50, width: 450, height: 1320, label: '42U Rack Cabinet', trueScale: true,
+      }],
+    });
+
+    const viewport = document.getElementById('cloud-viewport')!;
+    // Drop near the cabinet's 3rd rack-unit slot (inner top = 50+30 = 80; slot 2 starts at 140).
+    dispatchDrop(viewport, { iconId: 'onprem-server-1u-true' }, 300, 150);
+
+    const s = stateManager.getState();
+    const server = s.cloudNodes.find(n => n.id !== 'cab1')!;
+    expect(server.x).toBe(100 + 25); // cabinet.x + RAIL_WIDTH
+    expect(server.y).toBe(80 + 2 * 30); // innerTop + slot(2) * RU_HEIGHT
+  });
+
+  it('dragging an existing True Scale node to a new spot snaps its release position to the RU grid', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    stateManager.setState({
+      cloudNodes: [{
+        id: 'srv1', iconId: 'onprem-server-1u-true', provider: 'onprem',
+        x: 0, y: 0, width: 400, height: 30, label: '1U Server', trueScale: true,
+      }],
+    });
+    app.setActiveView('cloud');
+
+    const svgEl = document.getElementById('cloud-canvas')!;
+    const nodeEl = document.querySelector('[data-cloud-node-id="srv1"]')!;
+    nodeEl.dispatchEvent(mouseEvent('mousedown', 200, 15));
+    svgEl.dispatchEvent(mouseEvent('mousemove', 210, 40)); // +10x, +25y from mousedown
+    window.dispatchEvent(mouseEvent('mouseup', 210, 40));
+
+    const server = stateManager.getState().cloudNodes.find(n => n.id === 'srv1')!;
+    // Raw drag would land at (10, 25) — snaps to the nearest RU_HEIGHT(30) multiple: (0, 30).
+    expect(server.x).toBe(0);
+    expect(server.y).toBe(30);
+  });
+
+  it('resizing a True Scale node snaps its released height to a whole rack-unit multiple', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    stateManager.setState({
+      cloudNodes: [{
+        id: 'srv1', iconId: 'onprem-server-1u-true', provider: 'onprem',
+        x: 0, y: 0, width: 400, height: 30, label: '1U Server', trueScale: true,
+      }],
+      selection: [{ type: 'cloud-node', id: 'srv1' }],
+    });
+    app.setActiveView('cloud');
+
+    const svgEl = document.getElementById('cloud-canvas')!;
+    const handle = document.querySelector('.cloud-node-resize-handle[data-cloud-node-id="srv1"]')!;
+    handle.dispatchEvent(mouseEvent('mousedown', 400, 30));
+    svgEl.dispatchEvent(mouseEvent('mousemove', 400, 75)); // height 30 -> 75 raw
+    window.dispatchEvent(mouseEvent('mouseup', 400, 75));
+
+    const server = stateManager.getState().cloudNodes.find(n => n.id === 'srv1')!;
+    expect(server.height).toBe(90); // rounds 75 up to the nearest RU_HEIGHT(30) multiple
+  });
+
   it('dropping an unknown iconId is a no-op', async () => {
     mountAppSkeleton();
     const { App } = await import('../app');

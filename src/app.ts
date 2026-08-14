@@ -4657,17 +4657,23 @@ export class App {
         }
 
         const worldPos = this.cloudCanvas!.screenToWorld({ x: e.clientX, y: e.clientY });
-        const size = 64;
+        const { width, height } = icon.trueScale ?? { width: 64, height: 64 };
         const node: CloudNode = {
           id: generateId(),
           iconId,
           provider: icon.provider,
-          x: worldPos.x - size / 2,
-          y: worldPos.y - size / 2,
-          width: size,
-          height: size,
+          x: worldPos.x - width / 2,
+          y: worldPos.y - height / 2,
+          width,
+          height,
           label: icon.name,
+          trueScale: !!icon.trueScale,
         };
+        if (node.trueScale) {
+          const snapped = this.snapTrueScaleNode(node, node.x, node.y);
+          node.x = snapped.x;
+          node.y = snapped.y;
+        }
         stateManager.addCloudNode(node);
         const selection: SelectableItem[] = [{ type: 'cloud-node', id: node.id }];
         stateManager.setState({ selection });
@@ -5027,6 +5033,47 @@ export class App {
     this.renderCloudAll();
   }
 
+  /** "True Scale" nodes (see cloud-icon-catalog.ts's CloudIconEntry.trueScale) snap on
+   *  release/drop instead of landing at an arbitrary pixel, mirroring how the rack canvas's own
+   *  devices only ever sit at whole rack-unit positions:
+   *  - Dropped/dragged over a True-Scale Rack Cabinet node: x snaps flush to the cabinet's inner
+   *    rail opening, y snaps to the nearest whole rack-unit slot within that cabinet (clamped so
+   *    the device can't hang off the top/bottom).
+   *  - Otherwise: y snaps to the global RU_HEIGHT grid so stand-alone true-scale items (not
+   *    inside any cabinet) still stack cleanly against each other.
+   *  This is placement/visual alignment only — there's no occupancy/collision tracking here the
+   *  way the rack canvas's startUnit system has, so two true-scale devices CAN overlap. */
+  private snapTrueScaleNode(node: CloudNode, x: number, y: number): { x: number; y: number } {
+    const RU = RACK_CONSTANTS.RU_HEIGHT;
+    const isCabinet = node.iconId.includes('rack-cabinet');
+
+    if (!isCabinet) {
+      const centerX = x + node.width / 2;
+      const centerY = y + node.height / 2;
+      const cabinets = stateManager.getState().cloudNodes.filter(
+        n => n.id !== node.id && n.trueScale && n.iconId.includes('rack-cabinet')
+      );
+      const MARGIN = 24;
+      for (const cabinet of cabinets) {
+        const withinX = centerX >= cabinet.x - MARGIN && centerX <= cabinet.x + cabinet.width + MARGIN;
+        const withinY = centerY >= cabinet.y - MARGIN && centerY <= cabinet.y + cabinet.height + MARGIN;
+        if (!withinX || !withinY) continue;
+
+        const innerLeft = cabinet.x + RACK_CONSTANTS.RAIL_WIDTH;
+        const innerTop = cabinet.y + RACK_CONSTANTS.RACK_PADDING_TOP;
+        const innerBottom = cabinet.y + cabinet.height - RACK_CONSTANTS.RACK_PADDING_BOTTOM;
+        const slotCount = Math.max(1, Math.round((innerBottom - innerTop) / RU));
+        const deviceSlots = Math.max(1, Math.round(node.height / RU));
+        const maxSlot = Math.max(0, slotCount - deviceSlots);
+        const rawSlot = Math.round((y - innerTop) / RU);
+        const slot = Math.min(Math.max(rawSlot, 0), maxSlot);
+        return { x: innerLeft, y: innerTop + slot * RU };
+      }
+    }
+
+    return { x: Math.round(x / RU) * RU, y: Math.round(y / RU) * RU };
+  }
+
   private commitCloudNodeDrag(): void {
     const nodeId = this.draggedCloudNodeId!;
     const wasResizing = this.isResizingCloudNode;
@@ -5038,8 +5085,13 @@ export class App {
       stateManager.setState({ cloudNodes: this.dragStartCloudNodesState }, true);
       this.dragStartCloudNodesState = null;
       const data = wasResizing
-        ? { width: finalNode.width, height: finalNode.height }
-        : { x: finalNode.x, y: finalNode.y };
+        ? {
+            width: finalNode.width,
+            height: finalNode.trueScale ? Math.max(RACK_CONSTANTS.RU_HEIGHT, Math.round(finalNode.height / RACK_CONSTANTS.RU_HEIGHT) * RACK_CONSTANTS.RU_HEIGHT) : finalNode.height,
+          }
+        : finalNode.trueScale
+          ? this.snapTrueScaleNode(finalNode, finalNode.x, finalNode.y)
+          : { x: finalNode.x, y: finalNode.y };
       eventBus.emit('cloudnode:update', { id: nodeId, data });
     }
   }

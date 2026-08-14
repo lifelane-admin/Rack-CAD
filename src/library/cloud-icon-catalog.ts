@@ -12,6 +12,10 @@ export interface CloudIconEntry {
   name: string;
   kind: 'service' | 'group' | 'category';
   path: string;
+  /** "True Scale" category only — real pixel dimensions using the exact same RACK_CONSTANTS
+   *  (RU_HEIGHT/RACK_INNER_WIDTH/RACK_OUTER_WIDTH) as the rack canvas, so a node dropped from
+   *  this category lands at true relative size instead of the generic 64x64 default. */
+  trueScale?: { width: number; height: number };
 }
 
 export const cloudIconManifest: CloudIconEntry[] = cloudIconManifestRaw as CloudIconEntry[];

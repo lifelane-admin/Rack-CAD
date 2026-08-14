@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Wireless Controller</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <rect fill="#FFFFFF" x="12" y="32" width="56" height="24" rx="3"></rect><g fill="#586069"><circle cx="22" cy="44" r="2.5"></circle><circle cx="30" cy="44" r="2.5"></circle></g><g stroke="#FFFFFF" stroke-width="2.5" fill="none" stroke-linecap="round"><path d="M46,28 C50,24 58,24 62,28"></path><path d="M42,22 C48,15 60,15 66,22"></path></g>
+    </g>
+</svg>

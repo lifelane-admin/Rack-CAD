@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400px" height="180px" viewBox="0 0 400 180" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>True-Scale/6U Blade Chassis (True Scale)</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+
+      <rect x="0" y="0" width="400" height="180" fill="#eef1f5"></rect>
+      <rect x="0" y="0" width="25" height="180" fill="#c4cad2" stroke="#24292f" stroke-width="0.5"></rect>
+      <rect x="375" y="0" width="25" height="180" fill="#c4cad2" stroke="#24292f" stroke-width="0.5"></rect>
+      <circle cx="12.5" cy="13.8" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="27.7" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="41.5" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="55.4" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="69.2" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="83.1" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="96.9" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="110.8" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="124.6" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="138.5" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="152.3" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="166.2" r="1.6" fill="#8b949e"></circle>
+      <circle cx="387.5" cy="13.8" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="27.7" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="41.5" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="55.4" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="69.2" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="83.1" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="96.9" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="110.8" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="124.6" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="138.5" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="152.3" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="166.2" r="1.6" fill="#8b949e"></circle>
+      <rect x="25" y="0" width="350" height="180" fill="none" stroke="#24292f" stroke-width="1"></rect>
+      <rect x="32.0" y="10.0" width="65.6" height="79.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="99.6" y="10.0" width="65.6" height="79.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="167.2" y="10.0" width="65.6" height="79.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="234.8" y="10.0" width="65.6" height="79.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="302.4" y="10.0" width="65.6" height="79.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="32.0" y="91.0" width="65.6" height="79.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="99.6" y="91.0" width="65.6" height="79.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="167.2" y="91.0" width="65.6" height="79.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect>
+    
+    </g>
+</svg>

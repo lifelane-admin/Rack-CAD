@@ -353,6 +353,10 @@ export interface CloudNode {
   height: number;
   label: string;  // editable display name, defaults to the manifest entry's name
   locked?: boolean;
+  /** Set at drop time from CloudIconEntry.trueScale — marks this node as using real
+   *  RACK_CONSTANTS proportions (see the "True Scale" local-resources category), which enables
+   *  rack-unit grid snapping and snap-into-cabinet placement in app.ts. */
+  trueScale?: boolean;
 }
 
 /** The full border/line dash-pattern catalog — shared by CloudConnector.style and

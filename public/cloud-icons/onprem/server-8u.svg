@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/8U Server</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <g fill="#FFFFFF"><rect x="16" y="12.0" width="48" height="5.2" rx="1"></rect><rect x="16" y="19.0" width="48" height="5.2" rx="1"></rect><rect x="16" y="25.9" width="48" height="5.2" rx="1"></rect><rect x="16" y="32.9" width="48" height="5.2" rx="1"></rect><rect x="16" y="39.9" width="48" height="5.2" rx="1"></rect><rect x="16" y="46.9" width="48" height="5.2" rx="1"></rect><rect x="16" y="53.8" width="48" height="5.2" rx="1"></rect><rect x="16" y="60.8" width="48" height="5.2" rx="1"></rect></g><g><circle fill="#586069" cx="22" cy="14.6" r="1.3"></circle><circle fill="#586069" cx="22" cy="21.6" r="1.3"></circle><circle fill="#586069" cx="22" cy="28.5" r="1.3"></circle><circle fill="#586069" cx="22" cy="35.5" r="1.3"></circle><circle fill="#586069" cx="22" cy="42.5" r="1.3"></circle><circle fill="#586069" cx="22" cy="49.5" r="1.3"></circle><circle fill="#586069" cx="22" cy="56.4" r="1.3"></circle><circle fill="#586069" cx="22" cy="63.4" r="1.3"></circle></g>
+    </g>
+</svg>

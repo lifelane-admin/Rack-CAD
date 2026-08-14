@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Shapes/Cloud</title>
+    <g fill="#8b949e" stroke="#484f58" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M24,58 C12,58 12,42 22,40 C20,26 36,20 44,30 C52,18 68,24 66,38 C76,38 76,58 64,58 Z"/>
+    </g>
+</svg>

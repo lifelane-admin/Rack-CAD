@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Antenna</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <line x1="40" y1="18" x2="40" y2="66" stroke="#FFFFFF" stroke-width="3"></line><line x1="24" y1="66" x2="56" y2="66" stroke="#FFFFFF" stroke-width="3"></line><path d="M40,18 L28,30 M40,18 L52,30" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" fill="none"></path><circle fill="#FFFFFF" cx="40" cy="12" r="4"></circle>
+    </g>
+</svg>

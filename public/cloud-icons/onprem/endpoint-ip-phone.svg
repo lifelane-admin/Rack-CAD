@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/IP Phone</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <path fill="#FFFFFF" d="M18,20 C24,14 30,14 33,20 L37,28 C39,32 37,34 34,36 C37,44 44,51 52,54 C54,51 56,49 60,51 L68,55 C74,58 74,64 68,70 C58,76 38,66 26,54 C14,42 12,30 18,20 Z"></path>
+    </g>
+</svg>

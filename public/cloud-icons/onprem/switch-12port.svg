@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/12-Port Switch</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <rect fill="#FFFFFF" x="8" y="26" width="64" height="28" rx="2"></rect><g fill="#586069"><rect x="12.0" y="31" width="4.5" height="8"></rect><rect x="22.3" y="31" width="4.5" height="8"></rect><rect x="32.6" y="31" width="4.5" height="8"></rect><rect x="42.9" y="31" width="4.5" height="8"></rect><rect x="53.2" y="31" width="4.5" height="8"></rect><rect x="63.5" y="31" width="4.5" height="8"></rect><rect x="12.0" y="42" width="4.5" height="8"></rect><rect x="22.3" y="42" width="4.5" height="8"></rect><rect x="32.6" y="42" width="4.5" height="8"></rect><rect x="42.9" y="42" width="4.5" height="8"></rect><rect x="53.2" y="42" width="4.5" height="8"></rect><rect x="63.5" y="42" width="4.5" height="8"></rect></g>
+    </g>
+</svg>

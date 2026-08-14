@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400px" height="60px" viewBox="0 0 400 60" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>True-Scale/2U Core Router (True Scale)</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+
+      <rect x="0" y="0" width="400" height="60" fill="#eef1f5"></rect>
+      <rect x="0" y="0" width="25" height="60" fill="#c4cad2" stroke="#24292f" stroke-width="0.5"></rect>
+      <rect x="375" y="0" width="25" height="60" fill="#c4cad2" stroke="#24292f" stroke-width="0.5"></rect>
+      <circle cx="12.5" cy="12.0" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="24.0" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="36.0" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="48.0" r="1.6" fill="#8b949e"></circle>
+      <circle cx="387.5" cy="12.0" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="24.0" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="36.0" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="48.0" r="1.6" fill="#8b949e"></circle>
+      <rect x="25" y="0" width="350" height="60" fill="none" stroke="#24292f" stroke-width="1"></rect>
+      
+  <rect x="32.0" y="15" width="19.9" height="30" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="53.1" y="15" width="19.9" height="30" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="74.3" y="15" width="19.9" height="30" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="95.4" y="15" width="19.9" height="30" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="116.6" y="15" width="19.9" height="30" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="137.8" y="15" width="19.9" height="30" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="158.9" y="15" width="19.9" height="30" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="180.0" y="15" width="19.9" height="30" fill="none" stroke="#24292f" stroke-width="0.6"></rect>
+  <path d="M220,30 L260,30" stroke="#24292f" stroke-width="2" fill="none"></path>
+  <path d="M260,30 L250,20 M260,30 L250,40" stroke="#24292f" stroke-width="2" fill="none"></path>
+  <rect x="280.0" y="12" width="9.3" height="36" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="291.3" y="12" width="9.3" height="36" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="302.5" y="12" width="9.3" height="36" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="313.8" y="12" width="9.3" height="36" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="325.0" y="12" width="9.3" height="36" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="336.3" y="12" width="9.3" height="36" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="347.5" y="12" width="9.3" height="36" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="358.8" y="12" width="9.3" height="36" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect>
+
+    
+    </g>
+</svg>

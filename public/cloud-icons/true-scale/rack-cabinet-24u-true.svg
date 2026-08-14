@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="450px" height="780px" viewBox="0 0 450 780" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>True-Scale/24U Rack Cabinet (True Scale)</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+
+      <rect x="0" y="0" width="450" height="780" fill="#eef1f5" stroke="#24292f" stroke-width="1.5"></rect>
+      <rect x="0" y="0" width="450" height="30" fill="#8b949e"></rect>
+      <rect x="0" y="750" width="450" height="30" fill="#8b949e"></rect>
+      <rect x="0" y="30" width="25" height="720" fill="#c4cad2"></rect>
+      <rect x="425" y="30" width="25" height="720" fill="#c4cad2"></rect>
+      <rect x="25" y="30" width="400" height="720" fill="none" stroke="#24292f" stroke-width="1"></rect>
+      <line x1="25" y1="30" x2="425" y2="30" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="60" x2="425" y2="60" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="90" x2="425" y2="90" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="120" x2="425" y2="120" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="150" x2="425" y2="150" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="180" x2="425" y2="180" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="210" x2="425" y2="210" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="240" x2="425" y2="240" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="270" x2="425" y2="270" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="300" x2="425" y2="300" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="330" x2="425" y2="330" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="360" x2="425" y2="360" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="390" x2="425" y2="390" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="420" x2="425" y2="420" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="450" x2="425" y2="450" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="480" x2="425" y2="480" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="510" x2="425" y2="510" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="540" x2="425" y2="540" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="570" x2="425" y2="570" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="600" x2="425" y2="600" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="630" x2="425" y2="630" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="660" x2="425" y2="660" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="690" x2="425" y2="690" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="720" x2="425" y2="720" stroke="#c4cad2" stroke-width="0.4"></line><line x1="25" y1="750" x2="425" y2="750" stroke="#c4cad2" stroke-width="0.4"></line>
+    
+    </g>
+</svg>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Proxy Server</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <g transform="translate(0, 0)"><g fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"><path d="M20,30 A20,20 0 0,1 58,24"/><path d="M60,50 A20,20 0 0,1 22,56"/></g><polygon fill="#FFFFFF" points="58,14 66,24 54,27"/><polygon fill="#FFFFFF" points="22,66 14,56 26,53"/></g>
+    </g>
+</svg>

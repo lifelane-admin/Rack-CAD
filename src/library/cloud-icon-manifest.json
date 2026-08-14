@@ -10192,17 +10192,273 @@
     "path": "/cloud-icons/gcp/web3.svg"
   },
   {
+    "id": "onprem-shapes-rectangle",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Rectangle",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/rectangle.svg"
+  },
+  {
+    "id": "onprem-shapes-rounded-rectangle",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Rounded Rectangle",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/rounded-rectangle.svg"
+  },
+  {
+    "id": "onprem-shapes-circle",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Circle",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/circle.svg"
+  },
+  {
+    "id": "onprem-shapes-ellipse",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Ellipse",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/ellipse.svg"
+  },
+  {
+    "id": "onprem-shapes-triangle",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Triangle",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/triangle.svg"
+  },
+  {
+    "id": "onprem-shapes-right-triangle",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Right Triangle",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/right-triangle.svg"
+  },
+  {
+    "id": "onprem-shapes-diamond",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Diamond",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/diamond.svg"
+  },
+  {
+    "id": "onprem-shapes-pentagon",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Pentagon",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/pentagon.svg"
+  },
+  {
+    "id": "onprem-shapes-hexagon",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Hexagon",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/hexagon.svg"
+  },
+  {
+    "id": "onprem-shapes-octagon",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Octagon",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/octagon.svg"
+  },
+  {
+    "id": "onprem-shapes-star",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Star",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/star.svg"
+  },
+  {
+    "id": "onprem-shapes-arrow-right",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Arrow Right",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/arrow-right.svg"
+  },
+  {
+    "id": "onprem-shapes-arrow-left",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Arrow Left",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/arrow-left.svg"
+  },
+  {
+    "id": "onprem-shapes-arrow-up",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Arrow Up",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/arrow-up.svg"
+  },
+  {
+    "id": "onprem-shapes-arrow-down",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Arrow Down",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/arrow-down.svg"
+  },
+  {
+    "id": "onprem-shapes-double-arrow",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Double Arrow",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/double-arrow.svg"
+  },
+  {
+    "id": "onprem-shapes-cross",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Cross",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/cross.svg"
+  },
+  {
+    "id": "onprem-shapes-cloud-shape",
+    "provider": "onprem",
+    "category": "Basic Shapes",
+    "name": "Cloud",
+    "kind": "service",
+    "path": "/cloud-icons/shapes/cloud-shape.svg"
+  },
+  {
+    "id": "onprem-flowchart-process",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Process",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/process.svg"
+  },
+  {
+    "id": "onprem-flowchart-decision",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Decision",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/decision.svg"
+  },
+  {
+    "id": "onprem-flowchart-terminator",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Terminator",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/terminator.svg"
+  },
+  {
+    "id": "onprem-flowchart-data",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Data",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/data.svg"
+  },
+  {
+    "id": "onprem-flowchart-document",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Document",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/document.svg"
+  },
+  {
+    "id": "onprem-flowchart-predefined-process",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Predefined Process",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/predefined-process.svg"
+  },
+  {
+    "id": "onprem-flowchart-database",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Database",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/database.svg"
+  },
+  {
+    "id": "onprem-flowchart-manual-input",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Manual Input",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/manual-input.svg"
+  },
+  {
+    "id": "onprem-flowchart-manual-operation",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Manual Operation",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/manual-operation.svg"
+  },
+  {
+    "id": "onprem-flowchart-preparation",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Preparation",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/preparation.svg"
+  },
+  {
+    "id": "onprem-flowchart-connector",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Connector",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/connector.svg"
+  },
+  {
+    "id": "onprem-flowchart-off-page-connector",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Off-Page Connector",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/off-page-connector.svg"
+  },
+  {
+    "id": "onprem-flowchart-or-junction",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Or",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/or-junction.svg"
+  },
+  {
+    "id": "onprem-flowchart-summing-junction",
+    "provider": "onprem",
+    "category": "Flowchart",
+    "name": "Summing Junction",
+    "kind": "service",
+    "path": "/cloud-icons/flowchart/summing-junction.svg"
+  },
+  {
     "id": "onprem-server",
     "provider": "onprem",
-    "category": "Local Resources",
-    "name": "Server",
+    "category": "Servers",
+    "name": "Server (Generic)",
     "kind": "service",
     "path": "/cloud-icons/onprem/server.svg"
   },
   {
     "id": "onprem-rack-cabinet",
     "provider": "onprem",
-    "category": "Local Resources",
+    "category": "General",
     "name": "Rack Cabinet",
     "kind": "service",
     "path": "/cloud-icons/onprem/rack-cabinet.svg"
@@ -10210,55 +10466,55 @@
   {
     "id": "onprem-router",
     "provider": "onprem",
-    "category": "Local Resources",
-    "name": "Router",
+    "category": "Routers",
+    "name": "Router (Generic)",
     "kind": "service",
     "path": "/cloud-icons/onprem/router.svg"
   },
   {
     "id": "onprem-network-switch",
     "provider": "onprem",
-    "category": "Local Resources",
-    "name": "Network Switch",
+    "category": "Switches",
+    "name": "Switch (Generic)",
     "kind": "service",
     "path": "/cloud-icons/onprem/network-switch.svg"
   },
   {
     "id": "onprem-firewall",
     "provider": "onprem",
-    "category": "Local Resources",
-    "name": "Firewall",
+    "category": "Firewalls",
+    "name": "Firewall (Generic)",
     "kind": "service",
     "path": "/cloud-icons/onprem/firewall.svg"
   },
   {
     "id": "onprem-load-balancer",
     "provider": "onprem",
-    "category": "Local Resources",
-    "name": "Load Balancer",
+    "category": "Load Balancers",
+    "name": "Load Balancer (Generic)",
     "kind": "service",
     "path": "/cloud-icons/onprem/load-balancer.svg"
   },
   {
     "id": "onprem-database",
     "provider": "onprem",
-    "category": "Local Resources",
-    "name": "Database",
+    "category": "General",
+    "name": "Database Server",
     "kind": "service",
     "path": "/cloud-icons/onprem/database.svg"
   },
   {
     "id": "onprem-storage-array",
     "provider": "onprem",
-    "category": "Local Resources",
-    "name": "Storage Array",
+    "category": "Storage",
+    "name": "Storage Array (Generic)",
     "kind": "service",
     "path": "/cloud-icons/onprem/storage-array.svg"
   },
   {
     "id": "onprem-workstation",
     "provider": "onprem",
-    "category": "Local Resources",
+    "category": "Endpoints",
     "name": "Workstation",
     "kind": "service",
     "path": "/cloud-icons/onprem/workstation.svg"
@@ -10266,17 +10522,861 @@
   {
     "id": "onprem-wireless-access-point",
     "provider": "onprem",
-    "category": "Local Resources",
-    "name": "Wireless Access Point",
+    "category": "Wireless",
+    "name": "Wireless Access Point (Generic)",
     "kind": "service",
     "path": "/cloud-icons/onprem/wireless-access-point.svg"
   },
   {
     "id": "onprem-gateway",
     "provider": "onprem",
-    "category": "Local Resources",
+    "category": "General",
     "name": "Gateway",
     "kind": "service",
     "path": "/cloud-icons/onprem/gateway.svg"
+  },
+  {
+    "id": "onprem-cloud-generic",
+    "provider": "onprem",
+    "category": "General",
+    "name": "Cloud / Internet",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/cloud-generic.svg"
+  },
+  {
+    "id": "onprem-vpn",
+    "provider": "onprem",
+    "category": "Security",
+    "name": "VPN Gateway",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/vpn.svg"
+  },
+  {
+    "id": "onprem-dns",
+    "provider": "onprem",
+    "category": "General",
+    "name": "DNS Server",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/dns.svg"
+  },
+  {
+    "id": "onprem-proxy",
+    "provider": "onprem",
+    "category": "Security",
+    "name": "Proxy Server",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/proxy.svg"
+  },
+  {
+    "id": "onprem-backup",
+    "provider": "onprem",
+    "category": "Storage",
+    "name": "Backup Storage",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/backup.svg"
+  },
+  {
+    "id": "onprem-cluster",
+    "provider": "onprem",
+    "category": "Virtualization",
+    "name": "Cluster",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/cluster.svg"
+  },
+  {
+    "id": "onprem-container",
+    "provider": "onprem",
+    "category": "Virtualization",
+    "name": "Container",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/container.svg"
+  },
+  {
+    "id": "onprem-virtual-machine",
+    "provider": "onprem",
+    "category": "Virtualization",
+    "name": "Virtual Machine",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/virtual-machine.svg"
+  },
+  {
+    "id": "onprem-monitor-dashboard",
+    "provider": "onprem",
+    "category": "General",
+    "name": "Monitoring Dashboard",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/monitor-dashboard.svg"
+  },
+  {
+    "id": "onprem-user-person",
+    "provider": "onprem",
+    "category": "General",
+    "name": "User",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/user-person.svg"
+  },
+  {
+    "id": "onprem-laptop",
+    "provider": "onprem",
+    "category": "Endpoints",
+    "name": "Laptop",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/laptop.svg"
+  },
+  {
+    "id": "onprem-mobile-device",
+    "provider": "onprem",
+    "category": "Endpoints",
+    "name": "Mobile Device",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/mobile-device.svg"
+  },
+  {
+    "id": "onprem-ups-power",
+    "provider": "onprem",
+    "category": "Power",
+    "name": "UPS",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/ups-power.svg"
+  },
+  {
+    "id": "onprem-lock-shield",
+    "provider": "onprem",
+    "category": "Security",
+    "name": "Security Shield",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/lock-shield.svg"
+  },
+  {
+    "id": "onprem-web-server",
+    "provider": "onprem",
+    "category": "General",
+    "name": "Web Server",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/web-server.svg"
+  },
+  {
+    "id": "onprem-server-1u",
+    "provider": "onprem",
+    "category": "Servers",
+    "name": "1U Server",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/server-1u.svg"
+  },
+  {
+    "id": "onprem-server-2u",
+    "provider": "onprem",
+    "category": "Servers",
+    "name": "2U Server",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/server-2u.svg"
+  },
+  {
+    "id": "onprem-server-4u",
+    "provider": "onprem",
+    "category": "Servers",
+    "name": "4U Server",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/server-4u.svg"
+  },
+  {
+    "id": "onprem-server-8u",
+    "provider": "onprem",
+    "category": "Servers",
+    "name": "8U Server",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/server-8u.svg"
+  },
+  {
+    "id": "onprem-server-tower",
+    "provider": "onprem",
+    "category": "Servers",
+    "name": "Tower Server",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/server-tower.svg"
+  },
+  {
+    "id": "onprem-server-blade",
+    "provider": "onprem",
+    "category": "Servers",
+    "name": "Blade Server",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/server-blade.svg"
+  },
+  {
+    "id": "onprem-server-blade-chassis",
+    "provider": "onprem",
+    "category": "Servers",
+    "name": "Blade Chassis",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/server-blade-chassis.svg"
+  },
+  {
+    "id": "onprem-switch-4port",
+    "provider": "onprem",
+    "category": "Switches",
+    "name": "4-Port Switch",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/switch-4port.svg"
+  },
+  {
+    "id": "onprem-switch-8port",
+    "provider": "onprem",
+    "category": "Switches",
+    "name": "8-Port Switch",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/switch-8port.svg"
+  },
+  {
+    "id": "onprem-switch-12port",
+    "provider": "onprem",
+    "category": "Switches",
+    "name": "12-Port Switch",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/switch-12port.svg"
+  },
+  {
+    "id": "onprem-switch-16port",
+    "provider": "onprem",
+    "category": "Switches",
+    "name": "16-Port Switch",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/switch-16port.svg"
+  },
+  {
+    "id": "onprem-switch-24port",
+    "provider": "onprem",
+    "category": "Switches",
+    "name": "24-Port Switch",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/switch-24port.svg"
+  },
+  {
+    "id": "onprem-switch-32port",
+    "provider": "onprem",
+    "category": "Switches",
+    "name": "32-Port Switch",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/switch-32port.svg"
+  },
+  {
+    "id": "onprem-switch-48port",
+    "provider": "onprem",
+    "category": "Switches",
+    "name": "48-Port Switch",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/switch-48port.svg"
+  },
+  {
+    "id": "onprem-switch-l1-hub",
+    "provider": "onprem",
+    "category": "Switches",
+    "name": "L1 Hub",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/switch-l1-hub.svg"
+  },
+  {
+    "id": "onprem-switch-l2-switch",
+    "provider": "onprem",
+    "category": "Switches",
+    "name": "L2 Switch",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/switch-l2-switch.svg"
+  },
+  {
+    "id": "onprem-switch-l3-switch",
+    "provider": "onprem",
+    "category": "Switches",
+    "name": "L3 Switch",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/switch-l3-switch.svg"
+  },
+  {
+    "id": "onprem-router-edge",
+    "provider": "onprem",
+    "category": "Routers",
+    "name": "Edge Router",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/router-edge.svg"
+  },
+  {
+    "id": "onprem-router-core",
+    "provider": "onprem",
+    "category": "Routers",
+    "name": "Core Router",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/router-core.svg"
+  },
+  {
+    "id": "onprem-router-wireless",
+    "provider": "onprem",
+    "category": "Routers",
+    "name": "Wireless Router",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/router-wireless.svg"
+  },
+  {
+    "id": "onprem-lb-hardware",
+    "provider": "onprem",
+    "category": "Load Balancers",
+    "name": "Hardware Load Balancer",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/lb-hardware.svg"
+  },
+  {
+    "id": "onprem-lb-software",
+    "provider": "onprem",
+    "category": "Load Balancers",
+    "name": "Software Load Balancer",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/lb-software.svg"
+  },
+  {
+    "id": "onprem-lb-l4",
+    "provider": "onprem",
+    "category": "Load Balancers",
+    "name": "L4 Load Balancer",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/lb-l4.svg"
+  },
+  {
+    "id": "onprem-lb-l7",
+    "provider": "onprem",
+    "category": "Load Balancers",
+    "name": "L7 Load Balancer",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/lb-l7.svg"
+  },
+  {
+    "id": "onprem-lb-gslb",
+    "provider": "onprem",
+    "category": "Load Balancers",
+    "name": "Global Server Load Balancer (GSLB)",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/lb-gslb.svg"
+  },
+  {
+    "id": "onprem-firewall-ngfw",
+    "provider": "onprem",
+    "category": "Firewalls",
+    "name": "Next-Gen Firewall (NGFW)",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/firewall-ngfw.svg"
+  },
+  {
+    "id": "onprem-firewall-waf",
+    "provider": "onprem",
+    "category": "Firewalls",
+    "name": "Web Application Firewall (WAF)",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/firewall-waf.svg"
+  },
+  {
+    "id": "onprem-storage-san",
+    "provider": "onprem",
+    "category": "Storage",
+    "name": "SAN (Storage Area Network)",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/storage-san.svg"
+  },
+  {
+    "id": "onprem-storage-nas",
+    "provider": "onprem",
+    "category": "Storage",
+    "name": "NAS (Network Attached Storage)",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/storage-nas.svg"
+  },
+  {
+    "id": "onprem-storage-tape-library",
+    "provider": "onprem",
+    "category": "Storage",
+    "name": "Tape Library",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/storage-tape-library.svg"
+  },
+  {
+    "id": "onprem-storage-disk-shelf",
+    "provider": "onprem",
+    "category": "Storage",
+    "name": "Disk Shelf",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/storage-disk-shelf.svg"
+  },
+  {
+    "id": "onprem-security-ids-ips",
+    "provider": "onprem",
+    "category": "Security",
+    "name": "IDS / IPS",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/security-ids-ips.svg"
+  },
+  {
+    "id": "onprem-power-pdu",
+    "provider": "onprem",
+    "category": "Power",
+    "name": "PDU (Power Distribution Unit)",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/power-pdu.svg"
+  },
+  {
+    "id": "onprem-power-generator",
+    "provider": "onprem",
+    "category": "Power",
+    "name": "Generator",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/power-generator.svg"
+  },
+  {
+    "id": "onprem-power-battery-backup",
+    "provider": "onprem",
+    "category": "Power",
+    "name": "Battery Backup",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/power-battery-backup.svg"
+  },
+  {
+    "id": "onprem-endpoint-tablet",
+    "provider": "onprem",
+    "category": "Endpoints",
+    "name": "Tablet",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/endpoint-tablet.svg"
+  },
+  {
+    "id": "onprem-endpoint-printer",
+    "provider": "onprem",
+    "category": "Endpoints",
+    "name": "Printer",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/endpoint-printer.svg"
+  },
+  {
+    "id": "onprem-endpoint-ip-phone",
+    "provider": "onprem",
+    "category": "Endpoints",
+    "name": "IP Phone",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/endpoint-ip-phone.svg"
+  },
+  {
+    "id": "onprem-wireless-controller",
+    "provider": "onprem",
+    "category": "Wireless",
+    "name": "Wireless Controller",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/wireless-controller.svg"
+  },
+  {
+    "id": "onprem-wireless-antenna",
+    "provider": "onprem",
+    "category": "Wireless",
+    "name": "Antenna",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/wireless-antenna.svg"
+  },
+  {
+    "id": "onprem-virt-hypervisor-host",
+    "provider": "onprem",
+    "category": "Virtualization",
+    "name": "Hypervisor Host",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/virt-hypervisor-host.svg"
+  },
+  {
+    "id": "onprem-server-1u-true",
+    "provider": "onprem",
+    "category": "True Scale - Servers",
+    "name": "1U Server (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/server-1u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-server-2u-true",
+    "provider": "onprem",
+    "category": "True Scale - Servers",
+    "name": "2U Server (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/server-2u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 60
+    }
+  },
+  {
+    "id": "onprem-server-4u-true",
+    "provider": "onprem",
+    "category": "True Scale - Servers",
+    "name": "4U Server (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/server-4u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 120
+    }
+  },
+  {
+    "id": "onprem-switch-1u-true",
+    "provider": "onprem",
+    "category": "True Scale - Switches",
+    "name": "1U Switch — 24 Port (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/switch-1u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-patch-panel-1u-true",
+    "provider": "onprem",
+    "category": "True Scale - Patch Panels",
+    "name": "1U Patch Panel — 24 Port (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/patch-panel-1u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-pdu-1u-true",
+    "provider": "onprem",
+    "category": "True Scale - Power",
+    "name": "1U PDU — Horizontal (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/pdu-1u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-ups-2u-true",
+    "provider": "onprem",
+    "category": "True Scale - Power",
+    "name": "2U UPS (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/ups-2u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 60
+    }
+  },
+  {
+    "id": "onprem-rack-cabinet-24u-true",
+    "provider": "onprem",
+    "category": "True Scale - Cabinets",
+    "name": "24U Rack Cabinet (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/rack-cabinet-24u-true.svg",
+    "trueScale": {
+      "width": 450,
+      "height": 780
+    }
+  },
+  {
+    "id": "onprem-rack-cabinet-42u-true",
+    "provider": "onprem",
+    "category": "True Scale - Cabinets",
+    "name": "42U Rack Cabinet (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/rack-cabinet-42u-true.svg",
+    "trueScale": {
+      "width": 450,
+      "height": 1320
+    }
+  },
+  {
+    "id": "onprem-switch-4port-true",
+    "provider": "onprem",
+    "category": "True Scale - Switches",
+    "name": "4-Port Switch (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/switch-4port-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-switch-8port-true",
+    "provider": "onprem",
+    "category": "True Scale - Switches",
+    "name": "8-Port Switch (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/switch-8port-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-switch-12port-true",
+    "provider": "onprem",
+    "category": "True Scale - Switches",
+    "name": "12-Port Switch (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/switch-12port-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-switch-16port-true",
+    "provider": "onprem",
+    "category": "True Scale - Switches",
+    "name": "16-Port Switch (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/switch-16port-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-switch-24port-true",
+    "provider": "onprem",
+    "category": "True Scale - Switches",
+    "name": "24-Port Switch (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/switch-24port-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-switch-32port-true",
+    "provider": "onprem",
+    "category": "True Scale - Switches",
+    "name": "32-Port Switch (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/switch-32port-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-switch-48port-true",
+    "provider": "onprem",
+    "category": "True Scale - Switches",
+    "name": "48-Port Switch (True Scale, 2U)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/switch-48port-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 60
+    }
+  },
+  {
+    "id": "onprem-switch-l2-24port-true",
+    "provider": "onprem",
+    "category": "True Scale - Switches",
+    "name": "L2 Switch — 24 Port (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/switch-l2-24port-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-switch-l3-24port-true",
+    "provider": "onprem",
+    "category": "True Scale - Switches",
+    "name": "L3 Switch — 24 Port (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/switch-l3-24port-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-router-1u-true",
+    "provider": "onprem",
+    "category": "True Scale - Routers",
+    "name": "1U Router (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/router-1u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-router-core-2u-true",
+    "provider": "onprem",
+    "category": "True Scale - Routers",
+    "name": "2U Core Router (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/router-core-2u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 60
+    }
+  },
+  {
+    "id": "onprem-load-balancer-1u-true",
+    "provider": "onprem",
+    "category": "True Scale - Load Balancers",
+    "name": "1U Load Balancer (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/load-balancer-1u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-firewall-1u-true",
+    "provider": "onprem",
+    "category": "True Scale - Firewalls",
+    "name": "1U Firewall (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/firewall-1u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-storage-array-2u-true",
+    "provider": "onprem",
+    "category": "True Scale - Storage",
+    "name": "2U Storage Array (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/storage-array-2u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 60
+    }
+  },
+  {
+    "id": "onprem-storage-array-4u-true",
+    "provider": "onprem",
+    "category": "True Scale - Storage",
+    "name": "4U Storage Array (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/storage-array-4u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 120
+    }
+  },
+  {
+    "id": "onprem-patch-panel-24-true",
+    "provider": "onprem",
+    "category": "True Scale - Patch Panels",
+    "name": "24-Port Patch Panel (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/patch-panel-24-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-patch-panel-48-true",
+    "provider": "onprem",
+    "category": "True Scale - Patch Panels",
+    "name": "48-Port Patch Panel (True Scale, 2U)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/patch-panel-48-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 60
+    }
+  },
+  {
+    "id": "onprem-pdu-vertical-0u-true",
+    "provider": "onprem",
+    "category": "True Scale - Power",
+    "name": "Vertical PDU — 0U (True Scale, 42U span)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/pdu-vertical-0u-true.svg",
+    "trueScale": {
+      "width": 44,
+      "height": 1260
+    }
+  },
+  {
+    "id": "onprem-ups-1u-true",
+    "provider": "onprem",
+    "category": "True Scale - Power",
+    "name": "1U UPS (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/ups-1u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-blade-chassis-6u-true",
+    "provider": "onprem",
+    "category": "True Scale - Misc",
+    "name": "6U Blade Chassis (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/blade-chassis-6u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 180
+    }
+  },
+  {
+    "id": "onprem-cable-manager-1u-true",
+    "provider": "onprem",
+    "category": "True Scale - Misc",
+    "name": "1U Cable Manager (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/cable-manager-1u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-blank-panel-1u-true",
+    "provider": "onprem",
+    "category": "True Scale - Misc",
+    "name": "1U Blank Panel (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/blank-panel-1u-true.svg",
+    "trueScale": {
+      "width": 400,
+      "height": 30
+    }
+  },
+  {
+    "id": "onprem-rack-cabinet-12u-true",
+    "provider": "onprem",
+    "category": "True Scale - Cabinets",
+    "name": "12U Rack Cabinet (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/rack-cabinet-12u-true.svg",
+    "trueScale": {
+      "width": 450,
+      "height": 420
+    }
+  },
+  {
+    "id": "onprem-rack-cabinet-48u-true",
+    "provider": "onprem",
+    "category": "True Scale - Cabinets",
+    "name": "48U Rack Cabinet (True Scale)",
+    "kind": "service",
+    "path": "/cloud-icons/true-scale/rack-cabinet-48u-true.svg",
+    "trueScale": {
+      "width": 450,
+      "height": 1500
+    }
   }
 ]

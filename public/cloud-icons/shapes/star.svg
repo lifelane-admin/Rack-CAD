@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Shapes/Star</title>
+    <g fill="#8b949e" stroke="#484f58" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+        <polygon points="40.0,10.0 47.6,31.5 70.4,32.1 52.4,46.0 58.8,67.9 40.0,55.0 21.2,67.9 27.6,46.0 9.6,32.1 32.4,31.5"/>
+    </g>
+</svg>
