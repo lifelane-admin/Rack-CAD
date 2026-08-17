@@ -2,7 +2,7 @@ import EventBus from '../core/event-bus';
 import { eventBus } from '../core/event-bus';
 import State from '../core/state';
 import { stateManager } from '../core/state';
-import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, DeviceCategory, PduConfig, PduOutletGroup, SocketType, KvmConfig, SwitchConfig, FirewallConfig, SwitchVendor, FirewallVendor, LedTheme, SwitchLayer, SwitchPortGroup, NacConfig, NacVendor, AtsConfig, RACK_CONSTANTS, PortData, CloudConnector, CloudContainer } from '../core/types';
+import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, DeviceCategory, PduConfig, PduOutletGroup, SocketType, KvmConfig, SwitchConfig, FirewallConfig, SwitchVendor, FirewallVendor, LedTheme, SwitchLayer, SwitchPortGroup, NacConfig, NacVendor, AtsConfig, RACK_CONSTANTS, PortData, CloudConnector, CloudContainer, CloudHierarchy } from '../core/types';
 import { KVM_LOCAL_PORT_OPTIONS, CONSOLE_LOCAL_PORT_OPTIONS } from '../renderers/networking-renderer';
 import { computePduLoad } from '../renderers/pdu-renderer';
 import { switchVendorSkin, firewallVendorSkin, nacVendorSkin } from '../renderers/vendor-palette';
@@ -11,6 +11,8 @@ import { generateId } from '../utils/geometry';
 import { CustomAssetModal } from './custom-asset-modal';
 import { CLOUD_CONNECTOR_PRESETS, CloudConnectorPreset, getCloudConnectorPreset } from '../library/cloud-connector-presets';
 import { CLOUD_CONNECTOR_LINE_STYLES, DASH_BY_STYLE, DOUBLE_INNER_STYLE, isDoubleLineStyle } from '../renderers/cloud-connector-renderer';
+import { hierarchyLevelsToLine } from '../library/hierarchy-parser';
+import { showHierarchyInputModal } from './hierarchy-input-modal';
 
 const customAssetModal = new CustomAssetModal();
 
@@ -99,6 +101,8 @@ export class PropertiesPanel {
       this.renderCloudContainerProperties(item.id, content as HTMLElement);
     } else if (item.type === 'cloud-connector') {
       this.renderCloudConnectorProperties(item.id, content as HTMLElement);
+    } else if (item.type === 'cloud-hierarchy') {
+      this.renderCloudHierarchyProperties(item.id, content as HTMLElement);
     }
   }
 
@@ -301,6 +305,88 @@ export class PropertiesPanel {
       EventBus.emit('cloudcontainer:update', { id, data: { backgroundOpacity: pct / 100 } });
     });
     container.querySelector('#prop-cloudcontainer-delete')?.addEventListener('click', () => {
+      EventBus.emit('edit:delete', undefined as any);
+    });
+  }
+
+  /** CloudHierarchy (the "describe infra in one line" breadcrumb box) — same Border Color/Line
+   *  Style/Background Fill controls as CloudContainer above, since it's rendered as the same kind
+   *  of boundary box now. Levels themselves are edited by reopening the input modal rather than a
+   *  field-by-field UI here (mirrors the right-click menu's "Edit…", see app.ts's
+   *  editCloudHierarchy). */
+  private renderCloudHierarchyProperties(id: string, container: HTMLElement) {
+    const state = (State as any).getState?.() || (State as any);
+    const item: CloudHierarchy | undefined = state.cloudHierarchies?.find((h: CloudHierarchy) => h.id === id);
+    if (!item) return;
+
+    container.innerHTML = `
+      <div class="form-group">
+        <label>Levels</label>
+        <input type="text" value="${hierarchyLevelsToLine(item.levels).replace(/"/g, '&quot;')}" disabled title="${item.levels.map(l => l.label).join(' / ')}" />
+        <button id="prop-cloudhierarchy-edit" style="margin-top: 6px; width: 100%; padding: 5px 8px; font-size: 10px; background: rgba(88,166,255,0.12); border: 1px solid #58a6ff; border-radius: 4px; color: #58a6ff; cursor: pointer;">✏️ Edit Levels…</button>
+      </div>
+      <div class="form-group">
+        <label style="font-size: 10px;">Line Color (border + background tint — overrides Provider Accent)</label>
+        <input type="color" id="prop-cloudhierarchy-color" value="${item.color || '#8b949e'}" style="width: 100%; height: 28px; padding: 2px; cursor: pointer;" />
+      </div>
+      <div class="form-group">
+        <label style="font-size: 10px;">Ribbon Color (label chip — independent of Line Color above)</label>
+        <input type="color" id="prop-cloudhierarchy-ribbon-color" value="${item.ribbonColor || item.color || '#8b949e'}" style="width: 100%; height: 28px; padding: 2px; cursor: pointer;" />
+      </div>
+      <div class="form-group">
+        <label>Border Line Style</label>
+        ${this.lineStylePickerMarkup(item.style || 'solid', 'prop-cloudhierarchy-style')}
+      </div>
+      <div class="form-group">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+          <input type="checkbox" id="prop-cloudhierarchy-bg-enabled" ${(item.backgroundOpacity ?? 0.08) > 0 ? 'checked' : ''} />
+          Background Fill
+        </label>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px; ${(item.backgroundOpacity ?? 0.08) > 0 ? '' : 'opacity: 0.4; pointer-events: none;'}" id="prop-cloudhierarchy-bg-opacity-row">
+          <input type="range" id="prop-cloudhierarchy-bg-opacity" min="1" max="100" value="${Math.round((item.backgroundOpacity ?? 0.08) * 100) || 1}" style="flex: 1;" />
+          <span id="prop-cloudhierarchy-bg-opacity-value" style="font-size: 10px; color: var(--text-muted); width: 34px; text-align: right;">${Math.round((item.backgroundOpacity ?? 0.08) * 100)}%</span>
+        </div>
+      </div>
+      <button id="prop-cloudhierarchy-delete" style="margin-top: 10px; width: 100%; padding: 5px 8px; font-size: 10px; background: rgba(244,67,54,0.12); border: 1px solid #e53935; border-radius: 4px; color: #e53935; cursor: pointer;">🗑 Delete</button>
+    `;
+
+    container.querySelector('#prop-cloudhierarchy-edit')?.addEventListener('click', () => {
+      showHierarchyInputModal({
+        provider: item.provider,
+        initialLine: hierarchyLevelsToLine(item.levels),
+        onSubmit: (provider, levels) => {
+          EventBus.emit('cloudhierarchy:update', { id, data: { provider, levels } });
+        },
+      });
+    });
+    container.querySelector('#prop-cloudhierarchy-color')?.addEventListener('input', (e: any) => {
+      EventBus.emit('cloudhierarchy:update', { id, data: { color: e.target.value } });
+    });
+    container.querySelector('#prop-cloudhierarchy-ribbon-color')?.addEventListener('input', (e: any) => {
+      EventBus.emit('cloudhierarchy:update', { id, data: { ribbonColor: e.target.value } });
+    });
+    this.wireLineStylePicker(container, 'prop-cloudhierarchy-style', (value) => {
+      EventBus.emit('cloudhierarchy:update', { id, data: { style: value as CloudHierarchy['style'] } });
+    });
+    container.querySelector('#prop-cloudhierarchy-bg-enabled')?.addEventListener('change', (e: any) => {
+      const row = container.querySelector('#prop-cloudhierarchy-bg-opacity-row') as HTMLElement | null;
+      if (e.target.checked) {
+        if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
+        const slider = container.querySelector('#prop-cloudhierarchy-bg-opacity') as HTMLInputElement | null;
+        const pct = slider ? Number(slider.value) : 8;
+        EventBus.emit('cloudhierarchy:update', { id, data: { backgroundOpacity: pct / 100 } });
+      } else {
+        if (row) { row.style.opacity = '0.4'; row.style.pointerEvents = 'none'; }
+        EventBus.emit('cloudhierarchy:update', { id, data: { backgroundOpacity: 0 } });
+      }
+    });
+    container.querySelector('#prop-cloudhierarchy-bg-opacity')?.addEventListener('input', (e: any) => {
+      const pct = Number(e.target.value);
+      const label = container.querySelector('#prop-cloudhierarchy-bg-opacity-value');
+      if (label) label.textContent = `${pct}%`;
+      EventBus.emit('cloudhierarchy:update', { id, data: { backgroundOpacity: pct / 100 } });
+    });
+    container.querySelector('#prop-cloudhierarchy-delete')?.addEventListener('click', () => {
       EventBus.emit('edit:delete', undefined as any);
     });
   }

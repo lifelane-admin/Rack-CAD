@@ -35,6 +35,7 @@ import { deviceCatalog, getTemplate } from './library/device-catalog';
 import { generateId, distToSegment } from './utils/geometry';
 import { initExportHandlers, downloadFile, exportJSON } from './utils/export';
 import { computeSmartRouting, get3DefaultAnchors } from './utils/routing';
+import { reorderById, ZOrderDirection } from './utils/z-order';
 import { cloneDevice, cloneCloudConnector } from './utils/clone';
 import { socketTypeAtOutletIndex } from './renderers/pdu-layout';
 import { countDevicePowerCables } from './utils/power';
@@ -42,14 +43,17 @@ import { appendExportSummaryOverlay, getAutoSummaryCardOffset } from './renderer
 import {
   RackData, DeviceData, PortData, CableData, LegendItem, TextLabel, ImageAsset,
   RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode, SocketType,
-  CloudNode, CloudContainer, CloudConnector, CloudHandleSide, CloudArrowType
+  CloudNode, CloudContainer, CloudConnector, CloudHandleSide, CloudArrowType, CloudHierarchy, CloudProvider
 } from './core/types';
 import { ThreeViewport } from './three/ThreeViewport';
 import { CloudCanvasManager } from './core/cloud-canvas';
 import { renderCloudNode, nodeEdgeWorldPoint, nodeCenterWorldPoint } from './renderers/cloud-node-renderer';
 import { renderCloudContainer } from './renderers/cloud-container-renderer';
+import { renderCloudHierarchy, getNaturalHierarchySize } from './renderers/cloud-hierarchy-renderer';
 import { renderCloudConnector, inferBestSide, CLOUD_CONNECTOR_LINE_STYLES } from './renderers/cloud-connector-renderer';
 import { getCloudIcon, isBoundaryIcon, inferContainerKind, CLOUD_SHAPE_KINDS } from './library/cloud-icon-catalog';
+import { hierarchyLevelsToLine, hierarchyLevelIcon } from './library/hierarchy-parser';
+import { showHierarchyInputModal } from './components/hierarchy-input-modal';
 import { showStartupModal, StartupChoice } from './components/startup-modal';
 
 type CloudConnectorSegmentKind = 'entryStub' | 'entry' | 'crossbar' | 'exit' | 'exitStub';
@@ -194,6 +198,8 @@ export class App {
   private isResizingCloudNode = false;
   private draggedCloudContainerId: string | null = null;
   private isResizingCloudContainer = false;
+  private draggedCloudHierarchyId: string | null = null;
+  private isResizingCloudHierarchy = false;
   private dragStartCloudWorldPos: Point = { x: 0, y: 0 };
   private dragStartCloudX = 0;
   private dragStartCloudY = 0;
@@ -201,6 +207,7 @@ export class App {
   private dragStartCloudHeight = 0;
   private dragStartCloudNodesState: CloudNode[] | null = null;
   private dragStartCloudContainersState: CloudContainer[] | null = null;
+  private dragStartCloudHierarchiesState: CloudHierarchy[] | null = null;
 
   // Container-draw tool (mirrors export-area's mousedown-drag-mouseup rectangle tool)
   private isDrawingCloudContainer = false;
@@ -302,6 +309,7 @@ export class App {
       this.setupCloudCanvasInteractions();
       this.setupCloudDragDrop();
       this.setupCloudContextMenu();
+      this.setupCloudAreaSelect();
     } catch (err) {
       console.error('[CloudCanvas] init failed, Cloud Architecture view will be unavailable:', err);
     }
@@ -479,6 +487,37 @@ export class App {
       const cloudConnectors = stateManager.getState().cloudConnectors.map(c => c.id === id ? { ...c, ...data } : c);
       stateManager.setState({ cloudConnectors });
       this.renderCloudAll();
+    });
+    eventBus.on('cloudhierarchy:update', ({ id, data }) => {
+      const cloudHierarchies = stateManager.getState().cloudHierarchies.map(h => h.id === id ? { ...h, ...data } : h);
+      stateManager.setState({ cloudHierarchies });
+      this.renderCloudAll();
+    });
+    eventBus.on('cloudhierarchy:prime', (provider) => {
+      const svgEl = document.getElementById('cloud-canvas');
+      const rect = svgEl?.getBoundingClientRect();
+      const center = rect && this.cloudCanvas
+        ? this.cloudCanvas.screenToWorld({ x: rect.left + rect.width / 2, y: rect.top + 80 })
+        : { x: 80, y: 80 };
+      const cascade = (stateManager.getState().cloudHierarchies.length % 6) * 24;
+
+      showHierarchyInputModal({
+        provider: provider ?? 'azure',
+        onSubmit: (provider, levels) => {
+          const hierarchy: CloudHierarchy = {
+            id: 'cloud-hierarchy-' + crypto.randomUUID(),
+            provider,
+            x: center.x + cascade,
+            y: center.y + cascade,
+            levels,
+          };
+          stateManager.addCloudHierarchy(hierarchy);
+          const selection: SelectableItem[] = [{ type: 'cloud-hierarchy', id: hierarchy.id }];
+          stateManager.setState({ selection });
+          eventBus.emit('selection:changed', selection);
+          this.renderCloudAll();
+        },
+      });
     });
     eventBus.on('cable:batch-generate', ({ deviceId, side, type, color, count }) => {
       const s = stateManager.getState();
@@ -1511,8 +1550,12 @@ export class App {
           }
         }
 
-        // Nothing was hit — start rubber-band multi-select
+        // Nothing was hit — start rubber-band multi-select. Cancel whatever pan
+        // CanvasManager's own (earlier-registered) mousedown listener just optimistically
+        // started for this same background click — see cancelPan()'s doc comment for why
+        // letting both run would collapse the rubber-band's own screenToWorld() math to zero.
         {
+          this.canvas.cancelPan();
           const worldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
           this.rubberBandStart = worldPos;
           if (svgEl) {
@@ -1955,6 +1998,12 @@ export class App {
 
         const state = stateManager.getState();
         const selected: SelectableItem[] = [];
+
+        state.racks.forEach(rack => {
+          const rackH = RACK_CONSTANTS.RACK_PADDING_TOP + rack.units * RACK_CONSTANTS.RU_HEIGHT + RACK_CONSTANTS.RACK_PADDING_BOTTOM;
+          const intersects = rack.x < selX + selW && rack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH > selX && rack.y < selY + selH && rack.y + rackH > selY;
+          if (intersects) selected.push({ type: 'rack', id: rack.id });
+        });
 
         state.devices.forEach(dev => {
           const rack = stateManager.getRack(dev.rackId);
@@ -3481,6 +3530,51 @@ export class App {
     });
   }
 
+  /** Left-click-and-drag marquee select on the Cloud Architecture canvas's empty background (see
+   *  setupCloudAreaSelect below). The rack canvas already has its own pre-existing rubber-band
+   *  select (see the "Nothing was hit — start rubber-band multi-select" / "4. Rubber-band
+   *  multi-select completion" blocks in setupCanvasInteractions() — this was originally
+   *  duplicated here too before that was noticed; racks were the one gap in that older mechanism,
+   *  now closed there directly instead). Tests each candidate's real getBoundingClientRect()
+   *  against the dragged screen-space rectangle instead of hand-rolled per-type geometry: nodes/
+   *  containers/hierarchies are simple x/y/width/height, but connectors are arbitrary paths — the
+   *  browser has already computed the right answer for those. More than one element can carry the
+   *  same data-*-id (e.g. a container's resize handle) — every element for a given id is tested
+   *  independently and it's selected if ANY of them intersects, not just whichever happens to be
+   *  first in the DOM. */
+  private computeAreaSelection(svgEl: Element, rect: { left: number; top: number; right: number; bottom: number }, types: { attr: string; type: SelectableItem['type'] }[]): SelectableItem[] {
+    const selection: SelectableItem[] = [];
+    const added = new Set<string>();
+    for (const { attr, type } of types) {
+      svgEl.querySelectorAll(`[${attr}]`).forEach(el => {
+        const id = el.getAttribute(attr);
+        if (!id) return;
+        const key = `${type}:${id}`;
+        if (added.has(key)) return;
+        const r = el.getBoundingClientRect();
+        const intersects = r.left < rect.right && r.right > rect.left && r.top < rect.bottom && r.bottom > rect.top;
+        if (intersects) { added.add(key); selection.push({ type, id } as SelectableItem); }
+      });
+    }
+    return selection;
+  }
+
+  private setupCloudAreaSelect(): void {
+    eventBus.on('cloud-canvas:area-select', (rect) => {
+      const svgEl = document.getElementById('cloud-canvas');
+      if (!svgEl) return;
+      const selection = this.computeAreaSelection(svgEl, rect, [
+        { attr: 'data-cloud-node-id', type: 'cloud-node' },
+        { attr: 'data-cloud-container-id', type: 'cloud-container' },
+        { attr: 'data-cloud-hierarchy-id', type: 'cloud-hierarchy' },
+        { attr: 'data-cloud-connector-id', type: 'cloud-connector' },
+      ]);
+      stateManager.setState({ selection });
+      eventBus.emit('selection:changed', selection);
+      this.renderCloudAll();
+    });
+  }
+
   /**
    * Show a modal to pick a vertical PDU and mount it on the given rack side.
    */
@@ -3758,6 +3852,8 @@ export class App {
         stateManager.removeCloudContainer(item.id);
       } else if (item.type === 'cloud-connector') {
         stateManager.removeCloudConnector(item.id);
+      } else if (item.type === 'cloud-hierarchy') {
+        stateManager.removeCloudHierarchy(item.id);
       } else if ((item as any).type === 'vertical-mgr') {
         const side = (item as any).side;
         const prop = side === 'left' ? 'leftCableManagerWidth' : 'rightCableManagerWidth';
@@ -4548,11 +4644,13 @@ export class App {
     if (!this.cloudCanvas) return;
     const s = stateManager.getState();
     const containerLayer = this.cloudCanvas!.getLayer('cloud-container-layer');
+    const hierarchyLayer = this.cloudCanvas!.getLayer('cloud-hierarchy-layer');
     const nodeLayer = this.cloudCanvas!.getLayer('cloud-node-layer');
     const connectorLayer = this.cloudCanvas!.getLayer('cloud-connector-layer');
-    if (!containerLayer || !nodeLayer || !connectorLayer) return;
+    if (!containerLayer || !hierarchyLayer || !nodeLayer || !connectorLayer) return;
 
     containerLayer.innerHTML = '';
+    hierarchyLayer.innerHTML = '';
     nodeLayer.innerHTML = '';
     connectorLayer.innerHTML = '';
 
@@ -4560,6 +4658,12 @@ export class App {
     for (const container of s.cloudContainers) {
       const iconPath = container.iconId ? getCloudIcon(container.iconId)?.path : undefined;
       renderCloudContainer(container, containerLayer, selectedContainerIds.has(container.id), iconPath);
+    }
+
+    const selectedHierarchyIds = new Set(s.selection.filter(i => i.type === 'cloud-hierarchy').map(i => i.id));
+    for (const hierarchy of s.cloudHierarchies) {
+      const icons = hierarchy.levels.map(l => hierarchyLevelIcon(l.kind, hierarchy.provider));
+      renderCloudHierarchy(hierarchy, hierarchyLayer, selectedHierarchyIds.has(hierarchy.id), icons);
     }
 
     const selectedNodeIds = new Set(s.selection.filter(i => i.type === 'cloud-node').map(i => i.id));
@@ -4685,11 +4789,32 @@ export class App {
     });
   }
 
-  /** Right-click menu for the Cloud Architecture canvas — CloudConnectors (delete, duplicate,
-   *  add/remove waypoint, reset routing, line style/arrows/color/rounded corners) and
-   *  CloudContainers (delete, line style, color, kind), mirroring the rack canvas's cable context
-   *  menu (see setupContextMenuHandling()). Nodes and empty background still have no menu —
-   *  right-clicking them is a no-op. */
+  /** Builds the shared "Visual Order" submenu (Bring to Front/Forward, Send Backward/to Back) —
+   *  used by every cloud canvas object's context menu (node/container/hierarchy/connector). Each
+   *  type reorders only within its own state array/SVG layer (see reorderById's doc comment for
+   *  why that's the only order that's ever visually ambiguous). `getArr`/`setArr` are passed in
+   *  rather than a single array so the array is re-read fresh at click time, not captured stale
+   *  when the menu was first built. */
+  private visualOrderMenuItems<T extends { id: string }>(id: string, getArr: () => T[], setArr: (next: T[]) => void): MenuItem[] {
+    const reorder = (direction: ZOrderDirection) => {
+      setArr(reorderById(getArr(), id, direction));
+      this.renderCloudAll();
+    };
+    return [
+      { label: 'Bring to Front', icon: '⬆️', action: () => reorder('front') },
+      { label: 'Bring Forward', icon: '🔼', action: () => reorder('forward') },
+      { label: 'Send Backward', icon: '🔽', action: () => reorder('backward') },
+      { label: 'Send to Back', icon: '⬇️', action: () => reorder('back') },
+    ];
+  }
+
+  /** Right-click menu for the Cloud Architecture canvas — CloudNodes, CloudConnectors (delete,
+   *  duplicate, add/remove waypoint, reset routing, line style/arrows/color/rounded corners),
+   *  CloudContainers (delete, line style, color, kind), and CloudHierarchies (delete, line
+   *  style/colors, edit), mirroring the rack canvas's cable context menu (see
+   *  setupContextMenuHandling()). Every one of these also gets the shared Visual Order submenu
+   *  (see visualOrderMenuItems). Empty background still has no menu — right-clicking it is a
+   *  no-op. */
   private setupCloudContextMenu(): void {
     eventBus.on('cloud-canvas:rightclick', ({ point, target, screenPoint }) => {
       const targetEl = target as unknown as SVGElement | null;
@@ -4698,6 +4823,11 @@ export class App {
       const connectorId = connectorEl?.getAttribute('data-cloud-connector-id');
 
       if (!connectorId) {
+        const nodeEl = targetEl?.closest?.('[data-cloud-node-id]') as SVGElement | null;
+        if (nodeEl) {
+          this.showCloudNodeContextMenu(nodeEl, screenPoint);
+          return;
+        }
         this.showCloudContainerContextMenu(targetEl, screenPoint);
         return;
       }
@@ -4817,6 +4947,10 @@ export class App {
           },
         },
         {
+          label: 'Visual Order', icon: '📶',
+          submenu: this.visualOrderMenuItems(connectorId, () => stateManager.getState().cloudConnectors, (cloudConnectors) => stateManager.setState({ cloudConnectors })),
+        },
+        {
           label: '🗑 Delete Connector',
           icon: '🗑',
           shortcut: 'Del',
@@ -4833,6 +4967,44 @@ export class App {
     });
   }
 
+  /** Right-click menu for a CloudNode (a placed service icon) — just Visual Order and Delete; no
+   *  color/style pickers since a node's look comes entirely from its manifest icon, not something
+   *  manually tweaked per instance. */
+  private showCloudNodeContextMenu(nodeEl: SVGElement, screenPoint: Point): void {
+    const nodeId = nodeEl.getAttribute('data-cloud-node-id');
+    if (!nodeId) return;
+    const item = stateManager.getState().cloudNodes.find(n => n.id === nodeId);
+    if (!item) return;
+
+    const selection: SelectableItem[] = [{ type: 'cloud-node', id: nodeId }];
+    stateManager.setState({ selection });
+    eventBus.emit('selection:changed', selection);
+    this.renderCloudAll();
+
+    const items: MenuItem[] = [
+      { label: `☁️ ${item.label || 'Service'}`, disabled: true },
+      { separator: true, label: '' },
+      {
+        label: 'Visual Order', icon: '📶',
+        submenu: this.visualOrderMenuItems(nodeId, () => stateManager.getState().cloudNodes, (cloudNodes) => stateManager.setState({ cloudNodes })),
+      },
+      { separator: true, label: '' },
+      {
+        label: '🗑 Delete',
+        icon: '🗑',
+        shortcut: 'Del',
+        action: () => {
+          stateManager.removeCloudNode(nodeId);
+          stateManager.setState({ selection: [] });
+          eventBus.emit('selection:changed', []);
+          this.renderCloudAll();
+        },
+      },
+    ];
+
+    this.contextMenu.show(screenPoint.x, screenPoint.y, items);
+  }
+
   /** Right-click menu for a CloudContainer (VPC/Subnet/AZ/Region/Resource-Group/Account boundary
    *  box) — line style + color, same CLOUD_CONNECTOR_LINE_STYLES catalog CloudConnector uses (see
    *  CloudContainer.style's doc comment for why 'double'-family styles look different there), plus
@@ -4841,7 +5013,10 @@ export class App {
   private showCloudContainerContextMenu(targetEl: SVGElement | null, screenPoint: Point): void {
     const containerEl = targetEl?.closest?.('[data-cloud-container-id]') as SVGElement | null;
     const containerId = containerEl?.getAttribute('data-cloud-container-id');
-    if (!containerId) return;
+    if (!containerId) {
+      this.showCloudHierarchyContextMenu(targetEl, screenPoint);
+      return;
+    }
 
     const item = stateManager.getState().cloudContainers.find(c => c.id === containerId);
     if (!item) return;
@@ -4879,6 +5054,10 @@ export class App {
         icon: bgOn ? '◻️' : '◼️',
         action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { backgroundOpacity: bgOn ? 0 : 0.08 } }),
       },
+      {
+        label: 'Visual Order', icon: '📶',
+        submenu: this.visualOrderMenuItems(containerId, () => stateManager.getState().cloudContainers, (cloudContainers) => stateManager.setState({ cloudContainers })),
+      },
       { separator: true, label: '' },
       {
         label: '🗑 Delete',
@@ -4894,6 +5073,100 @@ export class App {
     ];
 
     this.contextMenu.show(screenPoint.x, screenPoint.y, items);
+  }
+
+  /** Right-click menu for a CloudHierarchy (the "describe infra in one line" breadcrumb box, see
+   *  hierarchy-input-modal.ts) — Edit (reopens the input modal, pre-filled from its current
+   *  levels), plus the same Border Line Style / Border Color / Background Fill controls
+   *  CloudContainer has (see showCloudContainerContextMenu just above), since it's now rendered
+   *  as the same kind of boundary box. */
+  private showCloudHierarchyContextMenu(targetEl: SVGElement | null, screenPoint: Point): void {
+    const hierarchyEl = targetEl?.closest?.('[data-cloud-hierarchy-id]') as SVGElement | null;
+    const hierarchyId = hierarchyEl?.getAttribute('data-cloud-hierarchy-id');
+    if (!hierarchyId) return;
+
+    const item = stateManager.getState().cloudHierarchies.find(h => h.id === hierarchyId);
+    if (!item) return;
+
+    const selection: SelectableItem[] = [{ type: 'cloud-hierarchy', id: hierarchyId }];
+    stateManager.setState({ selection });
+    eventBus.emit('selection:changed', selection);
+    this.renderCloudAll();
+
+    // Ribbon (label chip) and Line (boundary border/tint) are two independently-colorable
+    // elements — see CloudHierarchy.ribbonColor's doc comment for why they used to be locked
+    // together (both driven by the same `color` field) and no longer are.
+    const lineColorItems: MenuItem[] = [
+      { label: '🟠 Orange', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { color: '#FF9900' } }) },
+      { label: '🔷 Azure Blue', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { color: '#0078D4' } }) },
+      { label: '🔴 GCP Red', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { color: '#4285F4' } }) },
+      { label: '🟢 Green', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { color: '#3fb950' } }) },
+      { label: '🟣 Purple', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { color: '#8e24aa' } }) },
+      { label: '⚪ Grey (neutral)', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { color: undefined } }) },
+    ];
+
+    const ribbonColorItems: MenuItem[] = [
+      { label: '🟠 Orange', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { ribbonColor: '#FF9900' } }) },
+      { label: '🔷 Azure Blue', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { ribbonColor: '#0078D4' } }) },
+      { label: '🔴 GCP Red', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { ribbonColor: '#4285F4' } }) },
+      { label: '🟢 Green', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { ribbonColor: '#3fb950' } }) },
+      { label: '🟣 Purple', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { ribbonColor: '#8e24aa' } }) },
+      { label: '⚪ Match Line Color', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { ribbonColor: undefined } }) },
+    ];
+
+    const styleItems: MenuItem[] = [
+      { label: !item.style ? '● Default' : 'Default', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { style: undefined } }) },
+      ...CLOUD_CONNECTOR_LINE_STYLES.map(({ value, label }) => ({
+        label: item.style === value ? `● ${label}` : label,
+        action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { style: value } }),
+      })),
+    ];
+
+    const bgOn = (item.backgroundOpacity ?? 0.08) > 0;
+    const items: MenuItem[] = [
+      { label: '✏️ Edit…', icon: '✏️', action: () => this.editCloudHierarchy(hierarchyId) },
+      { separator: true, label: '' },
+      { label: 'Border Line Style', icon: '〰️', submenu: styleItems },
+      { label: 'Line Color', icon: '🎨', submenu: lineColorItems },
+      { label: 'Ribbon Color', icon: '🎀', submenu: ribbonColorItems },
+      {
+        label: bgOn ? 'Disable Background Fill' : 'Enable Background Fill',
+        icon: bgOn ? '◻️' : '◼️',
+        action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { backgroundOpacity: bgOn ? 0 : 0.08 } }),
+      },
+      {
+        label: 'Visual Order', icon: '📶',
+        submenu: this.visualOrderMenuItems(hierarchyId, () => stateManager.getState().cloudHierarchies, (cloudHierarchies) => stateManager.setState({ cloudHierarchies })),
+      },
+      { separator: true, label: '' },
+      {
+        label: '🗑 Delete',
+        icon: '🗑',
+        shortcut: 'Del',
+        action: () => {
+          stateManager.removeCloudHierarchy(hierarchyId);
+          stateManager.setState({ selection: [] });
+          eventBus.emit('selection:changed', []);
+          this.renderCloudAll();
+        },
+      },
+    ];
+
+    this.contextMenu.show(screenPoint.x, screenPoint.y, items);
+  }
+
+  /** Reopens the "describe infra in one line" modal pre-filled from an existing hierarchy's
+   *  current levels (see hierarchyLevelsToLine), so editing doesn't mean delete-and-retype. */
+  private editCloudHierarchy(hierarchyId: string): void {
+    const item = stateManager.getState().cloudHierarchies.find(h => h.id === hierarchyId);
+    if (!item) return;
+    showHierarchyInputModal({
+      provider: item.provider,
+      initialLine: hierarchyLevelsToLine(item.levels),
+      onSubmit: (provider, levels) => {
+        eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { provider, levels } });
+      },
+    });
   }
 
   /** Draws/updates the live rectangle preview for the cloud-container draw tool into
@@ -5113,6 +5386,23 @@ export class App {
     }
   }
 
+  private commitCloudHierarchyDrag(): void {
+    const hierarchyId = this.draggedCloudHierarchyId!;
+    const wasResizing = this.isResizingCloudHierarchy;
+    this.draggedCloudHierarchyId = null;
+    this.isResizingCloudHierarchy = false;
+
+    const finalHierarchy = stateManager.getState().cloudHierarchies.find(h => h.id === hierarchyId);
+    if (finalHierarchy && this.dragStartCloudHierarchiesState) {
+      stateManager.setState({ cloudHierarchies: this.dragStartCloudHierarchiesState }, true);
+      this.dragStartCloudHierarchiesState = null;
+      const data = wasResizing
+        ? { width: finalHierarchy.width, height: finalHierarchy.height }
+        : { x: finalHierarchy.x, y: finalHierarchy.y };
+      eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data });
+    }
+  }
+
   /** Binds all mouse interaction on the cloud canvas: select/drag/resize (default 'select'
    *  tool), the cloud-container draw tool, and the cloud-connect tool. A separate, dedicated
    *  handler from setupCanvasInteractions() above (which owns the rack canvas's `#canvas`) —
@@ -5130,6 +5420,14 @@ export class App {
     // NEW icon from the sidebar palette onto the canvas — that's a 'drop' starting from a
     // 'dragstart' on the SIDEBAR item, not on this canvas.
     svgEl.addEventListener('dragstart', (e) => e.preventDefault());
+
+    // Double-click a CloudHierarchy pill to reopen the "describe infra in one line" modal
+    // pre-filled with its current levels, instead of delete-and-retype (see editCloudHierarchy).
+    svgEl.addEventListener('dblclick', (e: MouseEvent) => {
+      const hierarchyEl = (e.target as Element).closest('[data-cloud-hierarchy-id]') as SVGElement | null;
+      const hierarchyId = hierarchyEl?.getAttribute('data-cloud-hierarchy-id');
+      if (hierarchyId) this.editCloudHierarchy(hierarchyId);
+    });
 
     svgEl.addEventListener('mousedown', (e: MouseEvent) => {
       if (e.button !== 0) return;
@@ -5266,10 +5564,11 @@ export class App {
         return;
       }
 
-      const resizeHandle = target.closest('.cloud-node-resize-handle, .cloud-container-resize-handle') as SVGElement | null;
+      const resizeHandle = target.closest('.cloud-node-resize-handle, .cloud-container-resize-handle, .cloud-hierarchy-resize-handle') as SVGElement | null;
       if (resizeHandle) {
         const nodeId = resizeHandle.getAttribute('data-cloud-node-id');
         const containerId = resizeHandle.getAttribute('data-cloud-container-id');
+        const hierarchyId = resizeHandle.getAttribute('data-cloud-hierarchy-id');
         if (nodeId) {
           const node = stateManager.getState().cloudNodes.find(n => n.id === nodeId);
           if (node && !node.locked) {
@@ -5289,6 +5588,18 @@ export class App {
             this.dragStartCloudWidth = container.width;
             this.dragStartCloudHeight = container.height;
             this.dragStartCloudContainersState = stateManager.getState().cloudContainers;
+          }
+        } else if (hierarchyId) {
+          const hierarchy = stateManager.getState().cloudHierarchies.find(h => h.id === hierarchyId);
+          if (hierarchy && !hierarchy.locked) {
+            const icons = hierarchy.levels.map(l => hierarchyLevelIcon(l.kind, hierarchy.provider));
+            const natural = getNaturalHierarchySize(hierarchy, icons);
+            this.isResizingCloudHierarchy = true;
+            this.draggedCloudHierarchyId = hierarchyId;
+            this.dragStartCloudWorldPos = worldPos;
+            this.dragStartCloudWidth = hierarchy.width ?? natural.width;
+            this.dragStartCloudHeight = hierarchy.height ?? natural.height;
+            this.dragStartCloudHierarchiesState = stateManager.getState().cloudHierarchies;
           }
         }
         return;
@@ -5336,6 +5647,24 @@ export class App {
         const selection: SelectableItem[] = [{ type: 'cloud-connector', id: connId }];
         stateManager.setState({ selection });
         eventBus.emit('selection:changed', selection);
+        this.renderCloudAll();
+        return;
+      }
+
+      const hierarchyEl = target.closest('[data-cloud-hierarchy-id]') as SVGElement | null;
+      if (hierarchyEl) {
+        const hierarchyId = hierarchyEl.getAttribute('data-cloud-hierarchy-id')!;
+        const hierarchy = stateManager.getState().cloudHierarchies.find(h => h.id === hierarchyId);
+        const selection: SelectableItem[] = [{ type: 'cloud-hierarchy', id: hierarchyId }];
+        stateManager.setState({ selection });
+        eventBus.emit('selection:changed', selection);
+        if (hierarchy && !hierarchy.locked) {
+          this.draggedCloudHierarchyId = hierarchyId;
+          this.dragStartCloudWorldPos = worldPos;
+          this.dragStartCloudX = hierarchy.x;
+          this.dragStartCloudY = hierarchy.y;
+          this.dragStartCloudHierarchiesState = stateManager.getState().cloudHierarchies;
+        }
         this.renderCloudAll();
         return;
       }
@@ -5468,6 +5797,29 @@ export class App {
         return;
       }
 
+      if (this.draggedCloudHierarchyId) {
+        const dx = worldPos.x - this.dragStartCloudWorldPos.x;
+        const dy = worldPos.y - this.dragStartCloudWorldPos.y;
+        const hierarchyId = this.draggedCloudHierarchyId;
+        if (this.isResizingCloudHierarchy) {
+          // Grows the box itself (like CloudContainer) — icons/text stay their normal size, the
+          // extra area is just more pill background. The renderer independently floors this at
+          // the content's natural size (see getNaturalHierarchySize), so text is never clipped
+          // even if a fast drag momentarily computes a width/height smaller than that.
+          const width = Math.max(40, this.dragStartCloudWidth + dx);
+          const height = Math.max(24, this.dragStartCloudHeight + dy);
+          const cloudHierarchies = stateManager.getState().cloudHierarchies.map(h => h.id === hierarchyId ? { ...h, width, height } : h);
+          stateManager.setState({ cloudHierarchies }, true);
+        } else {
+          const x = this.dragStartCloudX + dx;
+          const y = this.dragStartCloudY + dy;
+          const cloudHierarchies = stateManager.getState().cloudHierarchies.map(h => h.id === hierarchyId ? { ...h, x, y } : h);
+          stateManager.setState({ cloudHierarchies }, true);
+        }
+        this.renderCloudAll();
+        return;
+      }
+
       // Idle hover (no drag/tool gesture in progress, handled by the branches above) — reveal a
       // node's connection handles just from resting the mouse over it, same as any other diagram
       // tool, rather than requiring a click-to-select first.
@@ -5532,6 +5884,9 @@ export class App {
       }
       if (this.draggedCloudContainerId) {
         this.commitCloudContainerDrag();
+      }
+      if (this.draggedCloudHierarchyId) {
+        this.commitCloudHierarchyDrag();
       }
       if (this.draggedConnectorEndpoint) {
         this.commitConnectorEndpointDrag();

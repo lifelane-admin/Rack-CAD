@@ -21,6 +21,16 @@ export class CloudCanvasManager {
   private startPanPt: Point = { x: 0, y: 0 };
   private startTransform: Transform = { x: 0, y: 0, scale: 1 };
 
+  // Left-click-and-drag marquee select on empty background (see 'cloud-canvas:area-select' in
+  // types.ts) — mirrors CanvasManager's identical mechanics; right-click stays reserved for the
+  // context menu only, with no drag handling of its own.
+  private isAreaSelecting = false;
+  private areaSelectDragged = false;
+  private areaSelectStartWorld: Point = { x: 0, y: 0 };
+  private areaSelectStartScreen: Point = { x: 0, y: 0 };
+  private areaSelectEl: SVGRectElement | null = null;
+  private static readonly AREA_SELECT_DRAG_THRESHOLD = 4;
+
   constructor(containerId: string, svgId: string) {
     const container = document.getElementById(containerId);
     const svg = document.getElementById(svgId) as unknown as SVGSVGElement;
@@ -97,7 +107,7 @@ export class CloudCanvasManager {
     this.viewportGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     this.viewportGroup.setAttribute('id', 'cloud-viewport-group');
 
-    const layerNames = ['cloud-grid-layer', 'cloud-container-layer', 'cloud-node-layer', 'cloud-connector-layer', 'cloud-interaction-layer'];
+    const layerNames = ['cloud-grid-layer', 'cloud-container-layer', 'cloud-hierarchy-layer', 'cloud-node-layer', 'cloud-connector-layer', 'cloud-interaction-layer'];
     for (const name of layerNames) {
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       g.setAttribute('id', name);
@@ -138,15 +148,23 @@ export class CloudCanvasManager {
     const isInteractiveTarget = (e.target as Element).closest('[data-cloud-node-id]') ||
                                  (e.target as Element).closest('[data-cloud-container-id]') ||
                                  (e.target as Element).closest('[data-cloud-connector-id]') ||
+                                 (e.target as Element).closest('[data-cloud-hierarchy-id]') ||
                                  (e.target as Element).closest('[data-draggable="true"]');
     const isClickedOnBackground = !isInteractiveTarget;
 
-    if (e.button === 1 || isPanTool || (e.button === 0 && isClickedOnBackground)) {
+    if (e.button === 1 || isPanTool) {
       this.isPanning = true;
       this.startPanPt = { x: e.clientX, y: e.clientY };
       this.startTransform = { ...this.transform };
       this.svg.classList.add('cursor-grabbing');
       e.preventDefault();
+    } else if (e.button === 0 && isClickedOnBackground) {
+      // Left-drag on background is marquee select, not pan — panning off background still works
+      // via the middle mouse button (above) or the explicit Pan tool (isPanTool, above).
+      this.isAreaSelecting = true;
+      this.areaSelectDragged = false;
+      this.areaSelectStartWorld = this.screenToWorld({ x: e.clientX, y: e.clientY });
+      this.areaSelectStartScreen = { x: e.clientX, y: e.clientY };
     } else if (e.button === 0) {
       const pt = this.screenToWorld({ x: e.clientX, y: e.clientY });
       eventBus.emit('cloud-canvas:click', pt);
@@ -161,11 +179,61 @@ export class CloudCanvasManager {
       this.transform.y = this.startTransform.y + dy;
       this.updateTransform();
     }
+
+    if (this.isAreaSelecting) {
+      const dx = e.clientX - this.areaSelectStartScreen.x;
+      const dy = e.clientY - this.areaSelectStartScreen.y;
+      if (!this.areaSelectDragged && Math.hypot(dx, dy) > CloudCanvasManager.AREA_SELECT_DRAG_THRESHOLD) {
+        this.areaSelectDragged = true;
+      }
+      if (this.areaSelectDragged) {
+        this.updateAreaSelectRect(e);
+      }
+    }
   }
 
-  private onMouseUp() {
+  private updateAreaSelectRect(e: MouseEvent): void {
+    const current = this.screenToWorld({ x: e.clientX, y: e.clientY });
+    const x = Math.min(current.x, this.areaSelectStartWorld.x);
+    const y = Math.min(current.y, this.areaSelectStartWorld.y);
+    const w = Math.abs(current.x - this.areaSelectStartWorld.x);
+    const h = Math.abs(current.y - this.areaSelectStartWorld.y);
+
+    if (!this.areaSelectEl) {
+      const layer = this.getLayer('cloud-interaction-layer');
+      if (!layer) return;
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('fill', 'rgba(88,166,255,0.08)');
+      rect.setAttribute('stroke', '#58a6ff');
+      rect.setAttribute('stroke-width', '1');
+      rect.setAttribute('stroke-dasharray', '4,2');
+      rect.setAttribute('pointer-events', 'none');
+      layer.appendChild(rect);
+      this.areaSelectEl = rect;
+    }
+    this.areaSelectEl.setAttribute('x', String(x));
+    this.areaSelectEl.setAttribute('y', String(y));
+    this.areaSelectEl.setAttribute('width', String(w));
+    this.areaSelectEl.setAttribute('height', String(h));
+  }
+
+  private onMouseUp(e: MouseEvent) {
     this.isPanning = false;
     this.svg.classList.remove('cursor-grabbing');
+
+    if (this.isAreaSelecting) {
+      this.isAreaSelecting = false;
+      this.areaSelectEl?.remove();
+      this.areaSelectEl = null;
+      if (this.areaSelectDragged) {
+        const sx = this.areaSelectStartScreen, ex = { x: e.clientX, y: e.clientY };
+        eventBus.emit('cloud-canvas:area-select', {
+          left: Math.min(sx.x, ex.x), top: Math.min(sx.y, ex.y),
+          right: Math.max(sx.x, ex.x), bottom: Math.max(sx.y, ex.y),
+        });
+      }
+      this.areaSelectDragged = false;
+    }
   }
 
   private onWheel(e: WheelEvent) {

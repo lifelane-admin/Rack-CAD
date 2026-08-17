@@ -36,6 +36,7 @@ const minimalState: AppState = {
   cloudNodes: [],
   cloudContainers: [],
   cloudConnectors: [],
+  cloudHierarchies: [],
 };
 
 describe('serializeState', () => {

@@ -1,10 +1,11 @@
 import EventBus from '../core/event-bus';
 import State from '../core/state';
 import { deviceCatalog, getTemplate } from '../library/device-catalog';
-import { DeviceCategory, DeviceTemplate, CloudProvider } from '../core/types';
+import { DeviceCategory, DeviceTemplate, CloudProvider, CloudContainer } from '../core/types';
 import { CustomAssetModal } from './custom-asset-modal';
 import { deleteCustomTemplate, exportCustomLibraryJSON, parseCustomLibraryJSON } from '../library/custom-catalog';
-import { cloudIconManifest, CloudIconEntry } from '../library/cloud-icon-catalog';
+import { cloudIconManifest, CloudIconEntry, getCloudIcon, isBoundaryIcon, BOUNDARY_MENU_KINDS, getBoundaryIconsByKind } from '../library/cloud-icon-catalog';
+import { recordIconUse, recordBoundaryUse, getRecentUsage } from '../library/recent-usage';
 
 const CLOUD_SEARCH_RESULT_CAP = 150;
 let cloudSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -298,22 +299,162 @@ export class Sidebar {
     }
   }
 
-  private makeCloudIconItem(icon: CloudIconEntry): HTMLElement {
+  /** metaMode 'provider' is used in cross-provider contexts (Boundaries, Recently Used) where
+   *  showing the raw manifest category (e.g. "Groups") is less useful than which cloud it's from. */
+  private makeCloudIconItem(icon: CloudIconEntry, opts?: { metaMode?: 'category' | 'provider' }): HTMLElement {
     const el = document.createElement('div');
     el.className = 'catalog-item cloud-icon-item';
     el.draggable = true;
     el.title = `${icon.name} (${icon.provider.toUpperCase()})`;
+    const meta = opts?.metaMode === 'provider' ? icon.provider.toUpperCase() : icon.category;
     el.innerHTML = `
       <img class="cloud-icon-thumb" src="${icon.path}" alt="" loading="lazy" width="24" height="24" />
       <div class="item-details" style="min-width:0;overflow:hidden;">
         <div class="item-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${icon.name}</div>
-        <div class="item-meta">${icon.category}</div>
+        <div class="item-meta">${meta}</div>
       </div>
     `;
     el.ondragstart = (e) => {
       e.dataTransfer?.setData('application/json', JSON.stringify({ iconId: icon.id }));
+      recordIconUse(icon.id);
+      this.refreshRecentUsedSection();
     };
     return el;
+  }
+
+  /** A click-to-draw row for a boundary kind with no matching manifest icon (e.g. Availability
+   *  Zone has none in any of the three official packs) — mirrors the floating toolbar's shape
+   *  buttons (see cloud-floating-toolbar.ts) but reachable from inside the Boundaries submenu. */
+  private makeBoundaryDrawItem(kind: CloudContainer['kind'], label: string): HTMLElement {
+    const el = document.createElement('div');
+    el.className = 'catalog-item cloud-boundary-draw-item';
+    el.title = `Draw ${label}`;
+    el.innerHTML = `
+      <div class="item-icon">✏️</div>
+      <div class="item-details" style="min-width:0;overflow:hidden;">
+        <div class="item-name">${label}</div>
+        <div class="item-meta">Draw boundary</div>
+      </div>
+    `;
+    el.onclick = () => {
+      EventBus.emit('cloud-shape:prime' as any, kind);
+      recordBoundaryUse(kind);
+      this.refreshRecentUsedSection();
+    };
+    return el;
+  }
+
+  /** "Describe infra in one line" quick-entry (see hierarchy-input-modal.ts), reached from inside
+   *  this provider's own Boundaries submenu — opens the modal pre-scoped to `provider` instead of
+   *  defaulting to Azure. */
+  private makeDescribeInfraItem(provider: CloudProvider): HTMLElement {
+    const el = document.createElement('div');
+    el.className = 'catalog-item cloud-boundary-draw-item';
+    el.title = 'Describe Infra in one line (Subscription/Region/Resource Group/VNet)';
+    el.innerHTML = `
+      <div class="item-icon">⚡</div>
+      <div class="item-details" style="min-width:0;overflow:hidden;">
+        <div class="item-name">Subscription+Region+RG+vNET</div>
+        <div class="item-meta">Describe in one line</div>
+      </div>
+    `;
+    el.onclick = () => EventBus.emit('cloudhierarchy:prime' as any, provider);
+    return el;
+  }
+
+  /** "Recently Used" — real usage history (localStorage-backed, see recent-usage.ts), not seeded
+   *  placeholder data; empty until the user actually drags an icon or draws a boundary. Holds up
+   *  to the last 10 distinct icons/boundary-kinds used, most-recent first. */
+  private renderRecentUsedSection(startExpanded = false): HTMLElement {
+    const section = document.createElement('div');
+    section.id = 'recent-used-section';
+    section.className = startExpanded ? 'sidebar-section expanded' : 'sidebar-section';
+
+    const title = document.createElement('div');
+    title.className = 'sidebar-section-title';
+    title.textContent = '🕐 Recently Used';
+    title.onclick = () => section.classList.toggle('expanded');
+    section.appendChild(title);
+
+    const content = document.createElement('div');
+    content.className = 'sidebar-section-content';
+
+    const entries = getRecentUsage();
+    if (entries.length === 0) {
+      const hint = document.createElement('p');
+      hint.style.cssText = 'font-size:11px;color:#8b949e;font-style:italic;padding:6px 12px;margin:0;';
+      hint.textContent = 'Icons you drag in and boundaries you draw will show up here.';
+      content.appendChild(hint);
+    } else {
+      for (const entry of entries) {
+        if (entry.type === 'icon') {
+          const icon = getCloudIcon(entry.iconId);
+          if (icon) content.appendChild(this.makeCloudIconItem(icon, { metaMode: 'provider' }));
+        } else {
+          const shape = BOUNDARY_MENU_KINDS.find(s => s.kind === entry.kind);
+          content.appendChild(this.makeBoundaryDrawItem(entry.kind, shape?.label ?? entry.kind));
+        }
+      }
+    }
+
+    section.appendChild(content);
+    return section;
+  }
+
+  /** Swaps just the Recently Used section's DOM after a new use is recorded, instead of
+   *  rebuilding the whole palette (which would collapse every other section's expand state). */
+  private refreshRecentUsedSection(): void {
+    const existing = this.container.querySelector('#recent-used-section');
+    if (!existing) return;
+    existing.replaceWith(this.renderRecentUsedSection(existing.classList.contains('expanded')));
+  }
+
+  /** Per-provider "Boundaries" group — Region/AZ/VPC/Subnet/Resource Group/Account/Generic as
+   *  kind submenus scoped to that single cloud's own icons only. Inserted as the first group
+   *  inside each of AWS/Azure/GCP's own palette section (not a merged cross-cloud menu), so
+   *  browsing AWS boundaries never surfaces an Azure or GCP icon and vice versa. */
+  private renderProviderBoundariesGroup(provider: CloudProvider): HTMLElement {
+    const byKind = getBoundaryIconsByKind(provider);
+    const total = [...byKind.values()].reduce((n, arr) => n + arr.length, 0);
+
+    const catGroup = document.createElement('div');
+    catGroup.className = 'cloud-icon-category collapsed';
+
+    const catTitle = document.createElement('div');
+    catTitle.className = 'cloud-icon-category-title';
+    catTitle.innerHTML = `<span class="nav-tree-caret">▾</span> 📐 Boundaries <span style="opacity:0.6;font-weight:normal;">(${total})</span>`;
+    catTitle.onclick = () => catGroup.classList.toggle('collapsed');
+    catGroup.appendChild(catTitle);
+
+    const catContent = document.createElement('div');
+    catContent.className = 'cloud-icon-category-content';
+    catContent.appendChild(this.makeDescribeInfraItem(provider));
+
+    for (const { kind, label } of BOUNDARY_MENU_KINDS) {
+      const items = byKind.get(kind) ?? [];
+
+      const subGroup = document.createElement('div');
+      subGroup.className = 'cloud-icon-category collapsed';
+
+      const subTitle = document.createElement('div');
+      subTitle.className = 'cloud-icon-category-title';
+      subTitle.innerHTML = `<span class="nav-tree-caret">▾</span> ${label} <span style="opacity:0.6;font-weight:normal;">(${items.length})</span>`;
+      subTitle.onclick = () => subGroup.classList.toggle('collapsed');
+      subGroup.appendChild(subTitle);
+
+      const subContent = document.createElement('div');
+      subContent.className = 'cloud-icon-category-content';
+      subContent.appendChild(this.makeBoundaryDrawItem(kind, label));
+      for (const icon of items) {
+        subContent.appendChild(this.makeCloudIconItem(icon));
+      }
+      subGroup.appendChild(subContent);
+
+      catContent.appendChild(subGroup);
+    }
+
+    catGroup.appendChild(catContent);
+    return catGroup;
   }
 
   /** Cloud icon palette (see cloud-icon-catalog.ts) — 1274 official AWS/Azure/GCP icons.
@@ -360,6 +501,8 @@ export class Sidebar {
       return;
     }
 
+    container.appendChild(this.renderRecentUsedSection());
+
     const providers: { id: CloudProvider; label: string; icon: string }[] = [
       { id: 'onprem', label: 'Local Resources', icon: '🏠' },
       { id: 'aws', label: 'AWS', icon: '🟧' },
@@ -381,8 +524,16 @@ export class Sidebar {
       const content = document.createElement('div');
       content.className = 'sidebar-section-content';
 
+      // Boundary icons (Region/VPC/Subnet/...) get their own "📐 Boundaries" group instead of
+      // sitting in their raw manifest category — pulled out here so they don't also show up a
+      // second time under e.g. AWS's "Groups" or Azure's "Networking"/"General".
+      if (provider.id !== 'onprem') {
+        content.appendChild(this.renderProviderBoundariesGroup(provider.id));
+      }
+
       const byCategory = new Map<string, CloudIconEntry[]>();
       for (const icon of items) {
+        if (isBoundaryIcon(icon)) continue;
         if (!byCategory.has(icon.category)) byCategory.set(icon.category, []);
         byCategory.get(icon.category)!.push(icon);
       }

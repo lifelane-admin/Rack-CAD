@@ -79,3 +79,29 @@ export const CLOUD_SHAPE_KINDS: { kind: CloudContainer['kind']; label: string }[
   { kind: 'resource-group', label: 'Resource Group' },
   { kind: 'account', label: 'Account / Subscription / Project' },
 ];
+
+/** CLOUD_SHAPE_KINDS plus a catch-all "Generic" bucket, for the sidebar's cross-provider
+ *  "Boundaries" menu (see sidebar.ts) only — kept separate from CLOUD_SHAPE_KINDS itself so
+ *  adding "Generic" here doesn't also add a 7th draw button to the floating toolbar/context menu,
+ *  which iterate CLOUD_SHAPE_KINDS directly. */
+export const BOUNDARY_MENU_KINDS: { kind: CloudContainer['kind']; label: string }[] = [
+  ...CLOUD_SHAPE_KINDS,
+  { kind: 'generic', label: 'Generic' },
+];
+
+/** A single provider's boundary icons, grouped by inferred CloudContainer kind — lets the sidebar
+ *  browse Region/VPC/Subnet/... as one topic within that provider's own section (not merged across
+ *  clouds), instead of leaving them buried inside the provider's ordinary category tree alongside
+ *  unrelated services (e.g. AWS's "Groups" category also holds Auto Scaling Group and Spot Fleet,
+ *  which land in the 'generic' bucket here). Local Resources has no cloud boundary concept. */
+export function getBoundaryIconsByKind(provider: CloudProvider): Map<CloudContainer['kind'], CloudIconEntry[]> {
+  const map = new Map<CloudContainer['kind'], CloudIconEntry[]>();
+  for (const { kind } of BOUNDARY_MENU_KINDS) map.set(kind, []);
+  if (provider === 'onprem') return map;
+  for (const icon of cloudIconManifest) {
+    if (icon.provider !== provider || !isBoundaryIcon(icon)) continue;
+    const kind = inferContainerKind(icon);
+    map.get(kind)!.push(icon);
+  }
+  return map;
+}

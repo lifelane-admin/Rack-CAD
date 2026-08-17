@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/MPLS / Leased Line (WAN Link)</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <rect fill="#FFFFFF" x="8" y="30" width="16" height="16" rx="2"></rect>
+        <rect fill="#FFFFFF" x="56" y="30" width="16" height="16" rx="2"></rect>
+        <line x1="24" y1="38" x2="56" y2="38" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"></line>
+        <g stroke="#FFFFFF" stroke-width="3" fill="none">
+            <rect x="32" y="46" width="10" height="16" rx="5" transform="rotate(-30 37 54)"></rect>
+            <rect x="38" y="46" width="10" height="16" rx="5" transform="rotate(-30 43 54)"></rect>
+        </g>
+    </g>
+</svg>

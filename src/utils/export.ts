@@ -776,6 +776,7 @@ export function exportJSON(): string {
     cloudNodes: s.cloudNodes ?? [],
     cloudContainers: s.cloudContainers ?? [],
     cloudConnectors: s.cloudConnectors ?? [],
+    cloudHierarchies: s.cloudHierarchies ?? [],
   };
   return JSON.stringify(project, null, 2);
 }
@@ -810,6 +811,7 @@ export function importJSON(jsonString: string): void {
       cloudNodes: project.cloudNodes ?? [],
       cloudContainers: project.cloudContainers ?? [],
       cloudConnectors: project.cloudConnectors ?? [],
+      cloudHierarchies: project.cloudHierarchies ?? [],
       selection: [],
     });
     stateManager.markSaved();

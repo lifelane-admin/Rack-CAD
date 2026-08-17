@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/DHCP Server</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <rect fill="#FFFFFF" x="14" y="16" width="52" height="18" rx="3"></rect>
+        <rect fill="#FFFFFF" x="14" y="38" width="52" height="18" rx="3"></rect>
+        <circle fill="#586069" cx="22" cy="25" r="2.2"></circle>
+        <circle fill="#586069" cx="22" cy="47" r="2.2"></circle>
+        <g stroke="#586069" stroke-width="2.5" fill="none" stroke-linecap="round">
+            <path d="M40,25 L54,25"></path>
+            <path d="M40,47 L54,47"></path>
+        </g>
+        <g stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round">
+            <path d="M28,68 A12,12 0 1 1 50,68"></path>
+            <path d="M46,64 L51,68 L46,72"></path>
+        </g>
+    </g>
+</svg>

@@ -2,6 +2,10 @@ import type { RackDiff, AIMessage, AIHint, AIProviderName } from '../ai/types';
 
 // === Geometry ===
 export interface Point { x: number; y: number; }
+/** Screen-space (viewport pixel) rectangle — deliberately NOT world/SVG coordinates, since it's
+ *  compared directly against candidate elements' own getBoundingClientRect() (see the
+ *  *:area-select events this backs). */
+export interface ScreenRect { left: number; top: number; right: number; bottom: number; }
 export interface Rect { x: number; y: number; width: number; height: number; }
 export interface Transform { x: number; y: number; scale: number; }
 
@@ -394,6 +398,48 @@ export interface CloudContainer {
   iconId?: string;
 }
 
+export type CloudHierarchyLevelKind = 'account' | 'region' | 'resource-group' | 'vpc' | 'subnet';
+
+export interface CloudHierarchyLevel {
+  kind: CloudHierarchyLevelKind;
+  label: string;
+}
+
+/** A compact "breadcrumb bar" describing a nested Account/Region/Resource-Group/VPC/Subnet
+ *  hierarchy, built from one slash-separated line of text (see library/hierarchy-parser.ts's
+ *  parseHierarchyLine) instead of placing and nesting several CloudContainer boxes by hand.
+ *  Purely a labeled diagram element — a single continuous pill with each segment's icon+label
+ *  inline (see renderers/cloud-hierarchy-renderer.ts) — unlike CloudContainer it doesn't visually
+ *  bound/contain other canvas objects, it's read left-to-right like a breadcrumb path. */
+export interface CloudHierarchy {
+  id: string;
+  provider: CloudProvider;
+  x: number;
+  y: number;
+  levels: CloudHierarchyLevel[];
+  locked?: boolean;
+  /** Box dimensions, like CloudContainer's width/height — dragged via the corner resize handle.
+   *  Unset means "auto-fit to content" (the natural width for the icons+text at normal size, and
+   *  a single row's height). Icons/text are NOT scaled by resizing — growing the box just reveals
+   *  more pill background around the same-size content, same as CloudContainer's label chip. */
+  width?: number;
+  height?: number;
+  /** Boundary box LINE color override (border stroke + translucent background tint) — same
+   *  meaning as CloudContainer.color (unset = provider accent). Independent of ribbonColor below
+   *  — the box border and the chip on top of it are two separately colorable elements. */
+  color?: string;
+  /** Label chip ("ribbon") fill color override, independent of the boundary box's own line/border
+   *  color above. Unset falls back to `color` (or the provider accent if that's unset too), so a
+   *  hierarchy with no overrides at all still reads as one solid color like before. */
+  ribbonColor?: string;
+  /** Boundary box border dash pattern — same catalog/meaning as CloudContainer.style (unset =
+   *  the default dashed border). */
+  style?: CloudLineStyle;
+  /** Boundary box background fill opacity — same meaning as CloudContainer.backgroundOpacity
+   *  (unset = the default ~8% tint, 0 = border only). */
+  backgroundOpacity?: number;
+}
+
 /** A freeform line between two cloud nodes, or between a node and a bare point — mirrors
  *  CableData's floatingSource/floatingDest duality, but with no port system underneath. */
 export type CloudHandleSide = 'top' | 'right' | 'bottom' | 'left';
@@ -575,7 +621,8 @@ export type SelectableItem =
   | { type: 'image'; id: string }
   | { type: 'cloud-node'; id: string }
   | { type: 'cloud-container'; id: string }
-  | { type: 'cloud-connector'; id: string };
+  | { type: 'cloud-connector'; id: string }
+  | { type: 'cloud-hierarchy'; id: string };
 
 export interface LegendItem {
   id: string;
@@ -634,6 +681,7 @@ export interface AppState {
   cloudNodes: CloudNode[];
   cloudContainers: CloudContainer[];
   cloudConnectors: CloudConnector[];
+  cloudHierarchies: CloudHierarchy[];
 }
 
 // === Events ===
@@ -721,9 +769,17 @@ export interface AppEvents {
   'cloudcontainer:update': { id: string; data: Partial<CloudContainer> };
   'cloudconnector:added': CloudConnector;
   'cloudconnector:update': { id: string; data: Partial<CloudConnector> };
+  'cloudhierarchy:added': CloudHierarchy;
+  'cloudhierarchy:update': { id: string; data: Partial<CloudHierarchy> };
+  /** Opens the "describe infra in one line" quick-entry modal (see hierarchy-input-modal.ts),
+   *  pre-selecting the given provider (unset defaults inside the handler). */
+  'cloudhierarchy:prime': CloudProvider | undefined;
   'cloud-canvas:transformed': Transform;
   'cloud-canvas:click': Point;
   'cloud-canvas:rightclick': { point: Point; target: EventTarget | null; screenPoint: Point };
+  /** Left-click-and-drag marquee selection on the Cloud Architecture canvas — see
+   *  'canvas:area-select's doc comment, same mechanics via CloudCanvasManager. */
+  'cloud-canvas:area-select': ScreenRect;
   'notification': { message: string; type: 'info' | 'success' | 'warning' | 'error' };
   'ai:mode-changed': boolean;
   'ai:provider-changed': AIProviderName;

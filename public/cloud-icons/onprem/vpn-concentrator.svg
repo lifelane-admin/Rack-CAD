@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/VPN Concentrator</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <g stroke="#FFFFFF" stroke-width="2.5" stroke-dasharray="4,4" stroke-linecap="round">
+            <line x1="40" y1="34" x2="18" y2="16"></line>
+            <line x1="46" y1="34" x2="68" y2="16"></line>
+            <line x1="40" y1="46" x2="18" y2="64"></line>
+            <line x1="46" y1="46" x2="68" y2="64"></line>
+        </g>
+        <g fill="#FFFFFF">
+            <rect x="12" y="10" width="12" height="12" rx="2"></rect>
+            <rect x="62" y="10" width="12" height="12" rx="2"></rect>
+            <rect x="12" y="58" width="12" height="12" rx="2"></rect>
+            <rect x="62" y="58" width="12" height="12" rx="2"></rect>
+        </g>
+        <rect fill="#FFFFFF" x="30" y="30" width="20" height="20" rx="3"></rect>
+        <circle fill="#586069" cx="40" cy="38" r="3"></circle>
+        <rect fill="#586069" x="38" y="38" width="4" height="6"></rect>
+    </g>
+</svg>

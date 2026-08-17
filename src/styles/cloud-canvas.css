@@ -105,6 +105,19 @@
   border-left: 3px solid transparent;
 }
 
+/* --- Sidebar: Boundaries menu + Recently Used (draw-boundary quick action) --- */
+
+.catalog-item.cloud-boundary-draw-item {
+  cursor: pointer;
+  border-left: 3px solid var(--accent-primary, #58a6ff);
+}
+
+/* Per-provider Boundaries group nests one more level of cloud-icon-category (kind submenus) —
+   indent those so the hierarchy (Boundaries > Region/VPC/Subnet/...) reads clearly. */
+.cloud-icon-category .cloud-icon-category .cloud-icon-category-title {
+  padding-left: 24px;
+}
+
 /* --- Toolbar: Rack View / Cloud Architecture switch --- */
 
 #btn-view-rack.active,
@@ -116,7 +129,8 @@
 /* --- Cloud canvas objects (rendered as inline SVG attrs mostly; these cover cursor/handles) --- */
 
 #cloud-canvas .cloud-node-resize-handle,
-#cloud-canvas .cloud-container-resize-handle {
+#cloud-canvas .cloud-container-resize-handle,
+#cloud-canvas .cloud-hierarchy-resize-handle {
   cursor: nwse-resize;
 }
 

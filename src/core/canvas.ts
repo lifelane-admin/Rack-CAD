@@ -7,7 +7,7 @@ export class CanvasManager {
   private svg!: SVGSVGElement;
   private viewportGroup!: SVGGElement;
   private transform: Transform = { x: 0, y: 0, scale: 1 };
-  
+
   private isPanning = false;
   private startPanPt: Point = { x: 0, y: 0 };
   private startTransform: Transform = { x: 0, y: 0, scale: 1 };
@@ -141,6 +141,20 @@ export class CanvasManager {
   }
 
   private onMouseUp() {
+    this.isPanning = false;
+    this.svg.classList.remove('cursor-grabbing');
+  }
+
+  /** Cancels an in-progress (or just-started) pan — called by app.ts's own mousedown handler
+   *  when it determines the SAME gesture should actually be its pre-existing rubber-band select
+   *  instead (a plain left-click on empty background with the 'select' tool active is ambiguous
+   *  between "pan" and "start a rubber-band" — this class's mousedown listener registers first
+   *  and optimistically starts a pan; app.ts's listener runs after and, if it decides this should
+   *  be a rubber-band, interrupts that pan so the two don't fight over the same drag — panning
+   *  would otherwise shift the transform by the same delta the mouse moved, making the
+   *  rubber-band's own screenToWorld() collapse back to a zero-size rectangle at mouseup). No-op
+   *  if nothing was panning (e.g. the drag actually landed on a rack/device, or the Pan tool). */
+  cancelPan(): void {
     this.isPanning = false;
     this.svg.classList.remove('cursor-grabbing');
   }

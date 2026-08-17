@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Building</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <rect fill="#FFFFFF" x="20" y="18" width="40" height="48"></rect>
+        <g fill="#586069">
+            <rect x="27" y="25" width="6" height="6"></rect>
+            <rect x="37" y="25" width="6" height="6"></rect>
+            <rect x="47" y="25" width="6" height="6"></rect>
+            <rect x="27" y="35" width="6" height="6"></rect>
+            <rect x="47" y="35" width="6" height="6"></rect>
+            <rect x="27" y="45" width="6" height="6"></rect>
+            <rect x="47" y="45" width="6" height="6"></rect>
+            <rect x="36" y="52" width="8" height="14"></rect>
+        </g>
+    </g>
+</svg>

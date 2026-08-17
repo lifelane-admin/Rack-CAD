@@ -11378,5 +11378,117 @@
       "width": 450,
       "height": 1500
     }
+  },
+  {
+    "id": "onprem-building",
+    "provider": "onprem",
+    "category": "Sites & Facilities",
+    "name": "Building (Generic)",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/building.svg"
+  },
+  {
+    "id": "onprem-data-center",
+    "provider": "onprem",
+    "category": "Sites & Facilities",
+    "name": "Data Center",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/data-center.svg"
+  },
+  {
+    "id": "onprem-branch-office",
+    "provider": "onprem",
+    "category": "Sites & Facilities",
+    "name": "Branch Office",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/branch-office.svg"
+  },
+  {
+    "id": "onprem-vpn-site-to-site",
+    "provider": "onprem",
+    "category": "VPN & WAN Links",
+    "name": "Site-to-Site VPN",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/vpn-site-to-site.svg"
+  },
+  {
+    "id": "onprem-vpn-point-to-site",
+    "provider": "onprem",
+    "category": "VPN & WAN Links",
+    "name": "Point-to-Site VPN",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/vpn-point-to-site.svg"
+  },
+  {
+    "id": "onprem-vpn-client",
+    "provider": "onprem",
+    "category": "VPN & WAN Links",
+    "name": "Client VPN (Remote Access)",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/vpn-client.svg"
+  },
+  {
+    "id": "onprem-vpn-ipsec",
+    "provider": "onprem",
+    "category": "VPN & WAN Links",
+    "name": "IPsec VPN Tunnel",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/vpn-ipsec.svg"
+  },
+  {
+    "id": "onprem-vpn-ssl",
+    "provider": "onprem",
+    "category": "VPN & WAN Links",
+    "name": "SSL VPN Tunnel",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/vpn-ssl.svg"
+  },
+  {
+    "id": "onprem-vpn-concentrator",
+    "provider": "onprem",
+    "category": "VPN & WAN Links",
+    "name": "VPN Concentrator",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/vpn-concentrator.svg"
+  },
+  {
+    "id": "onprem-wan-mpls",
+    "provider": "onprem",
+    "category": "VPN & WAN Links",
+    "name": "MPLS / Leased Line (WAN Link)",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/wan-mpls.svg"
+  },
+  {
+    "id": "onprem-active-directory",
+    "provider": "onprem",
+    "category": "General",
+    "name": "Active Directory / Domain Controller",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/active-directory.svg"
+  },
+  {
+    "id": "onprem-dhcp",
+    "provider": "onprem",
+    "category": "General",
+    "name": "DHCP Server",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/dhcp-server.svg"
+  },
+  {
+    "id": "onprem-mail-server",
+    "provider": "onprem",
+    "category": "General",
+    "name": "Mail Server",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/mail-server.svg"
+  },
+  {
+    "id": "onprem-file-server",
+    "provider": "onprem",
+    "category": "General",
+    "name": "File Server",
+    "kind": "service",
+    "path": "/cloud-icons/onprem/file-server.svg"
   }
 ]

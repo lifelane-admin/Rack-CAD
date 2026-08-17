@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/File Server</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <path d="M12,26 C12,23.79 13.79,22 16,22 L32,22 L38,30 L64,30 C66.21,30 68,31.79 68,34 L68,58 C68,60.21 66.21,62 64,62 L16,62 C13.79,62 12,60.21 12,58 Z" fill="#FFFFFF"></path>
+    </g>
+</svg>

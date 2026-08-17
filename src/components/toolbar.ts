@@ -173,6 +173,12 @@ export class Toolbar {
         title: 'Add Account / Subscription / Project boundary',
         action: () => EventBus.emit('cloud-shape:prime' as any, 'account'),
       },
+      {
+        id: 'shape-describe-infra',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v6a2 2 0 002 2h8M6 4h4M6 4a2 2 0 100 4 2 2 0 000-4z"/><circle cx="18" cy="18" r="2"/><path d="M6 10v6a2 2 0 002 2h8"/></svg>',
+        title: 'Describe Infra in one line (Account/Region/Resource Group/VPC/Subnet)',
+        action: () => EventBus.emit('cloudhierarchy:prime' as any, undefined),
+      },
     ]);
     cloudShapesGroup.id = 'cloud-shapes-group';
     cloudShapesGroup.style.display = 'none';

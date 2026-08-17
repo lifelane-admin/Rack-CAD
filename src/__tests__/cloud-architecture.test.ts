@@ -62,7 +62,7 @@ describe('Cloud Architecture canvas', () => {
     eventBus.clear();
     stateManager.setState({
       racks: [], devices: [], cables: [], bundles: [], textLabels: [], imageAssets: [],
-      cloudNodes: [], cloudContainers: [], cloudConnectors: [], selection: [],
+      cloudNodes: [], cloudContainers: [], cloudConnectors: [], cloudHierarchies: [], selection: [],
       tool: 'select', cableInProgress: null, activeView: 'cloud',
     });
   });
@@ -694,5 +694,112 @@ describe('Cloud Architecture canvas', () => {
     const s = stateManager.getState();
     expect(s.cloudNodes).toHaveLength(0);
     expect(s.cloudConnectors).toHaveLength(0);
+  });
+
+  it('a CloudHierarchy has no resize handle in the DOM while unselected, but does once selected', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    stateManager.setState({
+      cloudHierarchies: [{ id: 'h1', provider: 'azure', x: 0, y: 0, levels: [{ kind: 'account', label: 'Sub' }] }],
+      selection: [],
+    });
+    app.setActiveView('cloud');
+
+    expect(document.querySelector('[data-cloud-hierarchy-id="h1"]')).toBeTruthy();
+    expect(document.querySelector('.cloud-hierarchy-resize-handle')).toBeFalsy();
+
+    stateManager.setState({ selection: [{ type: 'cloud-hierarchy', id: 'h1' }] });
+    app.setActiveView('cloud'); // re-render with the new selection (mirrors how every other cloud-canvas mutation path re-renders itself, see cloudhierarchy:update's app.ts handler)
+
+    expect(document.querySelector('.cloud-hierarchy-resize-handle[data-cloud-hierarchy-id="h1"]')).toBeTruthy();
+  });
+
+  it('dragging a CloudHierarchy resize handle grows its box like CloudContainer (real width/height, not a content-scaling zoom) — the handle used to be a dead, pointer-events:none decoration, see the "unable to drag the boundary" fix', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    const levels = [
+      { kind: 'account' as const, label: 'gipl-azure-subscription' },
+      { kind: 'region' as const, label: 'South India' },
+    ];
+    stateManager.setState({
+      cloudHierarchies: [{ id: 'h1', provider: 'azure' as const, x: 0, y: 0, levels }],
+      selection: [{ type: 'cloud-hierarchy', id: 'h1' }],
+    });
+    app.setActiveView('cloud');
+
+    const { getNaturalHierarchySize } = await import('../renderers/cloud-hierarchy-renderer');
+    const { hierarchyLevelIcon } = await import('../library/hierarchy-parser');
+    const icons = levels.map(l => hierarchyLevelIcon(l.kind, 'azure'));
+    const natural = getNaturalHierarchySize({ id: 'h1', provider: 'azure', x: 0, y: 0, levels }, icons);
+
+    const svgEl = document.getElementById('cloud-canvas')!;
+    const handle = document.querySelector('.cloud-hierarchy-resize-handle[data-cloud-hierarchy-id="h1"]')!;
+    handle.dispatchEvent(mouseEvent('mousedown', 300, 300));
+    svgEl.dispatchEvent(mouseEvent('mousemove', 450, 450)); // +150x, +150y
+    window.dispatchEvent(mouseEvent('mouseup', 450, 450));
+
+    const hierarchy = stateManager.getState().cloudHierarchies[0];
+    expect(hierarchy.width).toBeCloseTo(natural.width + 150, 5);
+    expect(hierarchy.height).toBeCloseTo(natural.height + 150, 5);
+  });
+
+  it('never renders the box smaller than what the content needs, even if dragged smaller than natural size', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    const levels = [{ kind: 'account' as const, label: 'my-account' }];
+    stateManager.setState({
+      cloudHierarchies: [{ id: 'h1', provider: 'aws' as const, x: 0, y: 0, levels }],
+      selection: [{ type: 'cloud-hierarchy', id: 'h1' }],
+    });
+    app.setActiveView('cloud');
+
+    const svgEl = document.getElementById('cloud-canvas')!;
+    const handle = document.querySelector('.cloud-hierarchy-resize-handle[data-cloud-hierarchy-id="h1"]')!;
+    handle.dispatchEvent(mouseEvent('mousedown', 300, 300));
+    svgEl.dispatchEvent(mouseEvent('mousemove', 100, 100)); // -200x, -200y — well past the content's natural size
+    window.dispatchEvent(mouseEvent('mouseup', 100, 100));
+
+    const { getNaturalHierarchySize } = await import('../renderers/cloud-hierarchy-renderer');
+    const { hierarchyLevelIcon } = await import('../library/hierarchy-parser');
+    const icons = levels.map(l => hierarchyLevelIcon(l.kind, 'aws'));
+    const natural = getNaturalHierarchySize({ id: 'h1', provider: 'aws', x: 0, y: 0, levels }, icons);
+
+    const pillRect = document.querySelector('[data-cloud-hierarchy-id="h1"] rect') as SVGRectElement;
+    expect(Number(pillRect.getAttribute('width'))).toBeCloseTo(natural.width, 5);
+    expect(Number(pillRect.getAttribute('height'))).toBeCloseTo(natural.height, 5);
+  });
+
+  it('dragging a CloudHierarchy pill itself (not its resize handle) moves it without touching width/height', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    stateManager.setState({
+      cloudHierarchies: [{ id: 'h1', provider: 'aws', x: 50, y: 50, levels: [{ kind: 'account', label: 'my-account' }] }],
+      selection: [{ type: 'cloud-hierarchy', id: 'h1' }],
+    });
+    app.setActiveView('cloud');
+
+    const svgEl = document.getElementById('cloud-canvas')!;
+    const pill = document.querySelector('[data-cloud-hierarchy-id="h1"]') as SVGElement;
+    pill.dispatchEvent(mouseEvent('mousedown', 60, 60));
+    svgEl.dispatchEvent(mouseEvent('mousemove', 80, 90)); // +20x, +30y
+    window.dispatchEvent(mouseEvent('mouseup', 80, 90));
+
+    const hierarchy = stateManager.getState().cloudHierarchies[0];
+    expect(hierarchy.x).toBe(70);
+    expect(hierarchy.y).toBe(80);
+    expect(hierarchy.width).toBeUndefined();
+    expect(hierarchy.height).toBeUndefined();
   });
 });

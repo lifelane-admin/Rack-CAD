@@ -153,6 +153,14 @@ export class CloudFloatingToolbar {
         <div class="ft-section">
           ${shapeButtons}
         </div>
+
+        <div class="ft-separator"></div>
+
+        <div class="ft-section">
+          <button class="ft-btn ft-btn--accent" id="cft-act-hierarchy" title="Describe Infra in one line (Account/Region/Resource Group/VPC/Subnet)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v6a2 2 0 002 2h8M6 4h4M6 4a2 2 0 100 4 2 2 0 000-4z"/><circle cx="18" cy="18" r="2"/><path d="M6 10v6a2 2 0 002 2h8"/></svg>
+          </button>
+        </div>
       </div>
     `;
 
@@ -169,6 +177,7 @@ export class CloudFloatingToolbar {
     this.element.querySelector('#cft-act-undo')?.addEventListener('click', () => EventBus.emit('edit:undo', undefined));
     this.element.querySelector('#cft-act-redo')?.addEventListener('click', () => EventBus.emit('edit:redo', undefined));
     this.element.querySelector('#cft-act-delete')?.addEventListener('click', () => EventBus.emit('edit:delete', undefined));
+    this.element.querySelector('#cft-act-hierarchy')?.addEventListener('click', () => EventBus.emit('cloudhierarchy:prime' as any, undefined));
     for (const { kind } of CLOUD_SHAPE_KINDS) {
       this.element.querySelector(`#cft-shape-${kind}`)?.addEventListener('click', () => EventBus.emit('cloud-shape:prime' as any, kind));
     }
