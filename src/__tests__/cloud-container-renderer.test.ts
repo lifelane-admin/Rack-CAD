@@ -105,26 +105,28 @@ describe('renderCloudContainer', () => {
 
   it('a double-family style draws a second, inset rect with the inner dash pattern', () => {
     const layer = makeLayer();
-    // label: '' — baseContainer's default label would add a 3rd (chip) <rect>, unrelated to the border.
+    // label: '' — baseContainer's default label would add another (chip) <rect>, unrelated to
+    // the border. Index 1 is the invisible border-hit rect (see renderCloudContainer's doc
+    // comment) that sits between the box (0) and the double-line inset rect (2).
     const group = renderCloudContainer(baseContainer({ kind: 'vpc', style: 'double-dashed', color: '#123456', label: '' }), layer, false);
     const rects = group.querySelectorAll('rect');
-    expect(rects.length).toBe(2);
+    expect(rects.length).toBe(3);
     expect(rects[0].getAttribute('stroke-dasharray')).toBe('8,5'); // dashed's own pattern
-    expect(rects[1].getAttribute('fill')).toBe('none');
-    expect(rects[1].getAttribute('stroke')).toBe('#123456');
-    expect(rects[1].getAttribute('stroke-dasharray')).toBe('8,5');
+    expect(rects[2].getAttribute('fill')).toBe('none');
+    expect(rects[2].getAttribute('stroke')).toBe('#123456');
+    expect(rects[2].getAttribute('stroke-dasharray')).toBe('8,5');
     // Inset, not the same box.
-    expect(Number(rects[1].getAttribute('x'))).toBeGreaterThan(0);
-    expect(Number(rects[1].getAttribute('width'))).toBeLessThan(300);
+    expect(Number(rects[2].getAttribute('x'))).toBeGreaterThan(0);
+    expect(Number(rects[2].getAttribute('width'))).toBeLessThan(300);
   });
 
   it('a plain "double" style draws a second inset rect with no dasharray (solid inner line)', () => {
     const layer = makeLayer();
     const group = renderCloudContainer(baseContainer({ kind: 'vpc', style: 'double', label: '' }), layer, false);
     const rects = group.querySelectorAll('rect');
-    expect(rects.length).toBe(2);
+    expect(rects.length).toBe(3);
     expect(rects[0].getAttribute('stroke-dasharray')).toBeNull();
-    expect(rects[1].getAttribute('stroke-dasharray')).toBeNull();
+    expect(rects[2].getAttribute('stroke-dasharray')).toBeNull();
   });
 
   it('defaults to the original ~8% background fill opacity when backgroundOpacity is unset', () => {

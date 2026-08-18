@@ -134,6 +134,7 @@ export class FloatingToolbar {
     const isLabelMode = this.currentTool === 'label';
     const isAirdropDestination = state.airdropDestination;
     const isSnap = state.snapEnabled;
+    const show3D = state.show3DPanel;
 
     const colors = [
       { hex: '#fb8c00', name: 'VM Traffic (Orange)' },
@@ -209,6 +210,17 @@ export class FloatingToolbar {
               <circle cx="8.5" cy="8.5" r="1.5"/>
               <path d="M21 15l-5-5L5 21"/>
             </svg>
+          </button>
+        </div>
+
+        <div class="ft-separator"></div>
+
+        <!-- 3D panel toggle — rack view only, shows/hides the Three.js panel next to the 2D
+             elevation (see App.setShow3DPanel). No Cloud Architecture canvas equivalent. -->
+        <div class="ft-section" id="ft-3d-toggle">
+          <span class="ft-context-label">3D</span>
+          <button class="ft-toggle-switch ${show3D ? 'on' : ''}" id="ft-toggle-3d-panel" role="switch" aria-checked="${show3D}" title="${show3D ? 'Disable' : 'Enable'} 3D Rack View">
+            <span class="ft-toggle-knob"></span>
           </button>
         </div>
       </div>
@@ -304,6 +316,9 @@ export class FloatingToolbar {
     });
     this.element.querySelector('#ft-toggle-airdrop-dest')?.addEventListener('click', () => {
       EventBus.emit('cable:toggle-airdrop-destination', undefined);
+    });
+    this.element.querySelector('#ft-toggle-3d-panel')?.addEventListener('click', () => {
+      EventBus.emit('view:toggle-3d-panel', undefined);
     });
     this.element.querySelector('#ft-act-undo')?.addEventListener('click', () => {
       EventBus.emit('edit:undo', undefined);

@@ -89,7 +89,7 @@ describe('Startup modal', () => {
     expect(awsSection?.classList.contains('expanded')).toBe(true);
   });
 
-  it('picking "Hybrid" switches to cloud with every provider section collapsed and search unscoped (Local Resources/AWS/Azure/GCP all equally reachable)', async () => {
+  it('picking "Hybrid" switches to hybrid view with the rack catalog AND every cloud provider section collapsed, search unscoped (Local Resources/AWS/Azure/GCP all equally reachable)', async () => {
     mountAppSkeleton();
     const { App } = await import('../app');
     const app = new App();
@@ -97,14 +97,21 @@ describe('Startup modal', () => {
 
     document.querySelector<HTMLButtonElement>('.startup-card[data-choice="hybrid"]')!.click();
 
-    expect(stateManager.getState().activeView).toBe('cloud');
+    expect(stateManager.getState().activeView).toBe('hybrid');
     const searchInput = document.querySelector('.sidebar-search input') as HTMLInputElement;
-    expect(searchInput.placeholder).toBe('Search AWS/Azure/GCP/Local services...');
+    expect(searchInput.placeholder).toBe('Search rack devices + cloud services...');
 
-    const sectionTitles = [...document.querySelectorAll('.sidebar-section-title')].map(el => el.textContent);
+    // Cloud palette (second, hybrid-only container) — every provider section still starts
+    // collapsed and unscoped, same guarantee the old unscoped-Cloud-view test made.
+    const cloudContainer = document.getElementById('cloud-catalog-container')!;
+    const sectionTitles = [...cloudContainer.querySelectorAll('.sidebar-section-title')].map(el => el.textContent);
     expect(sectionTitles.some(t => t?.includes('Local Resources'))).toBe(true);
     expect(sectionTitles.some(t => t?.includes('AWS'))).toBe(true);
-    expect([...document.querySelectorAll('.sidebar-section')].every(s => !s.classList.contains('expanded'))).toBe(true);
+    expect([...cloudContainer.querySelectorAll('.sidebar-section')].every(s => !s.classList.contains('expanded'))).toBe(true);
+
+    // The rack device catalog renders alongside it — this is what makes it Hybrid rather than
+    // just an unscoped Cloud view.
+    expect(document.querySelector('#catalog-container .sidebar-section-title')).toBeTruthy();
   });
 
   it('dismissing via the ✕ button leaves the current view untouched', async () => {

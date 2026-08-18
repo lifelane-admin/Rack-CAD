@@ -108,6 +108,20 @@ describe('Cloud hierarchy properties panel — Border Line Style + Color + Backg
     expect(hierarchy.color).toBe('#112233'); // unchanged
   });
 
+  it('the Text Color input sets CloudHierarchy.textColor independently of Line/Ribbon Color', async () => {
+    const panel = await selectHierarchy({ color: '#112233', ribbonColor: '#445566' });
+    const textInput = panel.querySelector('#prop-cloudhierarchy-text-color') as HTMLInputElement;
+    expect(textInput).not.toBeNull();
+
+    textInput.value = '#000000';
+    textInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const hierarchy = stateManager.getState().cloudHierarchies.find(h => h.id === 'h1')!;
+    expect(hierarchy.textColor).toBe('#000000');
+    expect(hierarchy.color).toBe('#112233'); // unchanged
+    expect(hierarchy.ribbonColor).toBe('#445566'); // unchanged
+  });
+
   it('the Background Fill checkbox is checked by default and unchecking it sets backgroundOpacity to 0', async () => {
     const panel = await selectHierarchy();
     const checkbox = panel.querySelector('#prop-cloudhierarchy-bg-enabled') as HTMLInputElement;

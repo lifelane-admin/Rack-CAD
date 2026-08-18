@@ -55,6 +55,12 @@ export class Toolbar {
         icon: '<svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>',
         title: 'Load Demo Cluster',
         action: () => EventBus.emit('file:demo', undefined)
+      },
+      {
+        id: 'btn-insert-image',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>',
+        title: 'Insert Image (logo / reference image, PNG transparency supported) — also Ctrl+V to paste a copied image',
+        action: () => EventBus.emit('image:insert' as any, undefined)
       }
     ]));
     
@@ -183,6 +189,30 @@ export class Toolbar {
     cloudShapesGroup.id = 'cloud-shapes-group';
     cloudShapesGroup.style.display = 'none';
     inner.appendChild(cloudShapesGroup);
+
+    // Hybrid-only — switches AppState.hybridLayoutMode between Split (separate, independently
+    // scaled rack/cloud panes, the default) and Merged (one shared overlapping canvas, locked
+    // pan/zoom, see app.ts's setHybridLayoutMode). Hidden outside Hybrid view alongside the other
+    // hybrid/cloud-only groups above (see the state:changed listener below).
+    const hybridLayoutGroup = this.createGroup('Hybrid Layout', [
+      {
+        id: 'btn-hybrid-split',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/></svg>',
+        title: 'Split — separate, independently scaled rack and cloud panes',
+        action: () => EventBus.emit('view:set-hybrid-layout' as any, 'split'),
+        toggle: true,
+      },
+      {
+        id: 'btn-hybrid-merge',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="14" height="14" rx="1"/><rect x="7" y="4" width="14" height="14" rx="1"/></svg>',
+        title: 'Merged — one shared canvas, rack and cloud items placed directly together',
+        action: () => EventBus.emit('view:set-hybrid-layout' as any, 'merged'),
+        toggle: true,
+      },
+    ]);
+    hybridLayoutGroup.id = 'hybrid-layout-group';
+    hybridLayoutGroup.style.display = 'none';
+    inner.appendChild(hybridLayoutGroup);
 
     inner.appendChild(this.createGroup('Edit', [
       { 
@@ -400,22 +430,36 @@ export class Toolbar {
       const rackExportGroup = this.container.querySelector('#rack-export-group') as HTMLElement | null;
       const rackViewGroup = this.container.querySelector('#rack-view-group') as HTMLElement | null;
       const rackAddGroup = this.container.querySelector('#rack-add-group') as HTMLElement | null;
+      // Hybrid shows both canvases at once, so both sets of groups are relevant there —
+      // showCloud/showRack each reduce to exactly the old isCloud/!isCloud for the 'rack'/'cloud'
+      // values (isHybrid is false for both), so this is additive, not a behavior change for the
+      // two pre-existing views.
       const isCloud = s.activeView === 'cloud';
-      if (cloudToolsGroup) cloudToolsGroup.style.display = isCloud ? '' : 'none';
-      if (cloudShapesGroup) cloudShapesGroup.style.display = isCloud ? '' : 'none';
-      if (cloudExportGroup) cloudExportGroup.style.display = isCloud ? '' : 'none';
+      const isHybrid = s.activeView === 'hybrid';
+      const showCloud = isCloud || isHybrid;
+      const showRack = !isCloud || isHybrid;
+      if (cloudToolsGroup) cloudToolsGroup.style.display = showCloud ? '' : 'none';
+      if (cloudShapesGroup) cloudShapesGroup.style.display = showCloud ? '' : 'none';
+      if (cloudExportGroup) cloudExportGroup.style.display = showCloud ? '' : 'none';
       // The rack canvas's own Export group (SVG/PNG/JPEG/PDF/HTML/Report) was never hidden while
       // in Cloud view — its "Export SVG" button looks identical to the Cloud Export one but drives
       // the RACK canvas's export-area tool, which is bound to the (now-hidden, non-interactive)
       // #canvas element. Clicking it while on the cloud canvas armed the wrong drag tool: the
       // notification fired ("Drag a rectangle on the canvas...", no "cloud" in the text — the
       // giveaway) but dragging on the visible #cloud-canvas never reached that listener at all.
-      if (rackExportGroup) rackExportGroup.style.display = isCloud ? 'none' : '';
+      if (rackExportGroup) rackExportGroup.style.display = showRack ? '' : 'none';
       // Same class of bug as rack-export-group above: View (grid/rulers/3D/skeleton/cable-tray
       // toggles) and Add (rack cabinet buttons) are rack-canvas-only concepts that stayed visible
       // and clickable in Cloud view — silently inert there since they all act on the hidden #canvas.
-      if (rackViewGroup) rackViewGroup.style.display = isCloud ? 'none' : '';
-      if (rackAddGroup) rackAddGroup.style.display = isCloud ? 'none' : '';
+      if (rackViewGroup) rackViewGroup.style.display = showRack ? '' : 'none';
+      if (rackAddGroup) rackAddGroup.style.display = showRack ? '' : 'none';
+
+      const hybridLayoutGroup = this.container.querySelector('#hybrid-layout-group') as HTMLElement | null;
+      if (hybridLayoutGroup) hybridLayoutGroup.style.display = isHybrid ? '' : 'none';
+      const btnHybridSplit = this.container.querySelector('#btn-hybrid-split');
+      const btnHybridMerge = this.container.querySelector('#btn-hybrid-merge');
+      if (btnHybridSplit) btnHybridSplit.classList.toggle('active', s.hybridLayoutMode !== 'merged');
+      if (btnHybridMerge) btnHybridMerge.classList.toggle('active', s.hybridLayoutMode === 'merged');
 
       const btnSide = this.container.querySelector('#btn-view-side');
       if (btnSide) {

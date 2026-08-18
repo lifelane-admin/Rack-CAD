@@ -46,6 +46,17 @@ function menuItemByText(text: string): HTMLElement | null {
   return (label?.closest('.context-menu-item') as HTMLElement | undefined) ?? null;
 }
 
+/** Looks inside a specific top-level item's OWN submenu (not just anywhere in the document) —
+ *  needed now that Border/Ribbon Color are two separate submenus that both have a "Purple"
+ *  option, so a document-wide search would ambiguously match whichever renders first. */
+function submenuItemByText(topLevelLabel: string, subLabel: string): HTMLElement | null {
+  const top = menuItemByText(topLevelLabel);
+  if (!top) return null;
+  const label = [...top.querySelectorAll('.context-submenu .context-menu-label')]
+    .find(el => el.textContent?.includes(subLabel));
+  return (label?.closest('.context-menu-item') as HTMLElement | undefined) ?? null;
+}
+
 describe('Cloud container right-click context menu', () => {
   beforeEach(() => {
     eventBus.clear();
@@ -78,6 +89,8 @@ describe('Cloud container right-click context menu', () => {
     expect(menuItemByText('Prod Subnet')).not.toBeNull();
     expect(menuItemByText('Border Line Style')).not.toBeNull();
     expect(menuItemByText('Border Color')).not.toBeNull();
+    expect(menuItemByText('Ribbon Color')).not.toBeNull();
+    expect(menuItemByText('Text Color')).not.toBeNull();
     expect(menuItemByText('Delete')).not.toBeNull();
   });
 
@@ -99,7 +112,7 @@ describe('Cloud container right-click context menu', () => {
     expect(ctr.style).toBe('dotted');
   });
 
-  it('picking a color from the submenu sets CloudContainer.color', async () => {
+  it('picking a color from the Border Color submenu sets CloudContainer.color only, not ribbonColor/textColor', async () => {
     mountAppSkeleton();
     const { App } = await import('../app');
     const app = new App();
@@ -108,13 +121,51 @@ describe('Cloud container right-click context menu', () => {
     app.setActiveView('cloud');
 
     document.querySelector('[data-cloud-container-id="ctr1"]')!.dispatchEvent(rightClick(150, 100));
-    const purpleItem = [...document.querySelectorAll('.context-submenu .context-menu-label')]
-      .find(el => el.textContent?.includes('Purple'))!.closest('.context-menu-item') as HTMLElement;
+    const purpleItem = submenuItemByText('Border Color', 'Purple')!;
     expect(purpleItem).toBeTruthy();
     purpleItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     const ctr = stateManager.getState().cloudContainers.find(c => c.id === 'ctr1')!;
     expect(ctr.color).toBe('#8e24aa');
+    expect(ctr.ribbonColor).toBeUndefined();
+    expect(ctr.textColor).toBeUndefined();
+  });
+
+  it('picking a color from the Ribbon Color submenu sets CloudContainer.ribbonColor only, independent of Border Color', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+    setupContainer();
+    app.setActiveView('cloud');
+
+    document.querySelector('[data-cloud-container-id="ctr1"]')!.dispatchEvent(rightClick(150, 100));
+    const orangeItem = submenuItemByText('Ribbon Color', 'Orange')!;
+    expect(orangeItem).toBeTruthy();
+    orangeItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const ctr = stateManager.getState().cloudContainers.find(c => c.id === 'ctr1')!;
+    expect(ctr.ribbonColor).toBe('#FF9900');
+    expect(ctr.color).toBeUndefined();
+  });
+
+  it('picking a color from the Text Color submenu sets CloudContainer.textColor only, independent of Border/Ribbon Color', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+    setupContainer();
+    app.setActiveView('cloud');
+
+    document.querySelector('[data-cloud-container-id="ctr1"]')!.dispatchEvent(rightClick(150, 100));
+    const whiteItem = submenuItemByText('Text Color', 'White')!;
+    expect(whiteItem).toBeTruthy();
+    whiteItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const ctr = stateManager.getState().cloudContainers.find(c => c.id === 'ctr1')!;
+    expect(ctr.textColor).toBe('#FFFFFF');
+    expect(ctr.color).toBeUndefined();
+    expect(ctr.ribbonColor).toBeUndefined();
   });
 
   it('"Disable Background Fill" sets backgroundOpacity to 0, and the item flips to "Enable" on the next right-click', async () => {

@@ -12,28 +12,66 @@ const LABEL_GAP = 6;
 const CONNECT_HANDLE_R = 6;
 const CONNECT_HANDLE_HIT_R = 11;
 
-/** Connection points on all 4 sides of a node — only rendered while the node is selected (click
- *  it first), not always-on: dragging from one starts a connector regardless of the active
- *  tool, but the dots themselves stay out of the way until you've actually clicked the icon. */
-export function connectHandlePositions(node: CloudNode): { side: CloudHandleSide; point: Point }[] {
+/** Anything with a world-space box — the only shape connectHandlePositions/nodeEdgeWorldPoint/
+ *  nodeCenterWorldPoint/renderConnectHandles actually need. Widened from CloudNode specifically
+ *  so a cloud-canvas ImageAsset (same x/y/width/height shape, see image-asset-renderer.ts) can
+ *  reuse the exact same connector-endpoint geometry and handle rendering — CloudConnector's own
+ *  sourceNodeId/destNodeId are just plain id strings with no type tying them to CloudNode, so
+ *  resolveCloudConnectorEndpoints() in app.ts can resolve either kind of id through here. */
+interface RectLike { x: number; y: number; width: number; height: number; }
+
+/** Connection points on all 4 sides of a node/image — only rendered while selected (click it
+ *  first), not always-on: dragging from one starts a connector regardless of the active tool,
+ *  but the dots themselves stay out of the way until you've actually clicked the object. */
+export function connectHandlePositions(rect: RectLike): { side: CloudHandleSide; point: Point }[] {
   return [
-    { side: 'top', point: { x: node.width / 2, y: 0 } },
-    { side: 'right', point: { x: node.width, y: node.height / 2 } },
-    { side: 'bottom', point: { x: node.width / 2, y: node.height } },
-    { side: 'left', point: { x: 0, y: node.height / 2 } },
+    { side: 'top', point: { x: rect.width / 2, y: 0 } },
+    { side: 'right', point: { x: rect.width, y: rect.height / 2 } },
+    { side: 'bottom', point: { x: rect.width / 2, y: rect.height } },
+    { side: 'left', point: { x: 0, y: rect.height / 2 } },
   ];
 }
 
-/** World-space (not node-local) position of one of a node's 4 connection points — used by
- *  app.ts's renderCloudAll() to resolve where a CloudConnector's line actually starts/ends. */
-export function nodeEdgeWorldPoint(node: CloudNode, side: CloudHandleSide): Point {
-  const local = connectHandlePositions(node).find(h => h.side === side)!.point;
-  return { x: node.x + local.x, y: node.y + local.y };
+/** World-space (not local) position of one of an object's 4 connection points — used by
+ *  app.ts's resolveCloudConnectorEndpoints() to resolve where a CloudConnector's line actually
+ *  starts/ends. */
+export function nodeEdgeWorldPoint(rect: RectLike, side: CloudHandleSide): Point {
+  const local = connectHandlePositions(rect).find(h => h.side === side)!.point;
+  return { x: rect.x + local.x, y: rect.y + local.y };
 }
 
-/** World-space center of a node — the fallback endpoint when no side is known/inferrable yet. */
-export function nodeCenterWorldPoint(node: CloudNode): Point {
-  return { x: node.x + node.width / 2, y: node.y + node.height / 2 };
+/** World-space center of an object — the fallback endpoint when no side is known/inferrable yet. */
+export function nodeCenterWorldPoint(rect: RectLike): Point {
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+}
+
+/** Draws the 4 connection-point dots (+ their larger invisible hit circles) for `rect` at `id` —
+ *  shared by renderCloudNode below and image-asset-renderer.ts's renderImageAsset, so a
+ *  cloud-canvas image can be a connector endpoint exactly like a CloudNode, reusing the same
+ *  '.cloud-node-connect-handle'/'-hit' classes and 'data-cloud-node-id' attribute app.ts's
+ *  mousedown/hover handling already matches on — no separate "image connect handle" class or
+ *  handling needed anywhere else. */
+export function renderConnectHandles(rect: RectLike, id: string, group: SVGGElement): void {
+  for (const { side, point } of connectHandlePositions(rect)) {
+    // A larger, invisible hit circle sits behind the visible dot so the actual click/drag target
+    // is far more forgiving than the small dot alone — precisely landing on a tiny circle to
+    // start or drop a connector was the reported failure mode. Kept as a separate class (not
+    // '.cloud-node-connect-handle') so existing "exactly 4 handles" checks, which count/inspect
+    // the visible dot only, are unaffected; app.ts's hit-testing matches both classes together.
+    const hit = createCircle(point.x, point.y, CONNECT_HANDLE_HIT_R, {
+      class: 'cloud-node-connect-handle-hit', 'data-handle-side': side, cursor: 'crosshair',
+      fill: 'transparent', stroke: 'none',
+    });
+    setAttributes(hit, { 'data-cloud-node-id': id });
+    group.appendChild(hit);
+
+    const handle = createCircle(point.x, point.y, CONNECT_HANDLE_R, {
+      class: 'cloud-node-connect-handle', 'data-handle-side': side, cursor: 'crosshair',
+      fill: '#58a6ff', stroke: '#0d1117', 'stroke-width': 1, opacity: 0.85, 'pointer-events': 'none',
+    });
+    setAttributes(handle, { 'data-cloud-node-id': id });
+    group.appendChild(handle);
+  }
 }
 
 /**
@@ -90,27 +128,7 @@ export function renderCloudNode(node: CloudNode, iconPath: string, layer: SVGGEl
   }
 
   if (showHandles) {
-    for (const { side, point } of connectHandlePositions(node)) {
-      // A larger, invisible hit circle sits behind the visible dot so the actual click/drag
-      // target is far more forgiving than the small dot alone — precisely landing on a tiny
-      // circle to start or drop a connector was the reported failure mode. Kept as a separate
-      // class (not '.cloud-node-connect-handle') so existing "exactly 4 handles" checks, which
-      // count/inspect the visible dot only, are unaffected; app.ts's hit-testing matches both
-      // classes together.
-      const hit = createCircle(point.x, point.y, CONNECT_HANDLE_HIT_R, {
-        class: 'cloud-node-connect-handle-hit', 'data-handle-side': side, cursor: 'crosshair',
-        fill: 'transparent', stroke: 'none',
-      });
-      setAttributes(hit, { 'data-cloud-node-id': node.id });
-      group.appendChild(hit);
-
-      const handle = createCircle(point.x, point.y, CONNECT_HANDLE_R, {
-        class: 'cloud-node-connect-handle', 'data-handle-side': side, cursor: 'crosshair',
-        fill: '#58a6ff', stroke: '#0d1117', 'stroke-width': 1, opacity: 0.85, 'pointer-events': 'none',
-      });
-      setAttributes(handle, { 'data-cloud-node-id': node.id });
-      group.appendChild(handle);
-    }
+    renderConnectHandles(node, node.id, group);
   }
 
   if (selected && !node.locked) {

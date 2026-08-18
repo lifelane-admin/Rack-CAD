@@ -30,13 +30,16 @@
         <div id="ruler-corner"></div>
         <div id="ruler-horizontal"></div>
         <div id="ruler-vertical"></div>
-        <div id="canvas-viewport">
-          <svg id="canvas"></svg>
-          <div class="splitter-3d" id="splitter-3d"></div>
-          <div id="canvas-3d"></div>
-        </div>
-        <div id="cloud-viewport" class="hidden">
-          <svg id="cloud-canvas"></svg>
+        <div id="canvas-split">
+          <div id="canvas-viewport">
+            <svg id="canvas"></svg>
+            <div class="splitter-3d hidden" id="splitter-3d"></div>
+            <div id="canvas-3d" class="hidden"></div>
+          </div>
+          <div class="splitter-hybrid hidden" id="splitter-hybrid"></div>
+          <div id="cloud-viewport" class="hidden">
+            <svg id="cloud-canvas"></svg>
+          </div>
         </div>
         <div id="minimap"></div>
       </main>

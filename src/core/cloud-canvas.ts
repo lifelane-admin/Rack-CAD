@@ -107,7 +107,18 @@ export class CloudCanvasManager {
     this.viewportGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     this.viewportGroup.setAttribute('id', 'cloud-viewport-group');
 
-    const layerNames = ['cloud-grid-layer', 'cloud-container-layer', 'cloud-hierarchy-layer', 'cloud-node-layer', 'cloud-connector-layer', 'cloud-interaction-layer'];
+    // cloud-hierarchy-layer sits BELOW cloud-container-layer (not above, despite hierarchies
+    // usually being drawn as the largest/outermost box) — CloudHierarchy's own bounding rect is
+    // solid-filled across its whole area (see cloud-hierarchy-renderer.ts), so if it painted (and
+    // therefore hit-tested) above containers, resizing a hierarchy pill large enough to visually
+    // wrap around a CloudContainer would make that container permanently unclickable, since every
+    // click on it would land on the hierarchy's fill instead. Containers — and nodes/connectors,
+    // layered higher still — must always win a click over whatever hierarchy happens to be drawn
+    // underneath them.
+    // cloud-image-layer (pasted/inserted reference images, see app.ts's insertImageAsset) sits
+    // above everything else, including connectors — a reference image (e.g. a logo or screenshot
+    // a user pasted for context) is meant to be clearly visible/on top, not a backdrop.
+    const layerNames = ['cloud-grid-layer', 'cloud-hierarchy-layer', 'cloud-container-layer', 'cloud-node-layer', 'cloud-connector-layer', 'cloud-image-layer', 'cloud-interaction-layer'];
     for (const name of layerNames) {
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       g.setAttribute('id', name);

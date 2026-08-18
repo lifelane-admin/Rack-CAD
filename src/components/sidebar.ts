@@ -13,7 +13,7 @@ let cloudSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 interface NavLeaf {
   label: string;
   icon: string;
-  view: 'rack' | 'cloud';
+  view: 'rack' | 'cloud' | 'hybrid';
   provider?: CloudProvider;
 }
 interface NavGroup {
@@ -23,12 +23,18 @@ interface NavGroup {
 }
 
 /** Top-level workspace navigation — the primary way to switch between the On-Prem rack
- *  elevation workspace and the Cloud Architecture canvas (per-provider entry points). Always
- *  rendered above the search/catalog, regardless of which view is currently active. */
+ *  elevation workspace, the Cloud Architecture canvas (per-provider entry points), and Hybrid
+ *  (both canvases at once, see app.ts's setActiveView). Always rendered above the
+ *  search/catalog, regardless of which view is currently active. */
 const NAV_TREE: NavGroup[] = [
   {
     label: 'On-Prem Infrastructure', icon: '🏢', children: [
       { label: 'Rack Development', icon: '📦', view: 'rack' },
+    ],
+  },
+  {
+    label: 'Hybrid', icon: '🌐', children: [
+      { label: 'All Tools (Rack + Cloud)', icon: '🌐', view: 'hybrid' },
     ],
   },
   {
@@ -64,7 +70,9 @@ export class Sidebar {
   }
 
   render() {
-    const isCloud = State.getState().activeView === 'cloud';
+    const activeView = State.getState().activeView;
+    const isCloud = activeView === 'cloud';
+    const isHybrid = activeView === 'hybrid';
 
     this.container.innerHTML = '';
     this.container.className = 'sidebar';
@@ -72,7 +80,7 @@ export class Sidebar {
     const header = document.createElement('div');
     header.className = 'sidebar-header';
     header.innerHTML = `
-      <h3>${isCloud ? 'Cloud Services' : 'Components'}</h3>
+      <h3>${isHybrid ? 'Rack + Cloud' : isCloud ? 'Cloud Services' : 'Components'}</h3>
       <button class="collapse-btn" title="Collapse">«</button>
     `;
 
@@ -85,37 +93,56 @@ export class Sidebar {
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
     const providerLabels: Record<CloudProvider, string> = { aws: 'AWS', azure: 'Azure', gcp: 'GCP', onprem: 'Local Resources' };
-    searchInput.placeholder = isCloud
-      ? (this.focusedCloudProvider ? `Search ${providerLabels[this.focusedCloudProvider]} services...` : 'Search AWS/Azure/GCP/Local services...')
-      : 'Search components...';
-    searchInput.oninput = (e: any) => {
-      this.searchTerm = e.target.value.toLowerCase();
-      if (isCloud) {
-        // Debounced — filtering runs across all 1274 manifest entries + a full DOM rebuild on
-        // every keystroke would otherwise feel sluggish at this list size (unlike the ~77-item
-        // device catalog this search box normally filters).
-        if (cloudSearchDebounceTimer) clearTimeout(cloudSearchDebounceTimer);
-        cloudSearchDebounceTimer = setTimeout(() => this.renderCloudPalette(), 150);
-      } else {
-        this.renderCatalog();
-      }
-    };
+    searchInput.placeholder = isHybrid
+      ? 'Search rack devices + cloud services...'
+      : isCloud
+        ? (this.focusedCloudProvider ? `Search ${providerLabels[this.focusedCloudProvider]} services...` : 'Search AWS/Azure/GCP/Local services...')
+        : 'Search components...';
     searchContainer.appendChild(searchInput);
 
     const catalogContainer = document.createElement('div');
     catalogContainer.className = 'sidebar-catalog';
     catalogContainer.id = 'catalog-container';
 
+    // Hybrid renders BOTH catalogs at once — renderCatalog()/renderCloudPalette() each own the
+    // ENTIRE content of whatever container they're given (they do container.innerHTML = ''), so
+    // they can't share #catalog-container the way the single-view modes do; a second container
+    // is created just for the cloud palette here.
+    const cloudCatalogContainer = document.createElement('div');
+    cloudCatalogContainer.className = 'sidebar-catalog';
+    cloudCatalogContainer.id = 'cloud-catalog-container';
+
+    searchInput.oninput = (e: any) => {
+      this.searchTerm = e.target.value.toLowerCase();
+      if (isHybrid) {
+        this.renderCatalog();
+        // Debounced — filtering runs across all 1274 manifest entries + a full DOM rebuild on
+        // every keystroke would otherwise feel sluggish at this list size (unlike the ~77-item
+        // device catalog this search box normally filters).
+        if (cloudSearchDebounceTimer) clearTimeout(cloudSearchDebounceTimer);
+        cloudSearchDebounceTimer = setTimeout(() => this.renderCloudPalette(cloudCatalogContainer), 150);
+      } else if (isCloud) {
+        if (cloudSearchDebounceTimer) clearTimeout(cloudSearchDebounceTimer);
+        cloudSearchDebounceTimer = setTimeout(() => this.renderCloudPalette(), 150);
+      } else {
+        this.renderCatalog();
+      }
+    };
+
     this.container.appendChild(header);
     this.container.appendChild(navTree);
     this.container.appendChild(searchContainer);
     this.container.appendChild(catalogContainer);
+    if (isHybrid) this.container.appendChild(cloudCatalogContainer);
 
     header.querySelector('.collapse-btn')?.addEventListener('click', () => {
       this.container.classList.toggle('collapsed');
     });
 
-    if (isCloud) {
+    if (isHybrid) {
+      this.renderCatalog();
+      this.renderCloudPalette(cloudCatalogContainer);
+    } else if (isCloud) {
       this.renderCloudPalette();
     } else {
       this.renderCatalog();
@@ -282,7 +309,9 @@ export class Sidebar {
       for (const leaf of group.children) {
         const isActive = leaf.view === 'rack'
           ? state.activeView === 'rack'
-          : state.activeView === 'cloud' && (leaf.provider ?? null) === this.focusedCloudProvider;
+          : leaf.view === 'hybrid'
+            ? state.activeView === 'hybrid' && this.focusedCloudProvider === null
+            : (state.activeView === 'cloud' || state.activeView === 'hybrid') && (leaf.provider ?? null) === this.focusedCloudProvider;
 
         const leafEl = document.createElement('div');
         leafEl.className = `nav-tree-leaf${isActive ? ' active' : ''}`;
@@ -290,7 +319,14 @@ export class Sidebar {
         leafEl.onclick = () => {
           this.focusedCloudProvider = leaf.provider ?? null;
           this.searchTerm = '';
-          EventBus.emit('view:switch', leaf.view);
+          // A provider leaf (AWS/Azure/GCP/Local Resources) switching away from an in-progress
+          // Rack or Hybrid workspace would otherwise discard the rack entirely (pure 'cloud' view
+          // hides #canvas-viewport, see setActiveView) — promote to 'hybrid' instead so the rack
+          // stays put and the user can wire it up to the newly-focused cloud provider. Only true
+          // standalone entry points (starting fresh from pure 'cloud', or the startup modal) still
+          // land in plain 'cloud'.
+          const target = leaf.view === 'cloud' && state.activeView !== 'cloud' ? 'hybrid' : leaf.view;
+          EventBus.emit('view:switch', target);
         };
         childrenEl.appendChild(leafEl);
       }
@@ -460,8 +496,8 @@ export class Sidebar {
   /** Cloud icon palette (see cloud-icon-catalog.ts) — 1274 official AWS/Azure/GCP icons.
    *  Provider sections collapsed by default with category sub-groupings inside; typing in the
    *  search box switches to a flat, capped, cross-provider results list instead. */
-  private renderCloudPalette(): void {
-    const container = this.container.querySelector('#catalog-container') as HTMLElement;
+  private renderCloudPalette(containerEl?: HTMLElement): void {
+    const container = containerEl ?? this.container.querySelector('#catalog-container') as HTMLElement;
     if (!container) return;
     container.innerHTML = '';
 
@@ -566,8 +602,8 @@ export class Sidebar {
     }
   }
 
-  private renderCatalog() {
-    const container = this.container.querySelector('#catalog-container') as HTMLElement;
+  private renderCatalog(containerEl?: HTMLElement) {
+    const container = containerEl ?? this.container.querySelector('#catalog-container') as HTMLElement;
     if (!container) return;
 
     container.innerHTML = '';

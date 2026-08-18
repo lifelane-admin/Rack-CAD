@@ -3,6 +3,7 @@
 // WEBP/SVG alpha transparency is preserved automatically since it's the real uploaded bytes.
 import { ImageAsset } from '../core/types';
 import { createGroup, createRect, createSVGElement, setAttributes } from '../utils/svg-helpers';
+import { renderConnectHandles } from './cloud-node-renderer';
 
 const XLINK_NS = 'http://www.w3.org/1999/xlink';
 const HANDLE_SIZE = 12;
@@ -11,13 +12,26 @@ const HANDLE_SIZE = 12;
  * Renders one ImageAsset into `layer` and returns the created <g data-image-id="...">.
  * `selected` draws a dashed outline plus a bottom-right resize handle; callers (app.ts
  * renderAll) recompute this on every render from the current selection.
+ *
+ * `showConnectHandles` (cloud-canvas images only — see ImageAsset.canvas's doc comment) draws
+ * the same 4 connection-point dots a CloudNode gets, reusing renderConnectHandles() so a
+ * connector can attach to an image exactly like it attaches to a node — see app.ts's
+ * resolveCloudConnectorEndpoints(), which resolves a connector endpoint id against cloud
+ * ImageAssets the same way it does CloudNodes. Also suppresses the resize handle in this mode:
+ * cloud-canvas images have no drag-resize wiring (see draggedCloudImageId's doc comment), so
+ * showing that handle there would be a dead, non-functional control.
  */
-export function renderImageAsset(asset: ImageAsset, layer: SVGGElement, selected: boolean): SVGGElement {
+export function renderImageAsset(asset: ImageAsset, layer: SVGGElement, selected: boolean, showConnectHandles: boolean = false): SVGGElement {
   const group = createGroup(undefined, 'image-asset');
   const cx = asset.width / 2;
   const cy = asset.height / 2;
   setAttributes(group, {
     'data-image-id': asset.id,
+    // Also tagged with 'data-cloud-node-id' (cloud-canvas images only) so the connect-tool's own
+    // hit-testing — closest('[data-cloud-node-id]'), same check used for a CloudNode's whole body
+    // — finds an image the same way it finds a node: clicking/hovering ANYWHERE on it, not just
+    // its 4 handle dots (renderConnectHandles below only tags those specifically).
+    ...(showConnectHandles ? { 'data-cloud-node-id': asset.id } : {}),
     transform: `translate(${asset.x}, ${asset.y}) rotate(${asset.rotation || 0}, ${cx}, ${cy})`,
     cursor: asset.locked ? 'default' : 'move',
   });
@@ -43,7 +57,7 @@ export function renderImageAsset(asset: ImageAsset, layer: SVGGElement, selected
       'pointer-events': 'none',
     }));
 
-    if (!asset.locked) {
+    if (!asset.locked && !showConnectHandles) {
       const handle = createRect(
         asset.width - HANDLE_SIZE / 2, asset.height - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE,
         { fill: '#58a6ff', stroke: '#0d1117', 'stroke-width': 1, rx: 2, ry: 2, cursor: 'nwse-resize', class: 'image-resize-handle' }
@@ -51,6 +65,10 @@ export function renderImageAsset(asset: ImageAsset, layer: SVGGElement, selected
       setAttributes(handle, { 'data-image-id': asset.id });
       group.appendChild(handle);
     }
+  }
+
+  if (showConnectHandles) {
+    renderConnectHandles(asset, asset.id, group);
   }
 
   layer.appendChild(group);

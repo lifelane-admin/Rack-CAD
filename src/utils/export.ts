@@ -19,9 +19,24 @@ export interface ExportOptions {
   rackId?: string;
   customRect?: { x: number; y: number; width: number; height: number };
   includeGrid?: boolean;
+  /** Background fill baked into the export (SVG background rect + PNG/JPEG canvas fill) —
+   *  independent of the live app theme, since a design meant to be pasted into a light-mode doc
+   *  shouldn't be forced to match whatever theme the editor happened to be in. Defaults to
+   *  'light' (unset = existing white-background behavior, unchanged for old callers). */
+  background?: 'light' | 'dark';
   scale?: number;
   pageSize?: 'letter' | 'a4' | 'a3' | 'tabloid';
   orientation?: 'landscape' | 'portrait';
+}
+
+/** Export background fill colors — shared by exportSVG (background rect), exportPNG/exportJPEG
+ *  (canvas fill), and their Cloud-canvas equivalents, so every export format agrees on exactly
+ *  the same two colors. Dark matches the app's own dark-theme canvas/modal chrome (#0d1117),
+ *  not the slightly different --bg-canvas dark value, so exports look like a deliberate "dark
+ *  mode" choice rather than an approximation of the live editor background. */
+const EXPORT_BG: Record<'light' | 'dark', string> = { light: '#ffffff', dark: '#0d1117' };
+function resolveExportBg(background?: 'light' | 'dark'): string {
+  return EXPORT_BG[background ?? 'light'];
 }
 
 /** Pending format-specific export awaiting a canvas area selection. */
@@ -30,6 +45,11 @@ let pendingAreaExport: { onConfirm: (options: ExportOptions) => void; baseOption
 export interface CloudExportOptions {
   area: 'full' | 'viewport' | 'custom';
   customRect?: { x: number; y: number; width: number; height: number };
+  includeGrid?: boolean;
+  /** See ExportOptions.background's doc comment — same two colors, but defaults to 'dark' here
+   *  since that was this export's only behavior before this option existed (cloud diagrams read
+   *  as provider-style architecture art, which has always rendered dark by default). */
+  background?: 'light' | 'dark';
   scale?: number;
 }
 
@@ -103,6 +123,27 @@ export function showCloudExportOptionsModal(
           </div>
         </div>
         ` : ''}
+
+        <div>
+          <label style="font-size: 11px; font-weight: 700; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;">Grid Settings</label>
+          <div style="margin-top: 8px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+              <input type="checkbox" id="cloud-export-include-grid" /> Include background grid lines
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size: 11px; font-weight: 700; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;">Background</label>
+          <div style="display: flex; gap: 12px; margin-top: 8px;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+              <input type="radio" name="cloud-export-background" value="light" /> ☀️ Light
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+              <input type="radio" name="cloud-export-background" value="dark" checked /> 🌙 Dark
+            </label>
+          </div>
+        </div>
       </div>
 
       <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 16px;">
@@ -120,8 +161,10 @@ export function showCloudExportOptionsModal(
 
   modal.querySelector('#cloud-export-modal-confirm')?.addEventListener('click', () => {
     const selectedArea = (modal.querySelector('input[name="cloud-export-area"]:checked') as HTMLInputElement).value as CloudExportOptions['area'];
+    const includeGrid = (modal.querySelector('#cloud-export-include-grid') as HTMLInputElement).checked;
+    const background = (modal.querySelector('input[name="cloud-export-background"]:checked') as HTMLInputElement).value as 'light' | 'dark';
 
-    const options: CloudExportOptions = { area: selectedArea };
+    const options: CloudExportOptions = { area: selectedArea, includeGrid, background };
 
     if (isRaster) {
       options.scale = parseInt((modal.querySelector('input[name="cloud-export-scale"]:checked') as HTMLInputElement).value);
@@ -246,6 +289,19 @@ export function showExportOptionsModal(
             </label>
           </div>
         </div>
+
+        <!-- Background / Dark Mode -->
+        <div>
+          <label style="font-size: 11px; font-weight: 700; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;">Background</label>
+          <div style="display: flex; gap: 12px; margin-top: 8px;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+              <input type="radio" name="export-background" value="light" ${stateManager.getState().theme === 'light' ? 'checked' : ''} /> ☀️ Light
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+              <input type="radio" name="export-background" value="dark" ${stateManager.getState().theme === 'dark' ? 'checked' : ''} /> 🌙 Dark
+            </label>
+          </div>
+        </div>
       </div>
 
       <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 16px;">
@@ -277,10 +333,12 @@ export function showExportOptionsModal(
   modal.querySelector('#export-modal-confirm')?.addEventListener('click', () => {
     const selectedArea = (modal.querySelector('input[name="export-area"]:checked') as HTMLInputElement).value as any;
     const includeGrid = (modal.querySelector('#export-include-grid') as HTMLInputElement).checked;
-    
+    const background = (modal.querySelector('input[name="export-background"]:checked') as HTMLInputElement).value as 'light' | 'dark';
+
     const options: ExportOptions = {
       area: selectedArea,
       includeGrid,
+      background,
       rackId: selectedArea === 'rack' ? rackSelect.value : undefined
     };
 
@@ -387,6 +445,18 @@ export function exportSVG(options?: ExportOptions): string {
   clone.setAttribute('width', String(bbox.width));
   clone.setAttribute('height', String(bbox.height));
 
+  // Background fill — baked into the SVG itself (not just the raster canvas fill in
+  // exportPNG/exportJPEG below) so a standalone .svg file opened in a viewer, or the vector
+  // content embedded in a PDF/HTML export, also carries the chosen Light/Dark background instead
+  // of showing through as transparent/white. Painted first so everything else layers on top.
+  const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bgRect.setAttribute('x', String(bbox.x));
+  bgRect.setAttribute('y', String(bbox.y));
+  bgRect.setAttribute('width', String(bbox.width));
+  bgRect.setAttribute('height', String(bbox.height));
+  bgRect.setAttribute('fill', resolveExportBg(options?.background));
+  clone.insertBefore(bgRect, vpGroup ?? clone.firstChild);
+
   // Remove or keep the grid layer from export
   const gridLayer = clone.querySelector('#grid-layer');
   if (gridLayer && (!options || !options.includeGrid)) {
@@ -444,7 +514,7 @@ export async function exportPNG(options?: ExportOptions): Promise<Blob> {
         return;
       }
 
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = resolveExportBg(options?.background);
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       ctx.scale(scale, scale);
@@ -488,7 +558,7 @@ export async function exportJPEG(options?: ExportOptions): Promise<Blob> {
         return;
       }
 
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = resolveExportBg(options?.background);
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       ctx.scale(scale, scale);
@@ -700,7 +770,16 @@ export async function exportCloudSVG(options?: CloudExportOptions): Promise<stri
   clone.setAttribute('width', String(bbox.width));
   clone.setAttribute('height', String(bbox.height));
 
-  clone.querySelector('#cloud-grid-layer')?.remove();
+  // Same background-rect treatment as exportSVG() above — see resolveExportBg's doc comment.
+  const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bgRect.setAttribute('x', String(bbox.x));
+  bgRect.setAttribute('y', String(bbox.y));
+  bgRect.setAttribute('width', String(bbox.width));
+  bgRect.setAttribute('height', String(bbox.height));
+  bgRect.setAttribute('fill', resolveExportBg(options?.background ?? 'dark'));
+  clone.insertBefore(bgRect, vpGroup ?? clone.firstChild);
+
+  if (!options?.includeGrid) clone.querySelector('#cloud-grid-layer')?.remove();
   clone.querySelector('#cloud-interaction-layer')?.remove();
   if (vpGroup) vpGroup.removeAttribute('transform');
 
@@ -740,7 +819,7 @@ export async function exportCloudPNG(options?: CloudExportOptions): Promise<Blob
         reject(new Error('Failed to get canvas context'));
         return;
       }
-      ctx.fillStyle = '#0d1117';
+      ctx.fillStyle = resolveExportBg(options?.background ?? 'dark');
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.scale(scale, scale);
       ctx.drawImage(img, 0, 0);

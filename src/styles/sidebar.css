@@ -81,7 +81,12 @@
 }
 
 .sidebar-catalog {
-  flex-grow: 1;
+  /* flex-basis:0 (not auto) so two of these stacked at once (Hybrid view's rack+cloud panes,
+     see sidebar.ts) split the available height evenly regardless of how much each one's own
+     content wants — with the default auto basis, the pane with more expanded content strictly
+     outgrew the other down to a sliver. Single-pane rack/cloud views still fill 100% either way. */
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
   padding: var(--space-sm) 0;
 }

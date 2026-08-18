@@ -79,11 +79,14 @@ export function getNaturalHierarchySize(hierarchy: CloudHierarchy, icons: (Hiera
  * needs.
  */
 export function renderCloudHierarchy(hierarchy: CloudHierarchy, layer: SVGGElement, selected: boolean, icons: (HierarchyLevelIcon | undefined)[]): SVGGElement {
-  // Two independently-colorable elements: the boundary box's own border/tint ("Line Color") and
-  // the label chip on top of it ("Ribbon Color") — ribbonColor falls back to the line color (and
-  // that in turn to the provider accent) so an untouched hierarchy still reads as one solid color.
+  // Three independently-colorable elements: the boundary box's own border/tint ("Border Color"),
+  // the label chip on top of it ("Ribbon Color"), and the chip's own text ("Text Color") —
+  // ribbonColor falls back to the border color (and that in turn to the provider accent) so an
+  // untouched hierarchy still reads as one solid color; textColor falls back to the original
+  // hardcoded white.
   const lineColor = hierarchy.color ?? PROVIDER_ACCENT[hierarchy.provider];
   const ribbonColor = hierarchy.ribbonColor ?? lineColor;
+  const textColor = hierarchy.textColor ?? '#FFFFFF';
 
   const group = createGroup(undefined, 'cloud-hierarchy');
   setAttributes(group, {
@@ -108,9 +111,19 @@ export function renderCloudHierarchy(hierarchy: CloudHierarchy, layer: SVGGEleme
   const boxAttrs: Record<string, string | number> = {
     fill: lineColor, 'fill-opacity': hierarchy.backgroundOpacity ?? DEFAULT_BG_OPACITY,
     stroke: lineColor, 'stroke-width': BORDER_WIDTH, rx: 10, ry: 10,
+    // Purely decorative — see CloudContainer's identical treatment (cloud-container-renderer.ts)
+    // for why the tinted interior is click-through and a separate invisible border-hit rect
+    // below is the real interaction target: lets a marquee-select drag start from inside a
+    // hierarchy's boundary box instead of always grabbing/moving it.
+    'pointer-events': 'none',
   };
   if (dasharray) boxAttrs['stroke-dasharray'] = dasharray;
   group.appendChild(createRect(0, 0, boundaryW, boundaryH, boxAttrs));
+
+  group.appendChild(createRect(0, 0, boundaryW, boundaryH, {
+    fill: 'none', stroke: 'transparent', 'stroke-width': Math.max(BORDER_WIDTH + 10, 14), rx: 10, ry: 10,
+    'pointer-events': 'stroke', class: 'cloud-hierarchy-border-hit',
+  }));
 
   if (isDouble) {
     const inset = BORDER_WIDTH + 3;
@@ -138,12 +151,14 @@ export function renderCloudHierarchy(hierarchy: CloudHierarchy, layer: SVGGEleme
     }
 
     group.appendChild(createText(CHIP_X + seg.textX, 4, seg.label, {
-      fill: '#FFFFFF', 'font-size': 12, 'font-family': 'Inter, sans-serif', 'font-weight': 700,
+      fill: textColor, 'font-size': 12, 'font-family': 'Inter, sans-serif', 'font-weight': 700,
     }));
 
     if (i < segments.length - 1) {
+      // Dimmed via fill-opacity rather than a hardcoded rgba(255,255,255,...) so the separator
+      // stays a lighter variant of whatever textColor was actually chosen, not always white.
       group.appendChild(createText(CHIP_X + seg.sepX, 4, SEPARATOR, {
-        fill: 'rgba(255,255,255,0.55)', 'font-size': 12, 'font-family': 'Inter, sans-serif', 'font-weight': 400,
+        fill: textColor, 'fill-opacity': 0.55, 'font-size': 12, 'font-family': 'Inter, sans-serif', 'font-weight': 400,
       }));
     }
   });

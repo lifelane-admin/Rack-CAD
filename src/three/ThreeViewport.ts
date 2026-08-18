@@ -97,6 +97,24 @@ export class ThreeViewport {
     this.post.render();
   }
 
+  /** Stops the render loop — used while the 3D panel is hidden (see AppState.show3DPanel) so an
+   *  unopened panel doesn't keep rendering an off-screen scene every frame. Safe to call more
+   *  than once. */
+  pause(): void {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+  }
+
+  /** Restarts the render loop after pause(), and forces an immediate resize since the container
+   *  may have gone from display:none (0x0) to its real size since the loop last ran — a
+   *  ResizeObserver firing on un-hide isn't guaranteed to land before the first frame. */
+  resume(): void {
+    this.onResize();
+    if (this.animId === null) this.animate();
+  }
+
   private onResize(): void {
     if (!this.container) return;
     const { width, height } = this.container.getBoundingClientRect();

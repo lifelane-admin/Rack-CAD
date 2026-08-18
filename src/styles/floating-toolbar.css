@@ -19,6 +19,17 @@
   opacity: 0.96;
 }
 
+/* Hybrid "Merged" sub-mode — both floating toolbars overlap the same full-size area (see
+   canvas.css's .hybrid-merged rules), so stack the cloud one above the rack one instead of
+   letting them sit on top of each other at the same default bottom:24px. Needs its own
+   pointer-events:auto since it's mounted inside #cloud-viewport, which is pointer-events:none
+   while merged (see canvas.css) for click-through — that would otherwise cascade down onto it.
+   Split mode (the default) never needs this — the two panes have their own separate space. */
+body.hybrid-merged #cloud-floating-toolbar {
+  bottom: 116px;
+  pointer-events: auto;
+}
+
 /* Row 1 (select/pan, quick actions, anchor + text/label/image tools) is deliberately more
    compact than row 2 (the primary cable/power drawing-mode buttons) — it packs the most
    buttons of either row, and shrinking it keeps the whole floating toolbar from growing every
@@ -234,6 +245,47 @@
   border-radius: 50%;
   background-color: #fff;
   display: block;
+}
+
+/* 3D panel toggle — a real switch (not a button), since it flips a persistent view setting
+   rather than firing a one-shot action or a mutually-exclusive tool. */
+.ft-toggle-switch {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: background var(--transition-speed) ease, border-color var(--transition-speed) ease;
+}
+
+.ft-toggle-switch:hover {
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.ft-toggle-switch .ft-toggle-knob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition: transform var(--transition-speed) ease, background var(--transition-speed) ease;
+}
+
+.ft-toggle-switch.on {
+  background: rgba(56, 189, 248, 0.32);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+
+.ft-toggle-switch.on .ft-toggle-knob {
+  transform: translateX(14px);
+  background: var(--accent-primary);
 }
 
 /* Contextual subheaders/hints inside floating bar */

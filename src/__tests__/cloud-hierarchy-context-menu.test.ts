@@ -5,9 +5,9 @@ import { stateManager } from '../core/state';
 /**
  * Right-click context menu for CloudHierarchy (the "describe infra in one line" breadcrumb box)
  * — Edit… + Border Line Style / Background Fill / Delete like CloudContainer (see
- * cloud-container-context-menu.test.ts), plus two INDEPENDENT color pickers (Line Color for the
- * boundary box, Ribbon Color for the label chip) since a hierarchy has two colorable elements
- * where a container only has one.
+ * cloud-container-context-menu.test.ts), plus THREE INDEPENDENT color pickers (Border Color for
+ * the boundary box, Ribbon Color for the label chip, Text Color for the chip's own text) — same
+ * 3-way split CloudContainer now also has (see cloud-container-context-menu.test.ts).
  */
 function mountAppSkeleton(): void {
   document.body.innerHTML = `
@@ -94,8 +94,9 @@ describe('Cloud hierarchy right-click context menu', () => {
     expect(stateManager.getState().selection).toEqual([{ type: 'cloud-hierarchy', id: 'h1' }]);
     expect(menuItemByText('Edit')).not.toBeNull();
     expect(menuItemByText('Border Line Style')).not.toBeNull();
-    expect(menuItemByText('Line Color')).not.toBeNull();
+    expect(menuItemByText('Border Color')).not.toBeNull();
     expect(menuItemByText('Ribbon Color')).not.toBeNull();
+    expect(menuItemByText('Text Color')).not.toBeNull();
     expect(menuItemByText('Delete')).not.toBeNull();
   });
 
@@ -116,7 +117,7 @@ describe('Cloud hierarchy right-click context menu', () => {
     expect(stateManager.getState().cloudHierarchies.find(h => h.id === 'h1')!.style).toBe('dotted');
   });
 
-  it('picking a color from the Line Color submenu sets CloudHierarchy.color only, not ribbonColor', async () => {
+  it('picking a color from the Border Color submenu sets CloudHierarchy.color only, not ribbonColor', async () => {
     mountAppSkeleton();
     const { App } = await import('../app');
     const app = new App();
@@ -125,12 +126,31 @@ describe('Cloud hierarchy right-click context menu', () => {
     app.setActiveView('cloud');
 
     document.querySelector('[data-cloud-hierarchy-id="h1"]')!.dispatchEvent(rightClick(150, 100));
-    const purpleItem = submenuItemByText('Line Color', 'Purple')!;
+    const purpleItem = submenuItemByText('Border Color', 'Purple')!;
     expect(purpleItem).toBeTruthy();
     purpleItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     const hierarchy = stateManager.getState().cloudHierarchies.find(h => h.id === 'h1')!;
     expect(hierarchy.color).toBe('#8e24aa');
+    expect(hierarchy.ribbonColor).toBeUndefined();
+  });
+
+  it('picking a color from the Text Color submenu sets CloudHierarchy.textColor only, independent of color/ribbonColor', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+    setupHierarchy();
+    app.setActiveView('cloud');
+
+    document.querySelector('[data-cloud-hierarchy-id="h1"]')!.dispatchEvent(rightClick(150, 100));
+    const blackItem = submenuItemByText('Text Color', 'Black')!;
+    expect(blackItem).toBeTruthy();
+    blackItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const hierarchy = stateManager.getState().cloudHierarchies.find(h => h.id === 'h1')!;
+    expect(hierarchy.textColor).toBe('#0d1117');
+    expect(hierarchy.color).toBeUndefined();
     expect(hierarchy.ribbonColor).toBeUndefined();
   });
 
@@ -152,10 +172,13 @@ describe('Cloud hierarchy right-click context menu', () => {
     expect(hierarchy.color).toBeUndefined();
 
     // Renderer proof, not just state: the boundary box border and the chip fill actually differ.
+    // The box rect is still the first child (index 0); the chip is found by its own distinctive
+    // fill rather than a fixed index, since the box now has a second, invisible border-hit rect
+    // immediately after it (see cloud-hierarchy-renderer.ts).
     const rects = document.querySelectorAll('[data-cloud-hierarchy-id="h1"] rect');
     const boxStroke = (rects[0] as SVGRectElement).getAttribute('stroke');
-    const chipFill = (rects[1] as SVGRectElement).getAttribute('fill');
-    expect(chipFill).toBe('#FF9900');
+    const chipFill = document.querySelector('[data-cloud-hierarchy-id="h1"] rect[fill="#FF9900"]');
+    expect(chipFill).not.toBeNull();
     expect(boxStroke).not.toBe('#FF9900');
   });
 

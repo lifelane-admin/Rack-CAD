@@ -32,10 +32,10 @@ describe('Sidebar navigation tree', () => {
     });
   }
 
-  it('renders both top-level groups with all five leaves', () => {
+  it('renders all three top-level groups with all six leaves', () => {
     mountSidebar();
     const labels = [...document.querySelectorAll('.nav-tree-leaf span')].map(el => el.textContent);
-    expect(labels).toEqual(['Rack Development', 'AWS', 'Azure', 'GCP', 'Local Resources']);
+    expect(labels).toEqual(['Rack Development', 'All Tools (Rack + Cloud)', 'AWS', 'Azure', 'GCP', 'Local Resources']);
   });
 
   it('"Rack Development" is active by default (activeView starts as rack)', () => {
@@ -44,7 +44,16 @@ describe('Sidebar navigation tree', () => {
     expect(rackLeaf?.classList.contains('active')).toBe(true);
   });
 
-  it('clicking "AWS" switches activeView to cloud', () => {
+  it('clicking "AWS" from Rack view switches activeView to hybrid, not cloud (preserves the rack)', () => {
+    const sidebar = mountSidebar();
+    wireViewSwitch(sidebar);
+    const awsLeaf = [...document.querySelectorAll('.nav-tree-leaf')].find(el => el.textContent?.includes('AWS')) as HTMLElement;
+    awsLeaf.click();
+    expect(stateManager.getState().activeView).toBe('hybrid');
+  });
+
+  it('clicking "AWS" while already in pure Cloud view stays in cloud (no rack to preserve)', () => {
+    stateManager.setState({ activeView: 'cloud' });
     const sidebar = mountSidebar();
     wireViewSwitch(sidebar);
     const awsLeaf = [...document.querySelectorAll('.nav-tree-leaf')].find(el => el.textContent?.includes('AWS')) as HTMLElement;
@@ -64,19 +73,20 @@ describe('Sidebar navigation tree', () => {
     expect(azureSection?.classList.contains('expanded')).toBe(true);
   });
 
-  it('after navigating to Azure via the tree, searching an AWS-only term (EC2) finds nothing', () => {
+  it('after navigating to Azure via the tree, searching an AWS-only term (EC2) finds nothing in the cloud pane', () => {
     vi.useFakeTimers();
     const sidebar = mountSidebar();
     wireViewSwitch(sidebar);
     const azureLeaf = [...document.querySelectorAll('.nav-tree-leaf')].find(el => el.textContent?.includes('Azure')) as HTMLElement;
-    azureLeaf.click();
+    azureLeaf.click(); // from Rack view, this lands in hybrid (see the "preserves the rack" test above) —
+    // both the rack catalog and the cloud palette render at once, so scope the query to the cloud pane.
 
     const searchInput = document.querySelector('.sidebar-search input') as HTMLInputElement;
     searchInput.value = 'ec2';
     searchInput.dispatchEvent(new Event('input'));
     vi.advanceTimersByTime(200);
 
-    const resultsTitle = document.querySelector('.sidebar-section-title')!;
+    const resultsTitle = document.querySelector('#cloud-catalog-container .sidebar-section-title')!;
     expect(resultsTitle.textContent).toContain('Results in AZURE (0)');
     vi.useRealTimers();
   });
@@ -93,14 +103,28 @@ describe('Sidebar navigation tree', () => {
     searchInput.dispatchEvent(new Event('input'));
     vi.advanceTimersByTime(200);
 
-    const resultsTitle = document.querySelector('.sidebar-section-title')!;
+    const resultsTitle = document.querySelector('#cloud-catalog-container .sidebar-section-title')!;
     expect(resultsTitle.textContent).toMatch(/Results in AZURE \(\d+\)/);
     const count = Number(resultsTitle.textContent!.match(/\((\d+)\)/)![1]);
     expect(count).toBeGreaterThan(0);
     vi.useRealTimers();
   });
 
-  it('the search placeholder reflects the focused provider after a tree click', () => {
+  it('the search placeholder covers both catalogs once a tree click lands in hybrid', () => {
+    const sidebar = mountSidebar();
+    wireViewSwitch(sidebar);
+    const gcpLeaf = [...document.querySelectorAll('.nav-tree-leaf')].find(el => el.textContent?.includes('GCP')) as HTMLElement;
+    gcpLeaf.click();
+
+    // Hybrid's placeholder is intentionally generic (rack + cloud together) rather than
+    // provider-scoped — see sidebar.ts's render(). Provider-scoping still shows up in which
+    // section the search results land under (see the Azure-scoped tests above).
+    const searchInput = document.querySelector('.sidebar-search input') as HTMLInputElement;
+    expect(searchInput.placeholder).toBe('Search rack devices + cloud services...');
+  });
+
+  it('the search placeholder still reflects the focused provider when reached from pure Cloud view', () => {
+    stateManager.setState({ activeView: 'cloud' });
     const sidebar = mountSidebar();
     wireViewSwitch(sidebar);
     const gcpLeaf = [...document.querySelectorAll('.nav-tree-leaf')].find(el => el.textContent?.includes('GCP')) as HTMLElement;

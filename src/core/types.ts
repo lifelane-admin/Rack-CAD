@@ -332,7 +332,7 @@ export interface TextLabel {
  *  since it's the real uploaded image bytes, not a re-encoded copy. */
 export interface ImageAsset {
   id: string;
-  x: number;  // world coords, top-left
+  x: number;  // world coords, top-left — in whichever canvas's own coordinate space `canvas` below selects
   y: number;
   width: number;
   height: number;
@@ -340,6 +340,12 @@ export interface ImageAsset {
   opacity: number;  // 0-1
   rotation: number;  // degrees
   locked?: boolean;
+  /** Which canvas this image was inserted/pasted onto — rack elevation or Cloud Architecture
+   *  diagram (see app.ts's insertImageAsset). Unset means 'rack', matching every image asset
+   *  created before this field existed. Each canvas only renders/hit-tests its own images (see
+   *  renderAll()'s labelLayer loop vs renderCloudAll()'s cloud-image-layer loop) — they don't
+   *  bleed across views, since their x/y aren't in a shared coordinate space. */
+  canvas?: 'rack' | 'cloud';
 }
 
 // === Cloud Architecture canvas (standalone diagram mode, independent of racks) ===
@@ -381,6 +387,15 @@ export interface CloudContainer {
   height: number;
   label: string;
   color?: string;  // border/accent override
+  /** Label chip ("ribbon") fill color override, independent of the boundary box's own border/tint
+   *  above — same relationship as CloudHierarchy.ribbonColor (see its doc comment). Unset falls
+   *  back to `color` (or the provider accent if that's unset too). */
+  ribbonColor?: string;
+  /** Label chip TEXT color override — independent of ribbonColor, since the chip's own fill can
+   *  be any color a user picks and dark-on-dark/light-on-light would otherwise become illegible.
+   *  Unset means the original hardcoded near-black (#0d1117), which only reads well on light
+   *  ribbon colors — pick something lighter if you've set a dark Ribbon Color. */
+  textColor?: string;
   /** Border dash pattern — unset means "use kind's own default" (see BORDER_STYLE_BY_KIND in
    *  cloud-container-renderer.ts, e.g. subnet defaults to dashed, az to dotted). A 'double'-family
    *  value draws a second, inset parallel rect border rather than an offset polyline (which is
@@ -432,6 +447,10 @@ export interface CloudHierarchy {
    *  color above. Unset falls back to `color` (or the provider accent if that's unset too), so a
    *  hierarchy with no overrides at all still reads as one solid color like before. */
   ribbonColor?: string;
+  /** Chip label TEXT color override — same meaning as CloudContainer.textColor (unset = the
+   *  original hardcoded white, tuned for the default provider-accent ribbon colors — pick
+   *  something darker if you've set a light Ribbon Color). */
+  textColor?: string;
   /** Boundary box border dash pattern — same catalog/meaning as CloudContainer.style (unset =
    *  the default dashed border). */
   style?: CloudLineStyle;
@@ -668,6 +687,12 @@ export interface AppState {
   cabinetDrawMode: 'default' | 'skeleton';
   cabinetCoverVisible: boolean;
   isometricMode: boolean;
+  /** Rack view only — shows/hides the Three.js 3D panel (#canvas-3d + its splitter) alongside
+   *  the 2D elevation. Off by default: the 3D render loop is paused while hidden (see
+   *  ThreeViewport.pause/resume) so an unopened panel costs nothing. Toggled from the rack
+   *  floating toolbar's 3D switch (see floating-toolbar.ts) — there is no Cloud Architecture
+   *  canvas equivalent. */
+  show3DPanel: boolean;
   presenterMode: boolean;
   cableRoutingTrayMode: 'overhead' | 'underfloor';
   // AI Mode
@@ -676,8 +701,17 @@ export interface AppState {
   previewDiff: RackDiff | null;
   customTemplates: DeviceTemplate[];
   /** Top-level view switch — 'rack' is the existing 2D+3D rack elevation workspace, 'cloud' is
-   *  the standalone Cloud Architecture diagram canvas. Independent surfaces, not layered. */
-  activeView: 'rack' | 'cloud';
+   *  the standalone Cloud Architecture diagram canvas, 'hybrid' shows both canvases together (2D
+   *  only — never shows the 3D panel), laid out per hybridLayoutMode. See app.ts's
+   *  setActiveView() for how the layering/pass-through works. */
+  activeView: 'rack' | 'cloud' | 'hybrid';
+  /** Hybrid-only sub-mode, toggled from the toolbar's Hybrid Layout group (see toolbar.ts) —
+   *  'split' (default) shows the rack and cloud canvases as separate side-by-side panes, each
+   *  with its own independent pan/zoom/scale (see mountHybridSplitter in app.ts), good for a rack
+   *  elevation and a cloud diagram that don't share a natural scale. 'merged' instead overlaps
+   *  them into one shared coordinate space with locked pan/zoom (see setHybridTransformSync) so
+   *  cloud items can be placed directly next to/over the rack at the same zoom level. */
+  hybridLayoutMode: 'split' | 'merged';
   cloudNodes: CloudNode[];
   cloudContainers: CloudContainer[];
   cloudConnectors: CloudConnector[];
@@ -751,18 +785,22 @@ export interface AppEvents {
   'view:toggle-grid': void;
   'view:toggle-snap': void;
   'view:toggle-rulers': void;
+  'view:toggle-3d-panel': void;
+  /** Switches Hybrid view's sub-mode between separate scaled panes and one shared overlapping
+   *  canvas — see AppState.hybridLayoutMode's doc comment and app.ts's setHybridLayoutMode(). */
+  'view:set-hybrid-layout': 'split' | 'merged';
   'view:toggle-theme': void;
   'view:toggle-legends': void;
   'cable:toggle-airdrop-destination': void;
   'textlabel:update': { id: string; data: Partial<TextLabel> };
   'image:insert': void;
   'imageasset:update': { id: string; data: Partial<ImageAsset> };
-  'view:switch': 'rack' | 'cloud';
+  'view:switch': 'rack' | 'cloud' | 'hybrid';
   /** Primes the cloud-container draw tool with a specific boundary kind (Region/AZ/VPC/Subnet/
    *  Resource Group/Account) — the dedicated toolbar shape buttons, as opposed to dropping a
    *  boundary-type palette icon (which also primes the same tool, see isBoundaryIcon()). */
   'cloud-shape:prime': CloudContainer['kind'];
-  'view:changed': 'rack' | 'cloud';
+  'view:changed': 'rack' | 'cloud' | 'hybrid';
   'cloudnode:added': CloudNode;
   'cloudnode:update': { id: string; data: Partial<CloudNode> };
   'cloudcontainer:added': CloudContainer;

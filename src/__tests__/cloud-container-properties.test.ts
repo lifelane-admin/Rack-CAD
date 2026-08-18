@@ -114,6 +114,31 @@ describe('Cloud container properties panel — Border Line Style + Color', () =>
     expect(stateManager.getState().cloudContainers.find(c => c.id === 'ctr1')!.color).toBe('#112233');
   });
 
+  it('the Ribbon Color input sets CloudContainer.ribbonColor independently of Border Color', async () => {
+    const panel = await selectContainer();
+    const ribbonInput = panel.querySelector('#prop-cloudcontainer-ribbon-color') as HTMLInputElement;
+    expect(ribbonInput).not.toBeNull();
+    ribbonInput.value = '#ffeb3b';
+    ribbonInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const ctr = stateManager.getState().cloudContainers.find(c => c.id === 'ctr1')!;
+    expect(ctr.ribbonColor).toBe('#ffeb3b');
+    expect(ctr.color).toBeUndefined();
+  });
+
+  it('the Text Color input sets CloudContainer.textColor independently of Border/Ribbon Color', async () => {
+    const panel = await selectContainer();
+    const textInput = panel.querySelector('#prop-cloudcontainer-text-color') as HTMLInputElement;
+    expect(textInput).not.toBeNull();
+    textInput.value = '#8b0000';
+    textInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const ctr = stateManager.getState().cloudContainers.find(c => c.id === 'ctr1')!;
+    expect(ctr.textColor).toBe('#8b0000');
+    expect(ctr.color).toBeUndefined();
+    expect(ctr.ribbonColor).toBeUndefined();
+  });
+
   it('the Background Fill checkbox is checked by default and unchecking it sets backgroundOpacity to 0', async () => {
     const panel = await selectContainer();
     const checkbox = panel.querySelector('#prop-cloudcontainer-bg-enabled') as HTMLInputElement;

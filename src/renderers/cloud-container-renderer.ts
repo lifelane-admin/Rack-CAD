@@ -71,9 +71,23 @@ export function renderCloudContainer(container: CloudContainer, layer: SVGGEleme
   const rectAttrs: Record<string, string | number> = {
     fill: accent, 'fill-opacity': container.backgroundOpacity ?? DEFAULT_BG_OPACITY,
     stroke: accent, 'stroke-width': border.width, rx: 8, ry: 8,
+    // Purely decorative — the tinted interior is deliberately click-through so a marquee-select
+    // drag can start from inside a container to select whatever's nested there, instead of
+    // always grabbing/moving the container itself (the "can't drag-select inside a container"
+    // report). See the invisible border-hit rect just below for the actual interaction target.
+    'pointer-events': 'none',
   };
   if (dasharray) rectAttrs['stroke-dasharray'] = dasharray;
   group.appendChild(createRect(0, 0, container.width, container.height, rectAttrs));
+
+  // Grabbing/selecting a container now happens via its border or label chip specifically, not
+  // its interior — a generous invisible stroke here (wider than the actual visible border line)
+  // makes that easy to grab without pixel-precise aim, same idea as the larger invisible hit
+  // circle sitting behind each connect handle's small visible dot.
+  group.appendChild(createRect(0, 0, container.width, container.height, {
+    fill: 'none', stroke: 'transparent', 'stroke-width': Math.max(border.width + 10, 14), rx: 8, ry: 8,
+    'pointer-events': 'stroke', class: 'cloud-container-border-hit',
+  }));
 
   if (isDouble) {
     const inset = border.width + 3;
@@ -86,7 +100,11 @@ export function renderCloudContainer(container: CloudContainer, layer: SVGGEleme
   if (container.label) {
     const hasIcon = !!iconPath;
     const chipW = Math.min(Math.max(container.label.length * 6.5 + (hasIcon ? ICON_SIZE + 24 : 16), 40), container.width - 8);
-    group.appendChild(createRect(8, -10, chipW, 20, { fill: accent, rx: 4, ry: 4 }));
+    // Ribbon and text are independently colorable from the border/background above (and from
+    // each other) — see CloudContainer.ribbonColor/textColor's doc comments.
+    const ribbonAccent = container.ribbonColor ?? accent;
+    const textColor = container.textColor ?? '#0d1117';
+    group.appendChild(createRect(8, -10, chipW, 20, { fill: ribbonAccent, rx: 4, ry: 4 }));
     if (hasIcon) {
       const img = createSVGElement('image', { x: 12, y: -8, width: ICON_SIZE, height: ICON_SIZE }) as SVGImageElement;
       img.setAttribute('href', iconPath!);
@@ -94,7 +112,7 @@ export function renderCloudContainer(container: CloudContainer, layer: SVGGEleme
       group.appendChild(img);
     }
     group.appendChild(createText(8 + chipW / 2 + (hasIcon ? ICON_SIZE / 2 : 0), 4, container.label, {
-      'text-anchor': 'middle', 'font-size': 11, 'font-family': 'Inter, sans-serif', fill: '#0d1117', 'font-weight': 600,
+      'text-anchor': 'middle', 'font-size': 11, 'font-family': 'Inter, sans-serif', fill: textColor, 'font-weight': 600,
     }));
   }
 

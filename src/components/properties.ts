@@ -251,6 +251,14 @@ export class PropertiesPanel {
         <input type="color" id="prop-cloudcontainer-color" value="${item.color || '#8b949e'}" style="width: 100%; height: 28px; padding: 2px; cursor: pointer;" />
       </div>
       <div class="form-group">
+        <label style="font-size: 10px;">Ribbon Color (label chip — independent of Border Color above)</label>
+        <input type="color" id="prop-cloudcontainer-ribbon-color" value="${item.ribbonColor || item.color || '#8b949e'}" style="width: 100%; height: 28px; padding: 2px; cursor: pointer;" />
+      </div>
+      <div class="form-group">
+        <label style="font-size: 10px;">Text Color (label chip text)</label>
+        <input type="color" id="prop-cloudcontainer-text-color" value="${item.textColor || '#0d1117'}" style="width: 100%; height: 28px; padding: 2px; cursor: pointer;" />
+      </div>
+      <div class="form-group">
         <label>Border Line Style</label>
         ${this.lineStylePickerMarkup(item.style || 'solid', 'prop-cloudcontainer-style')}
         <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Unset uses this Kind's own default (e.g. Subnet = dashed, AZ = dotted).</div>
@@ -279,6 +287,12 @@ export class PropertiesPanel {
     });
     container.querySelector('#prop-cloudcontainer-color')?.addEventListener('input', (e: any) => {
       EventBus.emit('cloudcontainer:update', { id, data: { color: e.target.value } });
+    });
+    container.querySelector('#prop-cloudcontainer-ribbon-color')?.addEventListener('input', (e: any) => {
+      EventBus.emit('cloudcontainer:update', { id, data: { ribbonColor: e.target.value } });
+    });
+    container.querySelector('#prop-cloudcontainer-text-color')?.addEventListener('input', (e: any) => {
+      EventBus.emit('cloudcontainer:update', { id, data: { textColor: e.target.value } });
     });
     this.wireLineStylePicker(container, 'prop-cloudcontainer-style', (value) => {
       EventBus.emit('cloudcontainer:update', { id, data: { style: value as CloudContainer['style'] } });
@@ -334,6 +348,10 @@ export class PropertiesPanel {
         <input type="color" id="prop-cloudhierarchy-ribbon-color" value="${item.ribbonColor || item.color || '#8b949e'}" style="width: 100%; height: 28px; padding: 2px; cursor: pointer;" />
       </div>
       <div class="form-group">
+        <label style="font-size: 10px;">Text Color (label chip text)</label>
+        <input type="color" id="prop-cloudhierarchy-text-color" value="${item.textColor || '#FFFFFF'}" style="width: 100%; height: 28px; padding: 2px; cursor: pointer;" />
+      </div>
+      <div class="form-group">
         <label>Border Line Style</label>
         ${this.lineStylePickerMarkup(item.style || 'solid', 'prop-cloudhierarchy-style')}
       </div>
@@ -364,6 +382,9 @@ export class PropertiesPanel {
     });
     container.querySelector('#prop-cloudhierarchy-ribbon-color')?.addEventListener('input', (e: any) => {
       EventBus.emit('cloudhierarchy:update', { id, data: { ribbonColor: e.target.value } });
+    });
+    container.querySelector('#prop-cloudhierarchy-text-color')?.addEventListener('input', (e: any) => {
+      EventBus.emit('cloudhierarchy:update', { id, data: { textColor: e.target.value } });
     });
     this.wireLineStylePicker(container, 'prop-cloudhierarchy-style', (value) => {
       EventBus.emit('cloudhierarchy:update', { id, data: { style: value as CloudHierarchy['style'] } });

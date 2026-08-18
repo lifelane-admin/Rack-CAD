@@ -36,13 +36,13 @@ import { generateId, distToSegment } from './utils/geometry';
 import { initExportHandlers, downloadFile, exportJSON } from './utils/export';
 import { computeSmartRouting, get3DefaultAnchors } from './utils/routing';
 import { reorderById, ZOrderDirection } from './utils/z-order';
-import { cloneDevice, cloneCloudConnector } from './utils/clone';
+import { cloneDevice, cloneRack, cloneTextLabel, cloneImageAsset, cloneCloudNode, cloneCloudContainer, cloneCloudHierarchy, cloneCloudConnector } from './utils/clone';
 import { socketTypeAtOutletIndex } from './renderers/pdu-layout';
 import { countDevicePowerCables } from './utils/power';
 import { appendExportSummaryOverlay, getAutoSummaryCardOffset } from './renderers/export-summary-overlay';
 import {
   RackData, DeviceData, PortData, CableData, LegendItem, TextLabel, ImageAsset,
-  RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode, SocketType,
+  RACK_CONSTANTS, CABLE_COLORS, CableType, SelectableItem, Point, ToolMode, SocketType, Transform,
   CloudNode, CloudContainer, CloudConnector, CloudHandleSide, CloudArrowType, CloudHierarchy, CloudProvider
 } from './core/types';
 import { ThreeViewport } from './three/ThreeViewport';
@@ -67,6 +67,21 @@ const SEGMENT_KIND_FIELD: Record<CloudConnectorSegmentKind, 'entryStubOffset' | 
   exitStub: 'exitStubOffset',
 };
 
+/** One clipboard/duplicate snapshot — see App.clipboard's doc comment. Deliberately excludes
+ *  'port'/'bundle' (not freestanding objects, they belong to a device/rack) and 'cable'
+ *  (references two specific ports; a copy with no valid new endpoints to attach to isn't
+ *  meaningful the way it is for a CloudConnector, which can fall back to a detached floating
+ *  copy — see cloneCloudConnector's doc comment). */
+type ClipboardEntry =
+  | { type: 'device'; data: DeviceData }
+  | { type: 'rack'; data: RackData }
+  | { type: 'text'; data: TextLabel }
+  | { type: 'image'; data: ImageAsset }
+  | { type: 'cloud-node'; data: CloudNode }
+  | { type: 'cloud-container'; data: CloudContainer }
+  | { type: 'cloud-hierarchy'; data: CloudHierarchy }
+  | { type: 'cloud-connector'; data: CloudConnector };
+
 export class App {
   private canvas!: CanvasManager;
   private threeViewport?: ThreeViewport;
@@ -77,10 +92,20 @@ export class App {
   private contextMenu!: ContextMenu;
   private floatingToolbar!: FloatingToolbar;
   private cloudFloatingToolbar!: CloudFloatingToolbar;
+  /** Guards the Hybrid "Merged" sub-mode's pan/zoom mirror (see setHybridTransformSync) against
+   *  re-entrant ping-pong — setTransform() on either manager re-emits that manager's own
+   *  *:transformed event, which would otherwise bounce back into the other manager's
+   *  setTransform() forever. Split mode never engages this — its two panes intentionally scale
+   *  independently. */
+  private hybridTransformSyncing = false;
+  private hybridTransformUnsync: (() => void) | null = null;
   private presenterDashboard!: PresenterDashboard;
 
-  // Clipboard for copy/paste
-  private clipboard: DeviceData | null = null;
+  // Clipboard for copy/paste — one snapshot per currently-selected object, so a multi-select
+  // copy pastes back as a group. Deliberately NOT a stack/history — pasting repeatedly re-clones
+  // these same snapshots each time (each landing at a fresh offset from the last paste), same as
+  // every desktop clipboard. See copySelection/pasteClipboard/duplicateSelection.
+  private clipboard: ClipboardEntry[] = [];
 
   // The on-disk file this project was last opened from or saved to (File System Access API —
   // Chromium-based browsers only). Lets plain "Save" re-write the same file/location without
@@ -103,6 +128,34 @@ export class App {
   private cloningMode = false;
   private cloneThresholdMet = false;
   private dragOriginalDevice: DeviceData | null = null;
+
+  // Generic Ctrl+mousedown state for every OTHER draggable type (rack/text/image on the rack
+  // canvas; cloud-node/cloud-container/cloud-hierarchy/cloud-image on the cloud canvas) — device
+  // above predates this and keeps its own dedicated fields. Ctrl+mousedown on any of these types
+  // doesn't commit to an action yet: released without crossing the drag threshold, it's a plain
+  // Ctrl+Click (toggle multi-select — see toggleSelectionItem); dragged past it, it's Ctrl+Drag
+  // (clone the original and drag the clone — see armCtrlDragClone). Mirrors device's own
+  // cloningMode/cloneThresholdMet split, generalized via ClipboardEntry so one mousemove/mouseup
+  // check per canvas covers every type instead of duplicating the threshold logic per type.
+  private ctrlDragPending: { entry: ClipboardEntry; startScreen: Point } | null = null;
+
+  /** Snapshot of every OTHER currently-selected object's starting x/y, captured when a drag
+   *  begins on one item while multiple are selected (see beginGroupDrag) — so dragging any ONE
+   *  selected item moves the whole selection together (applyGroupDragDelta), not just the item
+   *  physically grabbed. Covers text/image (rack canvas) and cloud-node/cloud-container/
+   *  cloud-hierarchy/cloud-image (cloud canvas) — all plain, freely-positioned x/y objects.
+   *  Deliberately excludes: devices (rack-unit/rackId positioned, not a free x/y), racks (drag
+   *  only ever moves rack.x, never y — see the rack drag mousemove block), and cables/connectors
+   *  (defined by their endpoints, not an independent position). Keyed by `${type}:${id}` since
+   *  SelectableItem ids aren't guaranteed unique across different types. */
+  private groupDragStart: Map<string, { x: number; y: number }> | null = null;
+  /** The last (dx, dy) applyGroupDragDelta was called with — read back by commitGroupDrag() at
+   *  drag-end, since the PRIMARY dragged item's own commit logic (revert-to-pre-drag-snapshot,
+   *  then reapply with snapping) runs on the same array a group member might live in, and would
+   *  otherwise silently wipe out that member's in-progress move as a side effect. See
+   *  commitGroupDrag's doc comment for why group members get a second, separate history entry
+   *  rather than being folded into the primary's own atomic commit. */
+  private lastGroupDragDelta: { dx: number; dy: number } = { dx: 0, dy: 0 };
 
   // Cable dragging state
   private isDraggingCableEnd = false;
@@ -200,6 +253,9 @@ export class App {
   private isResizingCloudContainer = false;
   private draggedCloudHierarchyId: string | null = null;
   private isResizingCloudHierarchy = false;
+  // Move-only (no resize/handle drag — see the class-level doc comment on where cloud-canvas
+  // image support intentionally stops short of rack-canvas image parity).
+  private draggedCloudImageId: string | null = null;
   private dragStartCloudWorldPos: Point = { x: 0, y: 0 };
   private dragStartCloudX = 0;
   private dragStartCloudY = 0;
@@ -208,6 +264,7 @@ export class App {
   private dragStartCloudNodesState: CloudNode[] | null = null;
   private dragStartCloudContainersState: CloudContainer[] | null = null;
   private dragStartCloudHierarchiesState: CloudHierarchy[] | null = null;
+  private dragStartCloudImagesState: ImageAsset[] | null = null;
 
   // Container-draw tool (mirrors export-area's mousedown-drag-mouseup rectangle tool)
   private isDrawingCloudContainer = false;
@@ -292,6 +349,10 @@ export class App {
         this.addCameraPresetButtons(canvas3d);
         this.addDoorPanel(canvas3d);
         this.addNavPanel(canvas3d);
+        // Mounted eagerly (so camera/door/nav panels above exist and the first toggle-on is
+        // instant) but paused immediately — the panel itself starts hidden (see index.html's
+        // .hidden on #canvas-3d/#splitter-3d and AppState.show3DPanel's default).
+        if (!stateManager.getState().show3DPanel) this.threeViewport.pause();
       } catch (err) {
         console.error('[ThreeViewport] 3D init failed, continuing in 2D-only mode:', err);
         canvas3d.style.display = 'none';
@@ -313,6 +374,7 @@ export class App {
     } catch (err) {
       console.error('[CloudCanvas] init failed, Cloud Architecture view will be unavailable:', err);
     }
+    this.mountHybridSplitter();
 
     // Initialize UI components
     const toolbarEl = document.getElementById('toolbar')!;
@@ -352,6 +414,7 @@ export class App {
     new ImageToolPanel();
 
     this.setupImageUpload();
+    this.setupClipboardImagePaste();
 
     // Render UI
     this.toolbar.render();
@@ -471,7 +534,10 @@ export class App {
     eventBus.on('imageasset:update', ({ id, data }) => {
       const imageAssets = stateManager.getState().imageAssets.map(a => a.id === id ? { ...a, ...data } : a);
       stateManager.setState({ imageAssets });
-      this.renderAll();
+      // Cloud-canvas images render on their own layer (see renderCloudAll) — the rack canvas's
+      // renderAll() explicitly skips them, so calling that here would be a silent no-op for them.
+      if (imageAssets.find(a => a.id === id)?.canvas === 'cloud') this.renderCloudAll();
+      else this.renderAll();
     });
     eventBus.on('cloudnode:update', ({ id, data }) => {
       const cloudNodes = stateManager.getState().cloudNodes.map(n => n.id === id ? { ...n, ...data } : n);
@@ -630,10 +696,17 @@ export class App {
         eventBus.emit('view:switch', 'rack');
         return;
       }
-      // 'hybrid' lands unscoped (every provider section collapsed, search unscoped) so Local
-      // Resources/On-Prem/AWS/Azure/GCP are all equally reachable; aws/azure/gcp focus their own
-      // section, same as clicking that provider in the sidebar's Cloud nav group.
-      this.sidebar.focusCloudProvider(choice === 'hybrid' ? null : choice);
+      if (choice === 'hybrid') {
+        // Lands unscoped (every provider section collapsed, search unscoped) so Local
+        // Resources/On-Prem/AWS/Azure/GCP are all equally reachable in the cloud-side catalog
+        // alongside the rack device catalog (see sidebar.ts's hybrid render branch).
+        this.sidebar.focusCloudProvider(null);
+        eventBus.emit('view:switch', 'hybrid');
+        return;
+      }
+      // aws/azure/gcp focus their own section, same as clicking that provider in the sidebar's
+      // Cloud nav group.
+      this.sidebar.focusCloudProvider(choice);
       eventBus.emit('view:switch', 'cloud');
     });
   }
@@ -760,6 +833,14 @@ export class App {
       stateManager.setState({ snapEnabled: !s.snapEnabled });
     });
 
+    (eventBus as any).on('view:toggle-3d-panel', () => {
+      this.setShow3DPanel(!stateManager.getState().show3DPanel);
+    });
+
+    (eventBus as any).on('view:set-hybrid-layout', (mode: 'split' | 'merged') => {
+      this.setHybridLayoutMode(mode);
+    });
+
     (eventBus as any).on('cable:toggle-airdrop-destination', () => {
       const s = stateManager.getState();
       stateManager.setState({ airdropDestination: !s.airdropDestination });
@@ -813,7 +894,7 @@ export class App {
       this.renderAll();
     });
 
-    (eventBus as any).on('view:switch', (view: 'rack' | 'cloud') => {
+    (eventBus as any).on('view:switch', (view: 'rack' | 'cloud' | 'hybrid') => {
       this.setActiveView(view);
     });
 
@@ -993,6 +1074,20 @@ export class App {
       this.lastMouseScreenY = e.clientY;
       (eventBus as any).emit('canvas:mousemove', this.mouseWorldPos);
 
+      // A Ctrl+mousedown on a rack/text/image is still undecided (see ctrlDragPending's doc
+      // comment) — crossing the drag threshold commits it to Ctrl+Drag-clone; short of that, it
+      // stays pending for mouseup to resolve as a plain Ctrl+Click multi-select toggle instead.
+      if (this.ctrlDragPending) {
+        const dx = e.clientX - this.ctrlDragPending.startScreen.x;
+        const dy = e.clientY - this.ctrlDragPending.startScreen.y;
+        if (Math.hypot(dx, dy) > 4) {
+          const entry = this.ctrlDragPending.entry;
+          this.ctrlDragPending = null;
+          this.armCtrlDragClone(entry, this.mouseWorldPos);
+        }
+        return;
+      }
+
       // Anchor point drag handling (highest priority mid-drag)
       if (this.isDraggingAnchor && this.draggedAnchorCableId !== null) {
         const cableId = this.draggedAnchorCableId;
@@ -1129,6 +1224,7 @@ export class App {
           t.id === this.draggedTextId ? { ...t, x: targetX, y: targetY } : t
         );
         stateManager.setState({ textLabels }, true);
+        this.applyGroupDragDelta(dx, dy);
         // Only the annotation layer needs to move — not a full canvas rebuild (see
         // renderAnnotationLayer()'s doc comment for why this matters here specifically).
         this.renderAnnotationLayer();
@@ -1161,6 +1257,7 @@ export class App {
           a.id === this.draggedImageId ? { ...a, x: targetX, y: targetY } : a
         );
         stateManager.setState({ imageAssets }, true);
+        this.applyGroupDragDelta(dx, dy);
         this.renderAnnotationLayer();
         return;
       }
@@ -1446,8 +1543,17 @@ export class App {
           const imageId = imageEl.getAttribute('data-image-id')!;
           const asset = stateManager.getState().imageAssets.find(a => a.id === imageId);
           if (asset) {
-            stateManager.setState({ selection: [{ type: 'image', id: imageId }] });
-            eventBus.emit('selection:changed', [{ type: 'image', id: imageId }]);
+            // Ctrl+mousedown doesn't commit yet — released without dragging, it's a Ctrl+Click
+            // multi-select toggle; dragged past the threshold, it clones and drags the clone
+            // (see ctrlDragPending's doc comment and the mousemove/mouseup handling below).
+            if (e.ctrlKey) {
+              if (!asset.locked) {
+                this.ctrlDragPending = { entry: { type: 'image', data: asset }, startScreen: { x: e.clientX, y: e.clientY } };
+              }
+              e.stopPropagation();
+              return;
+            }
+            this.selectForDrag({ type: 'image', id: imageId });
             if (!asset.locked) {
               this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
               this.isDraggingImage = true;
@@ -1455,6 +1561,7 @@ export class App {
               this.dragStartImageX = asset.x;
               this.dragStartImageY = asset.y;
               this.dragStartImageAssetsState = JSON.parse(JSON.stringify(stateManager.getState().imageAssets));
+              this.beginGroupDrag({ type: 'image', id: imageId });
               svgEl.classList.add('dragging-active');
             }
             e.stopPropagation();
@@ -1469,8 +1576,15 @@ export class App {
           const textId = textEl.getAttribute('data-text-id')!;
           const label = stateManager.getState().textLabels.find(t => t.id === textId);
           if (label) {
-            stateManager.setState({ selection: [{ type: 'text', id: textId }] });
-            eventBus.emit('selection:changed', [{ type: 'text', id: textId }]);
+            // See the image asset branch above for the Ctrl+mousedown pending/threshold pattern.
+            if (e.ctrlKey) {
+              if (!label.locked) {
+                this.ctrlDragPending = { entry: { type: 'text', data: label }, startScreen: { x: e.clientX, y: e.clientY } };
+              }
+              e.stopPropagation();
+              return;
+            }
+            this.selectForDrag({ type: 'text', id: textId });
             if (!label.locked) {
               this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
               this.isDraggingText = true;
@@ -1478,6 +1592,7 @@ export class App {
               this.dragStartTextX = label.x;
               this.dragStartTextY = label.y;
               this.dragStartTextLabelsState = JSON.parse(JSON.stringify(stateManager.getState().textLabels));
+              this.beginGroupDrag({ type: 'text', id: textId });
               svgEl.classList.add('dragging-active');
             }
             e.stopPropagation();
@@ -1508,21 +1623,28 @@ export class App {
           const deviceId = deviceEl.getAttribute('data-device-id')!;
           const device = stateManager.getDevice(deviceId);
           if (device) {
-            stateManager.setState({ selection: [{ type: 'device', id: deviceId }] });
-            eventBus.emit('selection:changed', [{ type: 'device', id: deviceId }]);
-            if (device.locked) return; // Selection allowed; drag/clone blocked
-            this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
             if (e.ctrlKey) {
+              // Don't touch selection yet — released without dragging, this resolves as a
+              // Ctrl+Click multi-select toggle (see the cloningMode mouseup cleanup below);
+              // dragged past the threshold, the mousemove handler above clones and drags the
+              // clone instead, same as it always has.
+              if (device.locked) return;
+              this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
               this.cloningMode = true;
               this.cloneThresholdMet = false;
               this.dragOriginalDevice = device;
-            } else {
-              this.isDraggingDevice = true;
-              this.draggedDeviceId = deviceId;
-              this.dragStartUnit = device.startUnit;
-              this.dragStartRackId = device.rackId;
-              this.dragStartDevicesState = JSON.parse(JSON.stringify(stateManager.getState().devices));
+              e.stopPropagation();
+              return;
             }
+            stateManager.setState({ selection: [{ type: 'device', id: deviceId }] });
+            eventBus.emit('selection:changed', [{ type: 'device', id: deviceId }]);
+            if (device.locked) return; // Selection allowed; drag blocked
+            this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+            this.isDraggingDevice = true;
+            this.draggedDeviceId = deviceId;
+            this.dragStartUnit = device.startUnit;
+            this.dragStartRackId = device.rackId;
+            this.dragStartDevicesState = JSON.parse(JSON.stringify(stateManager.getState().devices));
             svgEl.classList.add('dragging-active');
             e.stopPropagation();
             return;
@@ -1535,15 +1657,23 @@ export class App {
           const rackId = rackEl.getAttribute('id')?.replace('rack-', '') || rackEl.getAttribute('data-rack-id');
           const rack = rackId ? stateManager.getRack(rackId) : null;
           if (rack) {
+            // Ctrl+mousedown pending/threshold pattern — see the image asset branch above.
+            // Cloning here drags an EMPTY rack shell (see cloneRack's doc comment for why its
+            // devices/PDU references don't come along).
+            if (e.ctrlKey) {
+              this.ctrlDragPending = { entry: { type: 'rack', data: rack }, startScreen: { x: e.clientX, y: e.clientY } };
+              e.stopPropagation();
+              return;
+            }
             this.isDraggingRack = true;
             this.draggedRackId = rack.id;
             this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
             this.dragStartRackX = rack.x;
             this.dragStartRacksState = JSON.parse(JSON.stringify(stateManager.getState().racks));
-            
+
             stateManager.setState({ selection: [{ type: 'rack', id: rack.id }] });
             eventBus.emit('selection:changed', [{ type: 'rack', id: rack.id }]);
-            
+
             svgEl.classList.add('dragging-active');
             e.stopPropagation();
             return;
@@ -1576,6 +1706,17 @@ export class App {
 
     // Mouseup handling for device drag completion
     window.addEventListener('mouseup', (e) => {
+      // A Ctrl+mousedown that never crossed the drag threshold (see ctrlDragPending's doc
+      // comment) — a plain Ctrl+Click, toggling multi-select instead of the clone-and-drag
+      // mousemove would have committed to.
+      if (this.ctrlDragPending) {
+        const entry = this.ctrlDragPending.entry;
+        this.ctrlDragPending = null;
+        this.toggleSelectionItem({ type: entry.type, id: entry.data.id });
+        if (this.isCloudEntry(entry)) this.renderCloudAll(); else this.renderAll();
+        return;
+      }
+
       // 0. Anchor point drag completion
       if (this.isDraggingAnchor) {
         this.isDraggingAnchor = false;
@@ -1831,6 +1972,12 @@ export class App {
 
       // 2a. Cloning mode cleanup
       if (this.cloningMode) {
+        // Released without ever crossing the clone-drag threshold — a plain Ctrl+Click on the
+        // device, which never touched selection on mousedown (see the device branch above)
+        // specifically so this could resolve as a multi-select toggle instead.
+        if (!this.cloneThresholdMet && this.dragOriginalDevice) {
+          this.toggleSelectionItem({ type: 'device', id: this.dragOriginalDevice.id });
+        }
         this.cloningMode = false;
         this.cloneThresholdMet = false;
         this.dragOriginalDevice = null;
@@ -1938,6 +2085,7 @@ export class App {
           }
           eventBus.emit('textlabel:update', { id: textId, data: { x: dropX, y: dropY } });
         }
+        this.commitGroupDrag();
       }
 
       // 3b. Image asset resize completion
@@ -1982,6 +2130,7 @@ export class App {
           }
           eventBus.emit('imageasset:update', { id: imageId, data: { x: dropX, y: dropY } });
         }
+        this.commitGroupDrag();
       }
 
       // 4. Rubber-band multi-select completion
@@ -2031,6 +2180,31 @@ export class App {
           const intersects = asset.x < selX + selW && asset.x + asset.width > selX && asset.y < selY + selH && asset.y + asset.height > selY;
           if (intersects) selected.push({ type: 'image', id: asset.id });
         });
+
+        // Hybrid "Merged" — the cloud canvas's own background-triggered marquee
+        // (setupCloudAreaSelect) is unreachable there (its grid is hidden for click-through, see
+        // canvas.css's .hybrid-merged rules), so this rubber-band is the only "drag an
+        // empty-space marquee" entry point; extend it to also pick up cloud items via the same
+        // computeAreaSelection() helper setupCloudAreaSelect uses, converting this world-space
+        // rect to the screen-space one it expects (safe since pan/zoom is locked in sync, see
+        // setHybridTransformSync). Split mode's panes are spatially separate and independently
+        // scaled, so this extension only applies while merged.
+        if (state.activeView === 'hybrid' && state.hybridLayoutMode === 'merged') {
+          const cloudSvg = document.getElementById('cloud-canvas');
+          if (cloudSvg) {
+            const topLeft = this.canvas.worldToScreen({ x: selX, y: selY });
+            const bottomRight = this.canvas.worldToScreen({ x: selX + selW, y: selY + selH });
+            const cloudSelected = this.computeAreaSelection(cloudSvg, {
+              left: topLeft.x, top: topLeft.y, right: bottomRight.x, bottom: bottomRight.y,
+            }, [
+              { attr: 'data-cloud-node-id', type: 'cloud-node' },
+              { attr: 'data-cloud-container-id', type: 'cloud-container' },
+              { attr: 'data-cloud-hierarchy-id', type: 'cloud-hierarchy' },
+              { attr: 'data-cloud-connector-id', type: 'cloud-connector' },
+            ]);
+            selected.push(...cloudSelected);
+          }
+        }
 
         const existingIds = new Set(state.selection.map(s => s.id));
         const deduped = selected.filter(s => !existingIds.has(s.id));
@@ -2694,9 +2868,20 @@ export class App {
       if (!jsonData) return;
 
       try {
-        const { templateId } = JSON.parse(jsonData);
+        const { templateId, iconId } = JSON.parse(jsonData);
         const template = getTemplate(templateId);
-        if (!template) return;
+        if (!template) {
+          // Hybrid "Merged" mode overlaps #cloud-viewport on top of #canvas-viewport with
+          // click-through empty space (see canvas.css's .hybrid-merged rules) — a dropped cloud
+          // icon lands here, not on #cloud-canvas, whenever nothing was painted under the cursor
+          // in the cloud layer. Split mode never routes a cloud-icon drop here in the first place
+          // (the panes are spatially separate), so this only matters while merged.
+          const s = stateManager.getState();
+          if (iconId && s.activeView === 'hybrid' && s.hybridLayoutMode === 'merged') {
+            this.createCloudNodeFromDrop(iconId, { x: e.clientX, y: e.clientY });
+          }
+          return;
+        }
 
         // Convert drop position to world coordinates
         const worldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
@@ -3028,79 +3213,13 @@ export class App {
         eventBus.emit('selection:changed', allSelection);
       }
 
-      // Ctrl+C = Copy selected device
-      if (e.ctrlKey && e.key === 'c') {
-        e.preventDefault();
-        const devSel = s.selection.find(sel => sel.type === 'device');
-        if (devSel) {
-          const src = stateManager.getDevice(devSel.id);
-          this.clipboard = src ? cloneDevice(src) : null;
-        }
-      }
-
-      // Ctrl+X = Cut selected device
-      if (e.ctrlKey && e.key === 'x') {
-        e.preventDefault();
-        const devSel = s.selection.find(sel => sel.type === 'device');
-        if (devSel) {
-          const dev = stateManager.getDevice(devSel.id);
-          if (dev && !dev.locked) {
-            this.clipboard = dev;
-            stateManager.removeDevice(devSel.id);
-            stateManager.setState({ selection: [] });
-            eventBus.emit('selection:changed', []);
-          }
-        }
-      }
-
-      // Ctrl+V = Paste clipboard device
-      if (e.ctrlKey && e.key === 'v') {
-        e.preventDefault();
-        if (this.clipboard) {
-          const cloned = cloneDevice(this.clipboard);
-          const rack = stateManager.getRack(cloned.rackId);
-          if (rack) {
-            const nextRU = stateManager.getNextAvailableRU(cloned.rackId, getTemplate(cloned.templateId)?.heightUnits ?? 1);
-            if (nextRU !== null) cloned.startUnit = nextRU;
-          }
-          stateManager.addDevice(cloned);
-          stateManager.setState({ selection: [{ type: 'device', id: cloned.id }] });
-          eventBus.emit('selection:changed', [{ type: 'device', id: cloned.id }]);
-        }
-      }
-
-      // Ctrl+D = Duplicate selected device
-      if (e.ctrlKey && e.key === 'd') {
-        e.preventDefault();
-        const devSel = s.selection.find(sel => sel.type === 'device');
-        if (devSel) {
-          const dev = stateManager.getDevice(devSel.id);
-          if (dev) {
-            const cloned = cloneDevice(dev);
-            const nextRU = stateManager.getNextAvailableRU(cloned.rackId, getTemplate(cloned.templateId)?.heightUnits ?? 1);
-            if (nextRU !== null) cloned.startUnit = nextRU;
-            stateManager.addDevice(cloned);
-            stateManager.setState({ selection: [{ type: 'device', id: cloned.id }] });
-            eventBus.emit('selection:changed', [{ type: 'device', id: cloned.id }]);
-          }
-        }
-
-        // Ctrl+D = Duplicate selected cloud connector — a detached copy near the original (see
-        // cloneCloudConnector()'s doc comment for why it doesn't just reattach to the same nodes).
-        const connSel = s.selection.find(sel => sel.type === 'cloud-connector');
-        if (connSel) {
-          const conn = stateManager.getState().cloudConnectors.find(c => c.id === connSel.id);
-          const resolved = conn ? this.resolveCloudConnectorEndpoints(conn) : null;
-          if (conn && resolved) {
-            const cloned = cloneCloudConnector(conn, resolved.from, resolved.to);
-            stateManager.addCloudConnector(cloned);
-            const selection: SelectableItem[] = [{ type: 'cloud-connector', id: cloned.id }];
-            stateManager.setState({ selection });
-            eventBus.emit('selection:changed', selection);
-            this.renderCloudAll();
-          }
-        }
-      }
+      // Ctrl+C/X/V/D = Copy/Cut/Paste/Duplicate — works on the current selection regardless of
+      // object type (device, rack, text, image, cloud-node/container/hierarchy/connector), see
+      // copySelection/cutSelection/pasteClipboard/duplicateSelection's doc comments.
+      if (e.ctrlKey && e.key === 'c') { e.preventDefault(); this.copySelection(); }
+      if (e.ctrlKey && e.key === 'x') { e.preventDefault(); this.cutSelection(); }
+      if (e.ctrlKey && e.key === 'v') { e.preventDefault(); this.pasteClipboard(); }
+      if (e.ctrlKey && e.key === 'd') { e.preventDefault(); this.duplicateSelection(); }
 
       // Arrow keys = Move selected rack
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
@@ -3404,47 +3523,10 @@ export class App {
           const items: MenuItem[] = [
             { label: `${device.name}`, icon: '🖥️', disabled: true },
             { separator: true, label: '' },
-            {
-              label: 'Cut',
-              shortcut: 'Ctrl+X',
-              action: () => {
-                this.clipboard = device;
-                stateManager.removeDevice(deviceId);
-                stateManager.setState({ selection: [] });
-                eventBus.emit('selection:changed', []);
-              }
-            },
-            {
-              label: 'Copy',
-              shortcut: 'Ctrl+C',
-              action: () => { this.clipboard = cloneDevice(device); }
-            },
-            {
-              label: 'Paste',
-              shortcut: 'Ctrl+V',
-              disabled: !this.clipboard,
-              action: () => {
-                if (this.clipboard) {
-                  const cloned = cloneDevice(this.clipboard);
-                  const rack = stateManager.getRack(cloned.rackId);
-                  if (rack) {
-                    const nextRU = stateManager.getNextAvailableRU(cloned.rackId, getTemplate(cloned.templateId)?.heightUnits ?? 1);
-                    if (nextRU !== null) cloned.startUnit = nextRU;
-                  }
-                  stateManager.addDevice(cloned);
-                }
-              }
-            },
-            {
-              label: 'Duplicate',
-              shortcut: 'Ctrl+D',
-              action: () => {
-                const cloned = cloneDevice(device);
-                const nextRU = stateManager.getNextAvailableRU(cloned.rackId, getTemplate(cloned.templateId)?.heightUnits ?? 1);
-                if (nextRU !== null) cloned.startUnit = nextRU;
-                stateManager.addDevice(cloned);
-              }
-            },
+            { label: 'Cut', shortcut: 'Ctrl+X', disabled: !!device.locked, action: () => this.cutSelection() },
+            { label: 'Copy', shortcut: 'Ctrl+C', action: () => this.copySelection() },
+            { label: 'Paste', shortcut: 'Ctrl+V', disabled: this.clipboard.length === 0, action: () => this.pasteClipboard() },
+            { label: 'Duplicate', shortcut: 'Ctrl+D', action: () => this.duplicateSelection() },
             { separator: true, label: '' },
             {
               label: '🗑 Delete Device',
@@ -3471,11 +3553,21 @@ export class App {
         const rackId = rackEl2.getAttribute('data-rack-id')!;
         const rack = stateManager.getRack(rackId);
         if (rack) {
+          const rackSelection: SelectableItem[] = [{ type: 'rack', id: rackId }];
+          stateManager.setState({ selection: rackSelection });
+          eventBus.emit('selection:changed', rackSelection);
+
           this.contextMenu.show(screenPos.x, screenPos.y, [
             { label: 'Edit Rack Name', action: () => {
               const name = prompt('Rack name:', rack.name);
               if (name) eventBus.emit('rack:update', { id: rackId, data: { name } });
             }},
+            { separator: true, label: '' },
+            // Duplicate deliberately clones an empty rack shell only — see cloneRack's doc
+            // comment for why its devices/PDU references don't come along.
+            { label: 'Copy', shortcut: 'Ctrl+C', action: () => this.copySelection() },
+            { label: 'Paste', shortcut: 'Ctrl+V', disabled: this.clipboard.length === 0, action: () => this.pasteClipboard() },
+            { label: 'Duplicate (empty shell)', shortcut: 'Ctrl+D', action: () => this.duplicateSelection() },
             { separator: true, label: '' },
             { label: 'Delete Rack', action: () => {
               const devices = stateManager.getDevicesInRack(rackId);
@@ -3487,28 +3579,57 @@ export class App {
         }
       }
 
+      // 3.6. Text Label Right-Click Context Menu
+      const textEl2 = targetEl ? targetEl.closest?.('[data-text-id]') as SVGElement : null;
+      if (textEl2) {
+        const textId = textEl2.getAttribute('data-text-id')!;
+        const label = stateManager.getState().textLabels.find(t => t.id === textId);
+        if (label) {
+          const textSelection: SelectableItem[] = [{ type: 'text', id: textId }];
+          stateManager.setState({ selection: textSelection });
+          eventBus.emit('selection:changed', textSelection);
+
+          this.contextMenu.show(screenPos.x, screenPos.y, [
+            { label: 'Cut', shortcut: 'Ctrl+X', disabled: !!label.locked, action: () => this.cutSelection() },
+            { label: 'Copy', shortcut: 'Ctrl+C', action: () => this.copySelection() },
+            { label: 'Paste', shortcut: 'Ctrl+V', disabled: this.clipboard.length === 0, action: () => this.pasteClipboard() },
+            { label: 'Duplicate', shortcut: 'Ctrl+D', action: () => this.duplicateSelection() },
+            { separator: true, label: '' },
+            { label: '🗑 Delete', icon: '🗑', shortcut: 'Del', disabled: !!label.locked, action: () => this.deleteSelection() },
+          ]);
+          return;
+        }
+      }
+
+      // 3.7. Image Asset Right-Click Context Menu
+      const imageEl2 = targetEl ? targetEl.closest?.('[data-image-id]') as SVGElement : null;
+      if (imageEl2) {
+        const imageId = imageEl2.getAttribute('data-image-id')!;
+        const asset = stateManager.getState().imageAssets.find(a => a.id === imageId);
+        if (asset) {
+          const imageSelection: SelectableItem[] = [{ type: 'image', id: imageId }];
+          stateManager.setState({ selection: imageSelection });
+          eventBus.emit('selection:changed', imageSelection);
+
+          this.contextMenu.show(screenPos.x, screenPos.y, [
+            { label: 'Cut', shortcut: 'Ctrl+X', disabled: !!asset.locked, action: () => this.cutSelection() },
+            { label: 'Copy', shortcut: 'Ctrl+C', action: () => this.copySelection() },
+            { label: 'Paste', shortcut: 'Ctrl+V', disabled: this.clipboard.length === 0, action: () => this.pasteClipboard() },
+            { label: 'Duplicate', shortcut: 'Ctrl+D', action: () => this.duplicateSelection() },
+            { separator: true, label: '' },
+            { label: '🗑 Delete', icon: '🗑', shortcut: 'Del', disabled: !!asset.locked, action: () => this.deleteSelection() },
+          ]);
+          return;
+        }
+      }
+
       // 4. Default Canvas / Rack Right-Click Context Menu
       const allSel: SelectableItem[] = [
         ...s.devices.map(d => ({ type: 'device' as const, id: d.id })),
         ...s.cables.map(c => ({ type: 'cable' as const, id: c.id }))
       ];
       const items: MenuItem[] = [
-        {
-          label: 'Paste',
-          shortcut: 'Ctrl+V',
-          disabled: !this.clipboard,
-          action: () => {
-            if (this.clipboard) {
-              const cloned = cloneDevice(this.clipboard);
-              const rack = stateManager.getRack(cloned.rackId);
-              if (rack) {
-                const nextRU = stateManager.getNextAvailableRU(cloned.rackId, getTemplate(cloned.templateId)?.heightUnits ?? 1);
-                if (nextRU !== null) cloned.startUnit = nextRU;
-              }
-              stateManager.addDevice(cloned);
-            }
-          }
-        },
+        { label: 'Paste', shortcut: 'Ctrl+V', disabled: this.clipboard.length === 0, action: () => this.pasteClipboard() },
         {
           label: 'Select All',
           shortcut: 'Ctrl+A',
@@ -3753,7 +3874,12 @@ export class App {
 
   /** Places a new ImageAsset centered in the current viewport, scaled down (preserving aspect
    *  ratio) if larger than a reasonable on-canvas default, selects it, and opens the Image Tool
-   *  panel via the resulting selection change. */
+   *  panel via the resulting selection change. Lands on whichever canvas is actually visible —
+   *  pure Cloud view uses the cloud canvas's own coordinate space/renderer (see
+   *  ImageAsset.canvas's doc comment); Rack and Hybrid both use the rack canvas, matching the
+   *  original single-canvas behavior (Hybrid always keeps the rack pane on screen, so an image
+   *  landing there is never invisible the way pure Cloud view's hidden #canvas-viewport would
+   *  make one). */
   private insertImageAsset(dataUrl: string, naturalWidth: number, naturalHeight: number) {
     const MAX_DIM = 240;
     let width = naturalWidth;
@@ -3764,13 +3890,17 @@ export class App {
       height = Math.round(height * scale);
     }
 
-    const viewport = document.getElementById('canvas-viewport');
+    const isCloudView = stateManager.getState().activeView === 'cloud';
+    const viewportId = isCloudView ? 'cloud-viewport' : 'canvas-viewport';
+    const viewport = document.getElementById(viewportId);
     const rect = viewport?.getBoundingClientRect();
     const centerScreen = {
       x: (rect?.left ?? 0) + (rect?.width ?? 800) / 2,
       y: (rect?.top ?? 0) + (rect?.height ?? 600) / 2,
     };
-    const centerWorld = this.canvas.screenToWorld(centerScreen);
+    const centerWorld = isCloudView
+      ? this.cloudCanvas!.screenToWorld(centerScreen)
+      : this.canvas.screenToWorld(centerScreen);
 
     const asset: ImageAsset = {
       id: generateId(),
@@ -3781,12 +3911,393 @@ export class App {
       src: dataUrl,
       opacity: 1,
       rotation: 0,
+      canvas: isCloudView ? 'cloud' : 'rack',
     };
     const imageAssets = [...stateManager.getState().imageAssets, asset];
     stateManager.setState({ imageAssets, selection: [{ type: 'image', id: asset.id }] });
     eventBus.emit('selection:changed', [{ type: 'image', id: asset.id }]);
-    this.renderAll();
+    if (isCloudView) this.renderCloudAll(); else this.renderAll();
     eventBus.emit('notification', { message: 'Image added to canvas', type: 'success' });
+  }
+
+  /** Ctrl+V with an image on the OS clipboard (a screenshot, or an image copied from a browser/
+   *  file explorer) inserts it the same way the file picker does — same insertImageAsset() call,
+   *  so PNG transparency is preserved identically (the File's raw bytes go straight into a data
+   *  URL via FileReader, no canvas re-encoding step that would flatten alpha onto a background).
+   *  Only intercepts when the clipboard actually contains an image; a normal text paste (e.g.
+   *  into the hierarchy-line input or a rename prompt) is untouched — this listener finds nothing
+   *  of interest in `items` and simply does nothing. */
+  private setupClipboardImagePaste(): void {
+    document.addEventListener('paste', (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (!item.type.startsWith('image/')) continue;
+        const file = item.getAsFile();
+        if (!file) continue;
+        e.preventDefault();
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const probe = new Image();
+          probe.onload = () => this.insertImageAsset(dataUrl, probe.naturalWidth || 200, probe.naturalHeight || 200);
+          probe.onerror = () => this.insertImageAsset(dataUrl, 200, 200);
+          probe.src = dataUrl;
+        };
+        reader.onerror = () => eventBus.emit('notification', { message: 'Failed to read pasted image', type: 'error' });
+        reader.readAsDataURL(file);
+        return;
+      }
+    });
+  }
+
+  // ============================================================================================
+  // Generic copy/cut/paste/duplicate — works uniformly across every copyable object type (see
+  // ClipboardEntry's doc comment for what's excluded and why). Ctrl+C/X/V/D and every object's
+  // right-click Copy/Paste/Duplicate menu items all route through these four methods.
+  // ============================================================================================
+
+  /** One clipboard/duplicate clone step — clones `entry.data` via that type's own clone helper,
+   *  adds the clone to state, and returns both its new SelectableItem (for selecting it) and a
+   *  freshly-captured ClipboardEntry pointing at the clone (for pasteClipboard's "advance the
+   *  clipboard so repeated pastes walk outward" behavior). Returns null for a cloud-connector
+   *  whose endpoints can no longer be resolved (e.g. the node it was attached to is gone). */
+  private cloneEntryIntoState(entry: ClipboardEntry): { selectable: SelectableItem; clonedEntry: ClipboardEntry } | null {
+    switch (entry.type) {
+      case 'device': {
+        const cloned = cloneDevice(entry.data);
+        const rack = stateManager.getRack(cloned.rackId);
+        if (rack) {
+          const nextRU = stateManager.getNextAvailableRU(cloned.rackId, getTemplate(cloned.templateId)?.heightUnits ?? 1);
+          if (nextRU !== null) cloned.startUnit = nextRU;
+        }
+        stateManager.addDevice(cloned);
+        return { selectable: { type: 'device', id: cloned.id }, clonedEntry: { type: 'device', data: cloned } };
+      }
+      case 'rack': {
+        const cloned = cloneRack(entry.data);
+        stateManager.addRack(cloned);
+        return { selectable: { type: 'rack', id: cloned.id }, clonedEntry: { type: 'rack', data: cloned } };
+      }
+      case 'text': {
+        const cloned = cloneTextLabel(entry.data);
+        stateManager.setState({ textLabels: [...stateManager.getState().textLabels, cloned] });
+        return { selectable: { type: 'text', id: cloned.id }, clonedEntry: { type: 'text', data: cloned } };
+      }
+      case 'image': {
+        const cloned = cloneImageAsset(entry.data);
+        stateManager.setState({ imageAssets: [...stateManager.getState().imageAssets, cloned] });
+        return { selectable: { type: 'image', id: cloned.id }, clonedEntry: { type: 'image', data: cloned } };
+      }
+      case 'cloud-node': {
+        const cloned = cloneCloudNode(entry.data);
+        stateManager.addCloudNode(cloned);
+        return { selectable: { type: 'cloud-node', id: cloned.id }, clonedEntry: { type: 'cloud-node', data: cloned } };
+      }
+      case 'cloud-container': {
+        const cloned = cloneCloudContainer(entry.data);
+        stateManager.addCloudContainer(cloned);
+        return { selectable: { type: 'cloud-container', id: cloned.id }, clonedEntry: { type: 'cloud-container', data: cloned } };
+      }
+      case 'cloud-hierarchy': {
+        const cloned = cloneCloudHierarchy(entry.data);
+        stateManager.addCloudHierarchy(cloned);
+        return { selectable: { type: 'cloud-hierarchy', id: cloned.id }, clonedEntry: { type: 'cloud-hierarchy', data: cloned } };
+      }
+      case 'cloud-connector': {
+        const resolved = this.resolveCloudConnectorEndpoints(entry.data);
+        if (!resolved) return null;
+        const cloned = cloneCloudConnector(entry.data, resolved.from, resolved.to);
+        stateManager.addCloudConnector(cloned);
+        return { selectable: { type: 'cloud-connector', id: cloned.id }, clonedEntry: { type: 'cloud-connector', data: cloned } };
+      }
+    }
+  }
+
+  /** Whether cloning/pasting/deleting this entry should trigger renderCloudAll() rather than the
+   *  rack canvas's renderAll(). Takes the whole entry (not just its type) because 'image' is the
+   *  one type that can legitimately live on EITHER canvas — see ImageAsset.canvas's doc comment
+   *  — so its own tag decides, not a fixed per-type answer like every other entry type gets. */
+  private isCloudEntry(entry: ClipboardEntry): boolean {
+    if (entry.type === 'image') return entry.data.canvas === 'cloud';
+    return entry.type === 'cloud-node' || entry.type === 'cloud-container' || entry.type === 'cloud-hierarchy' || entry.type === 'cloud-connector';
+  }
+
+  /** Snapshots the current selection into ClipboardEntry form (see cloneEntryIntoState) — shared
+   *  read side for both copySelection (stores it) and duplicateSelection (clones it immediately
+   *  without touching the clipboard). */
+  private captureSelectionAsEntries(): ClipboardEntry[] {
+    const s = stateManager.getState();
+    const entries: ClipboardEntry[] = [];
+    for (const item of s.selection) {
+      switch (item.type) {
+        case 'device': { const d = stateManager.getDevice(item.id); if (d) entries.push({ type: 'device', data: d }); break; }
+        case 'rack': { const r = stateManager.getRack(item.id); if (r) entries.push({ type: 'rack', data: r }); break; }
+        case 'text': { const t = s.textLabels.find(l => l.id === item.id); if (t) entries.push({ type: 'text', data: t }); break; }
+        case 'image': { const img = s.imageAssets.find(a => a.id === item.id); if (img) entries.push({ type: 'image', data: img }); break; }
+        case 'cloud-node': { const n = s.cloudNodes.find(x => x.id === item.id); if (n) entries.push({ type: 'cloud-node', data: n }); break; }
+        case 'cloud-container': { const c = s.cloudContainers.find(x => x.id === item.id); if (c) entries.push({ type: 'cloud-container', data: c }); break; }
+        case 'cloud-hierarchy': { const h = s.cloudHierarchies.find(x => x.id === item.id); if (h) entries.push({ type: 'cloud-hierarchy', data: h }); break; }
+        case 'cloud-connector': { const c = s.cloudConnectors.find(x => x.id === item.id); if (c) entries.push({ type: 'cloud-connector', data: c }); break; }
+      }
+    }
+    return entries;
+  }
+
+  /** Ctrl+C / right-click "Copy" — works on whatever's currently selected, of any copyable type,
+   *  including a mixed multi-select. No-ops (keeps whatever was copied before) if the selection
+   *  has nothing copyable in it, e.g. only a cable or port. */
+  private copySelection(): void {
+    const entries = this.captureSelectionAsEntries();
+    if (entries.length > 0) this.clipboard = entries;
+  }
+
+  /** Ctrl+X / right-click "Cut". */
+  private cutSelection(): void {
+    this.copySelection();
+    this.deleteSelection();
+  }
+
+  /** Ctrl+V / right-click "Paste" — clones every clipboard entry and selects the new group as
+   *  one unit. Advances the clipboard to point at these fresh copies (not the original
+   *  selection), so pressing Ctrl+V repeatedly walks the pasted group diagonally outward each
+   *  time instead of stacking every paste exactly on top of the last. */
+  private pasteClipboard(): void {
+    if (this.clipboard.length === 0) return;
+    const newSelection: SelectableItem[] = [];
+    const nextClipboard: ClipboardEntry[] = [];
+    let touchedRack = false;
+    let touchedCloud = false;
+
+    for (const entry of this.clipboard) {
+      const result = this.cloneEntryIntoState(entry);
+      if (!result) continue;
+      newSelection.push(result.selectable);
+      nextClipboard.push(result.clonedEntry);
+      if (this.isCloudEntry(entry)) touchedCloud = true; else touchedRack = true;
+    }
+
+    if (newSelection.length === 0) return;
+    this.clipboard = nextClipboard;
+    stateManager.setState({ selection: newSelection });
+    eventBus.emit('selection:changed', newSelection);
+    if (touchedRack) this.renderAll();
+    if (touchedCloud) this.renderCloudAll();
+  }
+
+  /** Ctrl+D / right-click "Duplicate" — clones the current selection in place immediately,
+   *  without touching the clipboard (so it never clobbers whatever was separately Ctrl+C'd). */
+  private duplicateSelection(): void {
+    const entries = this.captureSelectionAsEntries();
+    if (entries.length === 0) return;
+    const newSelection: SelectableItem[] = [];
+    let touchedRack = false;
+    let touchedCloud = false;
+
+    for (const entry of entries) {
+      const result = this.cloneEntryIntoState(entry);
+      if (!result) continue;
+      newSelection.push(result.selectable);
+      if (this.isCloudEntry(entry)) touchedCloud = true; else touchedRack = true;
+    }
+
+    if (newSelection.length === 0) return;
+    stateManager.setState({ selection: newSelection });
+    eventBus.emit('selection:changed', newSelection);
+    if (touchedRack) this.renderAll();
+    if (touchedCloud) this.renderCloudAll();
+  }
+
+  /** Ctrl+Click (no drag) on any of the generic ctrlDragPending-eligible types — toggles the
+   *  object in/out of the current multi-select instead of replacing it (a plain click's
+   *  behavior). Mirrors the marquee-select's existing shiftKey add-to-selection behavior, just
+   *  for a single object instead of a rect sweep. */
+  private toggleSelectionItem(item: SelectableItem): void {
+    const s = stateManager.getState();
+    const exists = s.selection.some(sel => sel.type === item.type && sel.id === item.id);
+    const selection = exists
+      ? s.selection.filter(sel => !(sel.type === item.type && sel.id === item.id))
+      : [...s.selection, item];
+    stateManager.setState({ selection });
+    eventBus.emit('selection:changed', selection);
+  }
+
+  /** Fires once a pending Ctrl+mousedown (see ctrlDragPending's doc comment) crosses the drag
+   *  threshold — clones the original entry and arms that TYPE's own normal drag-continuation
+   *  state (isDraggingX/draggedXId/dragStartX-Y/dragStartWorldPos/dragStartXState) so the
+   *  existing per-type mousemove handling drags the CLONE from here on, exactly as if the user
+   *  had started a plain drag directly on it. `worldPos` is the current mouse position in
+   *  whichever canvas's coordinate space the entry's type belongs to (caller already knows
+   *  which — rack canvas types use this.canvas.screenToWorld, cloud types use
+   *  this.cloudCanvas.screenToWorld). Mirrors device's own cloningMode threshold-check inline in
+   *  setupCanvasInteractions(), generalized across every other type via ClipboardEntry. */
+  private armCtrlDragClone(entry: ClipboardEntry, worldPos: Point): void {
+    const result = this.cloneEntryIntoState(entry);
+    if (!result) return;
+    const cloned = result.clonedEntry.data;
+    stateManager.setState({ selection: [result.selectable] });
+    eventBus.emit('selection:changed', [result.selectable]);
+
+    switch (result.clonedEntry.type) {
+      case 'rack': {
+        const rack = cloned as RackData;
+        this.isDraggingRack = true;
+        this.draggedRackId = rack.id;
+        this.dragStartWorldPos = worldPos;
+        this.dragStartRackX = rack.x;
+        this.dragStartRacksState = JSON.parse(JSON.stringify(stateManager.getState().racks));
+        break;
+      }
+      case 'text': {
+        const label = cloned as TextLabel;
+        this.isDraggingText = true;
+        this.draggedTextId = label.id;
+        this.dragStartWorldPos = worldPos;
+        this.dragStartTextX = label.x;
+        this.dragStartTextY = label.y;
+        this.dragStartTextLabelsState = JSON.parse(JSON.stringify(stateManager.getState().textLabels));
+        break;
+      }
+      case 'image': {
+        const asset = cloned as ImageAsset;
+        if (asset.canvas === 'cloud') {
+          this.draggedCloudImageId = asset.id;
+          this.dragStartCloudWorldPos = worldPos;
+          this.dragStartCloudX = asset.x;
+          this.dragStartCloudY = asset.y;
+          this.dragStartCloudImagesState = stateManager.getState().imageAssets;
+        } else {
+          this.isDraggingImage = true;
+          this.draggedImageId = asset.id;
+          this.dragStartWorldPos = worldPos;
+          this.dragStartImageX = asset.x;
+          this.dragStartImageY = asset.y;
+          this.dragStartImageAssetsState = JSON.parse(JSON.stringify(stateManager.getState().imageAssets));
+        }
+        break;
+      }
+      case 'cloud-node': {
+        const node = cloned as CloudNode;
+        this.draggedCloudNodeId = node.id;
+        this.dragStartCloudWorldPos = worldPos;
+        this.dragStartCloudX = node.x;
+        this.dragStartCloudY = node.y;
+        this.dragStartCloudNodesState = stateManager.getState().cloudNodes;
+        break;
+      }
+      case 'cloud-container': {
+        const container = cloned as CloudContainer;
+        this.draggedCloudContainerId = container.id;
+        this.dragStartCloudWorldPos = worldPos;
+        this.dragStartCloudX = container.x;
+        this.dragStartCloudY = container.y;
+        this.dragStartCloudContainersState = stateManager.getState().cloudContainers;
+        break;
+      }
+      case 'cloud-hierarchy': {
+        const hierarchy = cloned as CloudHierarchy;
+        this.draggedCloudHierarchyId = hierarchy.id;
+        this.dragStartCloudWorldPos = worldPos;
+        this.dragStartCloudX = hierarchy.x;
+        this.dragStartCloudY = hierarchy.y;
+        this.dragStartCloudHierarchiesState = stateManager.getState().cloudHierarchies;
+        break;
+      }
+      // 'device'/'cloud-connector' never reach here — device has its own dedicated mechanism
+      // (cloningMode), and a connector isn't a positioned x/y object to Ctrl+Drag this way.
+    }
+
+    if (this.isCloudEntry(result.clonedEntry)) this.renderCloudAll(); else this.renderAll();
+  }
+
+  /** Called from every group-move-eligible type's own drag-start (mousedown) — captures the
+   *  starting x/y of every OTHER currently-selected, group-move-eligible object (see
+   *  groupDragStart's doc comment for exactly which types), so applyGroupDragDelta can move them
+   *  all together as the primary item is dragged. No-ops (leaves groupDragStart null) for a
+   *  single-item selection — the normal single-drag code path already handles that. */
+  /** Click-selects `item` for the start of a drag — but if it's already part of a larger
+   *  multi-selection, PRESERVES that whole selection instead of collapsing it down to just this
+   *  one object, so a group selected via marquee (or Ctrl+Click, see toggleSelectionItem) stays
+   *  intact when the user starts dragging any one member of it. A plain click on something NOT
+   *  already in a multi-select still replaces the selection as before. Call this before
+   *  beginGroupDrag, which relies on the selection already reflecting this decision. */
+  private selectForDrag(item: SelectableItem): void {
+    const s = stateManager.getState();
+    const alreadyInGroup = s.selection.length > 1 && s.selection.some(sel => sel.type === item.type && sel.id === item.id);
+    if (alreadyInGroup) return;
+    const selection = [item];
+    stateManager.setState({ selection });
+    eventBus.emit('selection:changed', selection);
+  }
+
+  private beginGroupDrag(primary: SelectableItem): void {
+    const s = stateManager.getState();
+    if (s.selection.length <= 1) { this.groupDragStart = null; return; }
+    const map = new Map<string, { x: number; y: number }>();
+    for (const item of s.selection) {
+      if (item.type === primary.type && item.id === primary.id) continue;
+      let pos: { x: number; y: number } | undefined;
+      switch (item.type) {
+        case 'text': pos = s.textLabels.find(t => t.id === item.id); break;
+        case 'image': pos = s.imageAssets.find(a => a.id === item.id); break;
+        case 'cloud-node': pos = s.cloudNodes.find(n => n.id === item.id); break;
+        case 'cloud-container': pos = s.cloudContainers.find(c => c.id === item.id); break;
+        case 'cloud-hierarchy': pos = s.cloudHierarchies.find(h => h.id === item.id); break;
+      }
+      if (pos) map.set(`${item.type}:${item.id}`, { x: pos.x, y: pos.y });
+    }
+    this.groupDragStart = map.size > 0 ? map : null;
+  }
+
+  /** Called from every group-move-eligible type's own drag-continuation (mousemove), right after
+   *  it computes its OWN dx/dy for the primary dragged item — applies that same world-space
+   *  delta to every object captured by beginGroupDrag, so the whole selection moves together.
+   *  A no-op if beginGroupDrag found nothing to move (single-item selection). Rendering is the
+   *  caller's responsibility, same as it already is for the primary item's own move. */
+  private applyGroupDragDelta(dx: number, dy: number): void {
+    if (!this.groupDragStart) return;
+    this.lastGroupDragDelta = { dx, dy };
+    const s = stateManager.getState();
+    const move = (id: string, key: string) => {
+      const start = this.groupDragStart!.get(`${key}:${id}`);
+      return start ? { x: start.x + dx, y: start.y + dy } : null;
+    };
+    const textLabels = s.textLabels.map(t => { const p = move(t.id, 'text'); return p ? { ...t, ...p } : t; });
+    const imageAssets = s.imageAssets.map(a => { const p = move(a.id, 'image'); return p ? { ...a, ...p } : a; });
+    const cloudNodes = s.cloudNodes.map(n => { const p = move(n.id, 'cloud-node'); return p ? { ...n, ...p } : n; });
+    const cloudContainers = s.cloudContainers.map(c => { const p = move(c.id, 'cloud-container'); return p ? { ...c, ...p } : c; });
+    const cloudHierarchies = s.cloudHierarchies.map(h => { const p = move(h.id, 'cloud-hierarchy'); return p ? { ...h, ...p } : h; });
+    stateManager.setState({ textLabels, imageAssets, cloudNodes, cloudContainers, cloudHierarchies }, true);
+  }
+
+  /** Finalizes a group-move (see groupDragStart/applyGroupDragDelta's doc comments) — call this
+   *  AFTER the primary dragged item's own commit logic finishes (that commit may revert-then-
+   *  reapply the very same array a group member lives in, e.g. two cloud nodes dragged together,
+   *  clobbering the member's in-progress position as a side effect of restoring the primary's
+   *  pre-drag snapshot). Re-derives each group member's FINAL position from its captured start
+   *  position plus the last live delta (not from whatever's currently in state, which the
+   *  primary's commit may have just clobbered) and pushes one more history-tracked update.
+   *  Ctrl+Z on a group move therefore takes two undos (primary, then group) rather than one
+   *  atomic step — an accepted trade-off for reusing each type's existing, working single-item
+   *  commit logic completely unchanged. A no-op if nothing was actually group-dragged. */
+  private commitGroupDrag(): void {
+    if (!this.groupDragStart) return;
+    const { dx, dy } = this.lastGroupDragDelta;
+    const start = this.groupDragStart;
+    this.groupDragStart = null;
+    const s = stateManager.getState();
+    const move = (id: string, key: string) => {
+      const p = start.get(`${key}:${id}`);
+      return p ? { x: p.x + dx, y: p.y + dy } : null;
+    };
+    const textLabels = s.textLabels.map(t => { const p = move(t.id, 'text'); return p ? { ...t, ...p } : t; });
+    const imageAssets = s.imageAssets.map(a => { const p = move(a.id, 'image'); return p ? { ...a, ...p } : a; });
+    const cloudNodes = s.cloudNodes.map(n => { const p = move(n.id, 'cloud-node'); return p ? { ...n, ...p } : n; });
+    const cloudContainers = s.cloudContainers.map(c => { const p = move(c.id, 'cloud-container'); return p ? { ...c, ...p } : c; });
+    const cloudHierarchies = s.cloudHierarchies.map(h => { const p = move(h.id, 'cloud-hierarchy'); return p ? { ...h, ...p } : h; });
+    stateManager.setState({ textLabels, imageAssets, cloudNodes, cloudContainers, cloudHierarchies });
+    this.renderAll();
+    this.renderCloudAll();
   }
 
   private deleteSelection() {
@@ -4163,6 +4674,10 @@ export class App {
     labelLayer.innerHTML = '';
 
     for (const asset of s.imageAssets) {
+      // 'cloud'-tagged images render on the cloud canvas's own cloud-image-layer instead (see
+      // renderCloudAll() and ImageAsset.canvas's doc comment) — their x/y aren't in this canvas's
+      // coordinate space.
+      if (asset.canvas === 'cloud') continue;
       try {
         const isSelected = s.selection.some(sel => sel.type === 'image' && sel.id === asset.id);
         renderImageAsset(asset, labelLayer, isSelected);
@@ -4603,39 +5118,188 @@ export class App {
   // Cloud Architecture canvas — standalone diagram mode, independent of the rack canvas above.
   // ============================================================================================
 
-  /** Switches the top-level workspace between the rack elevation view (2D+3D, unchanged) and
-   *  the Cloud Architecture canvas. The two are never shown at once. */
-  setActiveView(view: 'rack' | 'cloud'): void {
+  /** Shows/hides the Three.js 3D panel (#canvas-3d + its splitter) next to the rack 2D elevation
+   *  — rack view only, toggled from the floating toolbar's 3D switch (see floating-toolbar.ts).
+   *  Pauses/resumes the render loop with it (see ThreeViewport.pause/resume) rather than
+   *  mounting/unmounting, so re-enabling is instant. */
+  private setShow3DPanel(show: boolean): void {
+    stateManager.setState({ show3DPanel: show });
+
+    // Hybrid view is 2D-only by design (see setActiveView) — flipping this switch there must
+    // never actually reveal the panel, only record the preference for whenever the user lands
+    // back on pure Rack view. this.threeViewport also stays paused regardless.
+    const isHybrid = stateManager.getState().activeView === 'hybrid';
+
+    const canvas3d = document.getElementById('canvas-3d');
+    const splitter = document.getElementById('splitter-3d');
+    // A WebGL-init failure in init() permanently hides both via inline style — never override
+    // that (see init()'s try/catch and setActiveView's same guard on the splitter).
+    if (canvas3d && canvas3d.style.display !== 'none') canvas3d.classList.toggle('hidden', !show || isHybrid);
+    if (splitter && splitter.style.display !== 'none') splitter.classList.toggle('hidden', !show || isHybrid);
+
+    if (show && !isHybrid) this.threeViewport?.resume();
+    else this.threeViewport?.pause();
+  }
+
+  /** Wires up #splitter-hybrid — the draggable divider between #canvas-viewport (rack) and
+   *  #cloud-viewport (cloud) inside #canvas-split, only visible while Hybrid view is active (see
+   *  setActiveView). Mirrors ThreeViewport's own #splitter-3d drag logic (same clamped-flex-basis
+   *  technique) one level up. The two panes keep independent CanvasManager/CloudCanvasManager
+   *  pan/zoom state — deliberately not locked together — and both already resize reactively
+   *  (rack via CanvasManager's own ResizeObserver, cloud via live getBoundingClientRect() reads
+   *  on every interaction), so dragging this needs no explicit resize call on either side. */
+  private mountHybridSplitter(): void {
+    const splitter = document.getElementById('splitter-hybrid');
+    const container = document.getElementById('canvas-split');
+    const rackViewport = document.getElementById('canvas-viewport');
+    const cloudViewport = document.getElementById('cloud-viewport');
+    if (!splitter || !container || !rackViewport || !cloudViewport) return;
+
+    let dragging = false;
+    let startX = 0;
+    let startLeftPx = 0;
+
+    splitter.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      startX = e.clientX;
+      startLeftPx = rackViewport.getBoundingClientRect().width;
+      splitter.classList.add('dragging');
+      splitter.setPointerCapture(e.pointerId);
+    });
+
+    splitter.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const delta = e.clientX - startX;
+      const totalW = container.getBoundingClientRect().width - 5;
+      const newLeftPx = Math.max(200, Math.min(totalW - 200, startLeftPx + delta));
+      const pct = (newLeftPx / totalW) * 100;
+      rackViewport.style.flex = `0 0 ${pct}%`;
+      cloudViewport.style.flex = `0 0 ${100 - pct}%`;
+    });
+
+    splitter.addEventListener('pointerup', () => {
+      dragging = false;
+      splitter.classList.remove('dragging');
+    });
+  }
+
+  /** Keeps the rack and cloud canvas managers' pan/zoom locked together while Hybrid's "Merged"
+   *  sub-mode is active, so cloud items never visually drift relative to rack items as the user
+   *  pans/zooms either canvas — they're still two independent CanvasManager/CloudCanvasManager
+   *  instances, just mirrored. Both already emit their own *:transformed event on every pan/zoom/
+   *  setTransform() call (see canvas.ts/cloud-canvas.ts's updateTransform()); this just relays
+   *  whichever one changed into the other, guarded by hybridTransformSyncing against the infinite
+   *  loop setTransform()'s own re-emit would otherwise cause. Wired/unwired here (rather than
+   *  left always-on) so Split mode and pure rack/cloud views are provably unaffected. */
+  private setHybridTransformSync(active: boolean): void {
+    this.hybridTransformUnsync?.();
+    this.hybridTransformUnsync = null;
+    if (!active || !this.cloudCanvas) return;
+
+    const onRackTransformed = (t: Transform) => {
+      if (this.hybridTransformSyncing) return;
+      this.hybridTransformSyncing = true;
+      this.cloudCanvas!.setTransform(t);
+      this.hybridTransformSyncing = false;
+    };
+    const onCloudTransformed = (t: Transform) => {
+      if (this.hybridTransformSyncing) return;
+      this.hybridTransformSyncing = true;
+      this.canvas.setTransform(t);
+      this.hybridTransformSyncing = false;
+    };
+
+    eventBus.on('canvas:transformed', onRackTransformed);
+    eventBus.on('cloud-canvas:transformed', onCloudTransformed);
+    this.hybridTransformUnsync = () => {
+      eventBus.off('canvas:transformed', onRackTransformed);
+      eventBus.off('cloud-canvas:transformed', onCloudTransformed);
+    };
+
+    // Don't leave the two canvases visually offset from whatever pan/zoom each independently had
+    // before Merged was entered — snap cloud to rack's current transform once, immediately.
+    this.cloudCanvas.setTransform(this.canvas.getTransform());
+  }
+
+  /** Switches Hybrid's sub-mode (see toolbar.ts's Hybrid Layout group and AppState.hybridLayoutMode's
+   *  doc comment). 'split' is the default — two independently-scaled panes (see
+   *  mountHybridSplitter). 'merged' overlaps them into one shared canvas with locked pan/zoom
+   *  (see setHybridTransformSync) and click-through empty space (see canvas.css's .hybrid-merged
+   *  rules) so cloud items can be placed directly next to/over the rack. A no-op outside Hybrid
+   *  view — the toolbar button that fires this is itself hidden then. */
+  private setHybridLayoutMode(mode: 'split' | 'merged'): void {
+    stateManager.setState({ hybridLayoutMode: mode });
+    if (stateManager.getState().activeView !== 'hybrid') return;
+
+    document.body.classList.toggle('hybrid-merged', mode === 'merged');
+    // Merged overlaps both panes full-size via CSS (see .hybrid-merged rules) — clear any split
+    // ratio the user had dragged so re-entering Split later starts from an even 50/50 again
+    // rather than a stale flex-basis from before the switch.
+    if (mode === 'merged') {
+      const rackViewport = document.getElementById('canvas-viewport');
+      const cloudViewport = document.getElementById('cloud-viewport');
+      if (rackViewport) rackViewport.style.flex = '';
+      if (cloudViewport) cloudViewport.style.flex = '';
+    }
+    this.setHybridTransformSync(mode === 'merged');
+  }
+
+  /** 'hybrid' shows the rack AND cloud viewports together — laid out per
+   *  AppState.hybridLayoutMode (see setHybridLayoutMode's doc comment for the Split/Merged
+   *  distinction). 2D only — the 3D panel is force-hidden in this view same as it is in pure
+   *  Cloud view, independent of AppState.show3DPanel. The isCloud/isHybrid booleans below are
+   *  written so every existing 'rack'/'cloud' toggle expression reduces to exactly its old value
+   *  when isHybrid is false — hybrid support is additive, not a restructure of the pure rack/cloud
+   *  behavior. */
+  setActiveView(view: 'rack' | 'cloud' | 'hybrid'): void {
     stateManager.setState({ activeView: view });
 
     const rackViewport = document.getElementById('canvas-viewport');
     const cloudViewport = document.getElementById('cloud-viewport');
+    const hybridSplitter = document.getElementById('splitter-hybrid');
     const splitter = document.getElementById('splitter-3d');
     const rulerCorner = document.getElementById('ruler-corner');
     const rulerH = document.getElementById('ruler-horizontal');
     const rulerV = document.getElementById('ruler-vertical');
     const minimap = document.getElementById('minimap');
     const isCloud = view === 'cloud';
+    const isHybrid = view === 'hybrid';
+    const isMerged = isHybrid && stateManager.getState().hybridLayoutMode === 'merged';
 
-    rackViewport?.classList.toggle('hidden', isCloud);
-    cloudViewport?.classList.toggle('hidden', !isCloud);
-    rulerCorner?.classList.toggle('hidden', isCloud);
-    rulerH?.classList.toggle('hidden', isCloud);
-    rulerV?.classList.toggle('hidden', isCloud);
-    minimap?.classList.toggle('hidden', isCloud);
+    rackViewport?.classList.toggle('hidden', isCloud && !isHybrid);
+    cloudViewport?.classList.toggle('hidden', !isCloud && !isHybrid);
+    hybridSplitter?.classList.toggle('hidden', !isHybrid);
+    // Only Hybrid Split divides #canvas-split between the two panes (see mountHybridSplitter) —
+    // leaving a dragged flex-basis on the sole visible pane in single-view modes, or in Merged
+    // (which overlaps both full-size via CSS instead), would strand it at whatever % it was last
+    // resized to instead of filling the full width (see canvas.css's default flex:1).
+    if (!isHybrid || isMerged) {
+      if (rackViewport) rackViewport.style.flex = '';
+      if (cloudViewport) cloudViewport.style.flex = '';
+    }
+    rulerCorner?.classList.toggle('hidden', isCloud && !isHybrid);
+    rulerH?.classList.toggle('hidden', isCloud && !isHybrid);
+    rulerV?.classList.toggle('hidden', isCloud && !isHybrid);
+    minimap?.classList.toggle('hidden', isCloud && !isHybrid);
     if (splitter) {
-      if (isCloud) {
+      if (isCloud || isHybrid) {
         splitter.classList.add('hidden');
       } else if (splitter.style.display !== 'none') {
         // Only re-show if it wasn't permanently hidden by the WebGL-init-failure fallback in
-        // init() (that sets inline style, not the .hidden class) — see init()'s try/catch.
-        splitter.classList.remove('hidden');
+        // init() (that sets inline style, not the .hidden class — see init()'s try/catch), AND
+        // the user hadn't turned the 3D panel off before switching to Cloud view (see
+        // setShow3DPanel — its own 'hidden' toggle would otherwise be clobbered here).
+        splitter.classList.toggle('hidden', !stateManager.getState().show3DPanel);
       }
     }
+    document.body.classList.toggle('hybrid-active', isHybrid);
+    document.body.classList.toggle('hybrid-merged', isMerged);
+    this.setHybridTransformSync(isMerged);
 
     eventBus.emit('view:changed', view);
     this.sidebar.render();
-    if (isCloud) this.renderCloudAll();
+    if (isCloud || isHybrid) this.renderCloudAll();
+    if (isHybrid) this.renderAll();
   }
 
   /** Re-renders every CloudContainer/CloudNode/CloudConnector from current state. Mirrors
@@ -4647,12 +5311,14 @@ export class App {
     const hierarchyLayer = this.cloudCanvas!.getLayer('cloud-hierarchy-layer');
     const nodeLayer = this.cloudCanvas!.getLayer('cloud-node-layer');
     const connectorLayer = this.cloudCanvas!.getLayer('cloud-connector-layer');
-    if (!containerLayer || !hierarchyLayer || !nodeLayer || !connectorLayer) return;
+    const imageLayer = this.cloudCanvas!.getLayer('cloud-image-layer');
+    if (!containerLayer || !hierarchyLayer || !nodeLayer || !connectorLayer || !imageLayer) return;
 
     containerLayer.innerHTML = '';
     hierarchyLayer.innerHTML = '';
     nodeLayer.innerHTML = '';
     connectorLayer.innerHTML = '';
+    imageLayer.innerHTML = '';
 
     const selectedContainerIds = new Set(s.selection.filter(i => i.type === 'cloud-container').map(i => i.id));
     for (const container of s.cloudContainers) {
@@ -4681,6 +5347,19 @@ export class App {
       renderCloudNode(node, icon.path, nodeLayer, selected, showHandles);
     }
 
+    // Reference images pasted/inserted while on Cloud view — see ImageAsset.canvas's doc comment
+    // for why only 'cloud'-tagged ones render here (renderAll()'s own labelLayer loop handles the
+    // 'rack'-tagged ones, on the other canvas). Gets the same connection-point dots a CloudNode
+    // does (reusing hoverNodeId above — connector hover-detection doesn't distinguish node vs.
+    // image ids, see resolveCloudConnectorEndpoints), so a connector can attach to an image too.
+    const selectedImageIds = new Set(s.selection.filter(i => i.type === 'image').map(i => i.id));
+    for (const asset of s.imageAssets) {
+      if (asset.canvas !== 'cloud') continue;
+      const selected = selectedImageIds.has(asset.id);
+      const showHandles = selected || asset.id === hoverNodeId;
+      renderImageAsset(asset, imageLayer, selected, showHandles);
+    }
+
     const selectedConnIds = new Set(s.selection.filter(i => i.type === 'cloud-connector').map(i => i.id));
     for (const conn of s.cloudConnectors) {
       const resolved = this.resolveCloudConnectorEndpoints(conn);
@@ -4702,11 +5381,21 @@ export class App {
 
   /** Resolves a CloudConnector's exact source/dest points and sides against current node
    *  positions — used by renderCloudAll() to draw it. Returns null if a referenced node no
-   *  longer exists (e.g. deleted out from under the connector). */
+   *  longer exists (e.g. deleted out from under the connector).
+   *
+   *  sourceNodeId/destNodeId are plain id strings with no type tying them to CloudNode
+   *  specifically, so a connector endpoint can just as well be a cloud-canvas ImageAsset — see
+   *  ImageAsset.canvas's doc comment and renderConnectHandles' doc comment in
+   *  cloud-node-renderer.ts. Checked after cloudNodes so an id collision (astronomically
+   *  unlikely, both use crypto-random ids) would resolve to the node, matching prior behavior
+   *  for anything created before images could be connector endpoints at all. */
   private resolveCloudConnectorEndpoints(conn: CloudConnector): { from: Point; to: Point; fromSide?: CloudHandleSide; toSide?: CloudHandleSide } | null {
     const s = stateManager.getState();
-    const sourceNode = conn.sourceNodeId ? s.cloudNodes.find(n => n.id === conn.sourceNodeId) : undefined;
-    const destNode = conn.destNodeId ? s.cloudNodes.find(n => n.id === conn.destNodeId) : undefined;
+    const findEndpoint = (id: string | null | undefined) => id
+      ? (s.cloudNodes.find(n => n.id === id) ?? s.imageAssets.find(a => a.id === id && a.canvas === 'cloud'))
+      : undefined;
+    const sourceNode = findEndpoint(conn.sourceNodeId);
+    const destNode = findEndpoint(conn.destNodeId);
     if (conn.sourceNodeId && !sourceNode) return null;
     if (conn.destNodeId && !destNode) return null;
 
@@ -4746,47 +5435,59 @@ export class App {
       try {
         const { iconId } = JSON.parse(jsonData);
         if (!iconId) return;
-        const icon = getCloudIcon(iconId);
-        if (!icon) return;
-
-        // Boundary-type icons (VPC, Subnet, Resource Group, Region, Azure "Virtual Networks", ...)
-        // represent an area to draw, not a point resource — dropping one primes the
-        // container-draw tool instead of placing a small icon node. The user then drags out the
-        // actual boundary on the canvas (finishCloudContainerDraw() picks up pendingCloudContainerSpec).
-        if (isBoundaryIcon(icon)) {
-          this.pendingCloudContainerSpec = { kind: inferContainerKind(icon), iconId, provider: icon.provider, label: icon.name };
-          eventBus.emit('tool:changed', 'cloud-container');
-          eventBus.emit('notification', { message: `Drag on the canvas to draw the ${icon.name} boundary`, type: 'info' });
-          return;
-        }
-
-        const worldPos = this.cloudCanvas!.screenToWorld({ x: e.clientX, y: e.clientY });
-        const { width, height } = icon.trueScale ?? { width: 64, height: 64 };
-        const node: CloudNode = {
-          id: generateId(),
-          iconId,
-          provider: icon.provider,
-          x: worldPos.x - width / 2,
-          y: worldPos.y - height / 2,
-          width,
-          height,
-          label: icon.name,
-          trueScale: !!icon.trueScale,
-        };
-        if (node.trueScale) {
-          const snapped = this.snapTrueScaleNode(node, node.x, node.y);
-          node.x = snapped.x;
-          node.y = snapped.y;
-        }
-        stateManager.addCloudNode(node);
-        const selection: SelectableItem[] = [{ type: 'cloud-node', id: node.id }];
-        stateManager.setState({ selection });
-        eventBus.emit('selection:changed', selection);
-        this.renderCloudAll();
+        this.createCloudNodeFromDrop(iconId, { x: e.clientX, y: e.clientY });
       } catch (err) {
         console.error('Cloud icon drop failed', err);
       }
     });
+  }
+
+  /** Places a CloudNode (or, for boundary-type icons, primes the container-draw tool instead) at
+   *  a screen point. Used by setupCloudDragDrop() (a drop that physically lands on #cloud-canvas
+   *  — pure Cloud view, or Hybrid in either sub-mode) and setupDragDrop()'s Hybrid-Merged fallback
+   *  (a drop that lands on #canvas instead, because nothing was painted under the cursor in the
+   *  click-through cloud layer — see canvas.css's .hybrid-merged rules). screenPt is always
+   *  resolved via this.cloudCanvas's own screenToWorld regardless of which SVG physically
+   *  received the drop — safe because pan/zoom is kept in sync between the two managers while
+   *  Merged is active (see setHybridTransformSync). */
+  private createCloudNodeFromDrop(iconId: string, screenPt: Point): void {
+    const icon = getCloudIcon(iconId);
+    if (!icon) return;
+
+    // Boundary-type icons (VPC, Subnet, Resource Group, Region, Azure "Virtual Networks", ...)
+    // represent an area to draw, not a point resource — dropping one primes the
+    // container-draw tool instead of placing a small icon node. The user then drags out the
+    // actual boundary on the canvas (finishCloudContainerDraw() picks up pendingCloudContainerSpec).
+    if (isBoundaryIcon(icon)) {
+      this.pendingCloudContainerSpec = { kind: inferContainerKind(icon), iconId, provider: icon.provider, label: icon.name };
+      eventBus.emit('tool:changed', 'cloud-container');
+      eventBus.emit('notification', { message: `Drag on the canvas to draw the ${icon.name} boundary`, type: 'info' });
+      return;
+    }
+
+    const worldPos = this.cloudCanvas!.screenToWorld(screenPt);
+    const { width, height } = icon.trueScale ?? { width: 64, height: 64 };
+    const node: CloudNode = {
+      id: generateId(),
+      iconId,
+      provider: icon.provider,
+      x: worldPos.x - width / 2,
+      y: worldPos.y - height / 2,
+      width,
+      height,
+      label: icon.name,
+      trueScale: !!icon.trueScale,
+    };
+    if (node.trueScale) {
+      const snapped = this.snapTrueScaleNode(node, node.x, node.y);
+      node.x = snapped.x;
+      node.y = snapped.y;
+    }
+    stateManager.addCloudNode(node);
+    const selection: SelectableItem[] = [{ type: 'cloud-node', id: node.id }];
+    stateManager.setState({ selection });
+    eventBus.emit('selection:changed', selection);
+    this.renderCloudAll();
   }
 
   /** Builds the shared "Visual Order" submenu (Bring to Front/Forward, Send Backward/to Back) —
@@ -4808,6 +5509,34 @@ export class App {
     ];
   }
 
+  /** Shared 6-swatch accent color picker (Border/Ribbon color submenus) — used by every boundary
+   *  object's context menu (CloudContainer, CloudHierarchy). `onPick(undefined)` resets to that
+   *  field's own fallback chain (provider accent, or another field's color — see each renderer's
+   *  doc comment), which is why every picker's last item is a neutral reset rather than a 6th
+   *  fixed color. */
+  private accentColorSwatchItems(onPick: (color: string | undefined) => void, resetLabel = '⚪ Reset to Default'): MenuItem[] {
+    return [
+      { label: '🟠 Orange', action: () => onPick('#FF9900') },
+      { label: '🔷 Azure Blue', action: () => onPick('#0078D4') },
+      { label: '🔴 GCP Red', action: () => onPick('#4285F4') },
+      { label: '🟢 Green', action: () => onPick('#3fb950') },
+      { label: '🟣 Purple', action: () => onPick('#8e24aa') },
+      { label: resetLabel, action: () => onPick(undefined) },
+    ];
+  }
+
+  /** Shared label/chip Text Color picker — deliberately a different, smaller swatch set than
+   *  accentColorSwatchItems above (readability options, not brand colors) since this text sits on
+   *  top of whichever Ribbon Color was chosen and needs to stay legible against it. */
+  private textColorSwatchItems(onPick: (color: string | undefined) => void): MenuItem[] {
+    return [
+      { label: '⚪ White', action: () => onPick('#FFFFFF') },
+      { label: '⚫ Black', action: () => onPick('#0d1117') },
+      { label: '🩶 Grey', action: () => onPick('#8b949e') },
+      { label: '◾ Reset to Default', action: () => onPick(undefined) },
+    ];
+  }
+
   /** Right-click menu for the Cloud Architecture canvas — CloudNodes, CloudConnectors (delete,
    *  duplicate, add/remove waypoint, reset routing, line style/arrows/color/rounded corners),
    *  CloudContainers (delete, line style, color, kind), and CloudHierarchies (delete, line
@@ -4818,6 +5547,14 @@ export class App {
   private setupCloudContextMenu(): void {
     eventBus.on('cloud-canvas:rightclick', ({ point, target, screenPoint }) => {
       const targetEl = target as unknown as SVGElement | null;
+
+      // Reference images paint above everything else (see cloud-image-layer) — checked first.
+      const imageEl = targetEl?.closest?.('[data-image-id]') as SVGElement | null;
+      if (imageEl) {
+        this.showCloudImageContextMenu(imageEl, screenPoint);
+        return;
+      }
+
       const waypointHandleEl = targetEl?.closest?.('.cloud-connector-waypoint-handle') as SVGElement | null;
       const connectorEl = (waypointHandleEl ?? targetEl?.closest?.('[data-cloud-connector-id]')) as SVGElement | null;
       const connectorId = connectorEl?.getAttribute('data-cloud-connector-id');
@@ -4931,6 +5668,9 @@ export class App {
             }]
           : []),
         { separator: true, label: '' },
+        { label: 'Copy', shortcut: 'Ctrl+C', action: () => this.copySelection() },
+        { label: 'Paste', shortcut: 'Ctrl+V', disabled: this.clipboard.length === 0, action: () => this.pasteClipboard() },
+        { separator: true, label: '' },
         {
           label: '⧉ Duplicate Connector',
           icon: '⧉',
@@ -4967,6 +5707,39 @@ export class App {
     });
   }
 
+  /** Right-click menu for a reference image pasted/inserted on the cloud canvas — Cut/Copy/Paste/
+   *  Duplicate/Delete only; no opacity/rotation/resize controls (ImageToolPanel, which owns
+   *  those, is mounted inside #canvas-viewport and only ever shows for rack-canvas images — see
+   *  ImageAsset.canvas's doc comment for the scope this intentionally stops short of). */
+  private showCloudImageContextMenu(imageEl: SVGElement, screenPoint: Point): void {
+    const imageId = imageEl.getAttribute('data-image-id');
+    if (!imageId) return;
+    const asset = stateManager.getState().imageAssets.find(a => a.id === imageId);
+    if (!asset) return;
+
+    const selection: SelectableItem[] = [{ type: 'image', id: imageId }];
+    stateManager.setState({ selection });
+    eventBus.emit('selection:changed', selection);
+    this.renderCloudAll();
+
+    this.contextMenu.show(screenPoint.x, screenPoint.y, [
+      { label: '🖼️ Image', disabled: true },
+      { separator: true, label: '' },
+      { label: 'Cut', shortcut: 'Ctrl+X', disabled: !!asset.locked, action: () => this.cutSelection() },
+      { label: 'Copy', shortcut: 'Ctrl+C', action: () => this.copySelection() },
+      { label: 'Paste', shortcut: 'Ctrl+V', disabled: this.clipboard.length === 0, action: () => this.pasteClipboard() },
+      { label: 'Duplicate', shortcut: 'Ctrl+D', action: () => this.duplicateSelection() },
+      { separator: true, label: '' },
+      {
+        label: '🗑 Delete',
+        icon: '🗑',
+        shortcut: 'Del',
+        disabled: !!asset.locked,
+        action: () => this.deleteSelection(),
+      },
+    ]);
+  }
+
   /** Right-click menu for a CloudNode (a placed service icon) — just Visual Order and Delete; no
    *  color/style pickers since a node's look comes entirely from its manifest icon, not something
    *  manually tweaked per instance. */
@@ -4983,6 +5756,11 @@ export class App {
 
     const items: MenuItem[] = [
       { label: `☁️ ${item.label || 'Service'}`, disabled: true },
+      { separator: true, label: '' },
+      { label: 'Cut', shortcut: 'Ctrl+X', disabled: !!item.locked, action: () => this.cutSelection() },
+      { label: 'Copy', shortcut: 'Ctrl+C', action: () => this.copySelection() },
+      { label: 'Paste', shortcut: 'Ctrl+V', disabled: this.clipboard.length === 0, action: () => this.pasteClipboard() },
+      { label: 'Duplicate', shortcut: 'Ctrl+D', action: () => this.duplicateSelection() },
       { separator: true, label: '' },
       {
         label: 'Visual Order', icon: '📶',
@@ -5026,14 +5804,19 @@ export class App {
     eventBus.emit('selection:changed', selection);
     this.renderCloudAll();
 
-    const colorItems: MenuItem[] = [
-      { label: '🟠 Orange', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { color: '#FF9900' } }) },
-      { label: '🔷 Azure Blue', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { color: '#0078D4' } }) },
-      { label: '🔴 GCP Red', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { color: '#4285F4' } }) },
-      { label: '🟢 Green', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { color: '#3fb950' } }) },
-      { label: '🟣 Purple', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { color: '#8e24aa' } }) },
-      { label: '⚪ Grey (neutral)', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { color: undefined } }) },
-    ];
+    const colorItems = this.accentColorSwatchItems(
+      (color) => eventBus.emit('cloudcontainer:update', { id: containerId, data: { color } }),
+    );
+    // Ribbon (label chip) is independently colorable from the boundary box's own border/tint —
+    // same relationship as CloudHierarchy.ribbonColor (see its doc comment); reset falls back to
+    // the border color, so an untouched container still reads as one solid color.
+    const ribbonColorItems = this.accentColorSwatchItems(
+      (color) => eventBus.emit('cloudcontainer:update', { id: containerId, data: { ribbonColor: color } }),
+      '⚪ Match Border Color',
+    );
+    const textColorItems = this.textColorSwatchItems(
+      (color) => eventBus.emit('cloudcontainer:update', { id: containerId, data: { textColor: color } }),
+    );
 
     const styleItems: MenuItem[] = [
       { label: !item.style ? '● Kind Default' : 'Kind Default', action: () => eventBus.emit('cloudcontainer:update', { id: containerId, data: { style: undefined } }) },
@@ -5047,8 +5830,15 @@ export class App {
     const items: MenuItem[] = [
       { label: `⬚ ${item.label || 'Boundary'}`, disabled: true },
       { separator: true, label: '' },
+      { label: 'Cut', shortcut: 'Ctrl+X', disabled: !!item.locked, action: () => this.cutSelection() },
+      { label: 'Copy', shortcut: 'Ctrl+C', action: () => this.copySelection() },
+      { label: 'Paste', shortcut: 'Ctrl+V', disabled: this.clipboard.length === 0, action: () => this.pasteClipboard() },
+      { label: 'Duplicate', shortcut: 'Ctrl+D', action: () => this.duplicateSelection() },
+      { separator: true, label: '' },
       { label: 'Border Line Style', icon: '〰️', submenu: styleItems },
       { label: 'Border Color', icon: '🎨', submenu: colorItems },
+      { label: 'Ribbon Color', icon: '🎀', submenu: ribbonColorItems },
+      { label: 'Text Color', icon: '🔤', submenu: textColorItems },
       {
         label: bgOn ? 'Disable Background Fill' : 'Enable Background Fill',
         icon: bgOn ? '◻️' : '◼️',
@@ -5083,7 +5873,17 @@ export class App {
   private showCloudHierarchyContextMenu(targetEl: SVGElement | null, screenPoint: Point): void {
     const hierarchyEl = targetEl?.closest?.('[data-cloud-hierarchy-id]') as SVGElement | null;
     const hierarchyId = hierarchyEl?.getAttribute('data-cloud-hierarchy-id');
-    if (!hierarchyId) return;
+    if (!hierarchyId) {
+      // Genuinely empty cloud-canvas background — the fall-through target of every other check
+      // in setupCloudContextMenu(). Only worth a menu at all for Paste; unlike the rack canvas's
+      // background menu there's no per-provider "Add..." shape to offer generically here.
+      if (this.clipboard.length > 0) {
+        this.contextMenu.show(screenPoint.x, screenPoint.y, [
+          { label: 'Paste', shortcut: 'Ctrl+V', action: () => this.pasteClipboard() },
+        ]);
+      }
+      return;
+    }
 
     const item = stateManager.getState().cloudHierarchies.find(h => h.id === hierarchyId);
     if (!item) return;
@@ -5093,26 +5893,20 @@ export class App {
     eventBus.emit('selection:changed', selection);
     this.renderCloudAll();
 
-    // Ribbon (label chip) and Line (boundary border/tint) are two independently-colorable
-    // elements — see CloudHierarchy.ribbonColor's doc comment for why they used to be locked
-    // together (both driven by the same `color` field) and no longer are.
-    const lineColorItems: MenuItem[] = [
-      { label: '🟠 Orange', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { color: '#FF9900' } }) },
-      { label: '🔷 Azure Blue', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { color: '#0078D4' } }) },
-      { label: '🔴 GCP Red', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { color: '#4285F4' } }) },
-      { label: '🟢 Green', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { color: '#3fb950' } }) },
-      { label: '🟣 Purple', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { color: '#8e24aa' } }) },
-      { label: '⚪ Grey (neutral)', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { color: undefined } }) },
-    ];
-
-    const ribbonColorItems: MenuItem[] = [
-      { label: '🟠 Orange', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { ribbonColor: '#FF9900' } }) },
-      { label: '🔷 Azure Blue', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { ribbonColor: '#0078D4' } }) },
-      { label: '🔴 GCP Red', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { ribbonColor: '#4285F4' } }) },
-      { label: '🟢 Green', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { ribbonColor: '#3fb950' } }) },
-      { label: '🟣 Purple', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { ribbonColor: '#8e24aa' } }) },
-      { label: '⚪ Match Line Color', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { ribbonColor: undefined } }) },
-    ];
+    // Border, Ribbon (label chip), and Text are three independently-colorable elements — see
+    // CloudHierarchy.ribbonColor's doc comment for why Border/Ribbon used to be locked together
+    // (both driven by the same `color` field) and no longer are. Same 3-way split as
+    // CloudContainer's context menu just above, sharing the same swatch builders.
+    const lineColorItems = this.accentColorSwatchItems(
+      (color) => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { color } }),
+    );
+    const ribbonColorItems = this.accentColorSwatchItems(
+      (color) => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { ribbonColor: color } }),
+      '⚪ Match Border Color',
+    );
+    const textColorItems = this.textColorSwatchItems(
+      (color) => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { textColor: color } }),
+    );
 
     const styleItems: MenuItem[] = [
       { label: !item.style ? '● Default' : 'Default', action: () => eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data: { style: undefined } }) },
@@ -5126,9 +5920,15 @@ export class App {
     const items: MenuItem[] = [
       { label: '✏️ Edit…', icon: '✏️', action: () => this.editCloudHierarchy(hierarchyId) },
       { separator: true, label: '' },
+      { label: 'Cut', shortcut: 'Ctrl+X', disabled: !!item.locked, action: () => this.cutSelection() },
+      { label: 'Copy', shortcut: 'Ctrl+C', action: () => this.copySelection() },
+      { label: 'Paste', shortcut: 'Ctrl+V', disabled: this.clipboard.length === 0, action: () => this.pasteClipboard() },
+      { label: 'Duplicate', shortcut: 'Ctrl+D', action: () => this.duplicateSelection() },
+      { separator: true, label: '' },
       { label: 'Border Line Style', icon: '〰️', submenu: styleItems },
-      { label: 'Line Color', icon: '🎨', submenu: lineColorItems },
+      { label: 'Border Color', icon: '🎨', submenu: lineColorItems },
       { label: 'Ribbon Color', icon: '🎀', submenu: ribbonColorItems },
+      { label: 'Text Color', icon: '🔤', submenu: textColorItems },
       {
         label: bgOn ? 'Disable Background Fill' : 'Enable Background Fill',
         icon: bgOn ? '◻️' : '◼️',
@@ -5367,6 +6167,7 @@ export class App {
           : { x: finalNode.x, y: finalNode.y };
       eventBus.emit('cloudnode:update', { id: nodeId, data });
     }
+    this.commitGroupDrag();
   }
 
   private commitCloudContainerDrag(): void {
@@ -5384,6 +6185,7 @@ export class App {
         : { x: finalContainer.x, y: finalContainer.y };
       eventBus.emit('cloudcontainer:update', { id: containerId, data });
     }
+    this.commitGroupDrag();
   }
 
   private commitCloudHierarchyDrag(): void {
@@ -5401,6 +6203,20 @@ export class App {
         : { x: finalHierarchy.x, y: finalHierarchy.y };
       eventBus.emit('cloudhierarchy:update', { id: hierarchyId, data });
     }
+    this.commitGroupDrag();
+  }
+
+  private commitCloudImageDrag(): void {
+    const imageId = this.draggedCloudImageId!;
+    this.draggedCloudImageId = null;
+
+    const finalAsset = stateManager.getState().imageAssets.find(a => a.id === imageId);
+    if (finalAsset && this.dragStartCloudImagesState) {
+      stateManager.setState({ imageAssets: this.dragStartCloudImagesState }, true);
+      this.dragStartCloudImagesState = null;
+      eventBus.emit('imageasset:update', { id: imageId, data: { x: finalAsset.x, y: finalAsset.y } });
+    }
+    this.commitGroupDrag();
   }
 
   /** Binds all mouse interaction on the cloud canvas: select/drag/resize (default 'select'
@@ -5564,6 +6380,36 @@ export class App {
         return;
       }
 
+      // Reference images (cloud-image-layer, see renderCloudAll) paint above everything else on
+      // this canvas, so their hit-test runs first too — checked ahead of the resize-handle branch
+      // below since an image has no resize handle of its own to conflict with. Move-only (no
+      // resize) — see draggedCloudImageId's doc comment.
+      const cloudImageEl = target.closest('[data-image-id]') as SVGElement | null;
+      if (cloudImageEl) {
+        const imageId = cloudImageEl.getAttribute('data-image-id')!;
+        const asset = stateManager.getState().imageAssets.find(a => a.id === imageId && a.canvas === 'cloud');
+        if (asset) {
+          // Ctrl+mousedown pending/threshold pattern — see ctrlDragPending's doc comment.
+          if (e.ctrlKey) {
+            if (!asset.locked) {
+              this.ctrlDragPending = { entry: { type: 'image', data: asset }, startScreen: { x: e.clientX, y: e.clientY } };
+            }
+            return;
+          }
+          this.selectForDrag({ type: 'image', id: asset.id });
+          if (!asset.locked) {
+            this.draggedCloudImageId = asset.id;
+            this.dragStartCloudWorldPos = worldPos;
+            this.dragStartCloudX = asset.x;
+            this.dragStartCloudY = asset.y;
+            this.dragStartCloudImagesState = stateManager.getState().imageAssets;
+            this.beginGroupDrag({ type: 'image', id: asset.id });
+          }
+          this.renderCloudAll();
+        }
+        return;
+      }
+
       const resizeHandle = target.closest('.cloud-node-resize-handle, .cloud-container-resize-handle, .cloud-hierarchy-resize-handle') as SVGElement | null;
       if (resizeHandle) {
         const nodeId = resizeHandle.getAttribute('data-cloud-node-id');
@@ -5609,15 +6455,21 @@ export class App {
       if (nodeEl) {
         const nodeId = nodeEl.getAttribute('data-cloud-node-id')!;
         const node = stateManager.getState().cloudNodes.find(n => n.id === nodeId);
-        const selection: SelectableItem[] = [{ type: 'cloud-node', id: nodeId }];
-        stateManager.setState({ selection });
-        eventBus.emit('selection:changed', selection);
+        // Ctrl+mousedown pending/threshold pattern — see ctrlDragPending's doc comment.
+        if (node && e.ctrlKey) {
+          if (!node.locked) {
+            this.ctrlDragPending = { entry: { type: 'cloud-node', data: node }, startScreen: { x: e.clientX, y: e.clientY } };
+          }
+          return;
+        }
+        this.selectForDrag({ type: 'cloud-node', id: node?.id ?? nodeId });
         if (node && !node.locked) {
-          this.draggedCloudNodeId = nodeId;
+          this.draggedCloudNodeId = node.id;
           this.dragStartCloudWorldPos = worldPos;
           this.dragStartCloudX = node.x;
           this.dragStartCloudY = node.y;
           this.dragStartCloudNodesState = stateManager.getState().cloudNodes;
+          this.beginGroupDrag({ type: 'cloud-node', id: node.id });
         }
         this.renderCloudAll();
         return;
@@ -5627,15 +6479,20 @@ export class App {
       if (containerEl) {
         const containerId = containerEl.getAttribute('data-cloud-container-id')!;
         const container = stateManager.getState().cloudContainers.find(c => c.id === containerId);
-        const selection: SelectableItem[] = [{ type: 'cloud-container', id: containerId }];
-        stateManager.setState({ selection });
-        eventBus.emit('selection:changed', selection);
+        if (container && e.ctrlKey) {
+          if (!container.locked) {
+            this.ctrlDragPending = { entry: { type: 'cloud-container', data: container }, startScreen: { x: e.clientX, y: e.clientY } };
+          }
+          return;
+        }
+        this.selectForDrag({ type: 'cloud-container', id: container?.id ?? containerId });
         if (container && !container.locked) {
-          this.draggedCloudContainerId = containerId;
+          this.draggedCloudContainerId = container.id;
           this.dragStartCloudWorldPos = worldPos;
           this.dragStartCloudX = container.x;
           this.dragStartCloudY = container.y;
           this.dragStartCloudContainersState = stateManager.getState().cloudContainers;
+          this.beginGroupDrag({ type: 'cloud-container', id: container.id });
         }
         this.renderCloudAll();
         return;
@@ -5655,15 +6512,20 @@ export class App {
       if (hierarchyEl) {
         const hierarchyId = hierarchyEl.getAttribute('data-cloud-hierarchy-id')!;
         const hierarchy = stateManager.getState().cloudHierarchies.find(h => h.id === hierarchyId);
-        const selection: SelectableItem[] = [{ type: 'cloud-hierarchy', id: hierarchyId }];
-        stateManager.setState({ selection });
-        eventBus.emit('selection:changed', selection);
+        if (hierarchy && e.ctrlKey) {
+          if (!hierarchy.locked) {
+            this.ctrlDragPending = { entry: { type: 'cloud-hierarchy', data: hierarchy }, startScreen: { x: e.clientX, y: e.clientY } };
+          }
+          return;
+        }
+        this.selectForDrag({ type: 'cloud-hierarchy', id: hierarchy?.id ?? hierarchyId });
         if (hierarchy && !hierarchy.locked) {
-          this.draggedCloudHierarchyId = hierarchyId;
+          this.draggedCloudHierarchyId = hierarchy.id;
           this.dragStartCloudWorldPos = worldPos;
           this.dragStartCloudX = hierarchy.x;
           this.dragStartCloudY = hierarchy.y;
           this.dragStartCloudHierarchiesState = stateManager.getState().cloudHierarchies;
+          this.beginGroupDrag({ type: 'cloud-hierarchy', id: hierarchy.id });
         }
         this.renderCloudAll();
         return;
@@ -5679,6 +6541,20 @@ export class App {
 
     svgEl.addEventListener('mousemove', (e: MouseEvent) => {
       const worldPos = this.cloudCanvas!.screenToWorld({ x: e.clientX, y: e.clientY });
+
+      // See the rack canvas's identical check in setupCanvasInteractions() — ctrlDragPending's
+      // doc comment explains the pending-until-threshold-or-release pattern shared by both
+      // canvases.
+      if (this.ctrlDragPending) {
+        const dx = e.clientX - this.ctrlDragPending.startScreen.x;
+        const dy = e.clientY - this.ctrlDragPending.startScreen.y;
+        if (Math.hypot(dx, dy) > 4) {
+          const entry = this.ctrlDragPending.entry;
+          this.ctrlDragPending = null;
+          this.armCtrlDragClone(entry, worldPos);
+        }
+        return;
+      }
 
       if (this.isDrawingCloudExportArea && this.cloudExportAreaEl) {
         const x = Math.min(worldPos.x, this.cloudExportAreaStart.x);
@@ -5759,6 +6635,19 @@ export class App {
         return;
       }
 
+      if (this.draggedCloudImageId) {
+        const dx = worldPos.x - this.dragStartCloudWorldPos.x;
+        const dy = worldPos.y - this.dragStartCloudWorldPos.y;
+        const imageId = this.draggedCloudImageId;
+        const x = this.dragStartCloudX + dx;
+        const y = this.dragStartCloudY + dy;
+        const imageAssets = stateManager.getState().imageAssets.map(a => a.id === imageId ? { ...a, x, y } : a);
+        stateManager.setState({ imageAssets }, true);
+        this.applyGroupDragDelta(dx, dy);
+        this.renderCloudAll();
+        return;
+      }
+
       if (this.draggedCloudNodeId) {
         const dx = worldPos.x - this.dragStartCloudWorldPos.x;
         const dy = worldPos.y - this.dragStartCloudWorldPos.y;
@@ -5773,6 +6662,7 @@ export class App {
           const y = this.dragStartCloudY + dy;
           const cloudNodes = stateManager.getState().cloudNodes.map(n => n.id === nodeId ? { ...n, x, y } : n);
           stateManager.setState({ cloudNodes }, true);
+          this.applyGroupDragDelta(dx, dy);
         }
         this.renderCloudAll();
         return;
@@ -5792,6 +6682,7 @@ export class App {
           const y = this.dragStartCloudY + dy;
           const cloudContainers = stateManager.getState().cloudContainers.map(c => c.id === containerId ? { ...c, x, y } : c);
           stateManager.setState({ cloudContainers }, true);
+          this.applyGroupDragDelta(dx, dy);
         }
         this.renderCloudAll();
         return;
@@ -5815,6 +6706,7 @@ export class App {
           const y = this.dragStartCloudY + dy;
           const cloudHierarchies = stateManager.getState().cloudHierarchies.map(h => h.id === hierarchyId ? { ...h, x, y } : h);
           stateManager.setState({ cloudHierarchies }, true);
+          this.applyGroupDragDelta(dx, dy);
         }
         this.renderCloudAll();
         return;
@@ -5832,6 +6724,14 @@ export class App {
     });
 
     window.addEventListener('mouseup', (e: MouseEvent) => {
+      if (this.ctrlDragPending) {
+        const entry = this.ctrlDragPending.entry;
+        this.ctrlDragPending = null;
+        this.toggleSelectionItem({ type: entry.type, id: entry.data.id });
+        if (this.isCloudEntry(entry)) this.renderCloudAll(); else this.renderAll();
+        return;
+      }
+
       if (this.isDrawingCloudExportArea) {
         this.isDrawingCloudExportArea = false;
         this.cloudExportAreaEl?.remove();
@@ -5887,6 +6787,9 @@ export class App {
       }
       if (this.draggedCloudHierarchyId) {
         this.commitCloudHierarchyDrag();
+      }
+      if (this.draggedCloudImageId) {
+        this.commitCloudImageDrag();
       }
       if (this.draggedConnectorEndpoint) {
         this.commitConnectorEndpointDrag();

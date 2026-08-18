@@ -33,9 +33,24 @@
   background-repeat: repeat-y;
 }
 
-#canvas-viewport {
+/* Wraps #canvas-viewport (rack) and #cloud-viewport (cloud) side by side — in single-view modes
+   only one is unhidden and it fills this whole row via flex:1 (see their own rules below); in
+   Hybrid Split (the default sub-mode, see app.ts's setActiveView()/setHybridLayoutMode()) both
+   unhide at once next to #splitter-hybrid, a draggable divider (drag logic in app.ts's
+   mountHybridSplitter(), mirroring the existing #splitter-3d pattern in ThreeViewport.ts) that
+   resizes them via inline flex-basis, each keeping its own independent pan/zoom. Hybrid's other
+   sub-mode, Merged (body.hybrid-merged below), overrides this into one shared overlapping canvas
+   instead — see AppState.hybridLayoutMode's doc comment for when to use which. */
+#canvas-split {
   grid-column: 2;
   grid-row: 2;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+#canvas-viewport {
+  flex: 1;
   position: relative;
   overflow: hidden; /* Prevent browser scrollbar conflict with pan/zoom */
   background-color: var(--bg-canvas);
@@ -48,11 +63,8 @@
   display: block;
 }
 
-/* Cloud Architecture canvas occupies the same grid cell as #canvas-viewport — the two are
-   never shown at once, toggled via the .hidden class from app.ts's view-switch handler. */
 #cloud-viewport {
-  grid-column: 2;
-  grid-row: 2;
+  flex: 1;
   position: relative;
   overflow: hidden;
   background-color: var(--bg-canvas);
@@ -65,6 +77,58 @@
   display: block;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.splitter-hybrid {
+  flex-shrink: 0;
+  width: 5px;
+  cursor: col-resize;
+  background: var(--border-color);
+  z-index: 20;
+  transition: background-color var(--transition-speed);
+}
+
+.splitter-hybrid:hover,
+.splitter-hybrid.dragging {
+  background: var(--accent-primary);
+}
+
+/* Hybrid "Merged" sub-mode (toggled from the toolbar's Hybrid Layout group, see
+   AppState.hybridLayoutMode) — overrides the Split flex-row above so #canvas-viewport and
+   #cloud-viewport instead stack as full-size overlapping layers in one shared coordinate space,
+   with pan/zoom locked together (see app.ts's setHybridTransformSync). #cloud-viewport paints on
+   top (later DOM sibling) — pointer-events:none on the DIV lets clicks over its empty areas fall
+   through to the rack canvas beneath; #cloud-canvas opts back into normal SVG hit-testing so
+   painted cloud content (nodes/containers/connectors/hierarchies) stays fully clickable. The
+   cloud grid rect must be hidden outright (display:none, not just faded) since a pattern fill
+   still counts as "painted" for hit-testing regardless of its own transparency — left visible it
+   would swallow every click across the whole canvas. */
+body.hybrid-merged #canvas-split {
+  display: block;
+}
+
+body.hybrid-merged #canvas-viewport,
+body.hybrid-merged #cloud-viewport {
+  position: absolute;
+  inset: 0;
+  flex: none;
+}
+
+body.hybrid-merged .splitter-hybrid {
+  display: none;
+}
+
+body.hybrid-merged #cloud-viewport {
+  background-color: transparent;
+  pointer-events: none;
+}
+
+body.hybrid-merged #cloud-canvas {
+  pointer-events: auto;
+}
+
+body.hybrid-merged #cloud-viewport #cloud-grid-layer > rect {
+  display: none;
 }
 
 /* Node icons are SVG <image> elements — natively drag-ghostable in some browsers, which would

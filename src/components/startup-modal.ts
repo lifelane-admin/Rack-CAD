@@ -46,7 +46,7 @@ const STARTUP_OPTIONS: StartupOption[] = [
     choice: 'hybrid',
     icon: '🌐',
     title: 'Hybrid',
-    description: '2D diagram, every library at once — Local Resources, On-Prem, AWS, Azure, and GCP together.',
+    description: 'One 2D canvas, every tool at once — rack devices alongside Local Resources, AWS, Azure, and GCP icons, all together.',
     accent: '#8b949e',
   },
 ];
