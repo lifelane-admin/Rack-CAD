@@ -616,11 +616,14 @@ export class Sidebar {
         el.className = 'cat-item';
         el.draggable = true;
         const meta = item.mountType === 'side' ? 'Side' : `${item.heightUnits}U`;
-        el.innerHTML = `
-          <div class="cat-item-dot" style="background:${cat.accent}"></div>
-          ${item.name}
-          <span class="cat-item-meta">${meta}</span>
-        `;
+        const dot = document.createElement('div');
+        dot.className = 'cat-item-dot';
+        dot.style.background = cat.accent;
+        const nameNode = document.createTextNode(item.name);
+        const metaSpan = document.createElement('span');
+        metaSpan.className = 'cat-item-meta';
+        metaSpan.textContent = meta;
+        el.append(dot, nameNode, metaSpan);
         el.ondragstart = (e) => {
           e.dataTransfer?.setData('application/json', JSON.stringify({ templateId: item.id }));
         };
