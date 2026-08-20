@@ -184,9 +184,9 @@ describe('Hybrid view — sidebar dual-render', () => {
     expect(cloudContainer!.children.length).toBeGreaterThan(0);
   });
 
-  it('marks the "All Tools (Rack + Cloud)" nav leaf active while hybrid is the active view', () => {
+  it('marks the Hybrid tab active while hybrid is the active view', () => {
     mountSidebar();
-    const leaf = [...document.querySelectorAll('.nav-tree-leaf')].find(el => el.textContent?.includes('All Tools'));
-    expect(leaf?.classList.contains('active')).toBe(true);
+    const hybridTab = [...document.querySelectorAll('.sb-tab')].find(el => el.textContent?.trim() === 'Hybrid');
+    expect(hybridTab?.classList.contains('active')).toBe(true);
   });
 });
