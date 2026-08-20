@@ -10,41 +10,33 @@ import { recordIconUse, recordBoundaryUse, getRecentUsage } from '../library/rec
 const CLOUD_SEARCH_RESULT_CAP = 150;
 let cloudSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-interface NavLeaf {
-  label: string;
-  icon: string;
-  view: 'rack' | 'cloud' | 'hybrid';
-  provider?: CloudProvider;
-}
-interface NavGroup {
-  label: string;
-  icon: string;
-  children: NavLeaf[];
+function icon(d: string): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 }
 
-/** Top-level workspace navigation — the primary way to switch between the On-Prem rack
- *  elevation workspace, the Cloud Architecture canvas (per-provider entry points), and Hybrid
- *  (both canvases at once, see app.ts's setActiveView). Always rendered above the
- *  search/catalog, regardless of which view is currently active. */
-const NAV_TREE: NavGroup[] = [
-  {
-    label: 'On-Prem Infrastructure', icon: '🏢', children: [
-      { label: 'Rack Development', icon: '📦', view: 'rack' },
-    ],
-  },
-  {
-    label: 'Hybrid', icon: '🌐', children: [
-      { label: 'All Tools (Rack + Cloud)', icon: '🌐', view: 'hybrid' },
-    ],
-  },
-  {
-    label: 'Cloud', icon: '☁️', children: [
-      { label: 'AWS', icon: '🟧', view: 'cloud', provider: 'aws' },
-      { label: 'Azure', icon: '🔷', view: 'cloud', provider: 'azure' },
-      { label: 'GCP', icon: '🔴', view: 'cloud', provider: 'gcp' },
-      { label: 'Local Resources', icon: '🏠', view: 'cloud', provider: 'onprem' },
-    ],
-  },
+const RACK_CATEGORIES: Array<{ id: DeviceCategory; label: string; accent: string; svg: string }> = [
+  { id: 'server',        label: 'Servers',       accent: '#fb8c00', svg: icon('<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>') },
+  { id: 'switch',        label: 'Switches',      accent: '#00f2fe', svg: icon('<rect x="2" y="7" width="20" height="10" rx="1"/><path d="M6 11h.01M10 11h.01"/>') },
+  { id: 'router',        label: 'Routers',       accent: '#00f2fe', svg: icon('<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20"/>') },
+  { id: 'firewall',      label: 'Firewalls',     accent: '#ef4444', svg: icon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>') },
+  { id: 'nac',           label: 'NAC',           accent: '#ef4444', svg: icon('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>') },
+  { id: 'storage',       label: 'Storage',       accent: '#8e24aa', svg: icon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') },
+  { id: 'console',       label: 'KVM & Console', accent: '#64748b', svg: icon('<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M7 8h10M7 12h5"/>') },
+  { id: 'patch-panel',   label: 'Patch Panels',  accent: '#64748b', svg: icon('<rect x="2" y="8" width="20" height="8" rx="1"/><path d="M6 8v8M10 8v8M14 8v8M18 8v8"/>') },
+  { id: 'pdu',           label: 'PDU',           accent: '#fdd835', svg: icon('<path d="M18 20V10M12 20V4M6 20v-6"/>') },
+  { id: 'ats',           label: 'ATS',           accent: '#fdd835', svg: icon('<path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path d="M9 12l2 2 4-4"/>') },
+  { id: 'ups',           label: 'UPS',           accent: '#fdd835', svg: icon('<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/>') },
+  { id: 'cooling',       label: 'Cooling',       accent: '#38bdf8', svg: icon('<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/><circle cx="12" cy="12" r="3"/>') },
+  { id: 'cable-manager', label: 'Cable Mgmt',    accent: '#64748b', svg: icon('<path d="M4 6h16M4 10h16M4 14h16M4 18h16"/>') },
+  { id: 'blank-panel',   label: 'Blanks',        accent: '#2d3748', svg: icon('<rect x="2" y="9" width="20" height="6" rx="1"/>') },
+];
+
+const CABLE_TEMPLATES = [
+  { id: 'cable-eth',     name: 'Cat6 Ethernet Cable',   type: 'vm-network',   color: '#fb8c00', termination: 'RJ45 Ethernet', description: 'Orange VM/Data' },
+  { id: 'cable-mgmt',    name: 'iDRAC / Mgmt Cable',    type: 'idrac',        color: '#e53935', termination: 'RJ45 Ethernet', description: 'Red Out-of-band' },
+  { id: 'cable-fiber',   name: 'Fiber Patch Cable',      type: 'ceph-primary', color: '#43a047', termination: 'LC-Fiber',      description: 'Green High-speed' },
+  { id: 'cable-power',   name: 'C13/C14 Power Cord',     type: 'power',        color: '#212529', termination: 'C13/C14 Power', description: 'Black AC Power' },
+  { id: 'cable-console', name: 'Console Serial Cable',   type: 'general',      color: '#78909c', termination: 'Console DB9',   description: 'Grey Console' },
 ];
 
 export class Sidebar {
@@ -77,17 +69,20 @@ export class Sidebar {
     this.container.innerHTML = '';
     this.container.className = 'sidebar';
 
+    // Header
     const header = document.createElement('div');
     header.className = 'sidebar-header';
-    header.innerHTML = `
-      <h3>${isHybrid ? 'Rack + Cloud' : isCloud ? 'Cloud Services' : 'Components'}</h3>
-      <button class="collapse-btn" title="Collapse">«</button>
-    `;
+    header.innerHTML = `<h3>Rack Slicer</h3><button class="collapse-btn" title="Collapse">«</button>`;
+    header.querySelector('.collapse-btn')!.addEventListener('click', () => {
+      this.container.classList.toggle('collapsed');
+    });
 
-    const navTree = document.createElement('div');
-    navTree.className = 'sidebar-nav-tree';
-    this.renderNavTree(navTree);
+    // Workspace tab bar (replaces nav tree)
+    const tabBar = document.createElement('div');
+    tabBar.className = 'sb-tabs';
+    this.renderTabBar(tabBar, activeView);
 
+    // Search
     const searchContainer = document.createElement('div');
     searchContainer.className = 'sidebar-search';
     const searchInput = document.createElement('input');
@@ -104,10 +99,6 @@ export class Sidebar {
     catalogContainer.className = 'sidebar-catalog';
     catalogContainer.id = 'catalog-container';
 
-    // Hybrid renders BOTH catalogs at once — renderCatalog()/renderCloudPalette() each own the
-    // ENTIRE content of whatever container they're given (they do container.innerHTML = ''), so
-    // they can't share #catalog-container the way the single-view modes do; a second container
-    // is created just for the cloud palette here.
     const cloudCatalogContainer = document.createElement('div');
     cloudCatalogContainer.className = 'sidebar-catalog';
     cloudCatalogContainer.id = 'cloud-catalog-container';
@@ -116,9 +107,6 @@ export class Sidebar {
       this.searchTerm = e.target.value.toLowerCase();
       if (isHybrid) {
         this.renderCatalog();
-        // Debounced — filtering runs across all 1274 manifest entries + a full DOM rebuild on
-        // every keystroke would otherwise feel sluggish at this list size (unlike the ~77-item
-        // device catalog this search box normally filters).
         if (cloudSearchDebounceTimer) clearTimeout(cloudSearchDebounceTimer);
         cloudSearchDebounceTimer = setTimeout(() => this.renderCloudPalette(cloudCatalogContainer), 150);
       } else if (isCloud) {
@@ -130,14 +118,10 @@ export class Sidebar {
     };
 
     this.container.appendChild(header);
-    this.container.appendChild(navTree);
+    this.container.appendChild(tabBar);
     this.container.appendChild(searchContainer);
     this.container.appendChild(catalogContainer);
     if (isHybrid) this.container.appendChild(cloudCatalogContainer);
-
-    header.querySelector('.collapse-btn')?.addEventListener('click', () => {
-      this.container.classList.toggle('collapsed');
-    });
 
     if (isHybrid) {
       this.renderCatalog();
@@ -146,6 +130,36 @@ export class Sidebar {
       this.renderCloudPalette();
     } else {
       this.renderCatalog();
+    }
+  }
+
+  private renderTabBar(container: HTMLElement, activeView: string): void {
+    const tabs: Array<{ label: string; view: 'rack' | 'cloud' | 'hybrid' }> = [
+      { label: 'Rack', view: 'rack' },
+      { label: 'Cloud', view: 'cloud' },
+      { label: 'Hybrid', view: 'hybrid' },
+    ];
+
+    for (const tab of tabs) {
+      const isActive =
+        tab.view === 'rack' ? activeView === 'rack'
+        : tab.view === 'hybrid' ? activeView === 'hybrid'
+        : activeView === 'cloud';
+
+      const el = document.createElement('div');
+      el.className = `sb-tab${isActive ? ' active' : ''}`;
+      el.textContent = tab.label;
+      el.setAttribute('data-view', tab.view);
+
+      el.addEventListener('click', () => {
+        this.focusedCloudProvider = null;
+        this.searchTerm = '';
+        const currentView = State.getState().activeView;
+        const target = tab.view === 'cloud' && currentView !== 'cloud' ? 'hybrid' : tab.view;
+        EventBus.emit('view:switch', target);
+      });
+
+      container.appendChild(el);
     }
   }
 
@@ -288,51 +302,6 @@ export class Sidebar {
 
     section.appendChild(content);
     container.appendChild(section);
-  }
-
-  private renderNavTree(container: HTMLElement): void {
-    const state = State.getState();
-    container.innerHTML = '';
-
-    for (const group of NAV_TREE) {
-      const groupEl = document.createElement('div');
-      groupEl.className = 'nav-tree-group';
-
-      const groupTitle = document.createElement('div');
-      groupTitle.className = 'nav-tree-group-title';
-      groupTitle.innerHTML = `<span class="nav-tree-caret">▾</span> ${group.icon} ${group.label}`;
-      groupTitle.onclick = () => groupEl.classList.toggle('collapsed');
-      groupEl.appendChild(groupTitle);
-
-      const childrenEl = document.createElement('div');
-      childrenEl.className = 'nav-tree-children';
-      for (const leaf of group.children) {
-        const isActive = leaf.view === 'rack'
-          ? state.activeView === 'rack'
-          : leaf.view === 'hybrid'
-            ? state.activeView === 'hybrid' && this.focusedCloudProvider === null
-            : (state.activeView === 'cloud' || state.activeView === 'hybrid') && (leaf.provider ?? null) === this.focusedCloudProvider;
-
-        const leafEl = document.createElement('div');
-        leafEl.className = `nav-tree-leaf${isActive ? ' active' : ''}`;
-        leafEl.innerHTML = `${leaf.icon} <span>${leaf.label}</span>`;
-        leafEl.onclick = () => {
-          this.focusedCloudProvider = leaf.provider ?? null;
-          this.searchTerm = '';
-          // A provider leaf (AWS/Azure/GCP/Local Resources) switching away from an in-progress
-          // Rack or Hybrid workspace would otherwise discard the rack entirely (pure 'cloud' view
-          // hides #canvas-viewport, see setActiveView) — promote to 'hybrid' instead so the rack
-          // stays put and the user can wire it up to the newly-focused cloud provider. Only true
-          // standalone entry points (starting fresh from pure 'cloud', or the startup modal) still
-          // land in plain 'cloud'.
-          const target = leaf.view === 'cloud' && state.activeView !== 'cloud' ? 'hybrid' : leaf.view;
-          EventBus.emit('view:switch', target);
-        };
-        childrenEl.appendChild(leafEl);
-      }
-      groupEl.appendChild(childrenEl);
-      container.appendChild(groupEl);
-    }
   }
 
   /** metaMode 'provider' is used in cross-provider contexts (Boundaries, Recently Used) where
