@@ -1,65 +1,10 @@
 /* Cloud Architecture canvas — view-switch tabs, icon palette, and canvas object styling.
    #cloud-viewport / #cloud-canvas grid placement lives in canvas.css alongside #canvas-viewport. */
 
-/* --- Sidebar: top-level workspace navigation tree (On-Prem Infrastructure / Cloud) --- */
-
-.sidebar-nav-tree {
-  padding: var(--space-sm) 0;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.nav-tree-group-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px var(--space-md);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-}
-
-.nav-tree-group-title:hover {
-  color: var(--text-primary);
-}
-
 .nav-tree-caret {
   display: inline-block;
   transition: transform var(--transition-speed);
   font-size: 10px;
-}
-
-.nav-tree-group.collapsed .nav-tree-caret {
-  transform: rotate(-90deg);
-}
-
-.nav-tree-group.collapsed .nav-tree-children {
-  display: none;
-}
-
-.nav-tree-leaf {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px var(--space-md) 7px calc(var(--space-md) + 16px);
-  font-size: var(--font-size-xs);
-  color: var(--text-primary);
-  cursor: pointer;
-  border-left: 3px solid transparent;
-  transition: background-color var(--transition-speed);
-}
-
-.nav-tree-leaf:hover {
-  background-color: rgba(255, 255, 255, 0.04);
-}
-
-.nav-tree-leaf.active {
-  background-color: rgba(56, 189, 248, 0.1);
-  border-left-color: var(--accent-primary, #38bdf8);
-  font-weight: 600;
 }
 
 /* --- Sidebar: cloud icon palette --- */
