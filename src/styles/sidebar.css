@@ -381,7 +381,7 @@
   padding: 5px 10px 5px 35px;
   gap: 7px;
   font-size: 11px;
-  color: #64748b;
+  color: var(--text-muted);
   cursor: grab;
   border-bottom: 1px solid rgba(255, 255, 255, 0.02);
   transition: background-color var(--transition-speed), color var(--transition-speed);
