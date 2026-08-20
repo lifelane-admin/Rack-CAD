@@ -111,7 +111,7 @@ describe('Startup modal', () => {
 
     // The rack device catalog renders alongside it — this is what makes it Hybrid rather than
     // just an unscoped Cloud view.
-    expect(document.querySelector('#catalog-container .sidebar-section-title')).toBeTruthy();
+    expect(document.querySelector('#catalog-container .cat-row')).toBeTruthy();
   });
 
   it('dismissing via the ✕ button leaves the current view untouched', async () => {
