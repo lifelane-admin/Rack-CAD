@@ -141,10 +141,7 @@ export class Sidebar {
     ];
 
     for (const tab of tabs) {
-      const isActive =
-        tab.view === 'rack' ? activeView === 'rack'
-        : tab.view === 'hybrid' ? activeView === 'hybrid'
-        : activeView === 'cloud';
+      const isActive = tab.view === activeView;
 
       const el = document.createElement('div');
       el.className = `sb-tab${isActive ? ' active' : ''}`;
