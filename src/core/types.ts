@@ -693,6 +693,9 @@ export interface AppState {
    *  floating toolbar's 3D switch (see floating-toolbar.ts) — there is no Cloud Architecture
    *  canvas equivalent. */
   show3DPanel: boolean;
+  /** Whether the floating canvas toolbars (FloatingToolbar + CloudFloatingToolbar) are visible.
+   *  Toggled by the ⊞ button in the top toolbar. Default true. */
+  floatingToolbarVisible: boolean;
   presenterMode: boolean;
   cableRoutingTrayMode: 'overhead' | 'underfloor';
   // AI Mode
@@ -786,6 +789,8 @@ export interface AppEvents {
   'view:toggle-snap': void;
   'view:toggle-rulers': void;
   'view:toggle-3d-panel': void;
+  /** Toggles the floating canvas toolbar(s) show/hide — emitted by the ⊞ button in Toolbar. */
+  'view:toggle-floating-toolbar': void;
   /** Switches Hybrid view's sub-mode between separate scaled panes and one shared overlapping
    *  canvas — see AppState.hybridLayoutMode's doc comment and app.ts's setHybridLayoutMode(). */
   'view:set-hybrid-layout': 'split' | 'merged';

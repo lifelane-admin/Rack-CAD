@@ -55,6 +55,7 @@ class StateManager {
       cabinetCoverVisible: true,
       isometricMode: false,
       show3DPanel: false,
+      floatingToolbarVisible: true,
       presenterMode: false,
       cableRoutingTrayMode: 'overhead',
       aiMode: false,
