@@ -160,6 +160,136 @@ export class Sidebar {
     }
   }
 
+  private renderMyLibraryStrip(catalogContainer: HTMLElement): void {
+    const state = State.getState();
+    const customTemplates = state.customTemplates ?? [];
+
+    const strip = document.createElement('div');
+    strip.className = 'sb-library-strip';
+    strip.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+      </svg>
+      <span class="sb-library-label">My Library</span>
+      <span class="sb-library-count">${customTemplates.length} item${customTemplates.length !== 1 ? 's' : ''}</span>
+    `;
+
+    const importBtn = document.createElement('button');
+    importBtn.className = 'sb-library-add';
+    importBtn.textContent = '+';
+    importBtn.title = 'Import custom library from JSON file';
+    importBtn.onclick = (e) => {
+      e.stopPropagation();
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = (evt: any) => {
+        const file: File = evt.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (r: any) => {
+          try {
+            const imported = parseCustomLibraryJSON(r.target.result);
+            const existing = state.customTemplates ?? [];
+            const existingIds = new Set(existing.map(t => t.id));
+            const merged = [...existing, ...imported.filter(t => !existingIds.has(t.id))];
+            State.setState({ customTemplates: merged });
+            EventBus.emit('notification' as any, { message: `Imported ${imported.length} asset(s)`, type: 'success' });
+            this.render();
+          } catch (err) {
+            EventBus.emit('notification' as any, { message: `Import failed: ${err}`, type: 'error' });
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    };
+    strip.appendChild(importBtn);
+
+    const panel = document.createElement('div');
+    panel.className = 'sb-library-panel';
+
+    strip.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement) === importBtn || importBtn.contains(e.target as HTMLElement)) return;
+      panel.classList.toggle('open');
+    });
+
+    if (customTemplates.length === 0) {
+      const empty = document.createElement('p');
+      empty.style.cssText = 'font-size:11px;color:#8b949e;font-style:italic;padding:8px 12px;margin:0;';
+      empty.textContent = 'No custom assets yet. Select a device and click "Save as Custom Asset" in Properties.';
+      panel.appendChild(empty);
+    } else {
+      customTemplates.forEach(item => {
+        const el = document.createElement('div');
+        el.className = `catalog-item category-${item.category}`;
+        el.draggable = true;
+        el.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding-right:4px;';
+
+        const leftPart = document.createElement('div');
+        leftPart.style.cssText = 'display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow:hidden;';
+        leftPart.innerHTML = `
+          <div class="item-icon">${item.icon}</div>
+          <div class="item-details" style="min-width:0;overflow:hidden;">
+            <div class="item-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.name}</div>
+            <div class="item-meta">${item.heightUnits > 0 ? item.heightUnits + 'U' : 'Accessory'} · Custom</div>
+          </div>
+        `;
+
+        const actions = document.createElement('div');
+        actions.style.cssText = 'display:flex;gap:2px;flex-shrink:0;';
+
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '✎';
+        editBtn.title = 'Edit';
+        editBtn.style.cssText = 'background:none;border:none;color:#8b949e;cursor:pointer;font-size:13px;padding:2px 4px;';
+        editBtn.onclick = (e) => {
+          e.stopPropagation();
+          const fakeDevice: any = {
+            id: '__edit__', name: item.name, hostname: '', managementIp: '',
+            serialNumber: '', description: item.customDescription ?? '',
+            templateId: item.id, rackId: '', startUnit: 1,
+            ports: item.ports.map(p => ({ ...p, deviceId: '__edit__', connected: false, cableId: null })),
+            frontPanelImage: item.frontPanelImage,
+          };
+          const base = getTemplate(item.basedOnTemplateId ?? '') ?? null;
+          this.customAssetModal.show(fakeDevice, base, item, () => this.render());
+        };
+
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '×';
+        delBtn.title = 'Delete';
+        delBtn.style.cssText = 'background:none;border:none;color:#8b949e;cursor:pointer;font-size:16px;padding:2px 4px;';
+        delBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (!confirm(`Delete "${item.name}"?`)) return;
+          deleteCustomTemplate(item.id);
+          const newTemplates = (State.getState().customTemplates ?? []).filter(t => t.id !== item.id);
+          State.setState({ customTemplates: newTemplates });
+          this.render();
+        };
+
+        actions.appendChild(editBtn);
+        actions.appendChild(delBtn);
+        el.appendChild(leftPart);
+        el.appendChild(actions);
+        el.ondragstart = (e) => {
+          e.dataTransfer?.setData('application/json', JSON.stringify({ templateId: item.id }));
+        };
+        panel.appendChild(el);
+      });
+
+      const exportBtn = document.createElement('button');
+      exportBtn.textContent = 'Export My Library';
+      exportBtn.style.cssText = 'margin:6px 4px 2px;font-size:11px;padding:4px 10px;border:1px solid #30363d;background:transparent;color:#8b949e;border-radius:4px;cursor:pointer;width:calc(100% - 8px);';
+      exportBtn.onclick = () => exportCustomLibraryJSON(customTemplates);
+      panel.appendChild(exportBtn);
+    }
+
+    catalogContainer.appendChild(strip);
+    catalogContainer.appendChild(panel);
+  }
+
   private renderMyLibrary(container: HTMLElement): void {
     const state = State.getState();
     const customTemplates = state.customTemplates ?? [];
