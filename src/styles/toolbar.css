@@ -1,5 +1,6 @@
+/* ── Top bar shell ───────────────────────────────────────────────────────── */
 #toolbar {
-  height: 52px; /* Matches layout.css */
+  height: 48px;
   background: var(--bg-header);
   border-bottom: 1px solid var(--border-color);
   user-select: none;
@@ -14,111 +15,173 @@
   align-items: center;
   width: 100%;
   height: 100%;
+  gap: 0;
 }
 
-.toolbar-logo {
-  font-size: 14px;
-  color: var(--accent-primary);
-  font-weight: 800;
-  margin-right: var(--space-xl);
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  text-shadow: 0 0 8px rgba(56, 189, 248, 0.45);
-}
-
-.toolbar-group {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  padding: 2px 0;
-}
-
-.toolbar-buttons {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 4px;
-}
-
+/* ── Shared button base ──────────────────────────────────────────────────── */
 .toolbar-btn {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 5px;
   color: var(--text-secondary);
-  font-size: 15px;
-  transition: all var(--transition-speed) ease;
+  font-size: 13px;
   border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.01);
+  background: transparent;
+  transition: all var(--transition-speed) ease;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 
 .toolbar-btn:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--bg-hover);
+  border-color: rgba(255,255,255,0.08);
   color: var(--text-primary);
-  transform: translateY(-0.5px);
 }
 
 .toolbar-btn.active {
-  background-color: rgba(56, 189, 248, 0.15);
+  background: rgba(56,189,248,0.12);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
-}
-
-.toolbar-group-label {
-  font-size: 9px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  margin-top: 2px;
-}
-
-.toolbar-separator {
-  width: 1px;
-  height: 28px;
-  background-color: var(--border-color);
-  margin: 0 var(--space-md);
-  align-self: center;
 }
 
 .toolbar-btn svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   stroke: currentColor;
   fill: none;
-  stroke-width: 2.2;
+  stroke-width: 2;
 }
 
-.toolbar-btn svg[fill="currentColor"] {
-  fill: currentColor;
+/* ── Tool strip ──────────────────────────────────────────────────────────── */
+.tb-strip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }
 
-/* AI Mode toggle button */
+/* ── Separator ───────────────────────────────────────────────────────────── */
+.tb-sep {
+  width: 1px;
+  height: 26px;
+  background: var(--border-color);
+  margin: 0 10px;
+  flex-shrink: 0;
+}
+
+/* ── Menu bar ────────────────────────────────────────────────────────────── */
+.tb-menus {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  position: relative;
+}
+
+.tb-menu-wrap {
+  position: relative;
+}
+
+.tb-menu {
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tb-menu:hover,
+.tb-menu-wrap.open .tb-menu {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tb-caret {
+  font-size: 7px;
+  opacity: 0.5;
+}
+
+/* ── Dropdown ────────────────────────────────────────────────────────────── */
+.tb-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--bg-elevated, #0f172a);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  min-width: 190px;
+  z-index: 200;
+  padding: 3px 0;
+  list-style: none;
+  margin: 0;
+}
+
+.tb-menu-wrap.open .tb-dropdown {
+  display: block;
+}
+
+.tb-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  gap: 16px;
+}
+
+.tb-dropdown-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tb-kbd {
+  font-size: 9px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.tb-dropdown-sep {
+  height: 1px;
+  background: var(--border-color);
+  margin: 3px 0;
+}
+
+/* ── Right zone ──────────────────────────────────────────────────────────── */
+.tb-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* AI toggle — wider than standard tool button */
 .ai-toggle-btn {
   width: auto;
   min-width: 64px;
   padding: 4px 8px;
   font-size: 11px;
+  border-color: var(--border-color);
 }
 
 .ai-toggle-btn.active {
-  background: rgba(108, 99, 255, 0.2);
+  background: rgba(108,99,255,0.2);
   border-color: #6c63ff;
   color: #a89fff;
-  box-shadow: 0 0 8px rgba(108, 99, 255, 0.3);
 }
 
 .ai-toggle-btn:hover {
-  border-color: rgba(108, 99, 255, 0.5);
+  border-color: rgba(108,99,255,0.5);
 }
 
 .ai-badge {
@@ -126,12 +189,4 @@
   font-weight: 600;
   letter-spacing: 0.5px;
   white-space: nowrap;
-}
-
-.toolbar-group--ai {
-  margin-left: auto;
-}
-
-.toolbar-group--ai .toolbar-buttons {
-  padding: 0 4px;
 }
