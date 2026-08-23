@@ -467,6 +467,12 @@ export class PropertiesPanel {
           Round Edges (rounded corners on right-angle bends)
         </label>
       </div>
+      <div class="form-group">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+          <input type="checkbox" id="prop-cloudconn-avoid-obstacles" ${conn.avoidObstacles ? 'checked' : ''} />
+          Avoid Obstacles (route around other nodes/containers)
+        </label>
+      </div>
       <button id="prop-cloudconn-delete" style="margin-top: 10px; width: 100%; padding: 5px 8px; font-size: 10px; background: rgba(244,67,54,0.12); border: 1px solid #e53935; border-radius: 4px; color: #e53935; cursor: pointer;">🗑 Delete</button>
     `;
 
@@ -498,6 +504,9 @@ export class PropertiesPanel {
     });
     container.querySelector('#prop-cloudconn-rounded')?.addEventListener('change', (e: any) => {
       EventBus.emit('cloudconnector:update', { id, data: { roundedCorners: e.target.checked } });
+    });
+    container.querySelector('#prop-cloudconn-avoid-obstacles')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cloudconnector:update', { id, data: { avoidObstacles: e.target.checked } });
     });
     container.querySelector('#prop-cloudconn-delete')?.addEventListener('click', () => {
       EventBus.emit('edit:delete', undefined as any);

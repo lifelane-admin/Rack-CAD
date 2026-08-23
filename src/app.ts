@@ -53,6 +53,7 @@ import { renderCloudNode, nodeEdgeWorldPoint, nodeCenterWorldPoint } from './ren
 import { renderCloudContainer } from './renderers/cloud-container-renderer';
 import { renderCloudHierarchy, getNaturalHierarchySize } from './renderers/cloud-hierarchy-renderer';
 import { renderCloudConnector, inferBestSide, CLOUD_CONNECTOR_LINE_STYLES } from './renderers/cloud-connector-renderer';
+import type { ObstacleRect } from './renderers/cloud-connector-router';
 import { getCloudIcon, isBoundaryIcon, inferContainerKind, CLOUD_SHAPE_KINDS } from './library/cloud-icon-catalog';
 import { hierarchyLevelsToLine, hierarchyLevelIcon } from './library/hierarchy-parser';
 import { showHierarchyInputModal } from './components/hierarchy-input-modal';
@@ -5369,11 +5370,25 @@ export class App {
     }
 
     const selectedConnIds = new Set(s.selection.filter(i => i.type === 'cloud-connector').map(i => i.id));
+    // Obstacle rects for avoidObstacles routing (see cloud-connector-router.ts) — built once for
+    // the whole loop since it's the same set for every connector, only the per-connector
+    // exclusion (its own source/dest) differs. Skipped entirely while any cloud object is mid-drag
+    // so obstacle-avoiding routes only recompute once the drag settles, keeping every mousemove
+    // tick as cheap as a plain connector regardless of how many connectors have it enabled.
+    const cloudDragActive = !!(this.draggedCloudNodeId || this.draggedCloudContainerId || this.draggedCloudHierarchyId || this.draggedCloudImageId);
+    const allObstacles: { id: string; rect: ObstacleRect }[] = cloudDragActive ? [] : [
+      ...s.cloudContainers.map(c => ({ id: c.id, rect: c })),
+      ...s.cloudHierarchies.filter((h): h is typeof h & { width: number; height: number } => h.width != null && h.height != null).map(h => ({ id: h.id, rect: h })),
+      ...s.cloudNodes.map(n => ({ id: n.id, rect: n })),
+    ];
     for (const conn of s.cloudConnectors) {
       const resolved = this.resolveCloudConnectorEndpoints(conn);
       if (!resolved) continue;
       const { from, to, fromSide, toSide } = resolved;
-      const connGroup = renderCloudConnector(conn, from, to, connectorLayer, selectedConnIds.has(conn.id), fromSide, toSide);
+      const obstacles = conn.avoidObstacles && !cloudDragActive
+        ? allObstacles.filter(o => o.id !== conn.sourceNodeId && o.id !== conn.destNodeId).map(o => o.rect)
+        : undefined;
+      const connGroup = renderCloudConnector(conn, from, to, connectorLayer, selectedConnIds.has(conn.id), fromSide, toSide, obstacles);
       // While THIS connector's own tip is being re-dragged, its rendered line/hit-path sits on
       // the connector layer — painted ABOVE the node layer — and can shadow the very node
       // underneath it from hover/hit-testing, especially right at its current attachment point
@@ -5634,6 +5649,11 @@ export class App {
           label: connector.roundedCorners ? 'Sharp Corners' : 'Rounded Corners',
           icon: '⭕',
           action: () => eventBus.emit('cloudconnector:update', { id: connectorId, data: { roundedCorners: !connector.roundedCorners } }),
+        },
+        {
+          label: connector.avoidObstacles ? 'Disable Obstacle Avoidance' : 'Avoid Obstacles',
+          icon: '🔀',
+          action: () => eventBus.emit('cloudconnector:update', { id: connectorId, data: { avoidObstacles: !connector.avoidObstacles } }),
         },
         { separator: true, label: '' },
         waypointIndex !== null

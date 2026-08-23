@@ -531,6 +531,13 @@ export interface CloudConnector {
    *  placed waypoints are NOT forced back onto horizontal/vertical alignment (same as cable
    *  anchors) — the user is taking over routing entirely at that point. */
   waypoints?: Point[];
+  /** When true (and routing === 'orthogonal'), routes around other cloud nodes/containers/
+   *  hierarchies instead of straight through them — see routeAroundObstacles() in
+   *  cloud-connector-router.ts. Falls back to the plain elbow route when no valid path exists
+   *  (e.g. destination fully enclosed). Ignored when routing !== 'orthogonal', and overridden
+   *  entirely by a non-empty `waypoints` list, same precedence as every other auto-route knob.
+   *  The per-segment manual offsets above don't apply to a multi-bend pathfound route. */
+  avoidObstacles?: boolean;
   /** Stroke width in px — default 2 when unset. */
   width?: number;
   /** Tip style at the source end — default 'none'. */

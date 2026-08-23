@@ -7,6 +7,7 @@
 // cloud-node-renderer.ts, or passes through sourcePoint/destPoint as-is for a floating end).
 import { CloudConnector, CloudHandleSide, Point } from '../core/types';
 import { createCircle, createGroup, createPath, createText, setAttributes } from '../utils/svg-helpers';
+import { ObstacleRect, routeAroundObstacles } from './cloud-connector-router';
 
 const DEFAULT_COLOR = '#8b949e';
 const ENDPOINT_HANDLE_R = 5.5;
@@ -121,9 +122,14 @@ export function resolveRoutePoints(
   to: Point, toSide: CloudHandleSide | undefined,
   routing: CloudConnector['routing'],
   crossbarOffset?: number, entryOffset?: number, exitOffset?: number,
-  entryStubOffset?: number, exitStubOffset?: number, waypoints?: Point[]
+  entryStubOffset?: number, exitStubOffset?: number, waypoints?: Point[],
+  avoidObstacles?: boolean, obstacles?: ObstacleRect[]
 ): Point[] {
   if (waypoints && waypoints.length > 0) return [from, ...waypoints, to];
+  if (avoidObstacles && routing === 'orthogonal' && fromSide && toSide && obstacles && obstacles.length > 0) {
+    const routed = routeAroundObstacles(from, fromSide, to, toSide, obstacles);
+    if (routed) return routed;
+  }
   return autoRoutePoints(from, fromSide, to, toSide, routing, crossbarOffset, entryOffset, exitOffset, entryStubOffset, exitStubOffset);
 }
 
@@ -170,7 +176,8 @@ export function routeHandlesFor(
   to: Point, toSide: CloudHandleSide | undefined,
   routing: CloudConnector['routing'],
   crossbarOffset?: number, entryOffset?: number, exitOffset?: number,
-  entryStubOffset?: number, exitStubOffset?: number, waypoints?: Point[]
+  entryStubOffset?: number, exitStubOffset?: number, waypoints?: Point[],
+  avoidObstacles?: boolean
 ): {
   entryStub: SegmentHandle | null; entry: SegmentHandle | null; crossbar: SegmentHandle | null;
   exit: SegmentHandle | null; exitStub: SegmentHandle | null;
@@ -178,7 +185,8 @@ export function routeHandlesFor(
   const none = { entryStub: null, entry: null, crossbar: null, exit: null, exitStub: null };
   // A manual waypoint route gets its own per-point handles (see renderCloudConnector()) instead —
   // none of these segment-offset handles apply once the user has taken over routing entirely.
-  if ((waypoints && waypoints.length > 0) || routing !== 'orthogonal') return none;
+  // Same for an obstacle-avoiding route: its bends come from the router, not a draggable offset.
+  if ((waypoints && waypoints.length > 0) || routing !== 'orthogonal' || avoidObstacles) return none;
 
   if (!fromSide) {
     const midX = crossbarOffset ?? (from.x + to.x) / 2;
@@ -352,7 +360,8 @@ export function renderCloudConnector(
   connector: CloudConnector,
   from: Point, to: Point,
   layer: SVGGElement, selected: boolean,
-  fromSide?: CloudHandleSide, toSide?: CloudHandleSide
+  fromSide?: CloudHandleSide, toSide?: CloudHandleSide,
+  obstacles?: ObstacleRect[]
 ): SVGGElement {
   const group = createGroup(undefined, 'cloud-connector');
   setAttributes(group, { 'data-cloud-connector-id': connector.id, cursor: 'pointer' });
@@ -362,7 +371,8 @@ export function renderCloudConnector(
   const pts = resolveRoutePoints(
     from, fromSide, to, toSide, connector.routing,
     connector.crossbarOffset, connector.entryOffset, connector.exitOffset,
-    connector.entryStubOffset, connector.exitStubOffset, connector.waypoints
+    connector.entryStubOffset, connector.exitStubOffset, connector.waypoints,
+    connector.avoidObstacles, obstacles
   );
   const d = pointsToPathD(pts, !!connector.roundedCorners);
   const labelPoint = pathMidpoint(pts);
@@ -434,7 +444,8 @@ export function renderCloudConnector(
     const { entryStub, entry, crossbar, exit, exitStub } = routeHandlesFor(
       from, fromSide, to, toSide, connector.routing,
       connector.crossbarOffset, connector.entryOffset, connector.exitOffset,
-      connector.entryStubOffset, connector.exitStubOffset, connector.waypoints
+      connector.entryStubOffset, connector.exitStubOffset, connector.waypoints,
+      connector.avoidObstacles
     );
     const segmentHandles: { seg: SegmentHandle; kind: 'entryStub' | 'entry' | 'crossbar' | 'exit' | 'exitStub'; color: string }[] = [
       ...(entryStub ? [{ seg: entryStub, kind: 'entryStub' as const, color: '#d29922' }] : []),
