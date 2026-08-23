@@ -374,7 +374,7 @@ export class App {
     } catch (err) {
       console.error('[CloudCanvas] init failed, Cloud Architecture view will be unavailable:', err);
     }
-    this.mountHybridSplitter();
+    // mountHybridSplitter() removed — hybrid mode always uses merged canvas, no splitter needed
 
     // Initialize UI components
     const toolbarEl = document.getElementById('toolbar')!;
@@ -840,9 +840,8 @@ export class App {
       this.setShow3DPanel(!stateManager.getState().show3DPanel);
     });
 
-    (eventBus as any).on('view:set-hybrid-layout', (mode: 'split' | 'merged') => {
-      this.setHybridLayoutMode(mode);
-    });
+    // 'view:set-hybrid-layout' listener removed — hybrid always uses merged canvas, split mode
+    // no longer exists. The event may still be emitted by old toolbar buttons; ignore it.
 
     (eventBus as any).on('cable:toggle-airdrop-destination', () => {
       const s = stateManager.getState();
@@ -5267,19 +5266,16 @@ export class App {
     const minimap = document.getElementById('minimap');
     const isCloud = view === 'cloud';
     const isHybrid = view === 'hybrid';
-    const isMerged = isHybrid && stateManager.getState().hybridLayoutMode === 'merged';
+    // Hybrid always uses merged mode — split sub-mode has been removed.
+    const isMerged = isHybrid;
 
     rackViewport?.classList.toggle('hidden', isCloud && !isHybrid);
     cloudViewport?.classList.toggle('hidden', !isCloud && !isHybrid);
-    hybridSplitter?.classList.toggle('hidden', !isHybrid);
-    // Only Hybrid Split divides #canvas-split between the two panes (see mountHybridSplitter) —
-    // leaving a dragged flex-basis on the sole visible pane in single-view modes, or in Merged
-    // (which overlaps both full-size via CSS instead), would strand it at whatever % it was last
-    // resized to instead of filling the full width (see canvas.css's default flex:1).
-    if (!isHybrid || isMerged) {
-      if (rackViewport) rackViewport.style.flex = '';
-      if (cloudViewport) cloudViewport.style.flex = '';
-    }
+    // hybridSplitter is always kept hidden — merged mode needs no draggable divider.
+    hybridSplitter?.classList.add('hidden');
+    // Clear any stale flex-basis so each pane fills the available width correctly.
+    if (rackViewport) rackViewport.style.flex = '';
+    if (cloudViewport) cloudViewport.style.flex = '';
     rulerCorner?.classList.toggle('hidden', isCloud && !isHybrid);
     rulerH?.classList.toggle('hidden', isCloud && !isHybrid);
     rulerV?.classList.toggle('hidden', isCloud && !isHybrid);

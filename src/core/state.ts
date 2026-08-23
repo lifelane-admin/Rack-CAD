@@ -63,7 +63,7 @@ class StateManager {
       previewDiff: null,
       customTemplates: loadCustomTemplates(),
       activeView: 'rack',
-      hybridLayoutMode: 'split',
+      hybridLayoutMode: 'merged',
       cloudNodes: [],
       cloudContainers: [],
       cloudConnectors: [],

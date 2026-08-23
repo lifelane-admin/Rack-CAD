@@ -160,7 +160,7 @@ export class FloatingToolbar {
     this.element.innerHTML = `
       <!-- Row 1: Drag handle, pointer tools, edit actions, and anchor points -->
       <div class="ft-row" id="ft-row-1">
-        <div class="ft-drag-handle" title="Drag to reposition toolbar">⋮⋮</div>
+        <div class="ft-drag-handle" title="Drag to reposition toolbar"><span class="ft-toolbar-label">Rack Toolbar</span><span class="ft-drag-dots">⋮⋮</span></div>
 
         <!-- Selection & Pan Tools -->
         <div class="ft-section">

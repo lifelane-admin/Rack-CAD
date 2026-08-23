@@ -5,14 +5,12 @@ import { Toolbar } from '../components/toolbar';
 import { Sidebar } from '../components/sidebar';
 
 /**
- * Hybrid view — the rack canvas and the Cloud Architecture canvas shown side by side in
- * #canvas-split, split by the draggable #splitter-hybrid, 2D only (see app.ts's setActiveView()
- * and mountHybridSplitter()). Each pane keeps its own independent pan/zoom — deliberately not
- * locked together, since a rack elevation and a cloud diagram have very different native scales.
- * The splitter's own pointer-drag resizing is NOT covered here (jsdom doesn't do layout, so a
- * flex-basis percentage change can't be observed) — that needs a real-browser check. What IS
- * covered: the DOM/state side-effects setActiveView('hybrid') is responsible for, and
- * toolbar/sidebar visibility once both canvases are up.
+ * Hybrid view — the rack canvas and the Cloud Architecture canvas shown as a single merged canvas
+ * in #canvas-split, 2D only (see app.ts's setActiveView()). Both viewports overlap full-size with
+ * pan/zoom locked together (see setHybridTransformSync). The split/splitter sub-mode has been
+ * removed — hybrid always uses merged layout. What IS covered: the DOM/state side-effects
+ * setActiveView('hybrid') is responsible for, and toolbar/sidebar visibility once both canvases
+ * are up.
  */
 function mountAppSkeleton(): void {
   document.body.innerHTML = `
@@ -108,7 +106,7 @@ describe('Hybrid view', () => {
     expect(document.getElementById('canvas-3d')!.classList.contains('hidden')).toBe(true);
   });
 
-  it('dropping a cloud icon onto the rack canvas in hybrid view is a no-op — the two panes are separate drop targets now, not overlapping', async () => {
+  it('dropping a cloud icon onto the rack canvas in hybrid (merged) view creates a CloudNode — merged mode overlaps both canvases so the rack viewport is a valid cloud drop target', async () => {
     mountAppSkeleton();
     const { App } = await import('../app');
     const app = new App();
@@ -118,7 +116,10 @@ describe('Hybrid view', () => {
     const rackViewport = document.getElementById('canvas-viewport')!;
     dispatchDrop(rackViewport, { iconId: 'aws-amazon-ec2' }, 150, 200);
 
-    expect(stateManager.getState().cloudNodes).toHaveLength(0);
+    // In merged mode the cloud viewport overlaps the rack viewport with click-through empty space,
+    // so a cloud-icon drop that lands over empty cloud area falls through to #canvas-viewport and
+    // is routed to createCloudNodeFromDrop (see app.ts's drop handler).
+    expect(stateManager.getState().cloudNodes).toHaveLength(1);
   });
 
   it('does NOT create a CloudNode from a rack-canvas drop outside hybrid view either', async () => {

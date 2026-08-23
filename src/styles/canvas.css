@@ -131,6 +131,12 @@ body.hybrid-merged #cloud-viewport #cloud-grid-layer > rect {
   display: none;
 }
 
+/* Belt-and-suspenders: the splitter is also always hidden via JS (classList.add('hidden')) in
+   setActiveView(), but ensure it stays hidden regardless in case of any JS race. */
+body.hybrid-active .splitter-hybrid {
+  display: none !important;
+}
+
 /* Node icons are SVG <image> elements — natively drag-ghostable in some browsers, which would
    hijack the move/resize/connect/export-area mouse-drag gestures mid-gesture (see the dragstart
    listener in app.ts's setupCloudCanvasInteractions()). Belt-and-suspenders alongside

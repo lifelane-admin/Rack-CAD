@@ -123,7 +123,7 @@ export class CloudFloatingToolbar {
 
     this.element.innerHTML = `
       <div class="ft-row" id="ft-row-1">
-        <div class="ft-drag-handle" title="Drag to reposition toolbar">⋮⋮</div>
+        <div class="ft-drag-handle" title="Drag to reposition toolbar"><span class="ft-toolbar-label">Cloud Toolbar</span><span class="ft-drag-dots">⋮⋮</span></div>
 
         <div class="ft-section">
           <button class="ft-btn ${isSelect ? 'active' : ''}" id="cft-tool-select" title="Select Tool (V)">
