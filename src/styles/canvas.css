@@ -338,6 +338,15 @@ svg path.cable-element.selected {
   cursor: cell;
 }
 
+/* SVG summary overlay: hidden in main view, shown only during export */
+.export-summary-overlay {
+  display: none;
+}
+
+body.exporting .export-summary-overlay {
+  display: block;
+}
+
 /* ─── Animated Packet Flow Visualization ────────────────────────────── */
 @keyframes cableFlow {
   from { stroke-dashoffset: 28; }

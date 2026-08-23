@@ -19,11 +19,13 @@ import { StatusBar } from './components/statusbar';
 import { ContextMenu, MenuItem } from './components/context-menu';
 import { ReportsPanel } from './components/reports-panel';
 import { FloatingToolbar } from './components/floating-toolbar';
+import { ReportsFloat } from './components/reports-float';
 import { CloudFloatingToolbar } from './components/cloud-floating-toolbar';
 import { NotificationCenter } from './components/notifications';
 import { TextToolPanel } from './components/text-tool-panel';
 import { ImageToolPanel } from './components/image-tool-panel';
 import './styles/text-tool-panel.css';
+import './styles/reports-float.css';
 import { AIPanel } from './components/ai-panel';
 import { runSelfTests } from './utils/self-test';
 import { renderRack } from './renderers/rack-renderer';
@@ -400,6 +402,13 @@ export class App {
     // Its Cloud Architecture counterpart — mounted inside #cloud-viewport, so it's naturally
     // hidden/shown alongside the rest of that view (see setActiveView()'s .hidden toggling).
     this.cloudFloatingToolbar = new CloudFloatingToolbar();
+
+    // Initialize the draggable Reports float panel (Cable Types + Rack Load Summary).
+    // Mounted inside #canvas-viewport so it sits over the rack canvas only.
+    const canvasVp = document.getElementById('canvas-viewport') as HTMLElement;
+    if (canvasVp) {
+      new ReportsFloat(canvasVp).init();
+    }
 
     // Initialize Presenter Mode Dashboard
     this.presenterDashboard = new PresenterDashboard();
