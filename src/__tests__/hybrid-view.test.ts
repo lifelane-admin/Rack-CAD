@@ -152,9 +152,16 @@ describe('Hybrid view — toolbar group visibility', () => {
     mountToolbar();
     stateManager.setState({ activeView: 'hybrid' });
 
-    for (const id of ['rack-export-group', 'rack-view-group', 'rack-add-group', 'cloud-tools-group', 'cloud-shapes-group', 'cloud-export-group']) {
-      expect(document.getElementById(id)!.style.display, `#${id} should be visible in hybrid`).not.toBe('none');
-    }
+    // In the rewritten Toolbar (Task 4), old group IDs are gone. Instead, switching
+    // to hybrid should show the Cloud menu alongside the always-present File/Edit/View/Export menus.
+    const menuLabels = [...document.querySelectorAll('.tb-menu')].map(
+      el => (el.textContent ?? '').trim().replace('▾', '').trim(),
+    );
+    expect(menuLabels).toContain('File');
+    expect(menuLabels).toContain('Edit');
+    expect(menuLabels).toContain('View');
+    expect(menuLabels).toContain('Export');
+    expect(menuLabels).toContain('Cloud');
   });
 });
 

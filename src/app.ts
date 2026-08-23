@@ -384,6 +384,9 @@ export class App {
     const contextMenuEl = document.getElementById('context-menu')!;
 
     this.toolbar = new Toolbar(toolbarEl);
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.tb-menu.open').forEach(m => m.classList.remove('open'));
+    });
     this.sidebar = new Sidebar(sidebarEl);
     this.properties = new PropertiesPanel(propertiesEl);
     this.statusbar = new StatusBar(statusbarEl);

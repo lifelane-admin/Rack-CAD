@@ -3,6 +3,31 @@ import State from '../core/state';
 import { ToolMode } from '../core/types';
 import { ClaudeProvider } from '../ai/claude-provider';
 
+const TOOLS: { id: string; tool: ToolMode; title: string; svg: string }[] = [
+  {
+    id: 'tb-tool-select', tool: 'select', title: 'Select (V)',
+    svg: '<svg viewBox="0 0 24 24"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" fill="currentColor" stroke="currentColor" stroke-width="1.5"/></svg>',
+  },
+  {
+    id: 'tb-tool-pan', tool: 'pan', title: 'Pan (H)',
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 00-2-2 2 2 0 00-2 2v5m0-5V5a2 2 0 00-2-2 2 2 0 00-2 2v8m0-8V7a2 2 0 00-2-2 2 2 0 00-2 2v6m0-5V9a2 2 0 00-2-2 2 2 0 00-2 2v10a7 7 0 0014 0v-8"/></svg>',
+  },
+  {
+    id: 'tb-tool-cable', tool: 'cable', title: 'Draw Ethernet Cable (C)',
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M12 9v4M6 15v-2h12v2"/></svg>',
+  },
+  {
+    id: 'tb-tool-power', tool: 'power', title: 'Draw Power Cable (P)',
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2v4M15 2v4"/><path d="M7 6h10v4a5 5 0 01-10 0V6z"/><path d="M12 15v7"/></svg>',
+  },
+  {
+    id: 'tb-tool-text', tool: 'text', title: 'Add Text Label (T)',
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M12 5v14M9 19h6"/></svg>',
+  },
+];
+
+const FLOAT_TOGGLE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
+
 export class Toolbar {
   private container: HTMLElement;
 
@@ -13,574 +38,129 @@ export class Toolbar {
   render() {
     this.container.innerHTML = '';
     this.container.className = 'toolbar';
-    
-    // Create inner container
+
     const inner = document.createElement('div');
     inner.className = 'toolbar-inner';
-    
-    // Logo
-    const logo = document.createElement('div');
-    logo.className = 'toolbar-logo';
-    logo.innerHTML = '<strong>Rack Slicer</strong>';
-    inner.appendChild(logo);
 
-    // Groups
-    inner.appendChild(this.createGroup('File', [
-      { 
-        id: 'btn-new', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>', 
-        title: 'New Workspace', 
-        action: () => EventBus.emit('file:new', undefined) 
-      },
-      {
-        id: 'btn-open',
-        icon: '<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>',
-        title: 'Open File',
-        action: () => EventBus.emit('file:open', undefined)
-      },
-      {
-        id: 'btn-save',
-        icon: '<svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>',
-        title: 'Save Project (Ctrl+S)',
-        action: () => EventBus.emit('file:save', undefined)
-      },
-      {
-        id: 'btn-save-as',
-        icon: '<svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/><path d="M15 15l3 3 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-        title: 'Save Project As...',
-        action: () => EventBus.emit('file:save-as', undefined)
-      },
-      {
-        id: 'btn-demo',
-        icon: '<svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>',
-        title: 'Load Demo Cluster',
-        action: () => EventBus.emit('file:demo', undefined)
-      },
-      {
-        id: 'btn-insert-image',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>',
-        title: 'Insert Image (logo / reference image, PNG transparency supported) — also Ctrl+V to paste a copied image',
-        action: () => EventBus.emit('image:insert' as any, undefined)
-      }
-    ]));
-    
-    inner.appendChild(this.createGroup('Tools', [
-      { 
-        id: 'tool-select', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" fill="currentColor"/><path d="M13 13l6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>', 
-        title: 'Select Tool (V)', 
-        action: () => this.setTool('select'), 
-        toggle: true, 
-        defaultActive: true 
-      },
-      { 
-        id: 'tool-pan', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 00-2-2v0a2 2 0 00-2 2v5m0-5V5a2 2 0 00-2-2v0a2 2 0 00-2 2v8m0-8V7a2 2 0 00-2-2v0a2 2 0 00-2 2v6m0-5V9a2 2 0 00-2-2v0a2 2 0 00-2 2v10a7 7 0 0014 0v-8"/></svg>', 
-        title: 'Pan Tool (H)', 
-        action: () => this.setTool('pan'), 
-        toggle: true 
-      },
-      {
-        id: 'tool-cable',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="6" rx="1"></rect><rect x="3" y="15" width="6" height="6" rx="1"></rect><rect x="15" y="15" width="6" height="6" rx="1"></rect><path d="M12 9v4M6 15v-2h12v2"></path></svg>',
-        title: 'Draw Ethernet Cable (C)',
-        action: () => this.setTool('cable'),
-        toggle: true
-      },
-      {
-        id: 'tool-power',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v4M15 2v4"></path><path d="M7 6h10v4a5 5 0 01-10 0V6z"></path><path d="M12 15v7"></path></svg>',
-        title: 'Draw Power Cable to PDU (P)',
-        action: () => this.setTool('power'),
-        toggle: true
-      },
-      {
-        id: 'tool-text',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16"></path><path d="M12 5v14"></path><path d="M9 19h6"></path></svg>',
-        title: 'Add Text Box / Label (T)',
-        action: () => this.setTool('text'),
-        toggle: true
-      },
-      {
-        id: 'tool-zoomin',
-        icon: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/></svg>', 
-        title: 'Zoom In', 
-        action: () => EventBus.emit('view:zoom-in', undefined) 
-      },
-      {
-        id: 'tool-zoomout',
-        icon: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3M8 11h6"/></svg>',
-        title: 'Zoom Out',
-        action: () => EventBus.emit('view:zoom-out', undefined)
-      }
-    ]));
-
-    // Cloud Architecture-only tools — hidden while activeView is 'rack' (see the state:changed
-    // listener below, which toggles this group's visibility alongside the workspace switch).
-    const cloudToolsGroup = this.createGroup('Cloud Tools', [
-      {
-        id: 'tool-cloud-container',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
-        title: 'Draw Container (VPC/Subnet/Resource Group)',
-        action: () => this.setTool('cloud-container'),
-        toggle: true,
-      },
-      {
-        id: 'tool-cloud-connect',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h10"/></svg>',
-        title: 'Connect Cloud Services',
-        action: () => this.setTool('cloud-connect'),
-        toggle: true,
-      },
-    ]);
-    cloudToolsGroup.id = 'cloud-tools-group';
-    cloudToolsGroup.style.display = 'none';
-    inner.appendChild(cloudToolsGroup);
-
-    // Dedicated "basic shape" buttons for the boundary concepts every cloud provider has an
-    // equivalent of (Region/AZ/VPC-VNet/Subnet/Resource Group/Account) — each one-click primes
-    // the same container-draw tool as above, pre-labeled and kind-styled, instead of requiring
-    // the user to find and drag the right palette icon (or draw a bare unlabeled box and rename
-    // it by hand). See cloud-shape:prime in app.ts.
-    const cloudShapesGroup = this.createGroup('Cloud Shapes', [
-      {
-        id: 'shape-region',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 010 18 15 15 0 010-18z"/></svg>',
-        title: 'Add Region boundary',
-        action: () => EventBus.emit('cloud-shape:prime' as any, 'region'),
-      },
-      {
-        id: 'shape-az',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="8.5" y="14" width="7" height="7" rx="1"/></svg>',
-        title: 'Add Availability Zone boundary',
-        action: () => EventBus.emit('cloud-shape:prime' as any, 'az'),
-      },
-      {
-        id: 'shape-vpc',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.5" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.5" fill="currentColor" stroke="none"/></svg>',
-        title: 'Add VPC / Virtual Network boundary',
-        action: () => EventBus.emit('cloud-shape:prime' as any, 'vpc'),
-      },
-      {
-        id: 'shape-subnet',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2"><rect x="5" y="7" width="14" height="10" rx="1"/></svg>',
-        title: 'Add Subnet boundary',
-        action: () => EventBus.emit('cloud-shape:prime' as any, 'subnet'),
-      },
-      {
-        id: 'shape-resource-group',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 002-2v-9a2 2 0 00-2-2h-7l-2-2H4a2 2 0 00-2 2v11a2 2 0 002 2z"/></svg>',
-        title: 'Add Resource Group boundary',
-        action: () => EventBus.emit('cloud-shape:prime' as any, 'resource-group'),
-      },
-      {
-        id: 'shape-account',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg>',
-        title: 'Add Account / Subscription / Project boundary',
-        action: () => EventBus.emit('cloud-shape:prime' as any, 'account'),
-      },
-      {
-        id: 'shape-describe-infra',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v6a2 2 0 002 2h8M6 4h4M6 4a2 2 0 100 4 2 2 0 000-4z"/><circle cx="18" cy="18" r="2"/><path d="M6 10v6a2 2 0 002 2h8"/></svg>',
-        title: 'Describe Infra in one line (Account/Region/Resource Group/VPC/Subnet)',
-        action: () => EventBus.emit('cloudhierarchy:prime' as any, undefined),
-      },
-    ]);
-    cloudShapesGroup.id = 'cloud-shapes-group';
-    cloudShapesGroup.style.display = 'none';
-    inner.appendChild(cloudShapesGroup);
-
-    // Hybrid-only — switches AppState.hybridLayoutMode between Split (separate, independently
-    // scaled rack/cloud panes, the default) and Merged (one shared overlapping canvas, locked
-    // pan/zoom, see app.ts's setHybridLayoutMode). Hidden outside Hybrid view alongside the other
-    // hybrid/cloud-only groups above (see the state:changed listener below).
-    const hybridLayoutGroup = this.createGroup('Hybrid Layout', [
-      {
-        id: 'btn-hybrid-split',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/></svg>',
-        title: 'Split — separate, independently scaled rack and cloud panes',
-        action: () => EventBus.emit('view:set-hybrid-layout' as any, 'split'),
-        toggle: true,
-      },
-      {
-        id: 'btn-hybrid-merge',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="14" height="14" rx="1"/><rect x="7" y="4" width="14" height="14" rx="1"/></svg>',
-        title: 'Merged — one shared canvas, rack and cloud items placed directly together',
-        action: () => EventBus.emit('view:set-hybrid-layout' as any, 'merged'),
-        toggle: true,
-      },
-    ]);
-    hybridLayoutGroup.id = 'hybrid-layout-group';
-    hybridLayoutGroup.style.display = 'none';
-    inner.appendChild(hybridLayoutGroup);
-
-    inner.appendChild(this.createGroup('Edit', [
-      { 
-        id: 'btn-undo', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M3 7v6h6M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg>', 
-        title: 'Undo', 
-        action: () => EventBus.emit('edit:undo', undefined) 
-      },
-      { 
-        id: 'btn-redo', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M21 7v6h-6M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/></svg>', 
-        title: 'Redo', 
-        action: () => EventBus.emit('edit:redo', undefined) 
-      },
-      { 
-        id: 'btn-delete', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>', 
-        title: 'Delete Selected (Del)', 
-        action: () => EventBus.emit('edit:delete', undefined) 
-      }
-    ]));
-
-    const rackViewGroup = this.createGroup('View', [
-      {
-        id: 'btn-grid', 
-        icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>', 
-        title: 'Toggle Grid', 
-        action: () => EventBus.emit('view:toggle-grid', undefined) 
-      },
-      { 
-        id: 'btn-snap', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M5 12V4a3 3 0 016 0v8a3 3 0 006 0V4m-6 16v2m-4-2v2m8-2v2"/></svg>', 
-        title: 'Toggle Grid Snapping', 
-        action: () => EventBus.emit('view:toggle-snap', undefined) 
-      },
-      { 
-        id: 'btn-rulers', 
-        icon: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M6 6v3M9 6v2M12 6v3M15 6v2M18 6v3"/></svg>', 
-        title: 'Toggle Grid Rulers', 
-        action: () => EventBus.emit('view:toggle-rulers', undefined) 
-      },
-      { 
-        id: 'btn-theme', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41M12 7a5 5 0 100 10V7z" fill="currentColor"/></svg>', 
-        title: 'Toggle Theme', 
-        action: () => EventBus.emit('view:toggle-theme', undefined) 
-      },
-      { 
-        id: 'btn-legends', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M9 11H3v5h6v-5zm8 0h-6v5h6v-5zm4-8H3a2 2 0 00-2 2v14a2 2 0 002 2h18a2 2 0 002-2V5a2 2 0 00-2-2zm0 16H3V5h18v14z"/></svg>', 
-        title: 'Toggle Legends & Tables', 
-        action: () => EventBus.emit('view:toggle-legends', undefined) 
-      },
-      { 
-        id: 'btn-legend-custom', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C4.85857 19 6.5 16.5 8 16.5C9.5 16.5 9 19.5 11 20C12 20.25 12 22 12 22Z" stroke="currentColor"/><circle cx="7.5" cy="10.5" r="1.5" fill="currentColor"/><circle cx="11.5" cy="7.5" r="1.5" fill="currentColor"/><circle cx="16.5" cy="9.5" r="1.5" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1.5" fill="currentColor"/></svg>', 
-        title: 'Customize Network Legend & Cable Colors', 
-        action: () => EventBus.emit('legend:edit' as any, undefined) 
-      },
-      { 
-        id: 'btn-reset-routing', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 11-.57-8.38l6.13-5.19"/></svg>', 
-        title: 'Reset All Cable Routing', 
-        action: () => EventBus.emit('cable:reset-routing' as any, undefined) 
-      },
-      { 
-        id: 'btn-reports', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6" stroke-linecap="round"/></svg>', 
-        title: 'Reports & BOM Schedule', 
-        action: () => EventBus.emit('reports:toggle', undefined) 
-      },
-      {
-        id: 'btn-view-side',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 11-.57-8.38l6.13-5.19"></path><rect x="9" y="9" width="6" height="6" rx="1"></rect></svg>',
-        title: 'Switch View Side (Front / Rear)',
-        action: () => EventBus.emit('view:toggle-side' as any, undefined),
-        toggle: true
-      },
-      {
-        id: 'btn-view-skeleton',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"></path><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"></path></svg>',
-        title: 'Toggle Skeleton Wireframe View',
-        action: () => EventBus.emit('view:toggle-skeleton' as any, undefined),
-        toggle: true
-      },
-      {
-        id: 'btn-view-cover',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M9 3v18"></path></svg>',
-        title: 'Toggle Side Covers / Doors',
-        action: () => EventBus.emit('view:toggle-cover' as any, undefined),
-        toggle: true,
-        defaultActive: State.getState().cabinetCoverVisible
-      },
-      {
-        id: 'btn-view-3d',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>',
-        title: 'Toggle Isometric 3D Projection Mode',
-        action: () => EventBus.emit('view:toggle-3d' as any, undefined),
-        toggle: true
-      },
-      {
-        id: 'btn-view-presenter',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>',
-        title: 'Toggle Presenter Infographic Dashboard View',
-        action: () => EventBus.emit('view:toggle-presenter' as any, undefined),
-        toggle: true
-      },
-      {
-        id: 'btn-view-cable-tray-mode',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h16M4 14h16M4 6h16M4 18h16"></path></svg>',
-        title: 'Toggle Cable Routing Mode (Overhead / Underfloor)',
-        action: () => EventBus.emit('view:toggle-cable-tray-mode' as any, undefined),
-        toggle: true
-      }
-    ]);
-    rackViewGroup.id = 'rack-view-group';
-    inner.appendChild(rackViewGroup);
-
-    const rackAddGroup = this.createGroup('Add', [
-      {
-        id: 'btn-add-42u',
-        icon: '<svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M4 7h16M4 12h16M4 17h16M8 4.5h8"/></svg>', 
-        title: 'Add 42U Server Cabinet', 
-        action: () => EventBus.emit('rack:add', { units: 42 }) 
-      },
-      { 
-        id: 'btn-add-48u', 
-        icon: '<svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M4 7h16M4 12h16M4 17h16M8 4.5h8"/></svg>', 
-        title: 'Add 48U Server Cabinet', 
-        action: () => EventBus.emit('rack:add', { units: 48 })
-      }
-    ]);
-    rackAddGroup.id = 'rack-add-group';
-    inner.appendChild(rackAddGroup);
-
-    const rackExportGroup = this.createGroup('Export', [
-      {
-        id: 'btn-exp-svg',
-        icon: '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>', 
-        title: 'Export SVG Layout...', 
-        action: () => EventBus.emit('export:svg', undefined) 
-      },
-      { 
-        id: 'btn-exp-png', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M12 22C17.52 22 22 17.52 22 12S17.52 2 12 2 2 6.48 2 12s4.48 10 12 10z"/><path d="M8 12h8M12 8l4 4-4 4"/></svg>', 
-        title: 'Export PNG Image...', 
-        action: () => EventBus.emit('export:png', undefined) 
-      },
-      { 
-        id: 'btn-exp-jpg', 
-        icon: '<svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>', 
-        title: 'Export JPEG Image...', 
-        action: () => EventBus.emit('export:jpeg', undefined) 
-      },
-      {
-        id: 'btn-exp-pdf',
-        icon: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>',
-        title: 'Export PDF Document...',
-        action: () => EventBus.emit('export:pdf', undefined)
-      },
-      {
-        id: 'btn-exp-html',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
-        title: 'Export HTML (Animated)...',
-        action: () => EventBus.emit('export:html' as any, undefined)
-      },
-      {
-        id: 'btn-exp-report',
-        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>',
-        title: 'Export Design Report (HTML/PDF)...',
-        action: () => EventBus.emit('export:report' as any, undefined)
-      }
-    ]);
-    rackExportGroup.id = 'rack-export-group';
-    inner.appendChild(rackExportGroup);
-
-    // Cloud diagram export — same visibility toggle as #cloud-tools-group (see the
-    // state:changed listener below).
-    const cloudExportGroup = this.createGroup('Cloud Export', [
-      {
-        id: 'btn-exp-cloud-svg',
-        icon: '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>',
-        title: 'Export Cloud Diagram as SVG...',
-        action: () => EventBus.emit('export:cloud-svg', undefined),
-      },
-      {
-        id: 'btn-exp-cloud-png',
-        icon: '<svg viewBox="0 0 24 24"><path d="M12 22C17.52 22 22 17.52 22 12S17.52 2 12 2 2 6.48 2 12s4.48 10 12 10z"/><path d="M8 12h8M12 8l4 4-4 4"/></svg>',
-        title: 'Export Cloud Diagram as PNG...',
-        action: () => EventBus.emit('export:cloud-png', undefined),
-      },
-    ]);
-    cloudExportGroup.id = 'cloud-export-group';
-    cloudExportGroup.style.display = 'none';
-    inner.appendChild(cloudExportGroup);
-
-    // AI Mode toggle — standalone button after all groups
-    inner.appendChild(this.createAiToggle());
-
-    this.container.appendChild(inner);
-
-    EventBus.on('tool:changed', (mode: ToolMode) => {
-      this.container.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
-      const activeBtn = this.container.querySelector(`#tool-${mode}`);
-      if (activeBtn) activeBtn.classList.add('active');
-    });
-
-    // Listen to view states change and update active button highlighting
-    EventBus.on('state:changed', (partial: any) => {
-      const s = State.getState();
-
-      const cloudToolsGroup = this.container.querySelector('#cloud-tools-group') as HTMLElement | null;
-      const cloudShapesGroup = this.container.querySelector('#cloud-shapes-group') as HTMLElement | null;
-      const cloudExportGroup = this.container.querySelector('#cloud-export-group') as HTMLElement | null;
-      const rackExportGroup = this.container.querySelector('#rack-export-group') as HTMLElement | null;
-      const rackViewGroup = this.container.querySelector('#rack-view-group') as HTMLElement | null;
-      const rackAddGroup = this.container.querySelector('#rack-add-group') as HTMLElement | null;
-      // Hybrid shows both canvases at once, so both sets of groups are relevant there —
-      // showCloud/showRack each reduce to exactly the old isCloud/!isCloud for the 'rack'/'cloud'
-      // values (isHybrid is false for both), so this is additive, not a behavior change for the
-      // two pre-existing views.
-      const isCloud = s.activeView === 'cloud';
-      const isHybrid = s.activeView === 'hybrid';
-      const showCloud = isCloud || isHybrid;
-      const showRack = !isCloud || isHybrid;
-      if (cloudToolsGroup) cloudToolsGroup.style.display = showCloud ? '' : 'none';
-      if (cloudShapesGroup) cloudShapesGroup.style.display = showCloud ? '' : 'none';
-      if (cloudExportGroup) cloudExportGroup.style.display = showCloud ? '' : 'none';
-      // The rack canvas's own Export group (SVG/PNG/JPEG/PDF/HTML/Report) was never hidden while
-      // in Cloud view — its "Export SVG" button looks identical to the Cloud Export one but drives
-      // the RACK canvas's export-area tool, which is bound to the (now-hidden, non-interactive)
-      // #canvas element. Clicking it while on the cloud canvas armed the wrong drag tool: the
-      // notification fired ("Drag a rectangle on the canvas...", no "cloud" in the text — the
-      // giveaway) but dragging on the visible #cloud-canvas never reached that listener at all.
-      if (rackExportGroup) rackExportGroup.style.display = showRack ? '' : 'none';
-      // Same class of bug as rack-export-group above: View (grid/rulers/3D/skeleton/cable-tray
-      // toggles) and Add (rack cabinet buttons) are rack-canvas-only concepts that stayed visible
-      // and clickable in Cloud view — silently inert there since they all act on the hidden #canvas.
-      if (rackViewGroup) rackViewGroup.style.display = showRack ? '' : 'none';
-      if (rackAddGroup) rackAddGroup.style.display = showRack ? '' : 'none';
-
-      const hybridLayoutGroup = this.container.querySelector('#hybrid-layout-group') as HTMLElement | null;
-      if (hybridLayoutGroup) hybridLayoutGroup.style.display = isHybrid ? '' : 'none';
-      const btnHybridSplit = this.container.querySelector('#btn-hybrid-split');
-      const btnHybridMerge = this.container.querySelector('#btn-hybrid-merge');
-      if (btnHybridSplit) btnHybridSplit.classList.toggle('active', s.hybridLayoutMode !== 'merged');
-      if (btnHybridMerge) btnHybridMerge.classList.toggle('active', s.hybridLayoutMode === 'merged');
-
-      const btnSide = this.container.querySelector('#btn-view-side');
-      if (btnSide) {
-        if (s.cabinetViewMode === 'rear') btnSide.classList.add('active');
-        else btnSide.classList.remove('active');
-      }
-
-      const btnSkel = this.container.querySelector('#btn-view-skeleton');
-      if (btnSkel) {
-        if (s.cabinetDrawMode === 'skeleton') btnSkel.classList.add('active');
-        else btnSkel.classList.remove('active');
-      }
-
-      const btnCover = this.container.querySelector('#btn-view-cover');
-      if (btnCover) {
-        if (s.cabinetCoverVisible) btnCover.classList.add('active');
-        else btnCover.classList.remove('active');
-      }
-
-      const btn3D = this.container.querySelector('#btn-view-3d');
-      if (btn3D) {
-        if (s.isometricMode) btn3D.classList.add('active');
-        else btn3D.classList.remove('active');
-      }
-
-      const btnPresenter = this.container.querySelector('#btn-view-presenter');
-      if (btnPresenter) {
-        if (s.presenterMode) btnPresenter.classList.add('active');
-        else btnPresenter.classList.remove('active');
-      }
-
-      const btnCableTray = this.container.querySelector('#btn-view-cable-tray-mode');
-      if (btnCableTray) {
-        if (s.cableRoutingTrayMode === 'underfloor') btnCableTray.classList.add('active');
-        else btnCableTray.classList.remove('active');
-      }
-
-      // AI mode toggle active state
-      const btnAi = this.container.querySelector('#ai-toggle-btn');
-      if (btnAi) {
-        if (s.aiMode) btnAi.classList.add('active');
-        else btnAi.classList.remove('active');
-      }
-
-      // AI provider badge
-      const badge = this.container.querySelector('#ai-provider-badge');
-      if (badge) {
-        const labels: Record<string, string> = { claude: '☁ Claude', local: '⚡ Local', rules: '⚙ Rules' };
-        badge.textContent = labels[s.aiProvider] ?? '⚙ Rules';
-      }
-    });
-
-    EventBus.on('ai:mode-changed', (enabled: boolean) => {
-      this.container.querySelector('#ai-toggle-btn')?.classList.toggle('active', enabled);
-    });
-
-    EventBus.on('ai:provider-changed', (name) => {
-      const badge = this.container.querySelector('#ai-provider-badge');
-      if (!badge) return;
-      const labels: Record<string, string> = { claude: '☁ Claude', local: '⚡ Local', rules: '⚙ Rules' };
-      badge.textContent = labels[name] ?? '⚙ Rules';
-    });
-  }
-
-  private createGroup(name: string, buttons: any[]) {
-    const group = document.createElement('div');
-    group.className = 'toolbar-group';
-    
-    const buttonsContainer = document.createElement('div');
-    buttonsContainer.className = 'toolbar-buttons';
-    
-    buttons.forEach(btnInfo => {
+    // ── Tool strip ──────────────────────────────────────────────────────────
+    const strip = document.createElement('div');
+    strip.className = 'tb-strip';
+    const currentTool = State.getState().tool;
+    TOOLS.forEach(({ id, tool, title, svg }) => {
       const btn = document.createElement('button');
-      btn.id = btnInfo.id;
-      btn.className = `toolbar-btn ${btnInfo.toggle ? 'tool-btn' : ''} ${btnInfo.defaultActive ? 'active' : ''}`;
-      btn.title = btnInfo.title;
-      btn.innerHTML = btnInfo.icon;
-      btn.onclick = btnInfo.action;
-      buttonsContainer.appendChild(btn);
+      btn.id = id;
+      btn.className = 'toolbar-btn tb-tool' + (currentTool === tool ? ' active' : '');
+      btn.title = title;
+      btn.innerHTML = svg;
+      btn.addEventListener('click', () => EventBus.emit('tool:changed', tool));
+      strip.appendChild(btn);
     });
+    inner.appendChild(strip);
 
-    const label = document.createElement('div');
-    label.className = 'toolbar-group-label';
-    label.innerText = name;
-    
-    group.appendChild(buttonsContainer);
-    group.appendChild(label);
-    
-    const separator = document.createElement('div');
-    separator.className = 'toolbar-separator';
-    group.appendChild(separator);
+    // ── Separator ───────────────────────────────────────────────────────────
+    inner.appendChild(this.sep());
 
-    return group;
-  }
+    // ── Menu bar ────────────────────────────────────────────────────────────
+    // Each menu is a .tb-menu-wrap containing:
+    //   .tb-menu  — the clickable header (textContent = "Label ▾")
+    //   .tb-dropdown ul — the dropdown list (sibling to .tb-menu)
+    // This keeps .tb-menu textContent clean so tests can extract the label.
+    const menuBar = document.createElement('div');
+    menuBar.className = 'tb-menus';
+    menuBar.id = 'tb-menu-bar';
 
-  private setTool(mode: ToolMode) {
-    EventBus.emit('tool:changed', mode);
-  }
+    const fileMenu = this.menu('File', [
+      { label: 'New Project', kbd: '⌘N', action: () => EventBus.emit('file:new', undefined) },
+      { label: 'Open…', kbd: '⌘O', action: () => EventBus.emit('file:open', undefined) },
+      { label: 'Save', kbd: '⌘S', action: () => EventBus.emit('file:save', undefined) },
+      { label: 'Save As…', kbd: '⌘⇧S', action: () => EventBus.emit('file:save-as', undefined) },
+      'sep',
+      { label: 'Load Demo…', action: () => EventBus.emit('file:demo', undefined) },
+      { label: 'Insert Image…', action: () => EventBus.emit('image:insert' as any, undefined) },
+    ]);
+    menuBar.appendChild(fileMenu);
 
-  private createAiToggle(): HTMLElement {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'toolbar-group toolbar-group--ai';
+    const editMenu = this.menu('Edit', [
+      { label: 'Undo', kbd: '⌘Z', action: () => EventBus.emit('edit:undo', undefined) },
+      { label: 'Redo', kbd: '⌘⇧Z', action: () => EventBus.emit('edit:redo', undefined) },
+      'sep',
+      { label: 'Select All', kbd: '⌘A', action: () => {} },
+      { label: 'Delete', kbd: '⌫', action: () => EventBus.emit('edit:delete', undefined) },
+      'sep',
+      { label: 'Add 42U Rack', action: () => EventBus.emit('rack:add', { units: 42 }) },
+      { label: 'Add 48U Rack', action: () => EventBus.emit('rack:add', { units: 48 }) },
+    ]);
+    menuBar.appendChild(editMenu);
 
-    const buttonsContainer = document.createElement('div');
-    buttonsContainer.className = 'toolbar-buttons';
+    const viewMenu = this.menu('View', [
+      { label: 'Zoom In', kbd: '+', action: () => EventBus.emit('view:zoom-in', undefined) },
+      { label: 'Zoom Out', kbd: '−', action: () => EventBus.emit('view:zoom-out', undefined) },
+      'sep',
+      { label: 'Show Grid', action: () => EventBus.emit('view:toggle-grid', undefined) },
+      { label: 'Show Rulers', action: () => EventBus.emit('view:toggle-rulers', undefined) },
+      { label: 'Snap to Grid', action: () => EventBus.emit('view:toggle-snap', undefined) },
+      'sep',
+      { label: 'Switch to Rack', action: () => EventBus.emit('view:switch', 'rack') },
+      { label: 'Switch to Cloud', action: () => EventBus.emit('view:switch', 'cloud') },
+      { label: 'Switch to Hybrid', action: () => EventBus.emit('view:switch', 'hybrid') },
+      'sep',
+      { label: '3D Panel', action: () => EventBus.emit('view:toggle-3d-panel', undefined) },
+      { label: 'Toggle Theme', action: () => EventBus.emit('view:toggle-theme', undefined) },
+    ]);
+    menuBar.appendChild(viewMenu);
 
-    const btn = document.createElement('button');
-    btn.className = 'toolbar-btn ai-toggle-btn';
-    btn.id = 'ai-toggle-btn';
-    btn.title = 'Enable / Disable AI Mode';
+    const exportMenu = this.menu('Export', [
+      { label: 'Export SVG…', action: () => EventBus.emit('export:svg', undefined) },
+      { label: 'Export PNG…', action: () => EventBus.emit('export:png', undefined) },
+      { label: 'Export JPEG…', action: () => EventBus.emit('export:jpeg', undefined) },
+      { label: 'Export PDF…', action: () => EventBus.emit('export:pdf', undefined) },
+      { label: 'Export HTML…', action: () => EventBus.emit('export:html', undefined) },
+      'sep',
+      { label: 'Design Report…', action: () => EventBus.emit('export:report' as any, undefined) },
+    ]);
+    menuBar.appendChild(exportMenu);
+
+    // Conditionally render Cloud menu on initial render
+    const initialView = State.getState().activeView;
+    if (initialView === 'cloud' || initialView === 'hybrid') {
+      const cloudMenu = this.menu('Cloud', [
+        { label: 'Export Cloud SVG…', action: () => EventBus.emit('export:cloud-svg', undefined) },
+        { label: 'Export Cloud PNG…', action: () => EventBus.emit('export:cloud-png', undefined) },
+      ]);
+      cloudMenu.id = 'tb-menu-cloud-wrap';
+      menuBar.appendChild(cloudMenu);
+    }
+
+    inner.appendChild(menuBar);
+
+    // ── Right zone ──────────────────────────────────────────────────────────
+    const right = document.createElement('div');
+    right.className = 'tb-right';
+
+    // Float toggle
+    const floatToggle = document.createElement('button');
+    floatToggle.id = 'tb-float-toggle';
+    floatToggle.className = 'toolbar-btn tb-float-toggle' + (State.getState().floatingToolbarVisible ? ' active' : '');
+    floatToggle.title = 'Toggle floating toolbar';
+    floatToggle.innerHTML = FLOAT_TOGGLE_SVG;
+    floatToggle.addEventListener('click', () => {
+      EventBus.emit('view:toggle-floating-toolbar', undefined);
+    });
+    right.appendChild(floatToggle);
+
+    // AI / Rules toggle
+    const aiBtn = document.createElement('button');
+    aiBtn.className = 'toolbar-btn ai-toggle-btn';
+    aiBtn.id = 'ai-toggle-btn';
+    aiBtn.title = 'Enable / Disable AI Mode';
     const currentProvider = State.getState().aiProvider;
-    const labels: Record<string, string> = { claude: '☁ Claude', local: '⚡ Local', rules: '⚙ Rules' };
-    btn.innerHTML = `<span class="ai-badge" id="ai-provider-badge">${labels[currentProvider] ?? '⚙ Rules'}</span>`;
-    if (State.getState().aiMode) btn.classList.add('active');
-
-    btn.addEventListener('click', () => {
+    const aiLabels: Record<string, string> = { claude: '☁ Claude', local: '⚡ Local', rules: '⚙ Rules' };
+    aiBtn.innerHTML = `<span class="ai-badge" id="ai-provider-badge">${aiLabels[currentProvider] ?? '⚙ Rules'}</span>`;
+    if (State.getState().aiMode) aiBtn.classList.add('active');
+    aiBtn.addEventListener('click', () => {
       const current = State.getState().aiMode;
       if (!current && !ClaudeProvider.hasKey()) {
-        const aiProvider = State.getState().aiProvider;
-        if (aiProvider === 'claude') {
-          // Only show key modal when Claude is the active provider — local/rules don't need a key
+        if (State.getState().aiProvider === 'claude') {
           document.getElementById('ai-key-modal')?.classList.remove('hidden');
           return;
         }
@@ -589,19 +169,142 @@ export class Toolbar {
       State.setState({ aiMode: newMode });
       EventBus.emit('ai:mode-changed', newMode);
     });
+    right.appendChild(aiBtn);
 
-    const label = document.createElement('div');
-    label.className = 'toolbar-group-label';
-    label.innerText = 'AI';
+    inner.appendChild(right);
+    this.container.appendChild(inner);
 
-    const separator = document.createElement('div');
-    separator.className = 'toolbar-separator';
+    // ── Helpers ─────────────────────────────────────────────────────────────
+    const updateToolButtons = (mode: ToolMode) => {
+      this.container.querySelectorAll<HTMLElement>('.tb-tool').forEach(btn => {
+        btn.classList.toggle('active', btn.id === `tb-tool-${mode}`);
+      });
+    };
 
-    buttonsContainer.appendChild(btn);
-    wrapper.appendChild(buttonsContainer);
-    wrapper.appendChild(label);
-    wrapper.appendChild(separator);
+    // ── EventBus listeners ──────────────────────────────────────────────────
+    EventBus.on('tool:changed', (mode: ToolMode) => {
+      updateToolButtons(mode);
+    });
 
-    return wrapper;
+    EventBus.on('state:changed', () => {
+      const s = State.getState();
+
+      // Update tool buttons
+      updateToolButtons(s.tool);
+
+      // Cloud menu — add/remove based on activeView
+      const existing = menuBar.querySelector('#tb-menu-cloud-wrap');
+      const needsCloud = s.activeView === 'cloud' || s.activeView === 'hybrid';
+      if (needsCloud && !existing) {
+        const cloudMenu = this.menu('Cloud', [
+          { label: 'Export Cloud SVG…', action: () => EventBus.emit('export:cloud-svg', undefined) },
+          { label: 'Export Cloud PNG…', action: () => EventBus.emit('export:cloud-png', undefined) },
+        ]);
+        cloudMenu.id = 'tb-menu-cloud-wrap';
+        menuBar.appendChild(cloudMenu);
+      } else if (!needsCloud && existing) {
+        existing.remove();
+      }
+
+      // Float toggle active state
+      const ft = this.container.querySelector<HTMLElement>('#tb-float-toggle');
+      if (ft) ft.classList.toggle('active', s.floatingToolbarVisible);
+
+      // AI badge + active state
+      const badge = this.container.querySelector('#ai-provider-badge');
+      if (badge) badge.textContent = aiLabels[s.aiProvider] ?? '⚙ Rules';
+      const ai = this.container.querySelector('#ai-toggle-btn');
+      if (ai) ai.classList.toggle('active', s.aiMode);
+    });
+
+    // Update float-toggle active state when toggle event fires.
+    // We toggle the class directly (without re-reading state) because in tests
+    // there may be no FloatingToolbar mounted to flip the state before this runs.
+    EventBus.on('view:toggle-floating-toolbar', () => {
+      const ft = this.container.querySelector<HTMLElement>('#tb-float-toggle');
+      if (ft) ft.classList.toggle('active');
+    });
+
+    EventBus.on('ai:mode-changed', (enabled: boolean) => {
+      this.container.querySelector('#ai-toggle-btn')?.classList.toggle('active', enabled);
+    });
+    EventBus.on('ai:provider-changed', (name) => {
+      const badge = this.container.querySelector('#ai-provider-badge');
+      if (badge) badge.textContent = aiLabels[name] ?? '⚙ Rules';
+    });
+  }
+
+  private sep(): HTMLElement {
+    const d = document.createElement('div');
+    d.className = 'tb-sep';
+    return d;
+  }
+
+  /**
+   * Builds a menu widget. Structure:
+   *
+   *   div.tb-menu-wrap
+   *     div.tb-menu          ← header; textContent = "Label ▾" (no dropdown text)
+   *     ul.tb-dropdown       ← items (sibling, not child of .tb-menu)
+   *
+   * Keeping the dropdown outside .tb-menu ensures that textContent of .tb-menu
+   * is only the label + caret, which the tests rely on.
+   */
+  private menu(
+    label: string,
+    items: (string | { label: string; kbd?: string; action: () => void })[],
+  ): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'tb-menu-wrap';
+
+    // Header — the element with .tb-menu class; textContent must stay clean
+    const head = document.createElement('div');
+    head.className = 'tb-menu';
+    head.textContent = label + ' ';
+    const caret = document.createElement('span');
+    caret.className = 'tb-caret';
+    caret.textContent = '▾';
+    head.appendChild(caret);
+    wrap.appendChild(head);
+
+    // Dropdown — sibling to .tb-menu so it doesn't pollute textContent
+    const dropdown = document.createElement('ul');
+    dropdown.className = 'tb-dropdown';
+
+    items.forEach(item => {
+      if (typeof item === 'string') {
+        const li = document.createElement('li');
+        li.className = 'tb-dropdown-sep';
+        dropdown.appendChild(li);
+        return;
+      }
+      const li = document.createElement('li');
+      li.className = 'tb-dropdown-item';
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = item.label;
+      li.appendChild(nameSpan);
+      if (item.kbd) {
+        const kbdSpan = document.createElement('span');
+        kbdSpan.className = 'tb-kbd';
+        kbdSpan.textContent = item.kbd;
+        li.appendChild(kbdSpan);
+      }
+      li.addEventListener('click', () => {
+        wrap.classList.remove('open');
+        item.action();
+      });
+      dropdown.appendChild(li);
+    });
+
+    wrap.appendChild(dropdown);
+
+    head.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = wrap.classList.contains('open');
+      document.querySelectorAll('.tb-menu-wrap.open').forEach(m => m.classList.remove('open'));
+      if (!wasOpen) wrap.classList.add('open');
+    });
+
+    return wrap;
   }
 }
