@@ -385,7 +385,7 @@ export class App {
 
     this.toolbar = new Toolbar(toolbarEl);
     document.addEventListener('click', () => {
-      document.querySelectorAll('.tb-menu.open').forEach(m => m.classList.remove('open'));
+      document.querySelectorAll('.tb-menu-wrap.open').forEach(m => m.classList.remove('open'));
     });
     this.sidebar = new Sidebar(sidebarEl);
     this.properties = new PropertiesPanel(propertiesEl);

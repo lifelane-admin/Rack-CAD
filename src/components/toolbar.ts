@@ -127,7 +127,7 @@ export class Toolbar {
         { label: 'Export Cloud SVG…', action: () => EventBus.emit('export:cloud-svg', undefined) },
         { label: 'Export Cloud PNG…', action: () => EventBus.emit('export:cloud-png', undefined) },
       ]);
-      cloudMenu.id = 'tb-menu-cloud-wrap';
+      cloudMenu.id = 'tb-menu-cloud';
       menuBar.appendChild(cloudMenu);
     }
 
@@ -193,14 +193,14 @@ export class Toolbar {
       updateToolButtons(s.tool);
 
       // Cloud menu — add/remove based on activeView
-      const existing = menuBar.querySelector('#tb-menu-cloud-wrap');
+      const existing = menuBar.querySelector('#tb-menu-cloud');
       const needsCloud = s.activeView === 'cloud' || s.activeView === 'hybrid';
       if (needsCloud && !existing) {
         const cloudMenu = this.menu('Cloud', [
           { label: 'Export Cloud SVG…', action: () => EventBus.emit('export:cloud-svg', undefined) },
           { label: 'Export Cloud PNG…', action: () => EventBus.emit('export:cloud-png', undefined) },
         ]);
-        cloudMenu.id = 'tb-menu-cloud-wrap';
+        cloudMenu.id = 'tb-menu-cloud';
         menuBar.appendChild(cloudMenu);
       } else if (!needsCloud && existing) {
         existing.remove();
