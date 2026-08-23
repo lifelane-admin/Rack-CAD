@@ -42,6 +42,10 @@ export class CloudFloatingToolbar {
     this.element.className = 'floating-toolbar';
     viewport.appendChild(this.element);
 
+    if (!State.getState().floatingToolbarVisible) {
+      this.element.classList.add('hidden');
+    }
+
     this.render();
     this.setupRepositionDrag();
   }
@@ -52,6 +56,11 @@ export class CloudFloatingToolbar {
       this.render();
     });
     EventBus.on('state:changed', () => this.render());
+    EventBus.on('view:toggle-floating-toolbar' as any, () => {
+      const newVisible = !State.getState().floatingToolbarVisible;
+      State.setState({ floatingToolbarVisible: newVisible });
+      if (this.element) this.element.classList.toggle('hidden', !newVisible);
+    });
   }
 
   private setupRepositionDrag() {

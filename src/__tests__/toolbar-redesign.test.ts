@@ -2,6 +2,16 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { eventBus } from '../core/event-bus';
 import { stateManager } from '../core/state';
 import { FloatingToolbar } from '../components/floating-toolbar';
+import { CloudFloatingToolbar } from '../components/cloud-floating-toolbar';
+
+function mountCloudFloatingToolbar(): void {
+  document.body.innerHTML = `
+    <div id="cloud-viewport" style="position:relative;width:800px;height:600px;">
+      <svg id="cloud-canvas"></svg>
+    </div>
+  `;
+  new CloudFloatingToolbar();
+}
 
 describe('floatingToolbarVisible state', () => {
   beforeEach(() => {
@@ -69,5 +79,33 @@ describe('FloatingToolbar toggle visibility', () => {
     stateManager.setState({ floatingToolbarVisible: false });
     mountFloatingToolbar();
     expect(document.getElementById('floating-toolbar')!.classList.contains('hidden')).toBe(true);
+  });
+});
+
+describe('CloudFloatingToolbar toggle visibility', () => {
+  beforeEach(() => {
+    eventBus.clear();
+    stateManager.setState({
+      tool: 'select', activeView: 'cloud', floatingToolbarVisible: true,
+    });
+  });
+
+  it('hides on view:toggle-floating-toolbar', () => {
+    mountCloudFloatingToolbar();
+    eventBus.emit('view:toggle-floating-toolbar', undefined);
+    expect(document.getElementById('cloud-floating-toolbar')!.classList.contains('hidden')).toBe(true);
+  });
+
+  it('shows again on second view:toggle-floating-toolbar', () => {
+    mountCloudFloatingToolbar();
+    eventBus.emit('view:toggle-floating-toolbar', undefined);
+    eventBus.emit('view:toggle-floating-toolbar', undefined);
+    expect(document.getElementById('cloud-floating-toolbar')!.classList.contains('hidden')).toBe(false);
+  });
+
+  it('starts hidden when floatingToolbarVisible is false at init', () => {
+    stateManager.setState({ floatingToolbarVisible: false });
+    mountCloudFloatingToolbar();
+    expect(document.getElementById('cloud-floating-toolbar')!.classList.contains('hidden')).toBe(true);
   });
 });
