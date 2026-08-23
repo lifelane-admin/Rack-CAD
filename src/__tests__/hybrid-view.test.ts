@@ -136,32 +136,27 @@ describe('Hybrid view', () => {
 });
 
 describe('Hybrid view — toolbar group visibility', () => {
-  function mountToolbar(): Toolbar {
+  function mountHybridToolbar(): void {
     document.body.innerHTML = `<header id="toolbar"></header>`;
     const container = document.getElementById('toolbar')!;
-    const toolbar = new Toolbar(container);
-    toolbar.render();
-    return toolbar;
+    new Toolbar(container).render();
   }
 
   beforeEach(() => {
-    stateManager.setState({ activeView: 'rack', selection: [] });
+    stateManager.setState({ activeView: 'rack', selection: [], tool: 'select',
+      aiMode: false, aiProvider: 'rules', floatingToolbarVisible: true });
   });
 
-  it('shows every rack AND cloud toolbar group at once in hybrid view', () => {
-    mountToolbar();
+  it('shows all 5 tool strip buttons and the Cloud menu in hybrid view', () => {
+    mountHybridToolbar();
     stateManager.setState({ activeView: 'hybrid' });
 
-    // In the rewritten Toolbar (Task 4), old group IDs are gone. Instead, switching
-    // to hybrid should show the Cloud menu alongside the always-present File/Edit/View/Export menus.
-    const menuLabels = [...document.querySelectorAll('.tb-menu')].map(
-      el => (el.textContent ?? '').trim().replace('▾', '').trim(),
-    );
-    expect(menuLabels).toContain('File');
-    expect(menuLabels).toContain('Edit');
-    expect(menuLabels).toContain('View');
-    expect(menuLabels).toContain('Export');
-    expect(menuLabels).toContain('Cloud');
+    expect(document.getElementById('tb-tool-select')).not.toBeNull();
+    expect(document.getElementById('tb-tool-pan')).not.toBeNull();
+    expect(document.getElementById('tb-tool-cable')).not.toBeNull();
+    expect(document.getElementById('tb-tool-power')).not.toBeNull();
+    expect(document.getElementById('tb-tool-text')).not.toBeNull();
+    expect(document.getElementById('tb-menu-cloud')).not.toBeNull();
   });
 });
 

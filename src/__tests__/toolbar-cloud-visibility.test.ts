@@ -1,76 +1,42 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Toolbar } from '../components/toolbar';
 import { stateManager } from '../core/state';
+import { eventBus } from '../core/event-bus';
 
-/**
- * Regression test for toolbar view visibility.
- *
- * In the rewritten Toolbar (Task 4), the old group-based markup
- * (#rack-export-group, #cloud-export-group, etc.) is replaced by a menu-bar
- * design where a "Cloud" menu appears/disappears based on activeView.
- * These tests now verify that behaviour instead.
- */
-function mountToolbar(): Toolbar {
+function mountToolbar(): void {
   document.body.innerHTML = `<header id="toolbar"></header>`;
   const container = document.getElementById('toolbar')!;
-  const toolbar = new Toolbar(container);
-  toolbar.render();
-  return toolbar;
+  new Toolbar(container).render();
 }
 
-function getMenuLabels(): string[] {
-  return [...document.querySelectorAll('.tb-menu')].map(
-    el => (el.textContent ?? '').trim().replace('▾', '').trim(),
-  );
-}
-
-describe('Toolbar rack/cloud export group visibility', () => {
+describe('Toolbar Cloud menu contextual visibility', () => {
   beforeEach(() => {
-    stateManager.setState({ activeView: 'rack', selection: [] });
+    eventBus.clear();
+    stateManager.setState({ activeView: 'rack', selection: [], tool: 'select',
+      aiMode: false, aiProvider: 'rules', floatingToolbarVisible: true });
   });
 
-  it('shows the rack Export group and hides Cloud Export while activeView is rack', () => {
+  it('Cloud menu absent in rack view', () => {
     mountToolbar();
-    const labels = getMenuLabels();
-    expect(labels).toContain('Export');
-    expect(labels).not.toContain('Cloud');
+    expect(document.getElementById('tb-menu-cloud')).toBeNull();
   });
 
-  it('hides the rack Export group and shows Cloud Export once activeView switches to cloud', () => {
+  it('Cloud menu present after switching to cloud view', () => {
     mountToolbar();
     stateManager.setState({ activeView: 'cloud' });
-
-    const labels = getMenuLabels();
-    expect(labels).toContain('Export');   // Export menu always present
-    expect(labels).toContain('Cloud');    // Cloud menu added
+    expect(document.getElementById('tb-menu-cloud')).not.toBeNull();
   });
 
-  it('switching back to rack restores the rack Export group and hides Cloud Export again', () => {
+  it('Cloud menu present in hybrid view', () => {
+    stateManager.setState({ activeView: 'hybrid' });
+    mountToolbar();
+    expect(document.getElementById('tb-menu-cloud')).not.toBeNull();
+  });
+
+  it('Cloud menu removed again when switching back to rack', () => {
     mountToolbar();
     stateManager.setState({ activeView: 'cloud' });
     stateManager.setState({ activeView: 'rack' });
-
-    const labels = getMenuLabels();
-    expect(labels).toContain('Export');
-    expect(labels).not.toContain('Cloud');
-  });
-
-  it('hides the rack View and Add groups (grid/rulers/3D/cabinet toggles, Add Rack buttons) in Cloud view — same bug class as Export', () => {
-    mountToolbar();
-    // In rack view: File, Edit, View, Export menus visible, no Cloud
-    let labels = getMenuLabels();
-    expect(labels).toContain('File');
-    expect(labels).toContain('Edit');
-    expect(labels).toContain('View');
-    expect(labels).toContain('Export');
-    expect(labels).not.toContain('Cloud');
-
-    stateManager.setState({ activeView: 'cloud' });
-    labels = getMenuLabels();
-    expect(labels).toContain('Cloud');
-
-    stateManager.setState({ activeView: 'rack' });
-    labels = getMenuLabels();
-    expect(labels).not.toContain('Cloud');
+    expect(document.getElementById('tb-menu-cloud')).toBeNull();
   });
 });
