@@ -3250,6 +3250,33 @@ export class App {
           }
         }
       }
+
+      // Arrow keys = Nudge selected cloud objects (nodes, containers, hierarchies)
+      // 1px per press, 10px with Shift — same convention as text/image nudge above.
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        const cloudSel = s.selection.filter(sel =>
+          sel.type === 'cloud-node' || sel.type === 'cloud-container' || sel.type === 'cloud-hierarchy'
+        );
+        if (cloudSel.length > 0) {
+          e.preventDefault();
+          const step = e.shiftKey ? 10 : 1;
+          const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+          const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+          const cs = stateManager.getState();
+          for (const sel of cloudSel) {
+            if (sel.type === 'cloud-node') {
+              const node = cs.cloudNodes.find(n => n.id === sel.id);
+              if (node) eventBus.emit('cloudnode:update', { id: sel.id, data: { x: node.x + dx, y: node.y + dy } });
+            } else if (sel.type === 'cloud-container') {
+              const container = cs.cloudContainers.find(c => c.id === sel.id);
+              if (container) eventBus.emit('cloudcontainer:update', { id: sel.id, data: { x: container.x + dx, y: container.y + dy } });
+            } else if (sel.type === 'cloud-hierarchy') {
+              const hierarchy = cs.cloudHierarchies.find(h => h.id === sel.id);
+              if (hierarchy) eventBus.emit('cloudhierarchy:update', { id: sel.id, data: { x: hierarchy.x + dx, y: hierarchy.y + dy } });
+            }
+          }
+        }
+      }
     });
 
     document.addEventListener('keyup', (e) => {
