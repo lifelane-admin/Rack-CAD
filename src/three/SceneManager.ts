@@ -3,7 +3,7 @@ import type { AppState, RackData, DeviceData, DeviceTemplate, CableData } from '
 import { RACK_CONSTANTS } from '../core/types';
 import { getTemplate } from '../library/device-catalog';
 import type { MaterialManager } from './MaterialManager';
-import { buildRackGroup, buildShellMaterials, type RackColorKey } from './rack-builder';
+import { buildRackGroup, buildShellMaterials, type RackColorKey, RACK_DEPTH } from './rack-builder';
 import { buildDeviceMesh } from './device-builder';
 import { buildCableMesh } from './cable-builder';
 import { getDeviceFrontMaterial, disposeSVGTextures } from './svg-texture';
@@ -25,6 +25,7 @@ function geometryHash(device: DeviceData, template: DeviceTemplate): string {
     device.device3D?.depth ?? template.default3D?.depth ?? 500,
     device.device3D?.width ?? template.default3D?.width ?? 350,
     device.frontPanelImage ?? template.frontPanelImage ?? '',
+    JSON.stringify(device.deviceConfig || {}),
   ].join('|');
 }
 
@@ -34,7 +35,7 @@ export class SceneManager {
   readonly scene: THREE.Scene;
   private rackGroups = new Map<string, THREE.Group>();
   private deviceEntries = new Map<string, DeviceEntry>();
-  private cableMeshes = new Map<string, THREE.Mesh | THREE.Line>();
+  private cableMeshes = new Map<string, THREE.Mesh | THREE.Line | THREE.Group>();
   private materials: MaterialManager;
   private doorTargetAngle = 0;  // 0 = closed, Math.PI * 0.7 = open
   private rackColor: RackColorKey = 'black';
@@ -44,28 +45,24 @@ export class SceneManager {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x060809);
 
-    // Natural lighting only: a soft sky/ground hemisphere fill (no directional hotspots, so no
-    // hard specular glare on the rack's metal/glass) plus a single gentle "sun" directional light
-    // for a faint natural gradient. Replaces the old 4-directional studio-light rig, which put
-    // strong, differently-tinted highlights on the glossy device/rack materials from four angles
-    // at once — that's what read as glare.
-    const hemi = new THREE.HemisphereLight(0xdfe8f5, 0x30322e, 1.6);
+    // Natural 3-point lighting setup for maximum brightness and realism
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 2.2);
     this.scene.add(hemi);
 
-    const sun = new THREE.DirectionalLight(0xffffff, 0.9);
-    sun.position.set(1500, 2500, 1800);
-    this.scene.add(sun);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.25);
+    keyLight.position.set(1500, 2500, 1800);
+    this.scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.75);
+    fillLight.position.set(-1800, 2000, 1500);
+    this.scene.add(fillLight);
   }
 
   rebuild(state: AppState): void {
     this.syncRacks(state.racks);
     this.syncDevices(state.racks, state.devices, state.customTemplates ?? []);
-    // Cable routing in 3D is paused again (deliberately deprioritized) — the routing/lane-offset
-    // logic in cable-builder.ts is finished and tested directly (see cable-builder.test.ts), and
-    // ThreeViewport's debounced sync was reverted to not react to cable-only changes either. Just
-    // uncomment this call (and re-add `cables` to ThreeViewport's debouncedSync condition) to
-    // resume.
-    // this.syncCables(state.cables ?? [], state);
+    // Cable routing in 3D is resumed.
+    this.syncCables(state.cables ?? [], state);
   }
 
   private syncRacks(racks: RackData[]): void {
@@ -136,7 +133,9 @@ export class SceneManager {
 
       if (existing && existing.geometryHash === newHash) {
         // Only position changed — update Y on mesh and ears
-        existing.mesh.position.set(0, deviceY, 0);
+        const depth = device.device3D?.depth ?? template.default3D?.depth ?? 500;
+        const zOffset = RACK_DEPTH / 2 - depth / 2 + 0.4;
+        existing.mesh.position.set(0, deviceY, zOffset);
         for (const ear of existing.earMeshes) {
           ear.position.setY(deviceY);
         }
@@ -164,7 +163,7 @@ export class SceneManager {
     for (const [id, mesh] of this.cableMeshes) {
       if (!incoming.has(id)) {
         this.scene.remove(mesh);
-        (mesh as THREE.Mesh).geometry?.dispose();
+        disposeObject3D(mesh);
         this.cableMeshes.delete(id);
       }
     }
@@ -174,7 +173,7 @@ export class SceneManager {
       const existing = this.cableMeshes.get(cable.id);
       if (existing) {
         this.scene.remove(existing);
-        (existing as THREE.Mesh).geometry?.dispose();
+        disposeObject3D(existing);
         this.cableMeshes.delete(cable.id);
       }
       const mesh = buildCableMesh(cable, state);
@@ -280,4 +279,18 @@ export class SceneManager {
     this.deviceEntries.clear();
     this.cableMeshes.clear();
   }
+}
+
+function disposeObject3D(obj: THREE.Object3D): void {
+  obj.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (mesh.isMesh) {
+      mesh.geometry?.dispose();
+      if (Array.isArray(mesh.material)) {
+        mesh.material.forEach(m => m.dispose());
+      } else {
+        mesh.material?.dispose();
+      }
+    }
+  });
 }

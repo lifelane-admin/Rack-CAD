@@ -176,6 +176,41 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
     glowRing.setAttribute('pointer-events', 'none'); // opacity:0 alone doesn't disable hit-testing
     portGroup.appendChild(glowRing);
 
+    // Extract the slot/port label directly from the port name set by injectEarPorts
+    // e.g. "Left Ear S2-P3" → leftVal='S2', rightVal='P3'
+    //      "Left Ear Power"  → leftVal='PW', rightVal='Res'
+    let leftVal = 'PW';
+    let rightVal = 'Res';
+    if (!isPower) {
+      const nameMatch = port.name.match(/S(\d+)-P(\d+)/);
+      if (nameMatch) {
+        leftVal = `S${nameMatch[1]}`;
+        rightVal = `P${nameMatch[2]}`;
+      }
+    }
+
+    const leftText = createText(-bezelRadius - 1.2, 0, leftVal, {
+      fill: 'rgba(255, 255, 255, 0.4)',
+      'font-size': '3.8',
+      'font-family': 'sans-serif',
+      'font-weight': 'bold',
+      'text-anchor': 'end',
+      'dominant-baseline': 'central',
+      'pointer-events': 'none'
+    });
+    portGroup.appendChild(leftText);
+
+    const rightText = createText(bezelRadius + 1.2, 0, rightVal, {
+      fill: 'rgba(255, 255, 255, 0.4)',
+      'font-size': '3.8',
+      'font-family': 'sans-serif',
+      'font-weight': 'bold',
+      'text-anchor': 'start',
+      'dominant-baseline': 'central',
+      'pointer-events': 'none'
+    });
+    portGroup.appendChild(rightText);
+
   } else {
     if (hasCustomPanel) {
       // These categories' panel renderer already draws all port visuals.

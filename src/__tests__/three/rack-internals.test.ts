@@ -94,12 +94,12 @@ describe('buildRackInternals', () => {
     }
   });
 
-  it('places left face plates at x = -212.5 and right at x = +212.5', () => {
+  it('places left face plates at x = -187.5 and right at x = +187.5', () => {
     const group = buildRackInternals(rack, bodyH, materials);
     const faces = group.children.filter((c: any) => c.name.includes('face'));
     const xs = faces.map((f: any) => (f as any).position.set.mock.calls[0][0]);
-    expect(xs).toContain(-(RACK_INNER_WIDTH / 2 + RAIL_WIDTH / 2));
-    expect(xs).toContain( (RACK_INNER_WIDTH / 2 + RAIL_WIDTH / 2));
+    expect(xs).toContain(-(RACK_INNER_WIDTH / 2 - RAIL_WIDTH / 2));
+    expect(xs).toContain( (RACK_INNER_WIDTH / 2 - RAIL_WIDTH / 2));
   });
 
   it('depth bars have barLen = 540', async () => {

@@ -714,6 +714,9 @@ export class PropertiesPanel {
     const rackOptions = racks.map((r: any) => `<option value="${r.id}" ${r.id === device.rackId ? 'selected' : ''}>${r.name}</option>`).join('');
     const currentEffectiveCategory = getEffectiveCategory(device, template);
 
+    const isEarSupported = template && ['server', 'switch', 'router', 'firewall', 'ups', 'storage', 'console'].includes(template.category);
+    const existingConfig = (device.deviceConfig && typeof device.deviceConfig === 'object') ? (device.deviceConfig as Record<string, unknown>) : {};
+
     container.innerHTML = `
       <div class="form-group">
         <label>Name</label>
@@ -755,6 +758,12 @@ export class PropertiesPanel {
         </div>
       </div>
 
+      ${isEarSupported ? `
+        <div class="form-group" style="margin-bottom: 12px;">
+          ${this.buildAdapterConfigHTML(existingConfig)}
+        </div>
+      ` : ''}
+
       <div class="form-group" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 12px;">
         <label style="font-weight: bold; color: var(--text-secondary);">Front Panel Image</label>
         <div style="display: flex; gap: 8px; margin-top: 8px;">
@@ -768,25 +777,6 @@ export class PropertiesPanel {
           </div>
         ` : ''}
         <button id="btn-save-custom-asset" class="prop-btn" title="Save this device configuration to My Library" style="width:100%;margin-top:8px;background:#1f6feb;color:#fff;font-weight:600;border:none;border-radius:4px;padding:7px 10px;font-size:12px;cursor:pointer;">Save as Custom Asset</button>
-      </div>
-
-      <div class="form-group" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 12px;">
-        <label style="font-weight: bold; color: var(--text-secondary);">Port Visual Calibration</label>
-        <div style="max-height: 140px; overflow-y: auto; background: rgba(0,0,0,0.25); padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); margin-top: 8px;">
-          ${(device.ports || []).map((port: any, idx: number) => `
-            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed rgba(255,255,255,0.05);">
-              <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px;">${port.name}</span>
-              <div style="display: flex; gap: 6px; align-items: center;">
-                X: <input type="number" class="port-coord-x" data-port-idx="${idx}" value="${port.relativeX}" style="width: 48px; font-size: 10px; background: #000; border: 1px solid var(--border-color); color: #fff; padding: 2px; border-radius: 2px;" />
-                Y: <input type="number" class="port-coord-y" data-port-idx="${idx}" value="${port.relativeY}" style="width: 48px; font-size: 10px; background: #000; border: 1px solid var(--border-color); color: #fff; padding: 2px; border-radius: 2px;" />
-                <button class="prop-port-remove" data-port-idx="${idx}" title="Remove this port" style="background: rgba(248, 81, 73, 0.15); border: 1px solid var(--danger-color); color: var(--danger-color); border-radius: 2px; width: 18px; height: 18px; font-size: 10px; line-height: 1; cursor: pointer;">✕</button>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-        <div style="display: flex; gap: 6px; margin-top: 8px;">
-          <button id="prop-port-add" title="Add a single custom RJ45 port (max 60 total per device) — position it with the X/Y inputs above before adding another" style="flex: 1; background: var(--border-color); border: 1px solid var(--border-color-focus); border-radius: 4px; padding: 6px; font-size: 11px; cursor: pointer;">+ Add Port</button>
-        </div>
       </div>
 
       ${currentEffectiveCategory === 'server' ? `
@@ -891,75 +881,24 @@ export class PropertiesPanel {
       EventBus.emit('cable:batch-generate', { deviceId: id, side, type, color, count: limitedCount });
     });
 
-    // Handle port coordinate inputs
-    container.querySelectorAll('.port-coord-x').forEach(input => {
-      input.addEventListener('change', (e: any) => {
-        const idx = parseInt(e.target.getAttribute('data-port-idx'));
-        const val = parseInt(e.target.value) || 0;
-        const updatedPorts = [...device.ports];
-        updatedPorts[idx] = { ...updatedPorts[idx], relativeX: val };
-        EventBus.emit('device:update', { id, data: { ports: updatedPorts } });
-      });
-    });
-
-    container.querySelectorAll('.port-coord-y').forEach(input => {
-      input.addEventListener('change', (e: any) => {
-        const idx = parseInt(e.target.getAttribute('data-port-idx'));
-        const val = parseInt(e.target.value) || 0;
-        const updatedPorts = [...device.ports];
-        updatedPorts[idx] = { ...updatedPorts[idx], relativeY: val };
-        EventBus.emit('device:update', { id, data: { ports: updatedPorts } });
-      });
-    });
-
-    // Remove a single custom port — cable cleanup for the removed port happens in app.ts's
-    // 'device:remove-port' handler (mirrors stateManager.removeDevice's cleanup).
-    container.querySelectorAll('.prop-port-remove').forEach(btn => {
-      btn.addEventListener('click', (e: any) => {
-        const idx = parseInt(e.target.getAttribute('data-port-idx'));
-        const port = device.ports[idx];
-        if (!port) return;
-        EventBus.emit('device:remove-port', { deviceId: id, portId: port.id });
-      });
-    });
-
-    // A device may carry at most this many manually-added/custom ports (real jacks only — the
-    // 4/6/8-per-side ear-mount holes injectEarPorts always adds don't count against it).
-    const countRealPorts = (ports: PortData[]) => ports.filter((p: PortData) => !p.id.includes('-ear-')).length;
-
-    // Manually add one RJ45 port — for devices (e.g. a custom front-panel image) whose real port
-    // count doesn't match what the built-in template shipped with. You position it yourself with
-    // the X/Y inputs above. Each new port's default spot is staggered a little from the last one
-    // (rather than a single fixed point) so adding a couple of ports back-to-back without
-    // repositioning the first still leaves them individually visible/clickable, instead of
-    // stacking into one indistinguishable, non-functional blob.
-    container.querySelector('#prop-port-add')?.addEventListener('click', () => {
-      const realCount = countRealPorts(device.ports);
-      if (realCount >= MAX_CUSTOM_PORTS) {
-        EventBus.emit('notification', { message: `Maximum of ${MAX_CUSTOM_PORTS} ports per device reached`, type: 'warning' });
-        return;
-      }
-      const deviceWidth = RACK_CONSTANTS.RACK_INNER_WIDTH - 2 * RACK_CONSTANTS.RAIL_WIDTH;
-      const deviceHeight = (template?.heightUnits ?? 1) * RACK_CONSTANTS.RU_HEIGHT;
-      const stagger = 10;
-      const cols = Math.max(1, Math.floor((deviceWidth - 20) / stagger));
-      const newPort = {
-        id: generateId(),
-        deviceId: id,
-        name: `Port ${device.ports.length + 1}`,
-        type: 'rj45' as const,
-        relativeX: 10 + (realCount % cols) * stagger,
-        relativeY: deviceHeight / 2,
-        // Tighter than the 12x10 type default — real hardware ports calibrated to match a photo
-        // are often packed close enough (~9-14px pitch) that the default size alone would make
-        // adjacent ports' hit-boxes touch or overlap.
-        portW: 9,
-        portH: 9,
-        connected: false,
-        cableId: null,
+    if (isEarSupported) {
+      const slotsInput = container.querySelector('#adapter-num-slots');
+      const portsInput = container.querySelector('#adapter-ports-per-slot');
+      const updateAdapterConfig = () => {
+        const currentConfig = (device.deviceConfig && typeof device.deviceConfig === 'object') ? device.deviceConfig : {};
+        EventBus.emit('device:update', {
+          id,
+          data: {
+            deviceConfig: {
+              ...currentConfig,
+              ...this.readAdapterConfig(container)
+            }
+          }
+        });
       };
-      EventBus.emit('device:update', { id, data: { ports: [...device.ports, newPort] } });
-    });
+      slotsInput?.addEventListener('change', updateAdapterConfig);
+      portsInput?.addEventListener('change', updateAdapterConfig);
+    }
 
     ['name', 'hostname', 'managementIp', 'serialNumber', 'description'].forEach(field => {
       const selector = `#prop-dev-${field === 'managementIp' ? 'ip' : field === 'serialNumber' ? 'serial' : field === 'description' ? 'desc' : field}`;
@@ -1073,6 +1012,42 @@ export class PropertiesPanel {
    *  override any of them. */
   private readonly PORT_GROUP_PALETTE = ['#37b6ff', '#39ff8a', '#ffb020', '#ff4d6a', '#a06cff', '#2dd4bf', '#f472b6', '#ff8a3d'];
 
+  // ── Adapter Configuration — two plain number inputs ───────────────────────────────────────────
+
+  /** Returns the HTML for the "Adapter Configuration (Ethernet)" section.
+   *  Two inputs only: Number of Slots (1–4) and Ports per Slot (1–4).
+   *  The caller's save() reads #adapter-num-slots and #adapter-ports-per-slot. */
+  private buildAdapterConfigHTML(cfg: Record<string, unknown>): string {
+    const numSlots     = Number(cfg.numSlots     ?? 1);
+    const portsPerSlot = Number(cfg.portsPerSlot ?? 4);
+    return `
+      <label class="pdu-lbl" style="margin-top:10px;">Adapter Configuration (Ethernet)</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:3px;">
+        <div>
+          <div class="pdu-sub">Number of Slots</div>
+          <input type="number" id="adapter-num-slots" class="pdu-inp"
+            value="${numSlots}" min="1" max="4"/>
+        </div>
+        <div>
+          <div class="pdu-sub">Ports per Slot</div>
+          <input type="number" id="adapter-ports-per-slot" class="pdu-inp"
+            value="${portsPerSlot}" min="1" max="4"/>
+        </div>
+      </div>
+      <div style="font-size:9px;color:#5b636a;margin-top:3px;">
+        Max 4 slots × 4 ports · 1 hole always reserved for Power
+      </div>
+    `;
+  }
+
+  /** Read numSlots + portsPerSlot from the DOM — called inside save(). */
+  private readAdapterConfig(container: HTMLElement): { numSlots: number; portsPerSlot: number } {
+    return {
+      numSlots:     Math.min(4, Math.max(1, Number((container.querySelector('#adapter-num-slots')     as HTMLInputElement)?.value ?? 1))),
+      portsPerSlot: Math.min(4, Math.max(1, Number((container.querySelector('#adapter-ports-per-slot') as HTMLInputElement)?.value ?? 4))),
+    };
+  }
+
   /** Enterprise Switch Physical SDK configurator. RJ45/SFP/SFP+/QSFP counts regenerate the
    *  device's actual ports live (see injectConfigurablePorts in state.ts) — everything else
    *  (vendor skin, toggled chrome, colors) is cosmetic only. */
@@ -1151,6 +1126,8 @@ export class PropertiesPanel {
           </select>
         </div>
 
+        ${this.buildAdapterConfigHTML(cfg as Record<string, unknown>)}
+
         <label class="pdu-lbl" style="margin-top:10px;">Branding</label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
           <div><div class="pdu-sub">Brand Name</div><input type="text" id="sw-brandname" class="pdu-inp" value="${cfg.brandName ?? ''}" placeholder="${skin.brandName}"/></div>
@@ -1175,7 +1152,7 @@ export class PropertiesPanel {
     this.renderSwitchPortGroupRows(container, portGroupRows, () => save());
 
     save = () => {
-      const newConfig: SwitchConfig = {
+      const newConfig: SwitchConfig & { numSlots: number; portsPerSlot: number } = {
         vendor: (container.querySelector('#sw-vendor') as HTMLSelectElement)?.value as SwitchVendor,
         layer: (container.querySelector('#sw-layer') as HTMLSelectElement)?.value as SwitchLayer,
         rj45Count: Math.max(0, Number((container.querySelector('#sw-rj45') as HTMLInputElement)?.value ?? 24)),
@@ -1198,6 +1175,7 @@ export class PropertiesPanel {
         rackEars: activeToggles.has('rackEars'),
         assetLabel: activeToggles.has('assetLabel'),
         dustCovers: activeToggles.has('dustCovers'),
+        ...this.readAdapterConfig(container),
         portGroups: portGroupRows,
       };
       eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig } });
@@ -1296,6 +1274,8 @@ export class PropertiesPanel {
         </div>
         <div style="font-size:9px;color:#5b636a;margin-top:3px;">Font Colour: port numbers/names (HA, WAN1, MGMT, RJ45 #s). Font Mute Colour: model name, zone captions (WAN/UPLINK), USB-C/RST, status line.</div>
 
+        ${this.buildAdapterConfigHTML(cfg as Record<string, unknown>)}
+
         <label class="pdu-lbl" style="margin-top:10px;">Branding</label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
           <div><div class="pdu-sub">Brand Name</div><input type="text" id="fw-brandname" class="pdu-inp" value="${cfg.brandName ?? ''}" placeholder="${skin.brandName}"/></div>
@@ -1320,7 +1300,7 @@ export class PropertiesPanel {
     this.renderSwitchPortGroupRows(container, portGroupRows, () => save(), '#fw-portgroup-rows');
 
     save = () => {
-      const newConfig: FirewallConfig = {
+      const newConfig: FirewallConfig & { numSlots: number; portsPerSlot: number } = {
         vendor: (container.querySelector('#fw-vendor') as HTMLSelectElement)?.value as FirewallVendor,
         wanCount: Math.max(0, Number((container.querySelector('#fw-wan') as HTMLInputElement)?.value ?? 0)),
         rj45Count: Math.max(0, Number((container.querySelector('#fw-rj45') as HTMLInputElement)?.value ?? 16)),
@@ -1344,6 +1324,7 @@ export class PropertiesPanel {
         qrCode: activeToggles.has('qrCode'),
         assetLabel: activeToggles.has('assetLabel'),
         dustCovers: activeToggles.has('dustCovers'),
+        ...this.readAdapterConfig(container),
         portGroups: portGroupRows,
       };
       eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig } });
@@ -1410,6 +1391,8 @@ export class PropertiesPanel {
           </select>
         </div>
 
+        ${this.buildAdapterConfigHTML(cfg as Record<string, unknown>)}
+
         <label class="pdu-lbl" style="margin-top:10px;">Branding</label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
           <div><div class="pdu-sub">Brand Name</div><input type="text" id="nac-brandname" class="pdu-inp" value="${cfg.brandName ?? ''}" placeholder="${skin.brandName}"/></div>
@@ -1432,7 +1415,7 @@ export class PropertiesPanel {
     this.renderPduChips(container, '#nac-toggles', this.NAC_TOGGLES, activeToggles, this.NAC_TOGGLE_LABELS, () => save());
 
     save = () => {
-      const newConfig: NacConfig = {
+      const newConfig: NacConfig & { numSlots: number; portsPerSlot: number } = {
         vendor: (container.querySelector('#nac-vendor') as HTMLSelectElement)?.value as NacVendor,
         rj45Count: Math.max(0, Number((container.querySelector('#nac-rj45') as HTMLInputElement)?.value ?? 4)),
         panelColor: (container.querySelector('#nac-panelcolor') as HTMLInputElement)?.value,
@@ -1445,6 +1428,7 @@ export class PropertiesPanel {
         usbPort: activeToggles.has('usbPort'),
         rackEars: activeToggles.has('rackEars'),
         assetLabel: activeToggles.has('assetLabel'),
+        ...this.readAdapterConfig(container),
       };
       eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig } });
     };

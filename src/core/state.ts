@@ -102,15 +102,14 @@ class StateManager {
       };
     };
 
-    const torA = mkDevice('tor-a', 'rs-sw-24p', 40, 'TOR SWITCH A', 'tor-switch-a', '10.10.10.11', 'SRN-TOR-A', 'Top of Rack Switch A');
-    const torB = mkDevice('tor-b', 'rs-sw-24p', 38, 'TOR SWITCH B', 'tor-switch-b', '10.10.10.12', 'SRN-TOR-B', 'Top of Rack Switch B');
-    const mgmtSwitch = mkDevice('mgmt-switch', 'rs-sw-24p', 36, 'MANAGEMENT SWITCH', 'mgmt-switch', '10.10.10.10', 'SRN-MGMT', '1GbE OOB Management Switch');
-    const node1 = mkDevice('node-1', 'server-2u', 20, 'Server Node 1', 'server-node-1', '10.10.10.21', 'SRN-NODE-1', 'Cluster Node 1');
-    const node2 = mkDevice('node-2', 'server-2u', 17, 'Server Node 2', 'server-node-2', '10.10.10.22', 'SRN-NODE-2', 'Cluster Node 2');
-    const node3 = mkDevice('node-3', 'server-2u', 14, 'Server Node 3', 'server-node-3', '10.10.10.23', 'SRN-NODE-3', 'Cluster Node 3');
-    const backup = mkDevice('backup-server', 'server-2u', 1, 'Backup Server', 'backup-server', '10.10.10.20', 'SRN-BACKUP', 'Backup Server Node');
+    // Switch A (Port 1 - 32)
+    const switchA = mkDevice('switch-a', 'rs-sw-32p', 31, '32-Port Gigabit Ethernet Switch', 'switch-a', '10.10.10.30', 'SRN-SW-A', '32-Port Gigabit Ethernet Switch');
+    // Cable Manager Brush Panel
+    const brushPanel = mkDevice('brush-panel', 'brush-panel-1u', 30, '1U Brush Panel', 'brush-panel', '', 'SRN-BRUSH', '1U Brush Panel');
+    // Switch B (Port 1 - 32)
+    const switchB = mkDevice('switch-b', 'rs-sw-32p', 29, 'Distribution Switch B', 'switch-b', '10.10.10.31', 'SRN-SW-B', 'Distribution Switch B');
 
-    devices.push(torA, torB, mgmtSwitch, node1, node2, node3, backup);
+    devices.push(switchA, brushPanel, switchB);
 
     let cableCount = 1;
     const connect = (srcDev: DeviceData, srcIdx: number, destDev: DeviceData, destIdx: number, type: CableType, color: string) => {
@@ -121,7 +120,7 @@ class StateManager {
       cables.push({
         id: cableId, name: `Cable ${cableCount - 1}`, type, color,
         sourcePortId: srcPort.id, destPortId: destPort.id,
-        bendPoints: [], thickness: 2, bendRadius: 10,
+        bendPoints: [], thickness: 2.2, bendRadius: 22,
         bundleId: null, notes: '', anchorPoints: [], anchorsLocked: false,
       });
       srcPort.connected = true;
@@ -130,32 +129,13 @@ class StateManager {
       destPort.cableId = cableId;
     };
 
-    // Node 1
-    connect(node1, 0, torA, 0, 'vm-network', '#fb8c00');
-    connect(node1, 1, torA, 1, 'ceph-primary', '#43a047');
-    connect(node1, 2, torB, 0, 'ceph-secondary', '#8e24aa');
-    connect(node1, 3, torB, 1, 'live-migration', '#fdd835');
-    connect(node1, 4, mgmtSwitch, 0, 'idrac', '#e53935');
-    // Node 2
-    connect(node2, 0, torA, 2, 'vm-network', '#fb8c00');
-    connect(node2, 1, torA, 3, 'ceph-primary', '#43a047');
-    connect(node2, 2, torB, 2, 'ceph-secondary', '#8e24aa');
-    connect(node2, 3, torB, 3, 'live-migration', '#fdd835');
-    connect(node2, 4, mgmtSwitch, 1, 'idrac', '#e53935');
-    // Node 3
-    connect(node3, 0, torA, 4, 'vm-network', '#fb8c00');
-    connect(node3, 1, torA, 5, 'ceph-primary', '#43a047');
-    connect(node3, 2, torB, 4, 'ceph-secondary', '#8e24aa');
-    connect(node3, 3, torB, 5, 'live-migration', '#fdd835');
-    connect(node3, 4, mgmtSwitch, 2, 'idrac', '#e53935');
-    // Backup
-    connect(backup, 0, mgmtSwitch, 3, 'backup', '#1e88e5');
-    connect(backup, 4, mgmtSwitch, 4, 'idrac', '#e53935');
-    // TOR interconnect
-    connect(torA, 23, torB, 23, 'ceph-secondary', '#8e24aa');
+    // Connect all 32 ports with neutral light-gray / off-white cables (#cfd8dc)
+    for (let i = 0; i < 32; i++) {
+      connect(switchA, i, switchB, i, 'general', '#cfd8dc');
+    }
 
     this.setState({ racks, devices, cables, selection: [], showLegends: true });
-    eventBus.emit('notification', { message: 'Loaded demo project!', type: 'success' });
+    eventBus.emit('notification', { message: 'Loaded 32-Port Switch Demo!', type: 'success' });
   }
 
   private prepareDevices(devices: DeviceData[]): DeviceData[] {
@@ -166,7 +146,7 @@ class StateManager {
       const withConfigurablePorts = injectConfigurablePorts(d.id, template, d.deviceConfig, withLocalPorts);
       return {
         ...d,
-        ports: injectEarPorts(d.id, template.category, template.heightUnits, withConfigurablePorts)
+        ports: injectEarPorts(d.id, template.category, template.heightUnits, withConfigurablePorts, d.deviceConfig)
       };
     });
   }
@@ -691,54 +671,105 @@ const EAR_HOLE_CATEGORIES = new Set(['server', 'switch', 'router', 'firewall', '
 
 // Standard ear-hole count per side for common chassis heights (4 for 1U, 6 for 2U, 8 for 4U) —
 // not a simple heightUnits*2 scaling; heights outside this table fall back to that formula.
-const STANDARD_EAR_HOLE_COUNTS: Record<number, number> = { 1: 4, 2: 6, 4: 8 };
+export const STANDARD_EAR_HOLE_COUNTS: Record<number, number> = { 1: 4, 2: 6, 4: 8 };
 
-export function injectEarPorts(deviceId: string, category: string, heightUnits: number, basePorts: PortData[]): PortData[] {
+export function getMaxEarHoles(heightUnits: number): number {
+  if (heightUnits === 1) return 4;
+  if (heightUnits === 2) return 9;
+  if (heightUnits === 4) return 13;
+  return Math.max(1, heightUnits * 3 + 1);
+}
+
+export function getDefaultEarHoles(heightUnits: number): number {
+  return STANDARD_EAR_HOLE_COUNTS[heightUnits] ?? heightUnits * 2;
+}
+
+export function injectEarPorts(
+  deviceId: string,
+  category: string,
+  heightUnits: number,
+  basePorts: PortData[],
+  deviceConfig?: unknown
+): PortData[] {
   if (!EAR_HOLE_CATEGORIES.has(category)) return basePorts;
 
-  // Every ear-hole port (network + hybrid) is regenerated here as one single evenly-spaced
-  // sequence, never defined in device-catalog.ts.
   const filtered = basePorts.filter(p => !p.id.includes('-ear-'));
 
-  const leftX = -12.5;
+  const leftX  = -12.5;
   const rightX = 350 + 12.5;
 
+  const maxHoles     = getMaxEarHoles(heightUnits);
+  const maxDataHoles = maxHoles - 1; // 1 hole always reserved for power
+
+  // ── Two simple user inputs: Number of Slots (1-4) and Ports per Slot (1-4) ─────────────────
+  let numSlots     = 1;
+  let portsPerSlot = Math.min(maxDataHoles, (STANDARD_EAR_HOLE_COUNTS[heightUnits] ?? heightUnits * 2) - 1);
+
+  if (deviceConfig && typeof deviceConfig === 'object') {
+    const cfg = deviceConfig as Record<string, unknown>;
+    if (typeof cfg.numSlots     === 'number') numSlots     = Math.min(4, Math.max(1, Math.round(cfg.numSlots)));
+    if (typeof cfg.portsPerSlot === 'number') portsPerSlot = Math.min(4, Math.max(1, Math.round(cfg.portsPerSlot)));
+  }
+
+  // Build sequential entries: S1-P1 … S1-Pn, S2-P1 … S2-Pn, …
+  type SlotEntry = { slotNumber: number; portInSlot: number };
+  const dataEntries: SlotEntry[] = [];
+  outer: for (let s = 1; s <= numSlots; s++) {
+    for (let p = 1; p <= portsPerSlot; p++) {
+      if (dataEntries.length >= maxDataHoles * 2) break outer;
+      dataEntries.push({ slotNumber: s, portInSlot: p });
+    }
+  }
+
+  // Fallback when config is absent
+  if (dataEntries.length === 0) {
+    const numData = Math.min(maxDataHoles * 2, Math.max(0, (STANDARD_EAR_HOLE_COUNTS[heightUnits] ?? heightUnits * 2) - 1));
+    for (let i = 0; i < numData; i++) {
+      dataEntries.push({ slotNumber: Math.floor(i / 4) + 1, portInSlot: (i % 4) + 1 });
+    }
+  }
+
+  const totalDataPorts = dataEntries.length;
+  const leftCount = Math.ceil(totalDataPorts / 2);
+  const rightCount = totalDataPorts - leftCount;
+  const maxDataCount = Math.max(leftCount, rightCount);
+
+  const numHoles = maxDataCount + 1; // +1 for the power hole
   const earPorts: PortData[] = [];
-  const numHoles = STANDARD_EAR_HOLE_COUNTS[heightUnits] ?? heightUnits * 2;
-  // Pitch is however much vertical space each hole gets when the device's own height is
-  // divided evenly into `numHoles` slots — it must scale with both height AND hole count (a
-  // fixed 15px pitch, correct for the old "2 holes per U" rule, would push a 1U's now-4 holes
-  // to y=52.5 — 22.5px past the bottom of a 30px-tall 1U panel). Left unrounded (SVG doesn't
-  // need integer coordinates) so every gap is exactly equal, not just approximately equal via
-  // independently-rounded positions.
   const height = heightUnits * RACK_CONSTANTS.RU_HEIGHT;
-  const pitch = height / numHoles;
+  const pitch  = height / numHoles;
 
   for (let i = 1; i <= numHoles; i++) {
     const yVal = (i - 0.5) * pitch;
-    // Every hole looks and behaves the same (plain network jack) except the very last one,
-    // which is the Hybrid port (same footprint, rendered as a distinct purple rounded-square
-    // in port-renderer.ts) — no separate PSU/power hole or special coloring.
-    const isLast = i === numHoles;
-    const portType = isLast ? 'hybrid' : 'rj45';
-    const label = isLast ? 'Hybrid' : 'RJ45';
-    // Left ear port
+
+    // Left side port
+    const leftIsLast = i === numHoles;
+    const leftEntry  = leftIsLast ? null : (i <= leftCount ? dataEntries[i - 1] : null);
+    const leftLabel  = leftIsLast ? 'Power' : (leftEntry ? `S${leftEntry.slotNumber}-P${leftEntry.portInSlot}` : 'Res');
+    const leftType   = leftIsLast ? 'power' : 'rj45';
+
     earPorts.push({
       id: `${deviceId}-ear-left-nic${i}`,
       deviceId,
-      name: `Left Ear ${isLast ? 'Hybrid' : 'Network'} ${i} (${label})`,
-      type: portType,
+      name: `Left Ear ${leftLabel}`,
+      type: leftType,
       relativeX: leftX,
       relativeY: yVal,
       connected: false,
       cableId: null
     });
-    // Right ear port
+
+    // Right side port
+    const rightIsLast = i === numHoles;
+    const rightEntry  = rightIsLast ? null : (i <= rightCount ? dataEntries[leftCount + i - 1] : null);
+    const rightLabel  = rightIsLast ? 'Power' : (rightEntry ? `S${rightEntry.slotNumber}-P${rightEntry.portInSlot}` : 'Res');
+    const rightType   = rightIsLast ? 'power' : 'rj45';
+
     earPorts.push({
       id: `${deviceId}-ear-right-nic${i}`,
       deviceId,
-      name: `Right Ear ${isLast ? 'Hybrid' : 'Network'} ${i} (${label})`,
-      type: portType,
+      name: `Right Ear ${rightLabel}`,
+      type: rightType,
       relativeX: rightX,
       relativeY: yVal,
       connected: false,
@@ -746,13 +777,10 @@ export function injectEarPorts(deviceId: string, category: string, heightUnits: 
     });
   }
 
-  // Merge any connection state from matching port IDs if they already exist
+  // Preserve existing cable connections on ports that still exist
   const mergedEarPorts = earPorts.map(ep => {
     const existing = basePorts.find(p => p.id === ep.id);
-    if (existing) {
-      return { ...ep, connected: existing.connected, cableId: existing.cableId };
-    }
-    return ep;
+    return existing ? { ...ep, connected: existing.connected, cableId: existing.cableId } : ep;
   });
 
   return [...filtered, ...mergedEarPorts];

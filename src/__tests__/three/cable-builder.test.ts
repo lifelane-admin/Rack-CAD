@@ -3,15 +3,29 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('three', () => {
   const Vector3 = vi.fn().mockImplementation(function(this: any, x = 0, y = 0, z = 0) {
     this.x = x; this.y = y; this.z = z;
+    this.set = vi.fn().mockImplementation((nx, ny, nz) => {
+      this.x = nx; this.y = ny; this.z = nz;
+      return this;
+    });
   });
-  const CatmullRomCurve3 = vi.fn().mockImplementation(function(this: any, points: any[]) {
-    this.points = points;
+  const LineCurve3 = vi.fn().mockImplementation(function(this: any, v1: any, v2: any) {
+    this.v1 = v1; this.v2 = v2;
+  });
+  const QuadraticBezierCurve3 = vi.fn().mockImplementation(function(this: any, v0: any, v1: any, v2: any) {
+    this.v0 = v0; this.v1 = v1; this.v2 = v2;
+  });
+  const CurvePath = vi.fn().mockImplementation(function(this: any) {
+    this.curves = [];
+    this.add = vi.fn().mockImplementation((curve) => {
+      this.curves.push(curve);
+    });
   });
   const TubeGeometry = vi.fn().mockImplementation(function(this: any, curve: any) {
     this.curve = curve; this.dispose = vi.fn();
   });
   const Mesh = vi.fn().mockImplementation(function(this: any, geo: any, mat: any) {
     this.geometry = geo; this.material = mat; this.name = '';
+    this.position = new Vector3();
   });
   const MeshStandardMaterial = vi.fn().mockImplementation(function(this: any, p: any) {
     Object.assign(this, p); this.dispose = vi.fn(); this.isMaterial = true;
@@ -26,9 +40,30 @@ vi.mock('three', () => {
   });
   const Line = vi.fn().mockImplementation(function(this: any, geo: any, mat: any) {
     this.geometry = geo; this.material = mat; this.name = '';
+    this.position = new Vector3();
     this.computeLineDistances = vi.fn();
   });
-  return { Vector3, CatmullRomCurve3, TubeGeometry, Mesh, MeshStandardMaterial, Color, LineDashedMaterial, BufferGeometry, Line };
+  const Group = vi.fn().mockImplementation(function(this: any) {
+    this.children = [];
+    this.name = '';
+    this.position = new Vector3();
+    this.add = vi.fn().mockImplementation((child) => {
+      this.children.push(child);
+    });
+  });
+  const BoxGeometry = vi.fn().mockImplementation(function(this: any) {
+    this.rotateX = vi.fn();
+    this.dispose = vi.fn();
+  });
+  const CylinderGeometry = vi.fn().mockImplementation(function(this: any) {
+    this.rotateX = vi.fn();
+    this.dispose = vi.fn();
+  });
+  return {
+    Vector3, LineCurve3, QuadraticBezierCurve3, CurvePath, TubeGeometry, Mesh,
+    MeshStandardMaterial, Color, LineDashedMaterial, BufferGeometry, Line,
+    Group, BoxGeometry, CylinderGeometry
+  };
 });
 
 vi.mock('../../three/rack-builder', () => ({ RACK_DEPTH: 600 }));
@@ -36,7 +71,15 @@ vi.mock('../../three/rack-builder', () => ({ RACK_DEPTH: 600 }));
 import { buildCableMesh } from '../../three/cable-builder';
 import { RACK_CONSTANTS } from '../../core/types';
 
-const { RACK_OUTER_WIDTH, RACK_PADDING_BOTTOM, RU_HEIGHT } = RACK_CONSTANTS;
+function getCurvePoints(curvePathInstance: any): any[] {
+  const pts: any[] = [];
+  if (!curvePathInstance || !curvePathInstance.curves || curvePathInstance.curves.length === 0) return pts;
+  pts.push(curvePathInstance.curves[0].v1);
+  for (const c of curvePathInstance.curves) {
+    if (c.v2) pts.push(c.v2);
+  }
+  return pts;
+}
 
 function makeState(cable: any) {
   const rack = { id: 'r1', units: 42, x: 0, y: 0 };
@@ -48,7 +91,7 @@ function makeState(cable: any) {
     id: 'd2', rackId: 'r1', templateId: 'tmpl', startUnit: 30,
     ports: [{ id: 'p2', deviceId: 'd2', relativeX: 300, relativeY: 10, type: 'rj45', connected: true, cableId: cable.id }],
   };
-  const template = { id: 'tmpl', heightUnits: 1, color: '#ccc' };
+  const template = { id: 'tmpl', heightUnits: 1, color: '#ccc', category: 'server' };
   return {
     racks: [rack],
     devices: [device1, device2],
@@ -86,31 +129,30 @@ describe('buildCableMesh', () => {
     expect(result).toBeNull();
   });
 
-  it('builds a CatmullRomCurve3 with 6 points for rectangular routing', async () => {
-    const { CatmullRomCurve3 } = await import('three');
+  it('builds a CurvePath for orthogonal routing', async () => {
+    const { CurvePath } = await import('three');
     buildCableMesh(cable, makeState(cable));
-    expect(CatmullRomCurve3).toHaveBeenCalled();
-    const [points] = vi.mocked(CatmullRomCurve3).mock.calls[0];
-    expect(points).toHaveLength(6);
+    expect(CurvePath).toHaveBeenCalled();
   });
 
   it('route uses left channel for source port in left half of device', async () => {
-    const { CatmullRomCurve3 } = await import('three');
-    // port1 has relativeX=50 — left half of 350px device
+    const { CurvePath } = await import('three');
     buildCableMesh(cable, makeState(cable));
-    const points = vi.mocked(CatmullRomCurve3).mock.calls[0]![0] as any[];
-    // P2 (channel) should be to the LEFT of P1 (source port) — both in world space
-    expect(points[1].x).toBeLessThan(points[0].x);
+    const curvePathInstance = vi.mocked(CurvePath).mock.instances[0] as any;
+    const points = getCurvePoints(curvePathInstance);
+    // The third point (first corner transition point after boot exit) should be to the left of the start point.
+    expect(points[2].x).toBeLessThan(points[0].x);
   });
 
   it('route uses right channel for source port in right half of device', async () => {
-    const { CatmullRomCurve3 } = await import('three');
+    const { CurvePath } = await import('three');
     const state = makeState(cable);
     state.devices[0].ports[0].relativeX = 300; // right half
     buildCableMesh(cable, state);
-    const points = vi.mocked(CatmullRomCurve3).mock.calls[0]![0] as any[];
-    // P2 (channel) should be to the RIGHT of P1 (source port) — both in world space
-    expect(points[1].x).toBeGreaterThan(points[0].x);
+    const curvePathInstance = vi.mocked(CurvePath).mock.instances[0] as any;
+    const points = getCurvePoints(curvePathInstance);
+    // The third point should be to the right of the start point.
+    expect(points[2].x).toBeGreaterThan(points[0].x);
   });
 
   it('material color matches cable.color', async () => {
@@ -121,15 +163,18 @@ describe('buildCableMesh', () => {
   });
 
   it('a single cable in a channel uses the base front-Z for its whole path', async () => {
-    const { CatmullRomCurve3 } = await import('three');
+    const { CurvePath } = await import('three');
     buildCableMesh(cable, makeState(cable));
-    const points = vi.mocked(CatmullRomCurve3).mock.calls[0]![0] as any[];
-    const zs = new Set(points.map((p: any) => p.z));
+    const curvePathInstance = vi.mocked(CurvePath).mock.instances[0] as any;
+    const points = getCurvePoints(curvePathInstance);
+    // Ignore the straight boot leaders and exit-transition segments to test the pure channel path
+    const channelPoints = points.slice(4, -4);
+    const zs = new Set(channelPoints.map((p: any) => p.z));
     expect(zs.size).toBe(1);
   });
 
   it('two cables sharing the same rack+channel side get distinct Z lanes (no overlapping geometry)', async () => {
-    const { CatmullRomCurve3 } = await import('three');
+    const { CurvePath } = await import('three');
     const cableA = { ...cable, id: 'c1' };
     const cableB = {
       id: 'c2', name: 'Cable 2', type: 'cat6', color: '#43a047',
@@ -144,12 +189,15 @@ describe('buildCableMesh', () => {
     state.cables = [cableA, cableB];
 
     buildCableMesh(cableA, state);
-    const pointsA = vi.mocked(CatmullRomCurve3).mock.calls[0]![0] as any[];
-    vi.mocked(CatmullRomCurve3).mockClear();
+    const curvePathInstanceA = vi.mocked(CurvePath).mock.instances[0] as any;
+    const pointsA = getCurvePoints(curvePathInstanceA);
+    vi.mocked(CurvePath).mockClear();
 
     buildCableMesh(cableB, state);
-    const pointsB = vi.mocked(CatmullRomCurve3).mock.calls[0]![0] as any[];
+    const curvePathInstanceB = vi.mocked(CurvePath).mock.instances[0] as any;
+    const pointsB = getCurvePoints(curvePathInstanceB);
 
-    expect(pointsA[0].z).not.toBe(pointsB[0].z);
+    // Connection points map to portZ, but lane positions (point index 2) are distinct
+    expect(pointsA[2].z).not.toBe(pointsB[2].z);
   });
 });

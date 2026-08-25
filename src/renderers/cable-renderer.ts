@@ -70,9 +70,9 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
       'stroke-width': (cable.thickness || mat.renderThicknessPx || 3) + 6,
       'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
-      opacity: 0.4,
+      opacity: 0.3,
       style: 'animation: pulse-glow 1.5s infinite alternate;',
-      'stroke-dasharray': '5,5'
+      'pointer-events': 'none'
     });
     group.appendChild(underlayGlow);
   }
@@ -100,9 +100,21 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     'stroke-width': effectiveThickness,
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
+    'pointer-events': 'none',
     ...(isPowerCable ? { 'stroke-dasharray': '6 3' } : {})
   });
   group.appendChild(path);
+
+  // Invisible wide hit target for easier mouse clicking/selecting
+  const hitTarget = createPath(pathData, {
+    fill: 'none',
+    stroke: 'transparent',
+    'stroke-width': Math.max(14, effectiveThickness + 10),
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    class: 'cable-hit-target'
+  });
+  group.appendChild(hitTarget);
 
   // Preview highlight: yellow glow if cable is in previewDiff
   const previewDiff = stateManager.getState().previewDiff;

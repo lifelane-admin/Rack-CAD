@@ -2,8 +2,7 @@ import * as THREE from 'three';
 import type { RackData } from '../core/types';
 import { RACK_CONSTANTS } from '../core/types';
 import type { MaterialManager } from './MaterialManager';
-// buildRackInternals import paused along with its call below — see that comment.
-// import { buildRackInternals } from './rack-internals';
+import { buildRackInternals } from './rack-internals';
 
 const { RU_HEIGHT, RACK_OUTER_WIDTH, RACK_INNER_WIDTH, RAIL_WIDTH, RACK_PADDING_TOP, RACK_PADDING_BOTTOM } = RACK_CONSTANTS;
 
@@ -383,7 +382,7 @@ function makeULabel(u: number): THREE.Sprite {
     ctx.fillText(String(u), 16, 10);
   }
   const texture = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+  const mat = new THREE.SpriteMaterial({ map: texture, depthTest: true });
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(16, 10, 1);
   return sprite;
@@ -546,15 +545,8 @@ export function buildRackGroup(
 
   group.add(doorGroup);
 
-  // ── 4-post L-angle rails, EIA-310 holes, depth bars — currently paused ────────────────
-  // rack-internals.ts's posts sit at x=±212.5, almost entirely inside the solid outer side
-  // wall's footprint (x 203-225 — see makeSidePanelMat's caller below), which z-fights along
-  // nearly the rack's full depth (the "brushed"/dithered seam visible while orbiting). Since
-  // they're already fully hidden behind that wall, not rendering them costs no visible detail
-  // and removes the glitch outright. Revisit as a dedicated pass if the posts need to be made
-  // genuinely visible later — that requires moving them AND the interior bay box AND the ear
-  // brackets together (see git history), not a one-line change.
-  // group.add(buildRackInternals(rack, bodyH, materials));
+  // ── 4-post L-angle rails, EIA-310 holes, depth bars ────────────────────────
+  group.add(buildRackInternals(rack, bodyH, materials));
 
   // ── Bay interior ───────────────────────────────────────────────────────────
   const bayD   = RACK_DEPTH - 40;
@@ -577,11 +569,11 @@ export function buildRackGroup(
     group.add(fanGroup);
   }
 
-  // ── U-number sprite labels ─────────────────────────────────────────────────
+  // ── U-number sprite labels (placed directly on the front-left Z pillar next to the mounting holes) ──
   for (let u = 1; u <= rack.units; u++) {
     const sprite      = makeULabel(u);
     const slotCenterY = -totalH / 2 + RACK_PADDING_BOTTOM + (u - 1) * RU_HEIGHT + RU_HEIGHT / 2;
-    sprite.position.set(-(RACK_INNER_WIDTH / 2 + RAIL_WIDTH / 2), slotCenterY, fz + 2);
+    sprite.position.set(-(RACK_INNER_WIDTH / 2 - 8), slotCenterY, fz - 2.0);
     group.add(sprite);
   }
 

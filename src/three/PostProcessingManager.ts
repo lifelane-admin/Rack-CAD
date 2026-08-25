@@ -16,8 +16,8 @@ export class PostProcessingManager {
     height: number
   ) {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    // ACES filmic compresses specular highlights — exposure 0.95 gives good brightness without blown-out glare
-    renderer.toneMappingExposure = 0.95;
+    // ACES filmic compresses specular highlights — exposure 1.1 gives bright, realistic natural brightness
+    renderer.toneMappingExposure = 1.1;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.composer = new EffectComposer(renderer);

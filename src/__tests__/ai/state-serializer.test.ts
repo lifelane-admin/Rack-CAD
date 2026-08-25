@@ -39,6 +39,7 @@ const minimalState: AppState = {
   cloudContainers: [],
   cloudConnectors: [],
   cloudHierarchies: [],
+  floatingToolbarVisible: false,
 };
 
 describe('serializeState', () => {

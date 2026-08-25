@@ -15,6 +15,7 @@
     "@types/three": "^0.185.3",
     "@vitest/ui": "^4.1.10",
     "happy-dom": "^20.11.1",
+    "playwright": "^1.62.1",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
     "vitest": "^4.1.10"

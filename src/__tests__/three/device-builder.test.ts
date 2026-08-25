@@ -36,6 +36,7 @@ vi.mock('../../three/device-accessories', () => ({
   buildLedMeshes: vi.fn().mockReturnValue([]),
   buildPortBezels: vi.fn().mockReturnValue([]),
   buildLogoPlaque: vi.fn().mockReturnValue(null),
+  buildServerAccessories: vi.fn().mockReturnValue([]),
 }));
 
 import { buildDeviceMesh } from '../../three/device-builder';
@@ -113,13 +114,14 @@ describe('buildDeviceMesh', () => {
     const narrowDevice = { ...device, device3D: { depth: 500, width: 200 } };
     const { earMeshes } = buildDeviceMesh(narrowDevice, template, rack, materials);
     expect(earMeshes).toHaveLength(2);
-    // Each ear width = (DEFAULT_W - 200) / 2 = 75
+    // Each ear width = (RACK_INNER_WIDTH - 200) / 2 = 100
     const earCall = vi.mocked(BoxGeometry).mock.calls[1]; // second BoxGeometry call
-    expect(earCall[0]).toBeCloseTo(75);
+    expect(earCall[0]).toBeCloseTo(100);
   });
 
   it('returns empty earMeshes when device is full rack width', () => {
-    const { earMeshes } = buildDeviceMesh(device, template, rack, materials);
+    const fullDevice = { ...device, device3D: { depth: 500, width: RACK_INNER_WIDTH } };
+    const { earMeshes } = buildDeviceMesh(fullDevice, template, rack, materials);
     expect(earMeshes).toHaveLength(0);
   });
 
@@ -128,9 +130,9 @@ describe('buildDeviceMesh', () => {
     const narrowDevice = { ...device, device3D: { depth: 500, width: 200 } };
     const { earMeshes } = buildDeviceMesh(narrowDevice, template, rack, materials);
     expect(earMeshes).toHaveLength(2);
-    // Each ear width = (350 - 200) / 2 = 75
+    // Each ear width = (400 - 200) / 2 = 100
     const earCall = vi.mocked(BoxGeometry).mock.calls[1];
-    expect(earCall[0]).toBeCloseTo(75);
+    expect(earCall[0]).toBeCloseTo(100);
   });
 
   it('uses per-face material array when frontPanelImage is set', async () => {

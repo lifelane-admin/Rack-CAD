@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { injectConfigurablePorts, stateManager } from '../core/state';
+import { injectConfigurablePorts, stateManager, injectEarPorts } from '../core/state';
 import { getTemplate, deviceCatalog } from '../library/device-catalog';
 import { renderFrontPanel } from '../renderers/panel-renderer';
 import { PropertiesPanel } from '../components/properties';
@@ -443,3 +443,110 @@ describe('end-to-end: NAC and ATS Properties panels regenerate live ports throug
     eventBus.off('device:update' as any, handler);
   });
 });
+
+describe('Ethernet Adapter Slots configuration (numSlots, portsPerSlot)', () => {
+  const switchTemplate = getTemplate('sw-enterprise')!;
+
+  it('injectEarPorts generates slot/port sequence correctly for custom config', () => {
+    const deviceId = 'test-switch';
+
+    // Config: 2 slots, 3 ports per slot (total 6 data ports split as 3 left + 3 right + 1 power = 4 ports total per side)
+    const cfg = { numSlots: 2, portsPerSlot: 3 };
+    const ports = injectEarPorts(deviceId, 'switch', 2, [], cfg);
+
+    // Filter left/right side separately
+    const leftPorts = ports.filter(p => p.id.includes('-left-'));
+    expect(leftPorts.length).toBe(4);
+
+    // Verify sequential labels
+    expect(leftPorts[0].name).toBe('Left Ear S1-P1');
+    expect(leftPorts[1].name).toBe('Left Ear S1-P2');
+    expect(leftPorts[2].name).toBe('Left Ear S1-P3');
+    expect(leftPorts[3].name).toBe('Left Ear Power');
+    expect(leftPorts[3].type).toBe('power');
+
+    const rightPorts = ports.filter(p => p.id.includes('-right-'));
+    expect(rightPorts.length).toBe(4);
+    expect(rightPorts[0].name).toBe('Right Ear S2-P1');
+    expect(rightPorts[1].name).toBe('Right Ear S2-P2');
+    expect(rightPorts[2].name).toBe('Right Ear S2-P3');
+    expect(rightPorts[3].name).toBe('Right Ear Power');
+    expect(rightPorts[3].type).toBe('power');
+  });
+
+  it('injectEarPorts respects maxDataHoles constraint', () => {
+    const deviceId = 'test-switch-1u';
+
+    // 1U max holes is 4 per side (3 data + 1 power = 4 total per side)
+    // Config: 2 slots, 4 ports per slot (total 8 data ports, capped to max 6 data ports total = 3 data + 1 power per side)
+    const cfg = { numSlots: 2, portsPerSlot: 4 };
+    const ports = injectEarPorts(deviceId, 'switch', 1, [], cfg);
+
+    const leftPorts = ports.filter(p => p.id.includes('-left-'));
+    expect(leftPorts.length).toBe(4);
+    expect(leftPorts[0].name).toBe('Left Ear S1-P1');
+    expect(leftPorts[1].name).toBe('Left Ear S1-P2');
+    expect(leftPorts[2].name).toBe('Left Ear S1-P3');
+    expect(leftPorts[3].name).toBe('Left Ear Power');
+
+    const rightPorts = ports.filter(p => p.id.includes('-right-'));
+    expect(rightPorts.length).toBe(4);
+    expect(rightPorts[0].name).toBe('Right Ear S1-P4');
+    expect(rightPorts[1].name).toBe('Right Ear S2-P1');
+    expect(rightPorts[2].name).toBe('Right Ear S2-P2');
+    expect(rightPorts[3].name).toBe('Right Ear Power');
+  });
+
+  it('end-to-end: changing slot/port inputs on properties panel updates config and regenerates ports', () => {
+    const template = getTemplate('sw-enterprise')!;
+    const deviceId = 'e2e-switch-adapters';
+    const cfg = { numSlots: 1, portsPerSlot: 2 };
+    const seedPorts = template.ports.map(p => ({ ...p, deviceId, connected: false, cableId: null }));
+
+    stateManager.setState({
+      devices: [{
+        id: deviceId,
+        templateId: template.id,
+        rackId: 'r1',
+        startUnit: 1,
+        name: 'My Switch',
+        hostname: '',
+        managementIp: '',
+        serialNumber: '',
+        description: '',
+        ports: seedPorts,
+        deviceConfig: cfg
+      } as DeviceData]
+    });
+
+    const container = document.createElement('div');
+    const panel = new PropertiesPanel(container);
+    (panel as any).renderSwitchProperties(stateManager.getDevice(deviceId), template, container);
+
+    const slotsInput = container.querySelector('#adapter-num-slots') as HTMLInputElement;
+    const portsInput = container.querySelector('#adapter-ports-per-slot') as HTMLInputElement;
+    expect(slotsInput).toBeTruthy();
+    expect(portsInput).toBeTruthy();
+    expect(Number(slotsInput.value)).toBe(1);
+    expect(Number(portsInput.value)).toBe(2);
+
+    let capturedConfig: any = null;
+    const handler = (payload: any) => {
+      if (payload.id === deviceId) {
+        capturedConfig = payload.data.deviceConfig;
+      }
+    };
+    eventBus.on('device:update' as any, handler);
+
+    // Simulate user editing slots to 3, ports to 2
+    slotsInput.value = '3';
+    slotsInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    eventBus.off('device:update' as any, handler);
+
+    expect(capturedConfig).toBeTruthy();
+    expect(capturedConfig.numSlots).toBe(3);
+    expect(capturedConfig.portsPerSlot).toBe(2);
+  });
+});
+

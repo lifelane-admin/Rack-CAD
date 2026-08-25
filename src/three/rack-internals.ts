@@ -60,9 +60,9 @@ export function buildRackInternals(
 
   const fz = RACK_DEPTH / 2; // 300
 
-  // X positions
-  const leftFaceX    = -(RACK_INNER_WIDTH / 2 + RAIL_WIDTH / 2);  // -212.5
-  const rightFaceX   =  (RACK_INNER_WIDTH / 2 + RAIL_WIDTH / 2);  // +212.5
+  // X positions (shifted inwards to ±187.5 so they align between device bezel edge and side wall)
+  const leftFaceX    = -(RACK_INNER_WIDTH / 2 - RAIL_WIDTH / 2);  // -187.5
+  const rightFaceX   =  (RACK_INNER_WIDTH / 2 - RAIL_WIDTH / 2);  // +187.5
   const leftFlangeX  = -(RACK_INNER_WIDTH / 2 + FLANGE_T / 2);    // -202.5
   const rightFlangeX =  (RACK_INNER_WIDTH / 2 + FLANGE_T / 2);    // +202.5
 

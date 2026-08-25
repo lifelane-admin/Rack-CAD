@@ -73,7 +73,7 @@ describe('Properties panel routing for customLayout devices', () => {
     (panel as any).renderDeviceProperties('dev-csw', container);
 
     expect(container.querySelector('#prop-dev-panel-file')).toBeTruthy();
-    expect(container.querySelector('#prop-port-add')).toBeTruthy();
+    expect(container.querySelector('#btn-save-custom-asset')).toBeTruthy();
     // No bulk-add — adding several unpositioned ports at once is exactly what caused the overlap bug.
     expect(container.querySelector('#prop-port-bulk-add')).toBeFalsy();
     // The SDK switch configurator's own field must NOT be present.
@@ -87,7 +87,7 @@ describe('Properties panel routing for customLayout devices', () => {
     (panel as any).renderDeviceProperties('dev-cfw', container);
 
     expect(container.querySelector('#prop-dev-panel-file')).toBeTruthy();
-    expect(container.querySelector('#prop-port-add')).toBeTruthy();
+    expect(container.querySelector('#btn-save-custom-asset')).toBeTruthy();
     expect(container.querySelector('#fw-rj45')).toBeFalsy();
   });
 
@@ -98,7 +98,7 @@ describe('Properties panel routing for customLayout devices', () => {
     (panel as any).renderDeviceProperties('dev-csrv', container);
 
     expect(container.querySelector('#prop-dev-panel-file')).toBeTruthy();
-    expect(container.querySelector('#prop-port-add')).toBeTruthy();
+    expect(container.querySelector('#btn-save-custom-asset')).toBeTruthy();
   });
 
   it('regression: a NON-custom-layout switch/firewall still gets its SDK configurator, unaffected by the routing change', () => {
@@ -107,14 +107,14 @@ describe('Properties panel routing for customLayout devices', () => {
     const swPanel = new PropertiesPanel(swContainer);
     (swPanel as any).renderDeviceProperties('dev-sw-enterprise', swContainer);
     expect(swContainer.querySelector('#sw-rj45')).toBeTruthy();
-    expect(swContainer.querySelector('#prop-port-add')).toBeFalsy();
+    expect(swContainer.querySelector('#btn-save-custom-asset')).toBeFalsy();
 
     seedDevice('dev-fw-enterprise', 'fw-enterprise');
     const fwContainer = document.createElement('div');
     const fwPanel = new PropertiesPanel(fwContainer);
     (fwPanel as any).renderDeviceProperties('dev-fw-enterprise', fwContainer);
     expect(fwContainer.querySelector('#fw-rj45')).toBeTruthy();
-    expect(fwContainer.querySelector('#prop-port-add')).toBeFalsy();
+    expect(fwContainer.querySelector('#btn-save-custom-asset')).toBeFalsy();
   });
 });
 

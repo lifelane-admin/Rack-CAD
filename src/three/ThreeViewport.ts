@@ -32,12 +32,11 @@ export class ThreeViewport {
   private resizeObserver: ResizeObserver | null = null;
   private stateHandler: ((partial: Partial<AppState>) => void) | null = null;
 
-  private debouncedSync = debounce((partial: Partial<AppState>) => {
-    // Cable routing in 3D is paused — SceneManager.rebuild() doesn't render cables right now, so
-    // there's no point reacting to cable-only state changes here either. Re-add
-    // `|| partial.cables !== undefined` when that work resumes.
-    if (partial.racks !== undefined || partial.devices !== undefined) {
+  private dirtySync = false;
+  private debouncedSync = debounce(() => {
+    if (this.dirtySync) {
       this.sceneManager.rebuild(stateManager.getState());
+      this.dirtySync = false;
     }
   }, 100);
 
@@ -76,7 +75,12 @@ export class ThreeViewport {
     this.fitCameraToScene();
 
     // Subscribe to future state changes
-    this.stateHandler = (partial: Partial<AppState>) => this.debouncedSync(partial);
+    this.stateHandler = (partial: Partial<AppState>) => {
+      if (partial.racks !== undefined || partial.devices !== undefined || partial.cables !== undefined) {
+        this.dirtySync = true;
+      }
+      this.debouncedSync();
+    };
     eventBus.on('state:changed', this.stateHandler);
 
     // Resize observer
