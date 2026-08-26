@@ -2366,7 +2366,7 @@ export class App {
 
         // No real port was found anywhere near this click (or we're finishing/starting an Airdrop cable).
         // If Airdrop Destination is on, we can start or finish a cable at this exact floating point.
-        if (s.airdropDestination) {
+        if (s.airdropDestination && (s.tool === 'cable' || s.tool === 'power')) {
           const clickedPoint = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
           if (!s.cableInProgress) {
             // Start a new cable from a floating point!
