@@ -106,6 +106,7 @@ function buildPortMappingTable(
   devices.forEach(d => d.ports.forEach(p => { portNameById[p.id] = p.name; }));
 
   const cables = state.cables.filter(c =>
+    c.sourcePortId !== null &&
     c.destPortId !== null &&
     rackDeviceIds.has(portToDevice[c.sourcePortId]?.id),
   );
@@ -115,18 +116,18 @@ function buildPortMappingTable(
   }
 
   const sorted = [...cables].sort((a, b) => {
-    const aU = portToDevice[a.sourcePortId]?.startUnit ?? 0;
-    const bU = portToDevice[b.sourcePortId]?.startUnit ?? 0;
+    const aU = a.sourcePortId ? (portToDevice[a.sourcePortId]?.startUnit ?? 0) : 0;
+    const bU = b.sourcePortId ? (portToDevice[b.sourcePortId]?.startUnit ?? 0) : 0;
     return bU - aU;
   });
 
   const rows = sorted.map(c => {
-    const fromDev = portToDevice[c.sourcePortId];
+    const fromDev = c.sourcePortId ? portToDevice[c.sourcePortId] : null;
     const toDev   = portToDevice[c.destPortId!];
     const color = CABLE_COLORS[c.type as CableType] ?? '#888888';
     return `<tr>
       <td>${fromDev?.name ?? '?'}</td>
-      <td>${portNameById[c.sourcePortId] ?? '?'}</td>
+      <td>${c.sourcePortId ? (portNameById[c.sourcePortId] ?? '?') : 'Floating'}</td>
       <td>${toDev?.name ?? '?'}</td>
       <td>${portNameById[c.destPortId!] ?? '?'}</td>
       <td>${c.type}</td>

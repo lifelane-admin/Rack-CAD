@@ -25,7 +25,8 @@ const POWER_TYPES = new Set(['power', 'c13-power', 'c19-power']);
 const LANE_Z_SPACING = 3;
 const MAX_STAGGERED_LANES = 8; // beyond this, extra cables in one channel just re-share a Z plane
 
-function findPort(portId: string, devices: DeviceData[]) {
+function findPort(portId: string | null, devices: DeviceData[]) {
+  if (!portId) return null;
   for (const device of devices) {
     const port = device.ports.find(p => p.id === portId);
     if (port) return { port, device };
@@ -39,7 +40,8 @@ interface PortWorldPos {
   rackGroupX: number;
 }
 
-function portWorldPos(portId: string, state: AppState): PortWorldPos | null {
+function portWorldPos(portId: string | null, state: AppState): PortWorldPos | null {
+  if (!portId) return null;
   const found = findPort(portId, state.devices);
   if (!found) return null;
   const { port, device } = found;
@@ -65,8 +67,18 @@ function portWorldPos(portId: string, state: AppState): PortWorldPos | null {
 }
 
 function resolveSide(cable: CableData, devices: DeviceData[]): 'left' | 'right' | null {
-  const srcFound = findPort(cable.sourcePortId, devices);
-  if (!srcFound) return null;
+  const srcFound = cable.sourcePortId ? findPort(cable.sourcePortId, devices) : null;
+  if (!srcFound) {
+    const destFound = cable.destPortId ? findPort(cable.destPortId, devices) : null;
+    if (destFound) {
+      const destPortX = destFound.port.relativeX ?? 0;
+      const useRight = POWER_TYPES.has(cable.type)
+        || (cable as any).sidePreference === 'right'
+        || destPortX >= DEFAULT_DEVICE_WIDTH / 2;
+      return useRight ? 'right' : 'left';
+    }
+    return (cable as any).sidePreference === 'right' ? 'right' : 'left';
+  }
   const srcPortX = srcFound.port.relativeX ?? 0;
   const useRight = POWER_TYPES.has(cable.type)
     || (cable as any).sidePreference === 'right'
@@ -76,7 +88,7 @@ function resolveSide(cable: CableData, devices: DeviceData[]): 'left' | 'right' 
 
 function laneIndexFor(cable: CableData, rackId: string, side: 'left' | 'right', state: AppState): number {
   const channelCables = (state.cables ?? []).filter(c => {
-    const found = findPort(c.sourcePortId, state.devices);
+    const found = c.sourcePortId ? findPort(c.sourcePortId, state.devices) : null;
     if (!found || found.device.rackId !== rackId) return false;
     return resolveSide(c, state.devices) === side;
   });
@@ -94,7 +106,8 @@ function laneIndexFor(cable: CableData, rackId: string, side: 'left' | 'right', 
   return idx >= 0 ? idx : 0;
 }
 
-function portWorldPos2D(portId: string, state: AppState): Point | null {
+function portWorldPos2D(portId: string | null, state: AppState): Point | null {
+  if (!portId) return null;
   const found = findPort(portId, state.devices);
   if (!found) return null;
   const { port, device } = found;
@@ -395,27 +408,21 @@ function buildPlugGroup(pos2D: Point, rack: RackData, totalH: number, color: str
 }
 
 export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | THREE.Line | THREE.Group | null {
-  if ((cable as any).floatingDest && !cable.destPortId) {
-    return buildFloatingMesh(cable, state);
-  }
-
-  const src2D = portWorldPos2D(cable.sourcePortId, state);
+  const src2D = cable.sourcePortId ? portWorldPos2D(cable.sourcePortId, state) : cable.floatingSource;
   if (!src2D) return null;
 
-  let dest2D = cable.destPortId ? portWorldPos2D(cable.destPortId, state) : null;
-  if (!dest2D && (cable as any).floatingDest) {
-    dest2D = (cable as any).floatingDest;
-  }
+  const dest2D = cable.destPortId ? portWorldPos2D(cable.destPortId, state) : cable.floatingDest;
   if (!dest2D) return null;
 
-  const srcFound = findPort(cable.sourcePortId, state.devices);
-  if (!srcFound) return null;
+  const srcFound = cable.sourcePortId ? findPort(cable.sourcePortId, state.devices) : null;
+  const destFound = cable.destPortId ? findPort(cable.destPortId, state.devices) : null;
 
-  const rackId = srcFound.device.rackId;
+  const device = srcFound?.device ?? destFound?.device;
+  const rackId = device?.rackId ?? state.racks[0]?.id;
   const rack = state.racks.find(r => r.id === rackId);
   if (!rack) return null;
 
-  const srcPortX = srcFound.port.relativeX ?? 0;
+  const srcPortX = srcFound?.port.relativeX ?? destFound?.port.relativeX ?? 175;
   const useRight = POWER_TYPES.has(cable.type)
     || (cable as any).sidePreference === 'right'
     || srcPortX >= DEFAULT_DEVICE_WIDTH / 2;
@@ -451,8 +458,8 @@ export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | 
   group.name = `cable-${cable.id}`;
   group.add(mesh);
 
-  // Add source plug & boot (only if not an ear port)
-  if (!cable.sourcePortId.includes('-ear-')) {
+  // Add source plug & boot (only if not an ear port and not floating)
+  if (cable.sourcePortId && !cable.sourcePortId.includes('-ear-')) {
     const srcPlug = buildPlugGroup(src2D, rack, totalH, cable.color);
     group.add(srcPlug);
   }

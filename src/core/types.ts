@@ -597,7 +597,7 @@ export interface CableData {
   name: string;
   type: CableType;
   color: string;
-  sourcePortId: string;
+  sourcePortId: string | null;
   destPortId: string | null;
   bendPoints: Point[];
   thickness: number;
@@ -672,7 +672,8 @@ export interface AppState {
   validationAlerts: ValidationAlert[];
   selection: SelectableItem[];
   cableInProgress: {
-    sourcePortId: string;
+    sourcePortId: string | null;
+    floatingSource?: Point | null;
     currentPoint: Point;
     bendPoints: Point[];
     cableType: CableType;

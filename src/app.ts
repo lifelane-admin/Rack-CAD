@@ -1190,7 +1190,7 @@ export class App {
       const s = stateManager.getState();
       if (s.cableInProgress) {
         svgEl.classList.add('cable-laying');
-        this.highlightNearestPort(this.mouseWorldPos, null, s.cableInProgress.sourcePortId);
+        this.highlightNearestPort(this.mouseWorldPos, null, s.cableInProgress.sourcePortId || undefined);
         this.updateCablePreview(this.mouseWorldPos);
       } else {
         svgEl.classList.remove('cable-laying');
@@ -2364,12 +2364,27 @@ export class App {
           }
         }
 
-        // No real port was found anywhere near this click (or we're finishing an Airdrop cable
-        // and deliberately skipped all port hit-testing above). With Airdrop Destination on and a
-        // cable already in progress (started from a real source port the normal way), finish it
-        // right here instead of requiring a real destination port — any rack, any spot, no snap.
-        if (s.airdropDestination && s.cableInProgress) {
-          this.commitCableToFloatingDestination(this.canvas.screenToWorld({ x: e.clientX, y: e.clientY }));
+        // No real port was found anywhere near this click (or we're finishing/starting an Airdrop cable).
+        // If Airdrop Destination is on, we can start or finish a cable at this exact floating point.
+        if (s.airdropDestination) {
+          const clickedPoint = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+          if (!s.cableInProgress) {
+            // Start a new cable from a floating point!
+            stateManager.setState({
+              cableInProgress: {
+                sourcePortId: null,
+                floatingSource: clickedPoint,
+                currentPoint: clickedPoint,
+                bendPoints: [],
+                cableType: s.tool === 'power' ? 'power' : (s.selectedCableType || 'general')
+              }
+            });
+            eventBus.emit('notification', { message: 'Cable started from a floating point! Click empty space to drop the end, or click a real port to connect it.', type: 'info' });
+            this.renderAll();
+          } else if (s.cableInProgress.cableType !== 'power') {
+            // Finish a cable at a floating point!
+            this.commitCableToFloatingDestination(clickedPoint);
+          }
           return;
         }
       }
@@ -2501,18 +2516,18 @@ export class App {
     } else {
       // Complete cable
       const sourcePortId = s.cableInProgress.sourcePortId;
-      if (sourcePortId === portId) return; // Can't connect to self
+      if (sourcePortId && sourcePortId === portId) return; // Can't connect to self
 
       // Determine if source/dest are PDU outlets (virtual ports, not in device.ports)
-      const isSrcOutlet = sourcePortId.startsWith('outlet-');
+      const isSrcOutlet = sourcePortId ? sourcePortId.startsWith('outlet-') : false;
       const isDestOutlet = portId.startsWith('outlet-');
 
-      const sourcePort = stateManager.getPort(sourcePortId);
+      const sourcePort = sourcePortId ? stateManager.getPort(sourcePortId) : null;
       const destPort = stateManager.getPort(portId);
 
       // PDU outlet virtual ports are not in stateManager — they're always valid power endpoints
-      // For regular ports, both must exist
-      if (!sourcePort && !isSrcOutlet) return;
+      // For regular ports, both must exist (unless it started from a floating source)
+      if (!sourcePort && !isSrcOutlet && !s.cableInProgress.floatingSource) return;
       if (!destPort && !isDestOutlet) return;
 
       // Determine if source/dest are power ports via portTypes override
@@ -2539,7 +2554,7 @@ export class App {
       const isDestPower = isDestOutlet || isDestPowerByType || isDestPowerByPortName || wasPowerTool;
 
       // Validation: ear ports accept any cable; block fiber↔ethernet and power↔data mismatches
-      const isSrcEar = sourcePortId.includes('-ear-');
+      const isSrcEar = sourcePortId ? sourcePortId.includes('-ear-') : false;
       const isDestEar = portId.includes('-ear-');
 
       if (!isSrcEar && !isDestEar) {
@@ -2573,6 +2588,7 @@ export class App {
           type: cableInProgressSnapshot.cableType,
           color,
           sourcePortId,
+          floatingSource: cableInProgressSnapshot.floatingSource || null,
           destPortId: portId,
           bendPoints: [...cableInProgressSnapshot.bendPoints],
           thickness: RACK_CONSTANTS.CABLE_THICKNESS,
@@ -2674,9 +2690,9 @@ export class App {
     if (s.cableInProgress.cableType === 'power') return;
 
     const sourcePortId = s.cableInProgress.sourcePortId;
-    const sourcePort = stateManager.getPort(sourcePortId);
-    const isSrcOutlet = sourcePortId.startsWith('outlet-');
-    if (!sourcePort && !isSrcOutlet) return;
+    const isSrcOutlet = sourcePortId ? sourcePortId.startsWith('outlet-') : false;
+    const sourcePort = sourcePortId ? stateManager.getPort(sourcePortId) : null;
+    if (!sourcePort && !isSrcOutlet && !s.cableInProgress.floatingSource) return;
 
     const color = s.selectedCableType === 'custom'
       ? (s.selectedCableColor || '#78909c')
@@ -2688,6 +2704,7 @@ export class App {
       type: s.cableInProgress.cableType,
       color,
       sourcePortId,
+      floatingSource: s.cableInProgress.floatingSource || null,
       destPortId: null,
       floatingDest: point,
       bendPoints: [...s.cableInProgress.bendPoints],
@@ -2779,7 +2796,9 @@ export class App {
     // Clear previous preview
     interactionLayer.innerHTML = '';
 
-    const sourcePos = stateManager.getPortWorldPosition(s.cableInProgress.sourcePortId);
+    const sourcePos = s.cableInProgress.sourcePortId
+      ? stateManager.getPortWorldPosition(s.cableInProgress.sourcePortId)
+      : s.cableInProgress.floatingSource;
     if (!sourcePos) return;
 
     try {
@@ -4357,7 +4376,7 @@ export class App {
         });
         // Remove power cables connected to this PDU's outlets
         const updatedCables = s2.cables.filter(c =>
-          !(c.sourcePortId.startsWith(`outlet-${devId}`) || (c.destPortId ?? '').startsWith(`outlet-${devId}`))
+          !((c.sourcePortId ?? '').startsWith(`outlet-${devId}`) || (c.destPortId ?? '').startsWith(`outlet-${devId}`))
         );
         stateManager.setState({ racks: updatedRacks, cables: updatedCables, selection: [] });
         stateManager.removeDevice(devId);

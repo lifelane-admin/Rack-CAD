@@ -36,7 +36,7 @@ export function runValidationAlerts(
     let rightCount = 0;
 
     for (const cable of cables) {
-      const srcPort = findPort(cable.sourcePortId);
+      const srcPort = cable.sourcePortId ? findPort(cable.sourcePortId) : null;
       const srcDevice = srcPort ? findDeviceOfPort(srcPort.id) : null;
       if (srcDevice && srcDevice.rackId === rack.id) {
         if (cable.sidePreference === 'left') leftCount++;
@@ -93,7 +93,7 @@ export function runValidationAlerts(
       continue;
     }
 
-    const srcPort = findPort(cable.sourcePortId);
+    const srcPort = cable.sourcePortId ? findPort(cable.sourcePortId) : null;
     const destPort = findPort(cable.destPortId);
 
     if (!srcPort || !destPort) continue;

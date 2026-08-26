@@ -325,7 +325,8 @@ class StateManager {
     return this.state.devices.find(d => d.id === id);
   }
 
-  getPort(id: string): PortData | undefined {
+  getPort(id: string | null): PortData | undefined {
+    if (!id) return undefined;
     for (const device of this.state.devices) {
       const port = device.ports.find(p => p.id === id);
       if (port) return port;
@@ -424,7 +425,8 @@ class StateManager {
     return { x: deviceX, y: deviceY };
   }
 
-  getPortWorldPosition(portId: string): { x: number; y: number } | null {
+  getPortWorldPosition(portId: string | null): { x: number; y: number } | null {
+    if (!portId) return null;
     const outletMatch = /^outlet-(.+)-(\d+)$/.exec(portId);
     if (outletMatch) {
       return this.getPduOutletWorldPosition(outletMatch[1], Number(outletMatch[2]));
@@ -478,8 +480,8 @@ class StateManager {
       const portIds = device.ports.map(p => p.id);
       const outletPrefix = `outlet-${id}-`;
       cables = this.state.cables.filter(c =>
-        !portIds.includes(c.sourcePortId) && (!c.destPortId || !portIds.includes(c.destPortId)) &&
-        !c.sourcePortId.startsWith(outletPrefix) && !(c.destPortId ?? '').startsWith(outletPrefix)
+        (!c.sourcePortId || !portIds.includes(c.sourcePortId)) && (!c.destPortId || !portIds.includes(c.destPortId)) &&
+        !(c.sourcePortId && c.sourcePortId.startsWith(outletPrefix)) && !(c.destPortId ?? '').startsWith(outletPrefix)
       );
     }
     const devices = this.state.devices.filter(d => d.id !== id);

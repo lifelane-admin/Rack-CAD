@@ -117,7 +117,7 @@ export function executeResolvedDiff(
         .flatMap(d => d.ports.map(p => p.id))
     );
     cables = cables.filter(c =>
-      !removedPortIds.has(c.sourcePortId) &&
+      !(c.sourcePortId && removedPortIds.has(c.sourcePortId)) &&
       !(c.destPortId && removedPortIds.has(c.destPortId))
     );
   }

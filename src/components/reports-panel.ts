@@ -135,7 +135,7 @@ export class ReportsPanel {
           </thead>
           <tbody>
             ${cables.map(c => {
-              const srcPort = findPort(c.sourcePortId);
+              const srcPort = c.sourcePortId ? findPort(c.sourcePortId) : null;
               const srcDev = srcPort ? findDeviceOfPort(srcPort.id) : null;
               const destPort = c.destPortId ? findPort(c.destPortId) : null;
               const destDev = destPort ? findDeviceOfPort(destPort.id) : null;

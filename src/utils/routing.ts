@@ -70,7 +70,7 @@ export function getDeterministicLaneIndex(
   const s = stateManager.getState();
   
   const channelCables = s.cables.filter(c => {
-    const srcPort = stateManager.getPort(c.sourcePortId);
+    const srcPort = c.sourcePortId ? stateManager.getPort(c.sourcePortId) : null;
     const destPort = c.destPortId ? stateManager.getPort(c.destPortId) : null;
     
     const srcDev = srcPort ? stateManager.getDevice(srcPort.deviceId) : null;
@@ -82,14 +82,21 @@ export function getDeterministicLaneIndex(
     const usesSrc = srcDev && srcDev.rackId === rackId && srcSide === side;
     const usesDest = destDev && destDev.rackId === rackId && destSide === side;
     
-    return usesSrc || usesDest;
+    const usesFloatingSrc = !srcPort && c.floatingSource && s.racks[0]?.id === rackId;
+    const usesFloatingDest = !destPort && c.floatingDest && s.racks[0]?.id === rackId;
+    
+    return usesSrc || usesDest || usesFloatingSrc || usesFloatingDest;
   });
   
   channelCables.sort((a, b) => {
     const getPortY = (cab: CableData) => {
-      const isSrc = cab.sourcePortId && stateManager.getPort(cab.sourcePortId);
-      const port = isSrc ? stateManager.getPort(cab.sourcePortId) : (cab.destPortId ? stateManager.getPort(cab.destPortId) : null);
-      if (!port) return 0;
+      const isSrc = cab.sourcePortId ? stateManager.getPort(cab.sourcePortId) : null;
+      const port = isSrc ? isSrc : (cab.destPortId ? stateManager.getPort(cab.destPortId) : null);
+      if (!port) {
+        // Fallback to floating positions Y if no real ports
+        const floatPos = cab.floatingSource || cab.floatingDest;
+        return floatPos ? floatPos.y : 0;
+      }
       const dev = stateManager.getDevice(port.deviceId);
       if (!dev) return 0;
       return dev.startUnit * 30 + port.relativeY;

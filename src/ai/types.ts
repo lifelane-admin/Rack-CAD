@@ -31,7 +31,7 @@ export interface RackContextCable {
   id: string;
   type: string;
   color: string;
-  fromPort: string;
+  fromPort: string | null;
   toPort: string | null;
   routingMode: string;
   anchors: Point[];

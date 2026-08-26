@@ -328,4 +328,39 @@ describe('end-to-end: correcting an already-dropped floating destination by drag
     expect(updated.destPortId).toBe('s1u-nic2');
     expect(updated.floatingDest).toBeFalsy();
   });
+
+  it('allows starting a cable from a floating source when airdropDestination is on, and committing to a floating destination', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    stateManager.setState({
+      racks: [{ id: 'r1', name: 'Rack 1', units: 42, x: 300, y: 100, showPduLeft: true, showPduRight: true }],
+      devices: [],
+      cables: [],
+      airdropDestination: true,
+      tool: 'cable'
+    });
+
+    const canvasEl = document.getElementById('canvas')!;
+    
+    // First click on empty canvas to start floating source cable
+    canvasEl.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 200, clientY: 300 }));
+    
+    expect(stateManager.getState().cableInProgress).toBeTruthy();
+    expect(stateManager.getState().cableInProgress!.sourcePortId).toBeNull();
+    expect(stateManager.getState().cableInProgress!.floatingSource).toEqual({ x: 200, y: 300 });
+
+    // Second click on empty canvas to complete floating dest cable
+    canvasEl.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 600, clientY: 700 }));
+
+    const cables = stateManager.getState().cables;
+    expect(cables.length).toBe(1);
+    expect(cables[0].sourcePortId).toBeNull();
+    expect(cables[0].destPortId).toBeNull();
+    expect(cables[0].floatingSource).toEqual({ x: 200, y: 300 });
+    expect(cables[0].floatingDest).toEqual({ x: 600, y: 700 });
+    expect(stateManager.getState().cableInProgress).toBeNull();
+  });
 });
