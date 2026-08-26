@@ -112,6 +112,7 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     'stroke-width': Math.max(14, effectiveThickness + 10),
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
+    'pointer-events': 'stroke',
     class: 'cable-hit-target'
   });
   group.appendChild(hitTarget);
