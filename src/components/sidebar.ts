@@ -579,7 +579,7 @@ export class Sidebar {
       row.className = 'cat-row';
       row.innerHTML = `
         <div class="cat-accent" style="background:${accent}"></div>
-        <div class="cat-icon">${svgHtml}</div>
+        <div class="cat-icon" style="color:${accent}">${svgHtml}</div>
         <span class="cat-label">${label}</span>
         <span class="cat-count">${itemEls.length}</span>
         <div class="cat-chevron">${icon('<path d="M9 18l6-6-6-6"/>')}</div>

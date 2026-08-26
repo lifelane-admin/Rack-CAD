@@ -218,7 +218,7 @@
   flex: 1;
   padding: 8px 4px 7px;
   text-align: center;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.6px;
   color: var(--text-muted);
@@ -243,7 +243,7 @@
   align-items: center;
   gap: 7px;
   padding: 0 12px;
-  height: 32px;
+  height: 38px;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
   cursor: pointer;
@@ -254,15 +254,15 @@
   background: rgba(255, 255, 255, 0.03);
 }
 .sb-library-strip svg {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   stroke: #fbbf24;
   fill: none;
   stroke-width: 2;
   flex-shrink: 0;
 }
 .sb-library-label {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
@@ -270,7 +270,7 @@
 }
 .sb-library-count {
   margin-left: auto;
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text-muted);
 }
 .sb-library-add {
@@ -298,7 +298,7 @@
 .cat-row {
   display: flex;
   align-items: center;
-  height: 34px;
+  height: 38px;
   cursor: pointer;
   border-bottom: 1px solid rgba(255, 255, 255, 0.025);
   transition: background-color var(--transition-speed);
@@ -308,9 +308,6 @@
 }
 .cat-row:hover .cat-label {
   color: var(--text-primary);
-}
-.cat-row:hover .cat-icon svg {
-  stroke: var(--text-secondary);
 }
 .cat-accent {
   width: 3px;
@@ -325,16 +322,16 @@
   flex-shrink: 0;
 }
 .cat-icon svg {
-  width: 12px;
-  height: 12px;
-  stroke: var(--text-muted);
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
   fill: none;
   stroke-width: 2;
   transition: stroke var(--transition-speed);
 }
 .cat-label {
   flex: 1;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -342,7 +339,7 @@
   transition: color var(--transition-speed);
 }
 .cat-count {
-  font-size: 9px;
+  font-size: 10px;
   color: #2d3748;
   padding-right: 4px;
 }
@@ -356,8 +353,8 @@
   transition: transform var(--transition-speed);
 }
 .cat-chevron svg {
-  width: 9px;
-  height: 9px;
+  width: 11px;
+  height: 11px;
   stroke: var(--text-muted);
   fill: none;
   stroke-width: 2.5;
@@ -380,7 +377,7 @@
   align-items: center;
   padding: 5px 10px 5px 35px;
   gap: 7px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   cursor: grab;
   border-bottom: 1px solid rgba(255, 255, 255, 0.02);
