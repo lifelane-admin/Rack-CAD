@@ -200,21 +200,38 @@ export function socketTypeAtOutletIndex(template: DeviceTemplate | null, config:
   return allOutlets[idx] ?? null;
 }
 
-/** Total horizontal space a vertical cable manager duct occupies (its width + the 6px gap
- *  from the rack edge), or 0 when none is configured for that side. */
+/** Total horizontal space a vertical cable manager duct occupies (its width + the 4px gap), or 0 when none. */
 export function cableManagerSpan(width: RackData['leftCableManagerWidth']): number {
   if (!width || width === 'none') return 0;
-  return (width === '6-inch' ? 40 : 26) + 6;
+  switch (width) {
+    case '2-inch': return 16 + 4;
+    case '4-inch': return 26 + 4;
+    case '6-inch': return 40 + 4;
+    case '8-inch': return 54 + 4;
+    default: return 26 + 4;
+  }
 }
 
 /**
  * X-offset (in rack-local coordinates, i.e. relative to the rack's own translate(rack.x, rack.y))
- * of a side-mount PDU's own left edge, given the rack it's mounted on. PDUs are placed OUTSIDE
- * any vertical cable manager on that side — layout order (innermost to outermost) is always
- * Rack → Cable Manager → PDU. Shared by rack-renderer.ts (drawing) and core/state.ts's
- * getPortWorldPosition() (cable endpoint resolution) so the two can never drift apart.
+ * of a side-mount PDU's own left edge.
+ * Physical Order: Rack Frame -> 0U Side PDU -> Vertical Cable Manager (VCM).
+ * PDUs are positioned directly against the rack posts/frame.
  */
-export function sidePduOffsetX(rack: RackData, side: 'left' | 'right', pduWidth: number): number {
-  if (side === 'left') return -(cableManagerSpan(rack.leftCableManagerWidth) + pduWidth);
-  return RACK_CONSTANTS.RACK_OUTER_WIDTH + cableManagerSpan(rack.rightCableManagerWidth);
+export function sidePduOffsetX(_rack: RackData, side: 'left' | 'right', pduWidth: number): number {
+  if (side === 'left') return -pduWidth - 2;
+  return RACK_CONSTANTS.RACK_OUTER_WIDTH + 2;
 }
+
+/**
+ * X-offset of a vertical cable manager's duct, placed outside any 0U PDU on that side.
+ */
+export function sideVcmOffsetX(_rack: RackData, side: 'left' | 'right', vcmWidth: number, pduWidth: number = 0): number {
+  if (side === 'left') {
+    const pduSpace = pduWidth > 0 ? (pduWidth + 4) : 0;
+    return -pduSpace - vcmWidth - 4;
+  }
+  const pduSpace = pduWidth > 0 ? (pduWidth + 4) : 0;
+  return RACK_CONSTANTS.RACK_OUTER_WIDTH + pduSpace + 4;
+}
+

@@ -2,7 +2,7 @@ import EventBus from '../core/event-bus';
 import { eventBus } from '../core/event-bus';
 import State from '../core/state';
 import { stateManager } from '../core/state';
-import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, DeviceCategory, PduConfig, PduOutletGroup, SocketType, KvmConfig, SwitchConfig, FirewallConfig, SwitchVendor, FirewallVendor, LedTheme, SwitchLayer, SwitchPortGroup, NacConfig, NacVendor, AtsConfig, RACK_CONSTANTS, PortData, CloudConnector, CloudContainer, CloudHierarchy } from '../core/types';
+import { SelectableItem, CableType, CABLE_COLORS, DeviceData, DeviceTemplate, DeviceCategory, PduConfig, PduOutletGroup, SocketType, KvmConfig, SwitchConfig, FirewallConfig, SwitchVendor, FirewallVendor, LedTheme, SwitchLayer, SwitchPortGroup, NacConfig, NacVendor, AtsConfig, RACK_CONSTANTS, PortData, CloudConnector, CloudContainer, CloudHierarchy, Point, RACK_UNIT_SIZES } from '../core/types';
 import { KVM_LOCAL_PORT_OPTIONS, CONSOLE_LOCAL_PORT_OPTIONS } from '../renderers/networking-renderer';
 import { computePduLoad } from '../renderers/pdu-renderer';
 import { switchVendorSkin, firewallVendorSkin, nacVendorSkin } from '../renderers/vendor-palette';
@@ -18,8 +18,8 @@ const customAssetModal = new CustomAssetModal();
 
 // A device's manually-added/custom ports (Port Visual Calibration) are capped at this many real
 // jacks — the catalog's "Custom Layout" 1U/2U/4U templates ship with exactly this count too.
-const MAX_CUSTOM_PORTS = 60;
 import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
+import { getDevicePowerWatts } from '../utils/power';
 import { aiService } from '../ai/ai-service';
 import { AIHint } from '../ai/types';
 
@@ -36,6 +36,15 @@ export class PropertiesPanel {
       const state = (State as any).getState?.() || (State as any);
       this.update(state.selection);
     });
+    EventBus.on('properties:toggle', () => {
+      this.toggleCollapsed();
+    });
+    EventBus.on('properties:show', () => {
+      this.setCollapsed(false);
+    });
+    EventBus.on('properties:hide', () => {
+      this.setCollapsed(true);
+    });
   }
 
   render() {
@@ -46,11 +55,11 @@ export class PropertiesPanel {
     header.className = 'properties-header';
     header.innerHTML = `
       <h3>Properties</h3>
-      <button class="collapse-btn" title="Collapse">»</button>
+      <button class="collapse-btn" title="Hide Properties Panel (Maximize Workspace)">»</button>
     `;
     
     header.querySelector('.collapse-btn')?.addEventListener('click', () => {
-      this.container.classList.toggle('collapsed');
+      this.setCollapsed(true);
     });
 
     const content = document.createElement('div');
@@ -60,7 +69,36 @@ export class PropertiesPanel {
     this.container.appendChild(header);
     this.container.appendChild(content);
 
+    this.createFloatingUnhideButton();
     this.renderEmpty();
+  }
+
+  toggleCollapsed(): void {
+    this.setCollapsed(!this.container.classList.contains('collapsed'));
+  }
+
+  setCollapsed(collapsed: boolean): void {
+    this.container.classList.toggle('collapsed', collapsed);
+    const unhideBtn = document.getElementById('btn-unhide-properties');
+    if (unhideBtn) {
+      unhideBtn.classList.toggle('hidden', !collapsed);
+    }
+  }
+
+  private createFloatingUnhideButton(): void {
+    let unhideBtn = document.getElementById('btn-unhide-properties');
+    if (!unhideBtn) {
+      unhideBtn = document.createElement('button');
+      unhideBtn.id = 'btn-unhide-properties';
+      unhideBtn.className = 'floating-unhide-props hidden';
+      unhideBtn.title = 'Show Properties Panel (Alt+P)';
+      unhideBtn.innerHTML = `<span>«</span> Properties`;
+      unhideBtn.addEventListener('click', () => {
+        this.setCollapsed(false);
+      });
+      const canvasContainer = document.getElementById('canvas-container') || document.body;
+      canvasContainer.appendChild(unhideBtn);
+    }
   }
 
   update(selection: SelectableItem[]) {
@@ -525,16 +563,59 @@ export class PropertiesPanel {
     const rack = state.racks?.find((r: any) => r.id === id) || (State as any).getRack?.(id);
     if (!rack) return;
 
+    const rackDevices = (state.devices || []).filter((d: any) => d.rackId === rack.id);
+    const totalWatts = rackDevices.reduce((sum: number, d: any) => sum + getDevicePowerWatts(d), 0);
+    const totalAmps230 = (totalWatts / 230).toFixed(1);
+    const totalAmps120 = (totalWatts / 120).toFixed(1);
+    const totalBtu = Math.round(totalWatts * 3.412);
+
     container.innerHTML = `
       <div class="form-group">
         <label>Name</label>
         <input type="text" id="prop-rack-name" value="${rack.name || ''}" />
       </div>
+
+      <!-- Total Rack Power Load & Capacity Planning -->
+      <div style="margin-bottom: 12px; background: rgba(255, 176, 32, 0.06); border: 1px solid rgba(255, 176, 32, 0.28); border-radius: 6px; padding: 8px 10px;">
+        <div style="font-size: 11px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; color: #ffb74d; font-weight: 600;">
+          <span>⚡ Total Rack Power Load</span>
+          <span style="font-size: 10px; color: #8b939a;">${rackDevices.length} Installed Devices</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+          <span style="font-size: 17px; font-weight: bold; color: #fff; font-family: monospace;">${totalWatts} W</span>
+          <span style="font-size: 11px; color: #ffb74d; font-family: monospace;">${(totalWatts / 1000).toFixed(2)} kW</span>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 6px; font-size: 9.5px; color: #8b939a; font-family: monospace;">
+          <span>~${totalAmps230}A @ 230V</span>
+          <span>•</span>
+          <span>~${totalAmps120}A @ 120V</span>
+          <span>•</span>
+          <span>~${totalBtu} BTU/hr</span>
+        </div>
+      </div>
+
       <div class="form-group">
-        <label>Units</label>
+        <label>Height (Units)</label>
         <select id="prop-rack-units">
-          <option value="42" ${rack.units === 42 ? 'selected' : ''}>42U</option>
-          <option value="48" ${rack.units === 48 ? 'selected' : ''}>48U</option>
+          ${RACK_UNIT_SIZES.map(u => `<option value="${u}" ${rack.units === u ? 'selected' : ''}>${u}U</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Rack Width</label>
+        <select id="prop-rack-width">
+          <option value="19-inch" ${rack.rackWidth === '19-inch' || !rack.rackWidth ? 'selected' : ''}>19" Standard (482.6 mm)</option>
+          <option value="23-inch" ${rack.rackWidth === '23-inch' ? 'selected' : ''}>23" Telecom (584.2 mm)</option>
+          <option value="custom" ${rack.rackWidth === 'custom' ? 'selected' : ''}>Custom Width</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Depth (mm)</label>
+        <select id="prop-rack-depth">
+          <option value="450" ${rack.depthMm === 450 ? 'selected' : ''}>450 mm (Shallow Wall / Edge)</option>
+          <option value="600" ${rack.depthMm === 600 ? 'selected' : ''}>600 mm (Network / Wall Mount)</option>
+          <option value="800" ${rack.depthMm === 800 ? 'selected' : ''}>800 mm (Standard Server / Network)</option>
+          <option value="1000" ${rack.depthMm === 1000 || !rack.depthMm ? 'selected' : ''}>1000 mm (Deep Server Cabinet)</option>
+          <option value="1200" ${rack.depthMm === 1200 ? 'selected' : ''}>1200 mm (Ultra-Deep Enterprise)</option>
         </select>
       </div>
       <div class="form-group">
@@ -546,8 +627,157 @@ export class PropertiesPanel {
         <input type="number" id="prop-rack-y" value="${rack.y || 0}" />
       </div>
       
+      <!-- Enclosure & Architecture -->
       <div style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 10px;">
-        <label style="font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--text-secondary);">Vertical Cabinet Accessories</label>
+        <label style="font-weight: 600; font-size: 11px; text-transform: uppercase; color: #fb8c00;">Enclosure & Architecture</label>
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 10px;">Rack Type</label>
+            <select id="prop-rack-type" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
+              <option value="server" ${rack.rackType === 'server' || !rack.rackType ? 'selected' : ''}>Server Cabinet</option>
+              <option value="network" ${rack.rackType === 'network' ? 'selected' : ''}>Network Cabinet</option>
+              <option value="wall-mount" ${rack.rackType === 'wall-mount' ? 'selected' : ''}>Wall Mount Box</option>
+              <option value="open-frame" ${rack.rackType === 'open-frame' ? 'selected' : ''}>Open Frame (4-Post / 2-Post)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 10px;">Front Door Style</label>
+            <select id="prop-rack-door" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
+              <optgroup label="Twin Doors - Perforated Round (4 Levels)">
+                <option value="split-perforated-large" ${rack.frontDoor === 'split-perforated-large' ? 'selected' : ''}>Twin Door - Perforated (Large Holes)</option>
+                <option value="split-perforated" ${rack.frontDoor === 'split-perforated' || rack.frontDoor === 'split-perforated-medium' ? 'selected' : ''}>Twin Door - Perforated (Medium Holes)</option>
+                <option value="split-perforated-small" ${rack.frontDoor === 'split-perforated-small' ? 'selected' : ''}>Twin Door - Perforated (Small Holes)</option>
+                <option value="split-perforated-tiny" ${rack.frontDoor === 'split-perforated-tiny' ? 'selected' : ''}>Twin Door - Perforated (Tiny / Micro-Mesh)</option>
+              </optgroup>
+              <optgroup label="Twin Doors - Honeycomb Hex (4 Levels)">
+                <option value="split-honeycomb-large" ${rack.frontDoor === 'split-honeycomb-large' ? 'selected' : ''}>Twin Door - Honeycomb (Large Hex)</option>
+                <option value="split-honeycomb" ${rack.frontDoor === 'split-honeycomb' || rack.frontDoor === 'split-honeycomb-medium' ? 'selected' : ''}>Twin Door - Honeycomb (Medium Hex)</option>
+                <option value="split-honeycomb-small" ${rack.frontDoor === 'split-honeycomb-small' ? 'selected' : ''}>Twin Door - Honeycomb (Small Hex)</option>
+                <option value="split-honeycomb-tiny" ${rack.frontDoor === 'split-honeycomb-tiny' ? 'selected' : ''}>Twin Door - Honeycomb (Tiny / Micro-Hex)</option>
+              </optgroup>
+              <optgroup label="Twin Doors - Glass & Solid">
+                <option value="split-glass" ${rack.frontDoor === 'split-glass' ? 'selected' : ''}>Twin Door - Glass</option>
+                <option value="split-solid" ${rack.frontDoor === 'split-solid' ? 'selected' : ''}>Twin Door - Solid Steel</option>
+              </optgroup>
+              <optgroup label="Single Doors - Perforated Round (4 Levels)">
+                <option value="perforated-large" ${rack.frontDoor === 'perforated-large' ? 'selected' : ''}>Single Door - Perforated (Large Holes)</option>
+                <option value="perforated" ${rack.frontDoor === 'perforated' || rack.frontDoor === 'perforated-medium' || !rack.frontDoor ? 'selected' : ''}>Single Door - Perforated (Medium Holes)</option>
+                <option value="perforated-small" ${rack.frontDoor === 'perforated-small' ? 'selected' : ''}>Single Door - Perforated (Small Holes)</option>
+                <option value="perforated-tiny" ${rack.frontDoor === 'perforated-tiny' ? 'selected' : ''}>Single Door - Perforated (Tiny / Micro-Mesh)</option>
+              </optgroup>
+              <optgroup label="Single Doors - Honeycomb Hex (4 Levels)">
+                <option value="honeycomb-large" ${rack.frontDoor === 'honeycomb-large' ? 'selected' : ''}>Single Door - Honeycomb (Large Hex)</option>
+                <option value="honeycomb-medium" ${rack.frontDoor === 'honeycomb-medium' ? 'selected' : ''}>Single Door - Honeycomb (Medium Hex)</option>
+                <option value="honeycomb-small" ${rack.frontDoor === 'honeycomb-small' ? 'selected' : ''}>Single Door - Honeycomb (Small Hex)</option>
+                <option value="honeycomb-tiny" ${rack.frontDoor === 'honeycomb-tiny' ? 'selected' : ''}>Single Door - Honeycomb (Tiny / Micro-Hex)</option>
+              </optgroup>
+              <optgroup label="Single Doors - Glass & Solid">
+                <option value="glass" ${rack.frontDoor === 'glass' ? 'selected' : ''}>Single Glass Door</option>
+                <option value="solid" ${rack.frontDoor === 'solid' ? 'selected' : ''}>Single Solid Steel</option>
+                <option value="louvered" ${rack.frontDoor === 'louvered' ? 'selected' : ''}>Louvered / Vented Door</option>
+              </optgroup>
+              <optgroup label="Colocation Compartment Doors">
+                <option value="multi-compartment-2" ${rack.frontDoor === 'multi-compartment-2' ? 'selected' : ''}>2-Compartment Colo Doors</option>
+                <option value="multi-compartment-4" ${rack.frontDoor === 'multi-compartment-4' ? 'selected' : ''}>4-Compartment Colo Doors</option>
+              </optgroup>
+              <optgroup label="Open Enclosure">
+                <option value="none" ${rack.frontDoor === 'none' ? 'selected' : ''}>None (Open Front)</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 10px;">Side Panels</label>
+            <select id="prop-rack-side-panels" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
+              <option value="true" ${rack.sidePanels !== false ? 'selected' : ''}>Enabled (Removable Panels)</option>
+              <option value="false" ${rack.sidePanels === false ? 'selected' : ''}>Disabled (Open Bay)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 10px;">Mounting Style</label>
+            <select id="prop-rack-mounting" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
+              <option value="floor" ${rack.mounting === 'floor' || !rack.mounting ? 'selected' : ''}>Floor Mount (Free Standing)</option>
+              <option value="wall-mount" ${rack.mounting === 'wall-mount' ? 'selected' : ''}>Wall Mount (Bracket)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 10px;">Cabinet Finish Color</label>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <select id="prop-rack-color" style="flex: 1; background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px;">
+                <option value="#0c0e12" ${rack.rackColor === '#0c0e12' ? 'selected' : ''}>Jet Black (RAL 9005)</option>
+                <option value="#131416" ${rack.rackColor === '#131416' || !rack.rackColor ? 'selected' : ''}>Matte Obsidian</option>
+                <option value="#1f242c" ${rack.rackColor === '#1f242c' ? 'selected' : ''}>Anthracite / Charcoal</option>
+                <option value="#334155" ${rack.rackColor === '#334155' ? 'selected' : ''}>Industrial Slate Grey</option>
+                <option value="#8a8d90" ${rack.rackColor === '#8a8d90' ? 'selected' : ''}>Telecom Grey (RAL 7035)</option>
+                <option value="#e8e8e4" ${rack.rackColor === '#e8e8e4' ? 'selected' : ''}>Cleanroom White</option>
+                <option value="#efe7d0" ${rack.rackColor === '#efe7d0' ? 'selected' : ''}>Ivory / Warm Beige</option>
+                <option value="#0f172a" ${rack.rackColor === '#0f172a' ? 'selected' : ''}>Midnight Navy</option>
+                <option value="#1e3a8a" ${rack.rackColor === '#1e3a8a' ? 'selected' : ''}>Enterprise Blue</option>
+              </select>
+              <input type="color" id="prop-rack-color-picker" value="${rack.rackColor && rack.rackColor.startsWith('#') ? rack.rackColor : '#131416'}" style="width: 24px; height: 24px; border: 1px solid var(--border-color); border-radius: 4px; padding: 0; background: transparent; cursor: pointer;" title="Custom Color Picker" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vertical Cable Managers -->
+      <div style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+        <label style="font-weight: 600; font-size: 11px; text-transform: uppercase; color: #10b981;">Vertical Cable Managers (VCM)</label>
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 10px;">Left VCM Channel</label>
+            <select id="prop-rack-mgr-left" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
+              <option value="none" ${rack.leftCableManagerWidth === 'none' || !rack.leftCableManagerWidth ? 'selected' : ''}>None</option>
+              <option value="2-inch" ${rack.leftCableManagerWidth === '2-inch' ? 'selected' : ''}>2-Inch Slim Organizer</option>
+              <option value="4-inch" ${rack.leftCableManagerWidth === '4-inch' ? 'selected' : ''}>4-Inch Standard Gutter</option>
+              <option value="6-inch" ${rack.leftCableManagerWidth === '6-inch' ? 'selected' : ''}>6-Inch High-Density VCM</option>
+              <option value="8-inch" ${rack.leftCableManagerWidth === '8-inch' ? 'selected' : ''}>8-Inch Backbone Trunk</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 10px;">Left VCM Color</label>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <input type="color" id="prop-rack-vcm-left-color" value="${rack.leftCableManagerColor || rack.rackColor || '#11141a'}" style="width: 24px; height: 24px; border: 1px solid var(--border-color); border-radius: 4px; padding: 0; background: transparent; cursor: pointer;" />
+              <span style="font-size: 10px; color: #8b949e;">Left Duct Finish</span>
+            </div>
+          </div>
+          
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 10px;">Right VCM Channel</label>
+            <select id="prop-rack-mgr-right" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
+              <option value="none" ${rack.rightCableManagerWidth === 'none' || !rack.rightCableManagerWidth ? 'selected' : ''}>None</option>
+              <option value="2-inch" ${rack.rightCableManagerWidth === '2-inch' ? 'selected' : ''}>2-Inch Slim Organizer</option>
+              <option value="4-inch" ${rack.rightCableManagerWidth === '4-inch' ? 'selected' : ''}>4-Inch Standard Gutter</option>
+              <option value="6-inch" ${rack.rightCableManagerWidth === '6-inch' ? 'selected' : ''}>6-Inch High-Density VCM</option>
+              <option value="8-inch" ${rack.rightCableManagerWidth === '8-inch' ? 'selected' : ''}>8-Inch Backbone Trunk</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 10px;">Right VCM Color</label>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <input type="color" id="prop-rack-vcm-right-color" value="${rack.rightCableManagerColor || rack.rackColor || '#11141a'}" style="width: 24px; height: 24px; border: 1px solid var(--border-color); border-radius: 4px; padding: 0; background: transparent; cursor: pointer;" />
+              <span style="font-size: 10px; color: #8b949e;">Right Duct Finish</span>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 10px;">VCM Duct Type</label>
+            <select id="prop-rack-vcm-type" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
+              <option value="single-sided" ${rack.vcmType === 'single-sided' || !rack.vcmType ? 'selected' : ''}>Single-Sided (Front)</option>
+              <option value="double-sided" ${rack.vcmType === 'double-sided' ? 'selected' : ''}>Double-Sided (Front & Rear)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Power Accessories -->
+      <div style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+        <label style="font-weight: 600; font-size: 11px; text-transform: uppercase; color: #fdd835;">Power Distribution (PDU)</label>
         <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
           <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
             <input type="checkbox" id="prop-rack-pdu-left" ${rack.showPduLeft !== false ? 'checked' : ''} />
@@ -557,26 +787,6 @@ export class PropertiesPanel {
             <input type="checkbox" id="prop-rack-pdu-right" ${rack.showPduRight !== false ? 'checked' : ''} />
             Show Right Intelligent PDU B
           </label>
-          
-          <div style="border-top: 1px dashed rgba(255,255,255,0.05); padding-top: 10px; margin-top: 5px; display: flex; flex-direction: column; gap: 8px;">
-            <div class="form-group" style="margin-bottom: 0;">
-              <label style="font-size: 10px;">Left Vertical Cable Manager</label>
-              <select id="prop-rack-mgr-left" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
-                <option value="none" ${rack.leftCableManagerWidth === 'none' || !rack.leftCableManagerWidth ? 'selected' : ''}>None</option>
-                <option value="4-inch" ${rack.leftCableManagerWidth === '4-inch' ? 'selected' : ''}>4-Inch Organizer</option>
-                <option value="6-inch" ${rack.leftCableManagerWidth === '6-inch' ? 'selected' : ''}>6-Inch Organizer</option>
-              </select>
-            </div>
-            
-            <div class="form-group" style="margin-bottom: 0;">
-              <label style="font-size: 10px;">Right Vertical Cable Manager</label>
-              <select id="prop-rack-mgr-right" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
-                <option value="none" ${rack.rightCableManagerWidth === 'none' || !rack.rightCableManagerWidth ? 'selected' : ''}>None</option>
-                <option value="4-inch" ${rack.rightCableManagerWidth === '4-inch' ? 'selected' : ''}>4-Inch Organizer</option>
-                <option value="6-inch" ${rack.rightCableManagerWidth === '6-inch' ? 'selected' : ''}>6-Inch Organizer</option>
-              </select>
-            </div>
-          </div>
         </div>
       </div>
     `;
@@ -585,7 +795,25 @@ export class PropertiesPanel {
       EventBus.emit('rack:update', { id, data: { name: e.target.value } });
     });
     container.querySelector('#prop-rack-units')?.addEventListener('change', (e: any) => {
-      EventBus.emit('rack:update', { id, data: { units: parseInt(e.target.value) as 42 | 48 } });
+      EventBus.emit('rack:update', { id, data: { units: parseInt(e.target.value, 10) } });
+    });
+    container.querySelector('#prop-rack-width')?.addEventListener('change', (e: any) => {
+      EventBus.emit('rack:update', { id, data: { rackWidth: e.target.value } });
+    });
+    container.querySelector('#prop-rack-depth')?.addEventListener('change', (e: any) => {
+      EventBus.emit('rack:update', { id, data: { depthMm: parseInt(e.target.value, 10) } });
+    });
+    container.querySelector('#prop-rack-type')?.addEventListener('change', (e: any) => {
+      EventBus.emit('rack:update', { id, data: { rackType: e.target.value } });
+    });
+    container.querySelector('#prop-rack-door')?.addEventListener('change', (e: any) => {
+      EventBus.emit('rack:update', { id, data: { frontDoor: e.target.value } });
+    });
+    container.querySelector('#prop-rack-side-panels')?.addEventListener('change', (e: any) => {
+      EventBus.emit('rack:update', { id, data: { sidePanels: e.target.value === 'true' } });
+    });
+    container.querySelector('#prop-rack-mounting')?.addEventListener('change', (e: any) => {
+      EventBus.emit('rack:update', { id, data: { mounting: e.target.value } });
     });
     container.querySelector('#prop-rack-x')?.addEventListener('change', (e: any) => {
       EventBus.emit('rack:update', { id, data: { x: parseInt(e.target.value) } });
@@ -599,11 +827,37 @@ export class PropertiesPanel {
     container.querySelector('#prop-rack-pdu-right')?.addEventListener('change', (e: any) => {
       EventBus.emit('rack:update', { id, data: { showPduRight: e.target.checked } });
     });
+    const rackColorSelect = container.querySelector('#prop-rack-color') as HTMLSelectElement;
+    const rackColorPicker = container.querySelector('#prop-rack-color-picker') as HTMLInputElement;
+    rackColorSelect?.addEventListener('change', (e: any) => {
+      if (rackColorPicker) rackColorPicker.value = e.target.value;
+      EventBus.emit('rack:update', { id, data: { rackColor: e.target.value } });
+    });
+    rackColorPicker?.addEventListener('input', (e: any) => {
+      if (rackColorSelect) {
+        let opt = Array.from(rackColorSelect.options).find(o => o.value.toLowerCase() === e.target.value.toLowerCase());
+        if (!opt) {
+          opt = new Option(`Custom (${e.target.value.toUpperCase()})`, e.target.value);
+          rackColorSelect.add(opt);
+        }
+        rackColorSelect.value = e.target.value;
+      }
+      EventBus.emit('rack:update', { id, data: { rackColor: e.target.value } });
+    });
+    container.querySelector('#prop-rack-vcm-left-color')?.addEventListener('input', (e: any) => {
+      EventBus.emit('rack:update', { id, data: { leftCableManagerColor: e.target.value } });
+    });
+    container.querySelector('#prop-rack-vcm-right-color')?.addEventListener('input', (e: any) => {
+      EventBus.emit('rack:update', { id, data: { rightCableManagerColor: e.target.value } });
+    });
     container.querySelector('#prop-rack-mgr-left')?.addEventListener('change', (e: any) => {
       EventBus.emit('rack:update', { id, data: { leftCableManagerWidth: e.target.value } });
     });
     container.querySelector('#prop-rack-mgr-right')?.addEventListener('change', (e: any) => {
       EventBus.emit('rack:update', { id, data: { rightCableManagerWidth: e.target.value } });
+    });
+    container.querySelector('#prop-rack-vcm-type')?.addEventListener('change', (e: any) => {
+      EventBus.emit('rack:update', { id, data: { vcmType: e.target.value } });
     });
   }
 
@@ -679,6 +933,33 @@ export class PropertiesPanel {
     });
   }
 
+  private renderPowerConsumptionSection(device: DeviceData, template?: DeviceTemplate | null): string {
+    const watts = device.powerWatts ?? template?.powerWatts ?? 0;
+    const amps230 = (watts / 230).toFixed(1);
+    const amps120 = (watts / 120).toFixed(1);
+    const btu = Math.round(watts * 3.412);
+    return `
+      <div class="form-group" style="margin-bottom: 12px; background: rgba(255, 176, 32, 0.06); border: 1px solid rgba(255, 176, 32, 0.28); border-radius: 6px; padding: 8px 10px;">
+        <label style="font-size: 11px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; color: #ffb74d; font-weight: 600;">
+          <span>⚡ Power Draw &amp; Rack Load</span>
+          <span style="font-size: 9.5px; color: #8b939a; text-transform: none;">Capacity Planning</span>
+        </label>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input id="power-watts-input" type="number" min="0" max="25000" step="5" value="${watts}"
+            style="width: 85px; background: #000; border: 1px solid rgba(255, 176, 32, 0.5); color: #fff; border-radius: 4px; padding: 5px 8px; font-size: 12px; font-weight: bold; font-family: monospace;" />
+          <span style="font-size: 12px; font-weight: 600; color: #ffb74d;">Watts (W)</span>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 6px; font-size: 9.5px; color: #8b939a; font-family: monospace;">
+          <span>~${amps230}A @ 230V</span>
+          <span>•</span>
+          <span>~${amps120}A @ 120V</span>
+          <span>•</span>
+          <span>~${btu} BTU/hr</span>
+        </div>
+      </div>
+    `;
+  }
+
   private renderDeviceProperties(id: string, container: HTMLElement) {
     const state = (State as any).getState?.() || (State as any);
     const device = state.devices?.find((d: any) => d.id === id) || (State as any).getDevice?.(id);
@@ -748,13 +1029,18 @@ export class PropertiesPanel {
         <textarea id="prop-dev-desc">${device.description || ''}</textarea>
       </div>
 
-      <div style="margin-bottom:12px;">
-        <label style="font-size:11px;display:block;margin-bottom:4px;color:var(--text-muted);">Power Consumption</label>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <input id="power-watts-input" type="number" min="0" value="${device.powerWatts ?? template?.powerWatts ?? 0}"
-            style="width:80px;background:#000;border:1px solid var(--border-color);color:#fff;border-radius:4px;padding:5px 8px;font-size:12px;" />
-          <span style="font-size:12px;color:var(--text-muted);">W</span>
-          <span style="font-size:10px;color:var(--text-muted);margin-left:4px;">Volts × Amps = Watts</span>
+      ${this.renderPowerConsumptionSection(device, template)}
+
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label style="font-size: 11px; display: block; margin-bottom: 4px; color: #58a6ff; font-weight: 600;">Chassis & Panel Finish Color</label>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <input type="color" id="prop-dev-color" value="${device.color || template?.color || '#1e2430'}" style="width: 28px; height: 28px; border: 1px solid var(--border-color); border-radius: 4px; padding: 0; background: transparent; cursor: pointer;" />
+          <input type="text" id="prop-dev-color-text" value="${device.color || template?.color || '#1e2430'}" style="flex: 1; background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 5px 8px; border-radius: 4px;" placeholder="#HEX" />
+        </div>
+        <div style="display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap;">
+          ${['#0c0e12', '#1e2430', '#334155', '#475569', '#8a8d90', '#f1f5f9', '#1e3a8a', '#065f46', '#991b1b', '#d97706'].map(c => `
+            <div class="dev-color-chip" data-color="${c}" style="width: 18px; height: 18px; border-radius: 3px; background: ${c}; border: 1px solid rgba(255,255,255,0.2); cursor: pointer;" title="${c}"></div>
+          `).join('')}
         </div>
       </div>
 
@@ -834,6 +1120,22 @@ export class PropertiesPanel {
         EventBus.emit('device:update', { id, data: { powerWatts: watts } });
       });
     }
+
+    const devColorPicker = container.querySelector('#prop-dev-color') as HTMLInputElement;
+    const devColorText = container.querySelector('#prop-dev-color-text') as HTMLInputElement;
+    const setDevColor = (val: string) => {
+      if (devColorPicker) devColorPicker.value = val;
+      if (devColorText) devColorText.value = val;
+      EventBus.emit('device:update', { id, data: { color: val } });
+    };
+    devColorPicker?.addEventListener('input', (e: any) => setDevColor(e.target.value));
+    devColorText?.addEventListener('change', (e: any) => setDevColor(e.target.value));
+    container.querySelectorAll('.dev-color-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const c = chip.getAttribute('data-color');
+        if (c) setDevColor(c);
+      });
+    });
 
     this.wireDeviceTypeSection(container, id);
 
@@ -950,6 +1252,7 @@ export class PropertiesPanel {
           &#x1F4DF; ${template.name}<br>
           <span style="color:#5b636a;font-size:9px;">RACK-MOUNT — ${template.heightUnits}U &middot; ${targetsCount} ${isKvm ? 'SERVER TARGETS' : 'SERIAL PORTS'}</span>
         </div>
+        ${this.renderPowerConsumptionSection(device, template)}
         ${sections}
       </div>
       <style>
@@ -963,8 +1266,12 @@ export class PropertiesPanel {
     const defaultOptions = isKvm ? KVM_LOCAL_PORT_OPTIONS : CONSOLE_LOCAL_PORT_OPTIONS;
     const active = new Set<string>(Array.isArray(cfg.localPorts) ? cfg.localPorts : defaultOptions);
     const save = () => {
-      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: { localPorts: Array.from(active) } as KvmConfig } });
+      const pInp = container.querySelector('#power-watts-input') as HTMLInputElement;
+      const powerWatts = pInp ? Math.max(0, parseInt(pInp.value, 10) || 0) : (device.powerWatts ?? template.powerWatts ?? 0);
+      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: { localPorts: Array.from(active) } as KvmConfig, powerWatts } });
     };
+
+    container.querySelector('#power-watts-input')?.addEventListener('change', save);
 
     const LABELS: Record<string, string> = {
       usb1: 'USB 1', usb2: 'USB 2', usb3: 'USB 3', usb4: 'USB 4',
@@ -1054,15 +1361,6 @@ export class PropertiesPanel {
   private renderSwitchProperties(device: DeviceData, template: DeviceTemplate, container: HTMLElement): void {
     const cfg: SwitchConfig = (device.deviceConfig as SwitchConfig | undefined) ?? {};
     const skin = switchVendorSkin(cfg.vendor);
-    // Default each count field to the device's ACTUAL current ports, not a hardcoded guess —
-    // otherwise opening properties on any switch whose real counts differ from the guess (every
-    // catalog SKU except the ones that happen to already be 24 RJ45 + 4 SFP+) would silently
-    // rewrite its port composition to the guess the moment anything on this panel is saved.
-    // Exclude the auto-injected ear-hole ports (see injectEarPorts in state.ts) — they're mostly
-    // typed 'rj45' too (for the plain-jack holes) but aren't real network ports, so counting them
-    // here would silently inflate rj45Count on every save (e.g. a 1U switch gets 6 ear 'rj45'
-    // holes on top of its real ports — this was the actual cause of ports "shifting slightly"
-    // the moment the panel was first saved).
     const ports = (device.ports ?? []).filter(p => !p.id.includes('-ear-'));
     const defaultRj45 = ports.filter(p => p.type === 'rj45' && p.group !== 'STACK').length;
     const defaultSfp = ports.filter(p => p.type === 'sfp').length;
@@ -1075,6 +1373,8 @@ export class PropertiesPanel {
           &#x1F500; ${template.name}<br>
           <span style="color:#5b636a;font-size:9px;">RACK-MOUNT — ${template.heightUnits}U</span>
         </div>
+
+        ${this.renderPowerConsumptionSection(device, template)}
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
           <div>
@@ -1152,6 +1452,8 @@ export class PropertiesPanel {
     this.renderSwitchPortGroupRows(container, portGroupRows, () => save());
 
     save = () => {
+      const pInp = container.querySelector('#power-watts-input') as HTMLInputElement;
+      const powerWatts = pInp ? Math.max(0, parseInt(pInp.value, 10) || 0) : (device.powerWatts ?? template.powerWatts ?? 0);
       const newConfig: SwitchConfig & { numSlots: number; portsPerSlot: number } = {
         vendor: (container.querySelector('#sw-vendor') as HTMLSelectElement)?.value as SwitchVendor,
         layer: (container.querySelector('#sw-layer') as HTMLSelectElement)?.value as SwitchLayer,
@@ -1178,7 +1480,7 @@ export class PropertiesPanel {
         ...this.readAdapterConfig(container),
         portGroups: portGroupRows,
       };
-      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig } });
+      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig, powerWatts } });
     };
 
     container.querySelector('#sw-add-portgroup')?.addEventListener('click', () => {
@@ -1208,13 +1510,6 @@ export class PropertiesPanel {
   private renderFirewallProperties(device: DeviceData, template: DeviceTemplate, container: HTMLElement): void {
     const cfg: FirewallConfig = (device.deviceConfig as FirewallConfig | undefined) ?? {};
     const skin = firewallVendorSkin(cfg.vendor);
-    // Same reasoning as renderSwitchProperties: default each count to the device's actual
-    // current ports rather than a hardcoded guess, so opening properties on any firewall SKU
-    // whose real counts differ (every one except a device already at 16 RJ45 + 8 SFP+) doesn't
-    // silently rewrite its port composition on the first save. MGMT is its own port type
-    // ('management'), already excluded by the type filter; HA is a plain RJ45 jack tagged
-    // `group: 'HA'` (both the new firewallPorts() and the legacy networkingPorts() firewall
-    // zones tag it this way), so it's excluded explicitly.
     const ports = (device.ports ?? []).filter(p => !p.id.includes('-ear-'));
     const defaultRj45 = ports.filter(p => p.type === 'rj45' && p.group !== 'HA' && p.group !== 'WAN').length;
     const defaultWan = ports.filter(p => p.group === 'WAN').length;
@@ -1228,6 +1523,8 @@ export class PropertiesPanel {
           &#x1F6E1; ${template.name}<br>
           <span style="color:#5b636a;font-size:9px;">RACK-MOUNT — ${template.heightUnits}U</span>
         </div>
+
+        ${this.renderPowerConsumptionSection(device, template)}
 
         <label class="pdu-lbl">Vendor Profile</label>
         <select id="fw-vendor" class="pdu-sel">
@@ -1300,6 +1597,8 @@ export class PropertiesPanel {
     this.renderSwitchPortGroupRows(container, portGroupRows, () => save(), '#fw-portgroup-rows');
 
     save = () => {
+      const pInp = container.querySelector('#power-watts-input') as HTMLInputElement;
+      const powerWatts = pInp ? Math.max(0, parseInt(pInp.value, 10) || 0) : (device.powerWatts ?? template.powerWatts ?? 0);
       const newConfig: FirewallConfig & { numSlots: number; portsPerSlot: number } = {
         vendor: (container.querySelector('#fw-vendor') as HTMLSelectElement)?.value as FirewallVendor,
         wanCount: Math.max(0, Number((container.querySelector('#fw-wan') as HTMLInputElement)?.value ?? 0)),
@@ -1327,7 +1626,7 @@ export class PropertiesPanel {
         ...this.readAdapterConfig(container),
         portGroups: portGroupRows,
       };
-      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig } });
+      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig, powerWatts } });
     };
 
     container.querySelector('#fw-add-portgroup')?.addEventListener('click', () => {
@@ -1367,6 +1666,8 @@ export class PropertiesPanel {
           &#x1F510; ${template.name}<br>
           <span style="color:#5b636a;font-size:9px;">RACK-MOUNT — ${template.heightUnits}U</span>
         </div>
+
+        ${this.renderPowerConsumptionSection(device, template)}
 
         <label class="pdu-lbl">Vendor Profile</label>
         <select id="nac-vendor" class="pdu-sel">
@@ -1415,6 +1716,8 @@ export class PropertiesPanel {
     this.renderPduChips(container, '#nac-toggles', this.NAC_TOGGLES, activeToggles, this.NAC_TOGGLE_LABELS, () => save());
 
     save = () => {
+      const pInp = container.querySelector('#power-watts-input') as HTMLInputElement;
+      const powerWatts = pInp ? Math.max(0, parseInt(pInp.value, 10) || 0) : (device.powerWatts ?? template.powerWatts ?? 0);
       const newConfig: NacConfig & { numSlots: number; portsPerSlot: number } = {
         vendor: (container.querySelector('#nac-vendor') as HTMLSelectElement)?.value as NacVendor,
         rj45Count: Math.max(0, Number((container.querySelector('#nac-rj45') as HTMLInputElement)?.value ?? 4)),
@@ -1430,7 +1733,7 @@ export class PropertiesPanel {
         assetLabel: activeToggles.has('assetLabel'),
         ...this.readAdapterConfig(container),
       };
-      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig } });
+      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig, powerWatts } });
     };
 
     container.querySelectorAll('select, input[type="number"], input[type="text"]').forEach(el => el.addEventListener('change', save));
@@ -1449,6 +1752,8 @@ export class PropertiesPanel {
           &#x1F501; ${template.name}<br>
           <span style="color:#5b636a;font-size:9px;">RACK-MOUNT — ${template.heightUnits}U</span>
         </div>
+
+        ${this.renderPowerConsumptionSection(device, template)}
 
         <label class="pdu-lbl">Output Outlets</label>
         <div><div class="pdu-sub">Outlet Count</div><input type="number" id="ats-outlets" class="pdu-inp" value="${cfg.outletCount ?? 8}" min="1" max="16"/></div>
@@ -1481,6 +1786,8 @@ export class PropertiesPanel {
     `;
 
     const save = () => {
+      const pInp = container.querySelector('#power-watts-input') as HTMLInputElement;
+      const powerWatts = pInp ? Math.max(0, parseInt(pInp.value, 10) || 0) : (device.powerWatts ?? template.powerWatts ?? 0);
       const newConfig: AtsConfig = {
         outletCount: Math.max(1, Number((container.querySelector('#ats-outlets') as HTMLInputElement)?.value ?? 8)),
         activeSource: (container.querySelector('#ats-activesource') as HTMLSelectElement)?.value as 'A' | 'B',
@@ -1489,7 +1796,7 @@ export class PropertiesPanel {
         brandName: (container.querySelector('#ats-brandname') as HTMLInputElement)?.value || undefined,
         modelName: (container.querySelector('#ats-modelname') as HTMLInputElement)?.value || undefined,
       };
-      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig } });
+      eventBus.emit('device:update' as any, { id: device.id, data: { deviceConfig: newConfig, powerWatts } });
     };
 
     container.querySelectorAll('select, input[type="number"], input[type="text"]').forEach(el => el.addEventListener('change', save));
@@ -1503,6 +1810,12 @@ export class PropertiesPanel {
     const elec = cfg.electrical ?? {};
     const enc = cfg.enclosure ?? {};
     const isVertical = template.mountType === 'side';
+    const { watts } = computePduLoad(device.id);
+    const voltage = elec.voltage ?? 230;
+    const maxAmps = elec.currentA ?? 32;
+    const maxWatts = voltage * maxAmps;
+    const loadPct = maxWatts > 0 ? Math.min(100, Math.round((watts / maxWatts) * 100)) : 0;
+    const currentA = voltage > 0 ? (watts / voltage).toFixed(1) : '0.0';
 
     const headerBadge = isVertical
       ? `${device.sideMountPosition?.toUpperCase() ?? ''} WALL — 0U`
@@ -1514,6 +1827,21 @@ export class PropertiesPanel {
         <div style="color:#37b6ff;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;border-bottom:1px solid #23303b;padding-bottom:6px;">
           &#x26A1; ${template.name}<br>
           <span style="color:#5b636a;font-size:9px;">${headerBadge}</span>
+        </div>
+
+        <!-- Real-Time Load & Capacity Planning -->
+        <div style="margin-bottom: 12px; background: rgba(55, 182, 255, 0.06); border: 1px solid rgba(55, 182, 255, 0.3); border-radius: 6px; padding: 8px 10px;">
+          <div style="font-size: 11px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; color: #37b6ff; font-weight: 600;">
+            <span>⚡ Real-Time Connected Load</span>
+            <span style="font-size: 11px; font-weight: bold; color: ${loadPct > 80 ? '#ff4d6a' : '#39ff8a'};">${loadPct}% Capacity</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
+            <span style="font-size: 16px; font-weight: bold; color: #fff; font-family: monospace;">${watts} W</span>
+            <span style="font-size: 11px; color: #8b939a; font-family: monospace;">${currentA}A / ${maxAmps}A Max (${maxWatts}W)</span>
+          </div>
+          <div style="width: 100%; height: 6px; background: #171d24; border-radius: 3px; overflow: hidden; border: 1px solid #23303b;">
+            <div style="width: ${loadPct}%; height: 100%; background: ${loadPct > 80 ? '#ff4d6a' : loadPct > 60 ? '#ffb020' : '#39ff8a'}; transition: width 0.3s ease;"></div>
+          </div>
         </div>
 
         <!-- Category + Manufacturer -->
@@ -1697,6 +2025,18 @@ export class PropertiesPanel {
           <div class="pdu-lbl" id="pdu-inspector-toggle" style="cursor:pointer;">&#x25B8; Metadata / BOM / JSON</div>
           <pre id="pdu-inspector-body" style="display:none;font-size:9px;color:#8b939a;white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-family:monospace;line-height:1.5;"></pre>
         </div>
+
+        ${isVertical ? `
+        <!-- Actions (Swap & Delete) -->
+        <div style="margin-top: 15px; border-top: 1px solid #23303b; padding-top: 12px; display: flex; flex-direction: column; gap: 6px;">
+          <button type="button" id="btn-pdu-swap-side" style="width: 100%; padding: 7px; background: rgba(56, 189, 248, 0.15); border: 1px solid var(--accent-primary); color: var(--accent-primary); border-radius: 3px; font-size: 11px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            🔄 Move to ${device.sideMountPosition === 'left' ? 'Right' : 'Left'} Wall
+          </button>
+          <button type="button" id="btn-pdu-delete" style="width: 100%; padding: 7px; background: rgba(248, 81, 73, 0.15); border: 1px solid var(--danger-color); color: var(--danger-color); border-radius: 3px; font-size: 11px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            🗑️ Remove PDU from Rack
+          </button>
+        </div>
+        ` : ''}
       </div>
 
       <style>
@@ -1834,6 +2174,40 @@ export class PropertiesPanel {
       outletRows.push({ type: 'C13', count: 8 });
       this.renderPduOutletRows(container, outletRows, () => save());
       save();
+    });
+
+    // Swap PDU side listener
+    container.querySelector('#btn-pdu-swap-side')?.addEventListener('click', () => {
+      const state = (State as any).getState?.() || (State as any);
+      const rack = state.racks?.find((r: any) => r.id === device.rackId) || (State as any).getRack?.(device.rackId);
+      if (!rack) return;
+      const curSide = device.sideMountPosition || 'left';
+      const targetSide = curSide === 'left' ? 'right' : 'left';
+      const otherPduId = targetSide === 'left' ? rack.leftPduId : rack.rightPduId;
+
+      // Update rack PDU references
+      const updatedRacks = state.racks.map((r: any) => {
+        if (r.id === rack.id) {
+          if (curSide === 'left') {
+            return { ...r, leftPduId: otherPduId ? otherPduId : undefined, rightPduId: device.id };
+          } else {
+            return { ...r, rightPduId: otherPduId ? otherPduId : undefined, leftPduId: device.id };
+          }
+        }
+        return r;
+      });
+
+      // Update other device's side if present
+      if (otherPduId) {
+        EventBus.emit('device:update', { id: otherPduId, data: { sideMountPosition: curSide } });
+      }
+      EventBus.emit('device:update', { id: device.id, data: { sideMountPosition: targetSide } });
+      (State as any).setState?.({ racks: updatedRacks });
+    });
+
+    // Delete PDU listener
+    container.querySelector('#btn-pdu-delete')?.addEventListener('click', () => {
+      EventBus.emit('edit:delete', undefined as any);
     });
   }
 
@@ -1997,7 +2371,7 @@ export class PropertiesPanel {
     const destPos = (cable.destPortId ? State.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
     const activeAnchors = (cable.anchorPoints && cable.anchorPoints.length > 0)
       ? cable.anchorPoints
-      : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos));
+      : computeSmartRouting(cable, sourcePos, destPos);
 
     const anchorStatus = cable.anchorsLocked
       ? `<span style="color:#43a047;">● Custom (${activeAnchors.length} points)</span>`
@@ -2158,12 +2532,13 @@ export class PropertiesPanel {
         </div>
 
         <div class="form-group" style="margin-top: 8px;">
-          <label style="font-size: 12px; font-weight: bold; color: var(--accent-primary);">Source Plug Tilt / Direction (4-Way)</label>
+          <label style="font-size: 12px; font-weight: bold; color: var(--accent-primary);">Source Plug Tilt / Direction (5-Way)</label>
           <div style="display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap;">
             <button class="tilt-btn-src" data-dir="up" style="flex: 1; min-width: 48px; padding: 6px 5px; font-size: 11.5px; background: ${cable.sourceOrientation === 'up' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${cable.sourceOrientation === 'up' ? 'var(--accent-primary)' : 'var(--border-color)'}; border-radius: 4px; cursor: pointer; font-weight: 600;">⬆️ Up</button>
             <button class="tilt-btn-src" data-dir="down" style="flex: 1; min-width: 48px; padding: 6px 5px; font-size: 11.5px; background: ${cable.sourceOrientation === 'down' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${cable.sourceOrientation === 'down' ? 'var(--accent-primary)' : 'var(--border-color)'}; border-radius: 4px; cursor: pointer; font-weight: 600;">⬇️ Down</button>
             <button class="tilt-btn-src" data-dir="left" style="flex: 1; min-width: 48px; padding: 6px 5px; font-size: 11.5px; background: ${cable.sourceOrientation === 'left' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${cable.sourceOrientation === 'left' ? 'var(--accent-primary)' : 'var(--border-color)'}; border-radius: 4px; cursor: pointer; font-weight: 600;">⬅️ Left</button>
             <button class="tilt-btn-src" data-dir="right" style="flex: 1; min-width: 48px; padding: 6px 5px; font-size: 11.5px; background: ${cable.sourceOrientation === 'right' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${cable.sourceOrientation === 'right' ? 'var(--accent-primary)' : 'var(--border-color)'}; border-radius: 4px; cursor: pointer; font-weight: 600;">➡️ Right</button>
+            <button class="tilt-btn-src" data-dir="inward" style="flex: 1; min-width: 60px; padding: 6px 5px; font-size: 11px; background: ${cable.sourceOrientation === 'inward' ? '#00bcd4' : 'rgba(0,188,212,0.12)'}; color: #fff; border: 1px solid ${cable.sourceOrientation === 'inward' ? '#00bcd4' : 'rgba(0,188,212,0.4)'}; border-radius: 4px; cursor: pointer; font-weight: 700;" title="Show plug face-on as if inserted into port">🔌 Inward</button>
             <button class="tilt-btn-src" data-dir="auto" style="flex: 1; min-width: 48px; padding: 6px 5px; font-size: 11.5px; background: ${(!cable.sourceOrientation || cable.sourceOrientation === 'auto') ? 'var(--accent-primary)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${(!cable.sourceOrientation || cable.sourceOrientation === 'auto') ? 'var(--accent-primary)' : 'var(--border-color)'}; border-radius: 4px; cursor: pointer; font-weight: 600;">🔄 Auto</button>
           </div>
           <select id="prop-cab-src-orient" style="font-size: 13px; padding: 6px 10px; margin-top: 4px;">
@@ -2172,6 +2547,7 @@ export class PropertiesPanel {
             <option value="down" ${cable.sourceOrientation === 'down' ? 'selected' : ''}>⬇️ Plug Down (Exit Upwards)</option>
             <option value="left" ${cable.sourceOrientation === 'left' ? 'selected' : ''}>⬅️ Plug Left (Exit Leftwards)</option>
             <option value="right" ${cable.sourceOrientation === 'right' ? 'selected' : ''}>➡️ Plug Right (Exit Rightwards)</option>
+            <option value="inward" ${cable.sourceOrientation === 'inward' ? 'selected' : ''}>🔌 Inward (Plugged In)</option>
           </select>
         </div>
 
@@ -2183,12 +2559,13 @@ export class PropertiesPanel {
         </div>
 
         <div class="form-group" style="margin-top: 8px;">
-          <label style="font-size: 12px; font-weight: bold; color: var(--accent-primary);">Destination Plug Tilt Direction (4-Way)</label>
+          <label style="font-size: 12px; font-weight: bold; color: var(--accent-primary);">Destination Plug Tilt Direction (5-Way)</label>
           <div style="display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap;">
             <button class="tilt-btn-dest" data-dir="up" style="flex: 1; min-width: 48px; padding: 6px 5px; font-size: 11.5px; background: ${cable.destOrientation === 'up' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${cable.destOrientation === 'up' ? 'var(--accent-primary)' : 'var(--border-color)'}; border-radius: 4px; cursor: pointer; font-weight: 600;">⬆️ Up</button>
             <button class="tilt-btn-dest" data-dir="down" style="flex: 1; min-width: 48px; padding: 6px 5px; font-size: 11.5px; background: ${cable.destOrientation === 'down' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${cable.destOrientation === 'down' ? 'var(--accent-primary)' : 'var(--border-color)'}; border-radius: 4px; cursor: pointer; font-weight: 600;">⬇️ Down</button>
             <button class="tilt-btn-dest" data-dir="left" style="flex: 1; min-width: 48px; padding: 6px 5px; font-size: 11.5px; background: ${cable.destOrientation === 'left' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${cable.destOrientation === 'left' ? 'var(--accent-primary)' : 'var(--border-color)'}; border-radius: 4px; cursor: pointer; font-weight: 600;">⬅️ Left</button>
             <button class="tilt-btn-dest" data-dir="right" style="flex: 1; min-width: 48px; padding: 6px 5px; font-size: 11.5px; background: ${cable.destOrientation === 'right' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${cable.destOrientation === 'right' ? 'var(--accent-primary)' : 'var(--border-color)'}; border-radius: 4px; cursor: pointer; font-weight: 600;">➡️ Right</button>
+            <button class="tilt-btn-dest" data-dir="inward" style="flex: 1; min-width: 60px; padding: 6px 5px; font-size: 11px; background: ${cable.destOrientation === 'inward' ? '#00bcd4' : 'rgba(0,188,212,0.12)'}; color: #fff; border: 1px solid ${cable.destOrientation === 'inward' ? '#00bcd4' : 'rgba(0,188,212,0.4)'}; border-radius: 4px; cursor: pointer; font-weight: 700;" title="Show plug face-on as if inserted into port">🔌 Inward</button>
             <button class="tilt-btn-dest" data-dir="auto" style="flex: 1; min-width: 48px; padding: 6px 5px; font-size: 11.5px; background: ${(!cable.destOrientation || cable.destOrientation === 'auto') ? 'var(--accent-primary)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${(!cable.destOrientation || cable.destOrientation === 'auto') ? 'var(--accent-primary)' : 'var(--border-color)'}; border-radius: 4px; cursor: pointer; font-weight: 600;">🔄 Auto</button>
           </div>
           <select id="prop-cab-dest-orient" style="font-size: 13px; padding: 6px 10px; margin-top: 4px;">
@@ -2197,9 +2574,11 @@ export class PropertiesPanel {
             <option value="down" ${cable.destOrientation === 'down' ? 'selected' : ''}>⬇️ Plug Down (Exit Upwards)</option>
             <option value="left" ${cable.destOrientation === 'left' ? 'selected' : ''}>⬅️ Plug Left (Exit Leftwards)</option>
             <option value="right" ${cable.destOrientation === 'right' ? 'selected' : ''}>➡️ Plug Right (Exit Rightwards)</option>
+            <option value="inward" ${cable.destOrientation === 'inward' ? 'selected' : ''}>🔌 Inward (Plugged In)</option>
           </select>
         </div>
       </div>
+
 
       <div class="form-group" style="margin-top: 12px;">
         <label>Tags (Comma separated)</label>
@@ -2214,8 +2593,8 @@ export class PropertiesPanel {
       ${validationHTML}
 
       <div class="properties-info">
-        <div><strong>Source Port:</strong> ${cable.sourcePortId.split('-port-').pop() || cable.sourcePortId}</div>
-        <div><strong>Dest Port:</strong> ${cable.destPortId ? cable.destPortId.split('-port-').pop() || cable.destPortId : 'Unconnected (floating)'}</div>
+        <div><strong>Source Port:</strong> ${cable.sourcePortId ? (cable.sourcePortId.split('-port-').pop() || cable.sourcePortId) : '📡 Floating (Airdrop)'}</div>
+        <div><strong>Dest Port:</strong> ${cable.destPortId ? (cable.destPortId.split('-port-').pop() || cable.destPortId) : (cable.floatingDest ? '📡 Floating (Airdrop)' : 'Unconnected')}</div>
       </div>
     `;
 
@@ -2254,14 +2633,14 @@ export class PropertiesPanel {
     container.querySelector('#prop-cab-side')?.addEventListener('change', (e: any) => {
       EventBus.emit('cable:update', { id, data: { sidePreference: e.target.value } });
     });
-    // 6-Anchor Coordinate Listeners
+    // Anchor Coordinate Listeners
     container.querySelectorAll('.anchor-coord-x').forEach(input => {
       input.addEventListener('change', (e: any) => {
         const idx = parseInt(e.target.getAttribute('data-anchor-idx'));
         const val = parseInt(e.target.value) || 0;
         const sourcePos = cable.floatingSource || State.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
         const destPos = (cable.destPortId ? State.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
-        const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos)))];
+        const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : computeSmartRouting(cable, sourcePos, destPos))];
         if (currentPts[idx]) {
           currentPts[idx] = { ...currentPts[idx], x: val };
           EventBus.emit('cable:update', { id, data: { anchorPoints: currentPts, anchorsLocked: true } });
@@ -2275,7 +2654,7 @@ export class PropertiesPanel {
         const val = parseInt(e.target.value) || 0;
         const sourcePos = cable.floatingSource || State.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
         const destPos = (cable.destPortId ? State.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
-        const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos)))];
+        const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : computeSmartRouting(cable, sourcePos, destPos))];
         if (currentPts[idx]) {
           currentPts[idx] = { ...currentPts[idx], y: val };
           EventBus.emit('cable:update', { id, data: { anchorPoints: currentPts, anchorsLocked: true } });
@@ -2287,10 +2666,25 @@ export class PropertiesPanel {
     container.querySelector('#prop-cab-add-anchor')?.addEventListener('click', () => {
       const sourcePos = cable.floatingSource || State.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
       const destPos = (cable.destPortId ? State.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
-      const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos)))];
+      const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : computeSmartRouting(cable, sourcePos, destPos))];
       
-      const lastPt = currentPts[currentPts.length - 1] || sourcePos;
-      currentPts.push({ x: Math.round(lastPt.x + 25), y: Math.round(lastPt.y + 25) });
+      const fullSeq = [sourcePos, ...currentPts, destPos];
+      let maxDist = -1;
+      let maxIdx = 0;
+      for (let i = 0; i < fullSeq.length - 1; i++) {
+        const dist = Math.hypot(fullSeq[i + 1].x - fullSeq[i].x, fullSeq[i + 1].y - fullSeq[i].y);
+        if (dist > maxDist) {
+          maxDist = dist;
+          maxIdx = i;
+        }
+      }
+      const pA = fullSeq[maxIdx];
+      const pB = fullSeq[maxIdx + 1];
+      const newPt: Point = {
+        x: Math.round((pA.x + pB.x) / 2),
+        y: Math.round((pA.y + pB.y) / 2)
+      };
+      currentPts.splice(maxIdx, 0, newPt);
       EventBus.emit('cable:update', { id, data: { anchorPoints: currentPts, anchorsLocked: true } });
     });
 
@@ -2299,7 +2693,7 @@ export class PropertiesPanel {
         const idx = parseInt(e.target.getAttribute('data-anchor-idx'));
         const sourcePos = cable.floatingSource || State.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
         const destPos = (cable.destPortId ? State.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
-        const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos)))];
+        const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : computeSmartRouting(cable, sourcePos, destPos))];
 
         if (currentPts.length > 1) {
           currentPts.splice(idx, 1);
@@ -2522,21 +2916,77 @@ export class PropertiesPanel {
       <div class="form-group">
         <label>Manager Size (Width)</label>
         <select id="prop-vert-mgr-width" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 6px; border-radius: 4px; width: 100%;">
-          <option value="4-inch" ${width === '4-inch' ? 'selected' : ''}>4-Inch Wide</option>
-          <option value="6-inch" ${width === '6-inch' ? 'selected' : ''}>6-Inch Wide</option>
+          <option value="2-inch" ${width === '2-inch' ? 'selected' : ''}>2-Inch Slim Organizer</option>
+          <option value="4-inch" ${width === '4-inch' ? 'selected' : ''}>4-Inch Standard Gutter</option>
+          <option value="6-inch" ${width === '6-inch' ? 'selected' : ''}>6-Inch High-Density VCM</option>
+          <option value="8-inch" ${width === '8-inch' ? 'selected' : ''}>8-Inch Backbone Trunk</option>
         </select>
       </div>
 
-      <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+      <div class="form-group">
+        <label>Duct Finish Color</label>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <input type="color" id="prop-vert-mgr-color" value="${(side === 'left' ? rack.leftCableManagerColor : rack.rightCableManagerColor) || rack.rackColor || '#11141a'}" style="width: 28px; height: 28px; border: 1px solid var(--border-color); border-radius: 4px; padding: 0; background: transparent; cursor: pointer;" />
+          <input type="text" id="prop-vert-mgr-color-text" value="${(side === 'left' ? rack.leftCableManagerColor : rack.rightCableManagerColor) || rack.rackColor || '#11141a'}" style="flex: 1; background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 5px 8px; border-radius: 4px;" placeholder="#HEX" />
+        </div>
+        <div style="display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap;">
+          ${['#0c0e12', '#11141a', '#1f242c', '#334155', '#8a8d90', '#e8e8e4', '#10b981', '#00e5ff', '#3b82f6'].map(c => `
+            <div class="vcm-color-chip" data-color="${c}" style="width: 18px; height: 18px; border-radius: 3px; background: ${c}; border: 1px solid rgba(255,255,255,0.2); cursor: pointer;" title="${c}"></div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 15px; display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn-action" id="prop-vert-mgr-swap" style="width: 100%; text-align: center; justify-content: center; background: rgba(56, 189, 248, 0.15); border: 1px solid var(--accent-primary); color: var(--accent-primary); border-radius: 4px; padding: 8px; font-size: 12px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+          🔄 Move to ${side === 'left' ? 'Right' : 'Left'} Side
+        </button>
         <button class="btn-action btn-danger" id="prop-vert-mgr-delete" style="width: 100%; text-align: center; justify-content: center; background: rgba(248, 81, 73, 0.15); border: 1px solid var(--danger-color); color: var(--danger-color); border-radius: 4px; padding: 8px; font-size: 12px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;">
           🗑️ Delete Cable Manager
         </button>
       </div>
     `;
 
+    const colorProp = side === 'left' ? 'leftCableManagerColor' : 'rightCableManagerColor';
+    const colorPicker = container.querySelector('#prop-vert-mgr-color') as HTMLInputElement;
+    const colorText = container.querySelector('#prop-vert-mgr-color-text') as HTMLInputElement;
+
+    const setVcmColor = (val: string) => {
+      if (colorPicker) colorPicker.value = val;
+      if (colorText) colorText.value = val;
+      EventBus.emit('rack:update', { id, data: { [colorProp]: val } });
+    };
+
+    colorPicker?.addEventListener('input', (e: any) => setVcmColor(e.target.value));
+    colorText?.addEventListener('change', (e: any) => setVcmColor(e.target.value));
+    container.querySelectorAll('.vcm-color-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const c = chip.getAttribute('data-color');
+        if (c) setVcmColor(c);
+      });
+    });
+
     container.querySelector('#prop-vert-mgr-width')?.addEventListener('change', (e: any) => {
       const prop = side === 'left' ? 'leftCableManagerWidth' : 'rightCableManagerWidth';
       EventBus.emit('rack:update', { id, data: { [prop]: e.target.value } });
+    });
+
+    container.querySelector('#prop-vert-mgr-swap')?.addEventListener('click', () => {
+      const fromProp = side === 'left' ? 'leftCableManagerWidth' : 'rightCableManagerWidth';
+      const toProp = side === 'left' ? 'rightCableManagerWidth' : 'leftCableManagerWidth';
+      const fromColorProp = side === 'left' ? 'leftCableManagerColor' : 'rightCableManagerColor';
+      const toColorProp = side === 'left' ? 'rightCableManagerColor' : 'leftCableManagerColor';
+      const targetSide = side === 'left' ? 'right' : 'left';
+      
+      EventBus.emit('rack:update', {
+        id,
+        data: {
+          [toProp]: width,
+          [fromProp]: 'none',
+          [toColorProp]: rack[fromColorProp],
+          [fromColorProp]: undefined,
+        }
+      });
+      EventBus.emit('selection:changed', [{ type: 'vertical-mgr', id, side: targetSide } as any]);
     });
 
     container.querySelector('#prop-vert-mgr-delete')?.addEventListener('click', () => {

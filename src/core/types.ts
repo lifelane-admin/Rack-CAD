@@ -10,16 +10,68 @@ export interface Rect { x: number; y: number; width: number; height: number; }
 export interface Transform { x: number; y: number; scale: number; }
 
 // === Rack ===
+export const RACK_UNIT_SIZES = [
+  2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54
+] as const;
+export type RackUnits = typeof RACK_UNIT_SIZES[number] | number;
+
+export const STANDARD_RACK_HEIGHTS = [6, 9, 12, 18, 24, 27, 36, 42, 45, 48] as const;
+export const STANDARD_RACK_DEPTHS = [450, 600, 800, 1000, 1200] as const;
+export type VcmWidth = '2-inch' | '4-inch' | '6-inch' | '8-inch' | 'none';
+export type RackType = 'server' | 'network' | 'wall-mount' | 'open-frame';
+export type RackDoorType =
+  | 'glass'
+  | 'perforated'
+  | 'perforated-large'
+  | 'perforated-medium'
+  | 'perforated-small'
+  | 'perforated-tiny'
+  | 'honeycomb-large'
+  | 'honeycomb-medium'
+  | 'honeycomb-small'
+  | 'honeycomb-tiny'
+  | 'solid'
+  | 'split-perforated'
+  | 'split-perforated-large'
+  | 'split-perforated-medium'
+  | 'split-perforated-small'
+  | 'split-perforated-tiny'
+  | 'split-honeycomb'
+  | 'split-honeycomb-large'
+  | 'split-honeycomb-medium'
+  | 'split-honeycomb-small'
+  | 'split-honeycomb-tiny'
+  | 'split-solid'
+  | 'split-glass'
+  | 'multi-compartment-2'
+  | 'multi-compartment-4'
+  | 'louvered'
+  | 'none';
+export type RackMounting = 'floor' | 'wall-mount';
+export type RackWidthOption = '19-inch' | '23-inch' | 'custom';
+export type VcmType = 'single-sided' | 'double-sided';
+
 export interface RackData {
   id: string;
   name: string;
-  units: 42 | 48;
+  units: number;
   x: number;  // position on canvas
   y: number;
+  rackWidth?: RackWidthOption;
+  depthMm?: number;
+  rackType?: RackType;
+  frontDoor?: RackDoorType;
+  sidePanels?: boolean;
+  rackColor?: string;
+  mounting?: RackMounting;
   showPduLeft?: boolean;
   showPduRight?: boolean;
-  leftCableManagerWidth?: '4-inch' | '6-inch' | 'none';
-  rightCableManagerWidth?: '4-inch' | '6-inch' | 'none';
+  leftCableManagerWidth?: VcmWidth;
+  rightCableManagerWidth?: VcmWidth;
+  leftCableManagerColor?: string;
+  rightCableManagerColor?: string;
+  vcmType?: VcmType;
+  vcmHeight?: 'match-rack' | number;
   powerCircuitA?: string[];   // device IDs on circuit A
   powerCircuitB?: string[];   // device IDs on circuit B
   pduCapacityWatts?: number;  // max watts per circuit; default 3600
@@ -274,6 +326,7 @@ export interface DeviceData {
   serialNumber: string;
   description: string;
   locked?: boolean;
+  color?: string;  // per-instance chassis / finish color override
   ports: PortData[];
   frontPanelImage?: string;
   deviceConfig?: Record<string, unknown>;  // PDU configurator state
@@ -610,8 +663,8 @@ export interface CableData {
   floatingDest?: Point | null;
   floatingSource?: Point | null;
   sidePreference?: 'left' | 'right';
-  sourceOrientation?: 'auto' | 'up' | 'down' | 'left' | 'right';
-  destOrientation?: 'auto' | 'up' | 'down' | 'left' | 'right';
+  sourceOrientation?: 'auto' | 'up' | 'down' | 'left' | 'right' | 'inward';
+  destOrientation?: 'auto' | 'up' | 'down' | 'left' | 'right' | 'inward';
   /** 4 user-draggable midpoint anchors between source and dest */
   anchorPoints?: Point[];
   /** Whether anchors have been manually positioned by the user */
@@ -683,6 +736,7 @@ export interface AppState {
    *  cable at that exact point instead of requiring a real destination port. Source ports are
    *  never affected — only where a cable is allowed to land. */
   airdropDestination: boolean;
+  activeCableEnd?: 'source' | 'dest';
   sidebarCollapsed: boolean;
   propertiesCollapsed: boolean;
   showLegends: boolean;
@@ -736,7 +790,7 @@ export interface AppEvents {
   'rack:moved': { id: string; x: number; y: number };
   'rack:removed': string;
   'rack:update': { id: string; data: Partial<RackData> };
-  'rack:add': { units: 42 | 48 };
+  'rack:add': { units?: number };
   'device:added': DeviceData;
   'device:moved': { id: string; rackId: string; startUnit: number };
   'device:removed': string;
@@ -755,6 +809,9 @@ export interface AppEvents {
   'bundle:update': { id: string; data: Partial<CableBundle> };
   'validation:updated': ValidationAlert[];
   'reports:toggle': void;
+  'properties:toggle': void;
+  'properties:show': void;
+  'properties:hide': void;
   'selection:changed': SelectableItem[];
   'tool:changed': ToolMode;
   'theme:changed': Theme;

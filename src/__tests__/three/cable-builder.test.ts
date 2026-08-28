@@ -66,7 +66,11 @@ vi.mock('three', () => {
   };
 });
 
-vi.mock('../../three/rack-builder', () => ({ RACK_DEPTH: 600 }));
+vi.mock('../../three/rack-builder', () => ({
+  RACK_DEPTH: 600,
+  FRONT_RAIL_RECESS: 28,
+  DEVICE_FACE_Z: 272
+}));
 
 import { buildCableMesh } from '../../three/cable-builder';
 import { RACK_CONSTANTS } from '../../core/types';
@@ -81,6 +85,8 @@ function getCurvePoints(curvePathInstance: any): any[] {
   return pts;
 }
 
+import { stateManager } from '../../core/state';
+
 function makeState(cable: any) {
   const rack = { id: 'r1', units: 42, x: 0, y: 0 };
   const device1 = {
@@ -89,15 +95,17 @@ function makeState(cable: any) {
   };
   const device2 = {
     id: 'd2', rackId: 'r1', templateId: 'tmpl', startUnit: 30,
-    ports: [{ id: 'p2', deviceId: 'd2', relativeX: 300, relativeY: 10, type: 'rj45', connected: true, cableId: cable.id }],
+    ports: [{ id: 'p2', deviceId: 'd2', relativeX: 100, relativeY: 10, type: 'rj45', connected: true, cableId: cable.id }],
   };
   const template = { id: 'tmpl', heightUnits: 1, color: '#ccc', category: 'server' };
-  return {
+  const st = {
     racks: [rack],
     devices: [device1, device2],
     cables: [cable],
     customTemplates: [template],
   } as any;
+  stateManager.setState(st);
+  return st;
 }
 
 describe('buildCableMesh', () => {
@@ -147,7 +155,8 @@ describe('buildCableMesh', () => {
   it('route uses right channel for source port in right half of device', async () => {
     const { CurvePath } = await import('three');
     const state = makeState(cable);
-    state.devices[0].ports[0].relativeX = 300; // right half
+    state.devices[0].ports[0] = { ...state.devices[0].ports[0], relativeX: 300 };
+    stateManager.setState(state);
     buildCableMesh(cable, state);
     const curvePathInstance = vi.mocked(CurvePath).mock.instances[0] as any;
     const points = getCurvePoints(curvePathInstance);

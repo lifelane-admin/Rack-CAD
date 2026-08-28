@@ -16,9 +16,57 @@ export class MaterialManager {
     const key = `texture:${imageDataUrl.length}:${imageDataUrl.slice(-32)}`;
     const cached = this.cache.get(key);
     if (cached) return cached;
+
+    const mat = new THREE.MeshStandardMaterial({
+      metalness: 0.35,
+      roughness: 0.40,
+    });
+
     const loader = new THREE.TextureLoader();
-    const texture = loader.load(imageDataUrl);
-    const mat = new THREE.MeshStandardMaterial({ map: texture, metalness: 0.2, roughness: 0.5 });
+    loader.load(imageDataUrl, (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 16;
+      texture.generateMipmaps = true;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      mat.map = texture;
+
+      // Generate 3D surface depth bump map from custom panel image
+      try {
+        const img = texture.image;
+        if (img && img.width > 0 && img.height > 0) {
+          const bumpCanvas = document.createElement('canvas');
+          bumpCanvas.width = img.width;
+          bumpCanvas.height = img.height;
+          const bCtx = bumpCanvas.getContext('2d');
+          if (bCtx) {
+            bCtx.drawImage(img, 0, 0);
+            const imgData = bCtx.getImageData(0, 0, img.width, img.height);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+              const lum = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+              // Invert so dark port cavities recess and light bezels/screws/logos raise in 3D relief
+              const bumpVal = Math.min(255, Math.max(0, 255 - lum * 0.85));
+              data[i] = bumpVal;
+              data[i + 1] = bumpVal;
+              data[i + 2] = bumpVal;
+            }
+            bCtx.putImageData(imgData, 0, 0);
+            const bumpTex = new THREE.CanvasTexture(bumpCanvas);
+            bumpTex.anisotropy = 16;
+            bumpTex.generateMipmaps = true;
+            bumpTex.minFilter = THREE.LinearMipmapLinearFilter;
+            mat.bumpMap = bumpTex;
+            mat.bumpScale = 0.8;
+          }
+        }
+      } catch {
+        // Fallback if cross-origin image restricts pixel reading
+      }
+
+      mat.needsUpdate = true;
+    });
+
     this.cache.set(key, mat);
     return mat;
   }

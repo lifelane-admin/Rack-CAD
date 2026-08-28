@@ -22,7 +22,7 @@ export class CameraManager {
   private animFrame: number | null = null;
 
   constructor(renderer: THREE.WebGLRenderer) {
-    this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100000);
+    this.camera = new THREE.PerspectiveCamera(60, 1, 5, 20000);
     this.camera.position.set(1200, 1200, 2800);
 
     this.controls = new OrbitControls(this.camera, renderer.domElement);

@@ -7,20 +7,52 @@
   overflow: hidden;
   user-select: none;
   width: 320px; /* Matches layout.css */
-  transition: width var(--transition-speed) ease;
+  min-width: 260px;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
 }
 
 #properties-panel.collapsed {
-  width: 48px;
+  width: 0px !important;
+  min-width: 0px !important;
+  border-left: none !important;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
 }
 
-#properties-panel.collapsed .properties-header h3,
-#properties-panel.collapsed .properties-content {
-  display: none;
+/* Floating Unhide Button on Canvas */
+.floating-unhide-props {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 40;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid var(--border-color-focus, #38bdf8);
+  color: #38bdf8;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  user-select: none;
 }
 
-#properties-panel.collapsed .collapse-btn {
-  transform: rotate(180deg);
+.floating-unhide-props:hover {
+  background: rgba(56, 189, 248, 0.25);
+  color: #ffffff;
+  border-color: #60a5fa;
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3);
+  transform: translateX(-2px);
+}
+
+.floating-unhide-props.hidden {
+  display: none !important;
 }
 
 .properties-header {

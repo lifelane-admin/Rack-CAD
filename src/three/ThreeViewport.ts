@@ -43,7 +43,11 @@ export class ThreeViewport {
   mount(container: HTMLElement): void {
     this.container = container;
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: 'high-performance',
+      logarithmicDepthBuffer: true
+    });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = false;
     container.appendChild(this.renderer.domElement);
@@ -83,6 +87,15 @@ export class ThreeViewport {
     };
     eventBus.on('state:changed', this.stateHandler);
 
+    // Synchronize 3D selection box with 2D/3D selection state
+    this.selectionHandler = (selection: Array<{ type: string; id: string }>) => {
+      this.sceneManager.updateSelection(selection);
+    };
+    eventBus.on('selection:changed', this.selectionHandler);
+
+    // Setup 3D interactive pointer selection & context menu
+    this.setupInteractivePicking();
+
     // Resize observer
     this.resizeObserver = new ResizeObserver(() => this.onResize());
     this.resizeObserver.observe(container);
@@ -92,6 +105,123 @@ export class ThreeViewport {
 
     // Mount splitter drag behavior
     this.mountSplitter();
+  }
+
+  private selectionHandler: ((selection: Array<{ type: string; id: string }>) => void) | null = null;
+  private raycaster = new THREE.Raycaster();
+  private mouseNdc = new THREE.Vector2();
+
+  private raycastSelectable(clientX: number, clientY: number): { type: 'device' | 'rack' | 'cable'; id: string; object: THREE.Object3D } | null {
+    if (!this.container) return null;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    this.mouseNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouseNdc.y = -(((clientY - rect.top) / rect.height) * 2 - 1);
+    this.raycaster.setFromCamera(this.mouseNdc, this.camera.camera);
+
+    const intersects = this.raycaster.intersectObjects(this.sceneManager.scene.children, true);
+    if (intersects.length === 0) return null;
+
+    let deviceHit: { type: 'device'; id: string; object: THREE.Object3D } | null = null;
+    let cableHit: { type: 'cable'; id: string; object: THREE.Object3D } | null = null;
+    let rackHit: { type: 'rack'; id: string; object: THREE.Object3D } | null = null;
+
+    for (const hit of intersects) {
+      let curr: THREE.Object3D | null = hit.object;
+      while (curr && curr !== this.sceneManager.scene) {
+        if (!deviceHit && curr.name?.startsWith('device-')) {
+          const id = curr.name.replace('device-', '');
+          deviceHit = { type: 'device', id, object: curr };
+        } else if (!deviceHit && (curr.name?.startsWith('ear-left-') || curr.name?.startsWith('ear-right-'))) {
+          const id = curr.name.replace('ear-left-', '').replace('ear-right-', '');
+          deviceHit = { type: 'device', id, object: curr };
+        } else if (!cableHit && (curr.name?.startsWith('cable-tube-') || curr.name?.startsWith('cable-'))) {
+          const id = curr.name.replace('cable-tube-', '').replace('cable-', '');
+          cableHit = { type: 'cable', id, object: curr };
+        } else if (!rackHit && (curr.name?.startsWith('rack-') && curr.userData?.rack)) {
+          rackHit = { type: 'rack', id: curr.userData.rack.id, object: curr };
+        } else if (curr.userData?.type && curr.userData?.id) {
+          if (!deviceHit && curr.userData.type === 'device') {
+            deviceHit = { type: 'device', id: curr.userData.id, object: curr };
+          } else if (!cableHit && curr.userData.type === 'cable') {
+            cableHit = { type: 'cable', id: curr.userData.id, object: curr };
+          } else if (!rackHit && curr.userData.type === 'rack') {
+            rackHit = { type: 'rack', id: curr.userData.id, object: curr };
+          }
+        }
+        curr = curr.parent;
+      }
+      if (deviceHit) break; // Device takes top priority
+    }
+
+    return deviceHit || cableHit || rackHit || null;
+  }
+
+  private setupInteractivePicking(): void {
+    const el = this.renderer.domElement;
+    let downX = 0;
+    let downY = 0;
+    let downTime = 0;
+
+    el.addEventListener('pointerdown', (e) => {
+      downX = e.clientX;
+      downY = e.clientY;
+      downTime = performance.now();
+    });
+
+    el.addEventListener('pointerup', (e) => {
+      // If user dragged the camera (orbit/pan/zoom), ignore selection
+      const dist = Math.hypot(e.clientX - downX, e.clientY - downY);
+      const duration = performance.now() - downTime;
+      if (dist > 8 || duration > 600) return;
+
+      if (e.button === 0) {
+        // Left click selection
+        const hit = this.raycastSelectable(e.clientX, e.clientY);
+        if (hit) {
+          stateManager.setState({ selection: [{ type: hit.type, id: hit.id }] });
+          eventBus.emit('selection:changed', [{ type: hit.type, id: hit.id }]);
+        } else {
+          // Clicked empty 3D space — deselect
+          stateManager.setState({ selection: [] });
+          eventBus.emit('selection:changed', []);
+        }
+      }
+    });
+
+    el.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const hit = this.raycastSelectable(e.clientX, e.clientY);
+      if (hit) {
+        stateManager.setState({ selection: [{ type: hit.type, id: hit.id }] });
+        eventBus.emit('selection:changed', [{ type: hit.type, id: hit.id }]);
+
+        const attrName = `data-${hit.type}-id`;
+        const domEl = document.querySelector(`[${attrName}="${hit.id}"]`) as SVGElement | null;
+        eventBus.emit('canvas:rightclick', {
+          point: { x: 0, y: 0 },
+          target: domEl || el,
+          screenPoint: { x: e.clientX, y: e.clientY }
+        } as any);
+      }
+    });
+
+    el.addEventListener('pointermove', (e) => {
+      const hit = this.raycastSelectable(e.clientX, e.clientY);
+      el.style.cursor = hit ? 'pointer' : 'default';
+    });
+
+    el.addEventListener('dblclick', (e) => {
+      const hit = this.raycastSelectable(e.clientX, e.clientY);
+      if (hit && hit.type === 'device') {
+        const entry = this.sceneManager.getDeviceEntry(hit.id);
+        if (entry) {
+          const worldPos = new THREE.Vector3();
+          entry.mesh.getWorldPosition(worldPos);
+          this.camera.setTarget(worldPos.x, worldPos.y, worldPos.z);
+        }
+      }
+    });
   }
 
   private animate(): void {
@@ -199,6 +329,7 @@ export class ThreeViewport {
   destroy(): void {
     if (this.animId !== null) cancelAnimationFrame(this.animId);
     if (this.stateHandler) eventBus.off('state:changed', this.stateHandler);
+    if (this.selectionHandler) eventBus.off('selection:changed', this.selectionHandler);
     this.resizeObserver?.disconnect();
     this.camera.dispose();
     this.post.dispose();

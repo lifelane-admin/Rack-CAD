@@ -21,8 +21,8 @@ describe('appendExportSummaryOverlay — card placement must clear the rack\'s o
       hostname: '', managementIp: '', serialNumber: '', description: '', ports: [],
     };
     const rects = appendExportSummaryOverlay(makeVpGroup(), [rack], [pduDevice], []);
-    // vpdu-apc-ap8853 has pduWidth 44; PDU's right edge is OUTER_W + 44 — card must start after that.
-    const pduRightEdge = OUTER_W + 44;
+    // vpdu-apc-ap8853 has pduWidth 44; PDU's right edge is OUTER_W + 44 + 4 — card must start after that.
+    const pduRightEdge = OUTER_W + 44 + 4;
     expect(rects[0].x).toBeGreaterThan(pduRightEdge);
     expect(rects[0].x).toBe(pduRightEdge + 20);
   });
@@ -30,8 +30,8 @@ describe('appendExportSummaryOverlay — card placement must clear the rack\'s o
   it('with a right-side 6-inch cable manager (no PDU), the card clears the duct', () => {
     const rack: RackData = { id: 'r1', name: 'Rack 1', units: 42, x: 0, y: 0, rightCableManagerWidth: '6-inch' };
     const rects = appendExportSummaryOverlay(makeVpGroup(), [rack], [], []);
-    // 6-inch duct span is 46 (40 + 6 gutter, per cableManagerSpan).
-    expect(rects[0].x).toBe(OUTER_W + 46 + 20);
+    // 6-inch duct span is 44 (40 + 4 gutter, per cableManagerSpan).
+    expect(rects[0].x).toBe(OUTER_W + 44 + 20);
   });
 
   it('with BOTH a cable manager and a PDU on the right, the card clears both (this was the reported bug: a fixed +45 offset landed inside a PDU up to 48px wide)', () => {
@@ -44,7 +44,7 @@ describe('appendExportSummaryOverlay — card placement must clear the rack\'s o
       hostname: '', managementIp: '', serialNumber: '', description: '', ports: [],
     };
     const rects = appendExportSummaryOverlay(makeVpGroup(), [rack], [pduDevice], []);
-    const pduRightEdge = OUTER_W + 46 + 48; // cable-manager span, then the PDU beyond it
+    const pduRightEdge = OUTER_W + (48 + 4) + 44; // PDU space, then cable-manager span beyond it
     expect(rects[0].x).toBe(pduRightEdge + 20);
     // The old, fixed offset (OUTER_W + 45) would have landed at 495 — deep inside the PDU/duct.
     expect(rects[0].x).toBeGreaterThan(OUTER_W + 45);
@@ -59,7 +59,7 @@ describe('appendExportSummaryOverlay — card placement must clear the rack\'s o
     };
     const rects = appendExportSummaryOverlay(makeVpGroup(), [rackA, rackB], [pduDevice], []);
     expect(rects[0].x).toBe(OUTER_W + 20);
-    expect(rects[1].x).toBe(1000 + OUTER_W + 44 + 20);
+    expect(rects[1].x).toBe(1000 + OUTER_W + (44 + 4) + 20);
   });
 });
 

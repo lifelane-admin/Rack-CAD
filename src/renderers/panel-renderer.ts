@@ -288,11 +288,12 @@ function renderCoolingPanel(_template: DeviceTemplate | null, W: number, H: numb
   return group;
 }
 
-function renderCableManagerPanel(template: DeviceTemplate | null, W: number, H: number): SVGGElement {
+function renderCableManagerPanel(template: DeviceTemplate | null, W: number, H: number, deviceData?: DeviceData | null): SVGGElement {
   const group = g('cable-mgr-panel');
   const chY = 2;
   const chH = H - 4;
-  group.appendChild(el('rect', { x: 0, y: chY, width: W, height: chH, rx: 1, fill: '#151518', stroke: '#111', 'stroke-width': 1 }));
+  const panelFill = deviceData?.color || template?.color || '#151518';
+  group.appendChild(el('rect', { x: 0, y: chY, width: W, height: chH, rx: 1, fill: panelFill, stroke: '#111', 'stroke-width': 1 }));
 
   if (template?.id === 'brush-panel-1u') {
     group.appendChild(el('rect', { x: 20, y: chY + 4, width: W - 40, height: chH - 8, rx: 2, fill: '#050508', stroke: '#30363d', 'stroke-width': 1 }));
@@ -367,7 +368,7 @@ export function renderFrontPanel(
     }
     case 'blank-panel':   return renderBlankPanel(deviceWidth, deviceHeight);
     case 'cooling':       return renderCoolingPanel(template, deviceWidth, deviceHeight);
-    case 'cable-manager': return renderCableManagerPanel(template, deviceWidth, deviceHeight);
+    case 'cable-manager': return renderCableManagerPanel(template, deviceWidth, deviceHeight, deviceData);
     default: {
       const fallback = g('fallback-panel');
       fallback.appendChild(el('rect', { x: 0, y: 2, width: deviceWidth, height: deviceHeight - 4, rx: 1, fill: '#1b1b22', stroke: '#111', 'stroke-width': 1 }));

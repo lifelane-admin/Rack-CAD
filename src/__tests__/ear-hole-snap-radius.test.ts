@@ -53,7 +53,7 @@ describe('ear-hole proximity-snap radius', () => {
     stateManager.setState({ racks: [], devices: [], cables: [], bundles: [], selection: [], cableInProgress: null });
   });
 
-  it('a click 15px from the nearest ear hole (with no other real port nearby) does NOT snap to it', async () => {
+  it('a click 25px from the nearest ear hole (with no other real port nearby) does NOT snap to it', async () => {
     mountAppSkeleton();
     const { App } = await import('../app');
     const app = new App();
@@ -89,9 +89,8 @@ describe('ear-hole proximity-snap radius', () => {
     const earPos = stateManager.getPortWorldPosition(earPortId);
     expect(earPos).toBeTruthy();
 
-    // Click 15px away from that ear hole — inside the OLD 35-40px radius (would have snapped to
-    // the ear hole), but outside the new 1.5px ear-specific radius, and nowhere near any real port.
-    const clickPoint = { x: earPos!.x + 15, y: earPos!.y };
+    // Click 25px away from that ear hole — outside the 12px ear radius, and nowhere near any real port.
+    const clickPoint = { x: earPos!.x + 25, y: earPos!.y };
     const canvasEl = document.getElementById('canvas')!;
     canvasEl.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: clickPoint.x, clientY: clickPoint.y }));
     canvasEl.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: clickPoint.x, clientY: clickPoint.y }));
@@ -104,7 +103,7 @@ describe('ear-hole proximity-snap radius', () => {
     expect(earPort?.connected).toBe(false);
   });
 
-  it('a click within the new 1.5px ear radius still snaps (ear holes remain clickable, just not magnetic)', async () => {
+  it('a click within the 12px ear radius snaps with high sensitivity', async () => {
     mountAppSkeleton();
     const { App } = await import('../app');
     const app = new App();
@@ -131,8 +130,8 @@ describe('ear-hole proximity-snap radius', () => {
     const earPortId = 'dB-ear-left-nic1';
     const earPos = stateManager.getPortWorldPosition(earPortId)!;
 
-    // 1px away — well within the new 1.5px ear radius, so a genuinely close click still connects.
-    const clickPoint = { x: earPos.x + 1, y: earPos.y };
+    // 8px away — comfortably within the 12px ear radius, so a nearby click snaps and connects.
+    const clickPoint = { x: earPos.x + 8, y: earPos.y };
     const canvasEl = document.getElementById('canvas')!;
     canvasEl.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: clickPoint.x, clientY: clickPoint.y }));
     canvasEl.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: clickPoint.x, clientY: clickPoint.y }));

@@ -86,9 +86,23 @@ export class Toolbar {
       'sep',
       { label: 'Select All', kbd: '⌘A', action: () => {} },
       { label: 'Delete', kbd: '⌫', action: () => EventBus.emit('edit:delete', undefined) },
-      'sep',
-      { label: 'Add 42U Rack', action: () => EventBus.emit('rack:add', { units: 42 }) },
-      { label: 'Add 48U Rack', action: () => EventBus.emit('rack:add', { units: 48 }) },
+      { label: 'Add Rack (42U)', action: () => EventBus.emit('rack:add', { units: 42 }) },
+      { label: 'Add Rack (48U)', action: () => EventBus.emit('rack:add', { units: 48 }) },
+      { label: 'Add Rack (24U Half-Rack)', action: () => EventBus.emit('rack:add', { units: 24 }) },
+      { label: 'Add Rack (12U Wall-Mount)', action: () => EventBus.emit('rack:add', { units: 12 }) },
+      {
+        label: 'Add Rack (Custom Size…)',
+        action: () => {
+          const input = window.prompt('Enter rack height in units (2 to 54, even numbers only):', '42');
+          if (input !== null) {
+            let u = parseInt(input, 10);
+            if (isNaN(u) || u < 2) u = 2;
+            if (u > 54) u = 54;
+            if (u % 2 !== 0) u = Math.min(54, u + 1);
+            EventBus.emit('rack:add', { units: u });
+          }
+        }
+      },
     ]);
     menuBar.appendChild(editMenu);
 
@@ -105,6 +119,7 @@ export class Toolbar {
       { label: 'Switch to Hybrid', action: () => EventBus.emit('view:switch', 'hybrid') },
       'sep',
       { label: '3D Panel', action: () => EventBus.emit('view:toggle-3d-panel', undefined) },
+      { label: 'Properties Panel', kbd: 'Alt+P', action: () => EventBus.emit('properties:toggle', undefined) },
       { label: 'Toggle Theme', action: () => EventBus.emit('view:toggle-theme', undefined) },
     ]);
     menuBar.appendChild(viewMenu);

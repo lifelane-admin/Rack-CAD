@@ -1,6 +1,44 @@
 import EventBus from '../core/event-bus';
 import State from '../core/state';
-import { computeRackSummary } from '../utils/rack-summary';
+import { computeRackSummary, getCableTypeDisplayName } from '../utils/rack-summary';
+import { CABLE_COLORS } from '../core/types';
+
+export function getConnectorSvg(type: string, isPower: boolean): string {
+  const t = type.toLowerCase();
+  if (isPower || t.includes('power') || t.includes('pwr') || t.includes('c13') || t.includes('c14') || t.includes('c19')) {
+    return `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#ffb020" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;flex-shrink:0;" title="Power Plug">
+      <path d="M9 2v6"/>
+      <path d="M15 2v6"/>
+      <path d="M6 8h12a2 2 0 0 1 2 2v2a6 6 0 0 1-6 6H10a6 6 0 0 1-6-6v-2a2 2 0 0 1 2-2z" fill="rgba(255, 176, 32, 0.18)"/>
+      <path d="M12 18v4"/>
+    </svg>`;
+  }
+  if (t.includes('om') || t.includes('fiber') || t.includes('lc') || t.includes('sc') || t.includes('opt')) {
+    return `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#00e5ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;flex-shrink:0;" title="Fiber Optic">
+      <circle cx="7" cy="12" r="4" fill="rgba(0, 229, 255, 0.18)"/>
+      <circle cx="17" cy="12" r="4" fill="rgba(0, 229, 255, 0.18)"/>
+      <circle cx="7" cy="12" r="1.5" fill="#00e5ff"/>
+      <circle cx="17" cy="12" r="1.5" fill="#00e5ff"/>
+      <path d="M11 7h2"/>
+      <path d="M11 17h2"/>
+    </svg>`;
+  }
+  if (t.includes('sfp') || t.includes('qsfp') || t.includes('dac')) {
+    return `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#a5d6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;flex-shrink:0;" title="SFP Transceiver">
+      <rect x="3" y="6" width="18" height="12" rx="2" fill="rgba(165, 214, 255, 0.15)"/>
+      <path d="M8 6v12"/>
+      <path d="M16 10l-3 4-2-2"/>
+    </svg>`;
+  }
+  // Default Ethernet / RJ45 Modular Port
+  return `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;flex-shrink:0;" title="Ethernet Port">
+    <rect x="3" y="4" width="18" height="16" rx="3" fill="rgba(88, 166, 255, 0.15)"/>
+    <path d="M8 20v-4h8v4"/>
+    <circle cx="8" cy="9" r="1" fill="#58a6ff"/>
+    <circle cx="12" cy="9" r="1" fill="#58a6ff"/>
+    <circle cx="16" cy="9" r="1" fill="#58a6ff"/>
+  </svg>`;
+}
 
 export class ReportsFloat {
   private container: HTMLElement;
@@ -24,7 +62,14 @@ export class ReportsFloat {
     this.render();
     this.setupDrag();
 
-    EventBus.on('state:changed', () => this.render());
+    // Comprehensive real-time event bindings
+    const updateEvents = [
+      'state:changed', 'cable:create', 'cable:update', 'cable:delete', 'cable:connected', 'cable:disconnected',
+      'device:add', 'device:update', 'device:remove', 'device:move',
+      'rack:add', 'rack:update', 'rack:remove',
+      'port:connected', 'port:disconnected', 'power:update', 'project:load', 'history:undo', 'history:redo'
+    ];
+    updateEvents.forEach(evt => EventBus.on(evt as any, () => this.render()));
   }
 
   private render(): void {
@@ -34,14 +79,31 @@ export class ReportsFloat {
     const devices = s.devices ?? [];
     const racks = s.racks ?? [];
 
-    // ── Aggregate cable types across all racks ────────────────────────────
-    const typeMap = new Map<string, { color: string; label: string; count: number }>();
+    // ── Aggregate cable types & port types across all racks ───────────────
+    const typeMap = new Map<string, { color: string; label: string; portType: string; cableType: string; isPower: boolean; count: number }>();
     for (const c of cables) {
-      const key = `${c.type}::${c.color ?? ''}`;
+      const srcPort = c.sourcePortId ? State.getPort(c.sourcePortId) : null;
+      const destPort = c.destPortId ? State.getPort(c.destPortId) : null;
+      const isPower = c.powerCableType === 'power'
+        || c.type?.includes('power')
+        || (c.sourcePortId?.startsWith('outlet-') || c.destPortId?.startsWith('outlet-'))
+        || (srcPort?.type === 'power' || destPort?.type === 'power');
+
+      const color = c.color || (CABLE_COLORS as any)[c.type] || (isPower ? '#212529' : '#78909c');
+      const baseLabel = getCableTypeDisplayName(c.type, isPower);
+      const portLabel = isPower
+        ? 'Power'
+        : (srcPort?.type ? srcPort.type.toUpperCase() : (destPort?.type ? destPort.type.toUpperCase() : 'Data'));
+
+      const label = `${baseLabel} (${portLabel})`;
+      const key = `${c.type}::${color}::${isPower}`;
       if (!typeMap.has(key)) {
         typeMap.set(key, {
-          color: c.color || '#78909c',
-          label: c.displayName || c.name || c.type,
+          color,
+          label,
+          portType: portLabel,
+          cableType: c.type,
+          isPower,
           count: 0,
         });
       }
@@ -89,8 +151,9 @@ export class ReportsFloat {
           ? `<div class="rf-empty">No cables routed yet</div>`
           : cableRows.map(r => `
             <div class="rf-cable-row">
-              <span class="rf-cable-swatch" style="background:${r.color}"></span>
-              <span class="rf-cable-label">${r.label}</span>
+              <span class="rf-connector-icon">${getConnectorSvg(r.cableType, r.isPower)}</span>
+              <span class="rf-cable-swatch ${r.isPower ? 'dashed' : ''}" style="border-top-color:${r.color};"></span>
+              <span class="rf-cable-label" title="${r.label}">${r.label}</span>
               <span class="rf-cable-count">${r.count}</span>
             </div>`).join('')
         }
@@ -122,7 +185,14 @@ export class ReportsFloat {
         </div>
         <div class="rf-gauge-track">
           <div class="rf-gauge-fill" style="width:${wPct}%;background:${wColor}"></div>
-        </div>` : `<div class="rf-empty">No power capacity configured</div>`}
+        </div>` : `
+        <div class="rf-gauge-label">
+          <span>Power Draw</span>
+          <span>${Math.round(usedW)}W</span>
+        </div>
+        <div class="rf-gauge-track">
+          <div class="rf-gauge-fill" style="width:0%;background:#78909c"></div>
+        </div>`}
       </div>
     `;
 

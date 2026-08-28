@@ -21,8 +21,8 @@ function rackRightEdge(rack: RackData, devices: DeviceData[]): number {
   const rightPduDevice = rack.rightPduId ? devices.find(d => d.id === rack.rightPduId) : null;
   const rightPduTemplate = rightPduDevice ? getTemplate(rightPduDevice.templateId) : null;
   const rightPduW = rightPduTemplate?.pduWidth ?? 0;
-  if (rightPduW > 0) return sidePduOffsetX(rack, 'right', rightPduW) + rightPduW;
-  return RACK_CONSTANTS.RACK_OUTER_WIDTH + cableManagerSpan(rack.rightCableManagerWidth);
+  const pduSpace = rightPduW > 0 ? (rightPduW + 4) : 0;
+  return RACK_CONSTANTS.RACK_OUTER_WIDTH + pduSpace + cableManagerSpan(rack.rightCableManagerWidth);
 }
 
 /** The automatic (no manual `summaryCardOffset` yet) card position for a rack — exported so the

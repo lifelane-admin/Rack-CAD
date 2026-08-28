@@ -4,6 +4,8 @@ import { deviceCatalog, getTemplate } from '../library/device-catalog';
 import { DeviceCategory, DeviceTemplate, CloudProvider, CloudContainer } from '../core/types';
 import { CustomAssetModal } from './custom-asset-modal';
 import { deleteCustomTemplate, exportCustomLibraryJSON, parseCustomLibraryJSON } from '../library/custom-catalog';
+import { RACK_TEMPLATES, VCM_TEMPLATES, createRackFromTemplate } from '../library/rack-catalog';
+import { customRackModal } from './custom-rack-modal';
 import { cloudIconManifest, CloudIconEntry, getCloudIcon, isBoundaryIcon, BOUNDARY_MENU_KINDS, getBoundaryIconsByKind } from '../library/cloud-icon-catalog';
 import { recordIconUse, recordBoundaryUse, getRecentUsage } from '../library/recent-usage';
 
@@ -27,7 +29,6 @@ const RACK_CATEGORIES: Array<{ id: DeviceCategory; label: string; accent: string
   { id: 'ats',           label: 'ATS',           accent: '#fdd835', svg: icon('<path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path d="M9 12l2 2 4-4"/>') },
   { id: 'ups',           label: 'UPS',           accent: '#fdd835', svg: icon('<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/>') },
   { id: 'cooling',       label: 'Cooling',       accent: '#38bdf8', svg: icon('<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/><circle cx="12" cy="12" r="3"/>') },
-  { id: 'cable-manager', label: 'Cable Mgmt',    accent: '#64748b', svg: icon('<path d="M4 6h16M4 10h16M4 14h16M4 18h16"/>') },
   { id: 'blank-panel',   label: 'Blanks',        accent: '#2d3748', svg: icon('<rect x="2" y="9" width="20" height="6" rx="1"/>') },
 ];
 
@@ -605,11 +606,120 @@ export class Sidebar {
       container.appendChild(itemsEl);
     };
 
+    // ── 1. Racks Gallery Section ──
+    const filteredRacks = RACK_TEMPLATES.filter(r =>
+      r.name.toLowerCase().includes(this.searchTerm) ||
+      r.description.toLowerCase().includes(this.searchTerm) ||
+      r.badge.toLowerCase().includes(this.searchTerm)
+    );
+
+    const rackItemEls: HTMLElement[] = [];
+
+    const customRackBtn = document.createElement('div');
+    customRackBtn.className = 'cat-item';
+    customRackBtn.setAttribute('draggable', 'true');
+    customRackBtn.draggable = true;
+    customRackBtn.style.cssText = 'border: 1px dashed rgba(0,229,255,0.4); background: rgba(0,229,255,0.06); font-weight: 600; color: #00e5ff; cursor: pointer;';
+    customRackBtn.innerHTML = `
+      <div class="cat-item-dot" style="background: #00e5ff;"></div>
+      + Custom Rack Builder…
+      <span class="cat-item-meta" style="color: #00e5ff;">Configurator</span>
+    `;
+    customRackBtn.onclick = () => customRackModal.show();
+    rackItemEls.push(customRackBtn);
+
+    filteredRacks.forEach(tpl => {
+      const el = document.createElement('div');
+      el.className = 'cat-item';
+      el.draggable = true;
+      el.title = `${tpl.name}\n${tpl.description}`;
+      el.innerHTML = `
+        <div class="cat-item-dot" style="background: #00e5ff;"></div>
+        <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${tpl.name}</div>
+        <span class="cat-item-meta">${tpl.badge}</span>
+      `;
+      el.ondragstart = (e) => {
+        e.dataTransfer?.setData('application/json', JSON.stringify({ rackTemplateId: tpl.id }));
+      };
+      el.onclick = () => {
+        const nextX = 200 + State.getState().racks.length * 520;
+        const newRack = createRackFromTemplate(tpl, nextX, 100);
+        State.addRack(newRack);
+        EventBus.emit('notification', { message: `Deployed ${tpl.name}`, type: 'success' });
+      };
+      rackItemEls.push(el);
+    });
+
+    appendRow(
+      'Racks & Cabinets',
+      '#00e5ff',
+      icon('<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>'),
+      rackItemEls
+    );
+
+    // ── Standard Device Categories ──
     for (const cat of RACK_CATEGORIES) {
       const allItems = [
         ...deviceCatalog.filter(d => d.category === cat.id),
         ...(State.getState().customTemplates ?? []).filter(d => d.category === cat.id),
       ].filter(item => item.name.toLowerCase().includes(this.searchTerm));
+
+      if (cat.id === 'pdu') {
+        const pduElements: HTMLElement[] = [];
+        const verticalPdus = allItems.filter(item => item.mountType === 'side' || item.heightUnits === 0);
+        const horizontalPdus = allItems.filter(item => item.mountType !== 'side' && item.heightUnits > 0);
+
+        if (verticalPdus.length > 0) {
+          const vPduHeader = document.createElement('div');
+          vPduHeader.className = 'cat-subgroup-header';
+          vPduHeader.style.cssText = 'padding: 6px 10px 4px; font-size: 10px; font-weight: 700; color: #fdd835; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(253,216,53,0.15); margin: 4px 0 2px; display: flex; align-items: center; justify-content: space-between;';
+          vPduHeader.innerHTML = `<span>Vertical PDUs (0U Side-Mount)</span><span style="font-size: 9px; opacity: 0.8; color: #8b949e;">0U Rails</span>`;
+          pduElements.push(vPduHeader);
+
+          verticalPdus.forEach(item => {
+            const el = document.createElement('div');
+            el.className = 'cat-item';
+            el.draggable = true;
+            el.title = `${item.name}\nVertical 0U Side-Mount PDU\nDrag near rack rails to mount!`;
+            el.innerHTML = `
+              <div class="cat-item-dot" style="background: #fdd835;"></div>
+              <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.name}</div>
+              <span class="cat-item-meta" style="color: #fdd835;">0U Side</span>
+            `;
+            el.ondragstart = (e) => {
+              e.dataTransfer?.setData('application/json', JSON.stringify({ templateId: item.id }));
+            };
+            pduElements.push(el);
+          });
+        }
+
+        if (horizontalPdus.length > 0) {
+          const hPduHeader = document.createElement('div');
+          hPduHeader.className = 'cat-subgroup-header';
+          hPduHeader.style.cssText = 'padding: 8px 10px 4px; font-size: 10px; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(251,191,36,0.15); margin: 6px 0 2px; display: flex; align-items: center; justify-content: space-between;';
+          hPduHeader.innerHTML = `<span>Horizontal PDUs (Rackmount)</span><span style="font-size: 9px; opacity: 0.8; color: #8b949e;">1U / 2U</span>`;
+          pduElements.push(hPduHeader);
+
+          horizontalPdus.forEach(item => {
+            const el = document.createElement('div');
+            el.className = 'cat-item';
+            el.draggable = true;
+            el.title = `${item.name} (${item.heightUnits}U)`;
+            el.innerHTML = `
+              <div class="cat-item-dot" style="background: #fbbf24;"></div>
+              <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.name}</div>
+              <span class="cat-item-meta">${item.heightUnits}U</span>
+            `;
+            el.ondragstart = (e) => {
+              e.dataTransfer?.setData('application/json', JSON.stringify({ templateId: item.id }));
+            };
+            pduElements.push(el);
+          });
+        }
+
+        appendRow(cat.label, cat.accent, cat.svg, pduElements);
+        continue;
+      }
 
       const itemEls = allItems.map(item => {
         const el = document.createElement('div');
@@ -632,6 +742,87 @@ export class Sidebar {
 
       appendRow(cat.label, cat.accent, cat.svg, itemEls);
     }
+
+    // ── 2. Unified Cable Managers Category (Vertical & Horizontal Subtypes) ──
+    const filteredVcms = VCM_TEMPLATES.filter(v =>
+      v.name.toLowerCase().includes(this.searchTerm) ||
+      v.description.toLowerCase().includes(this.searchTerm)
+    );
+
+    const horizontalCmItems = [
+      ...deviceCatalog.filter(d => d.category === 'cable-manager'),
+      ...(State.getState().customTemplates ?? []).filter(d => d.category === 'cable-manager'),
+    ].filter(item => item.name.toLowerCase().includes(this.searchTerm));
+
+    const cmElements: HTMLElement[] = [];
+
+    // Vertical Cable Managers Sub-Type
+    if (filteredVcms.length > 0) {
+      const vcmSubHeader = document.createElement('div');
+      vcmSubHeader.className = 'cat-subgroup-header';
+      vcmSubHeader.style.cssText = 'padding: 6px 10px 4px; font-size: 10px; font-weight: 700; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(16,185,129,0.15); margin: 4px 0 2px; display: flex; align-items: center; justify-content: space-between;';
+      vcmSubHeader.innerHTML = `<span>Vertical Cable Managers (VCM)</span><span style="font-size: 9px; opacity: 0.8; color: #8b949e;">Side Ducts</span>`;
+      cmElements.push(vcmSubHeader);
+
+      filteredVcms.forEach(tpl => {
+        const el = document.createElement('div');
+        el.className = 'cat-item';
+        el.draggable = true;
+        el.title = `${tpl.name}\n${tpl.description}\nDrag next to any rack to attach!`;
+        el.innerHTML = `
+          <div class="cat-item-dot" style="background: #10b981;"></div>
+          <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${tpl.name}</div>
+          <span class="cat-item-meta" style="color: #10b981;">${tpl.badge}</span>
+        `;
+        el.ondragstart = (e) => {
+          e.dataTransfer?.setData('application/json', JSON.stringify({ vcmTemplateId: tpl.id }));
+        };
+        el.onclick = () => {
+          const racks = State.getState().racks;
+          if (racks.length === 0) {
+            EventBus.emit('notification', { message: 'Add a rack to the canvas first, then attach VCM!', type: 'warning' });
+            return;
+          }
+          const lastRack = racks[racks.length - 1];
+          const updatedRacks = racks.map(r => r.id === lastRack.id ? { ...r, leftCableManagerWidth: tpl.width, rightCableManagerWidth: tpl.width } : r);
+          State.setState({ racks: updatedRacks });
+          EventBus.emit('notification', { message: `Attached Dual ${tpl.badge} VCM to ${lastRack.name}!`, type: 'success' });
+        };
+        cmElements.push(el);
+      });
+    }
+
+    // Horizontal Cable Managers Sub-Type
+    if (horizontalCmItems.length > 0) {
+      const hcmSubHeader = document.createElement('div');
+      hcmSubHeader.className = 'cat-subgroup-header';
+      hcmSubHeader.style.cssText = 'padding: 8px 10px 4px; font-size: 10px; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(56,189,248,0.15); margin: 6px 0 2px; display: flex; align-items: center; justify-content: space-between;';
+      hcmSubHeader.innerHTML = `<span>Horizontal Cable Managers</span><span style="font-size: 9px; opacity: 0.8; color: #8b949e;">RU Panels</span>`;
+      cmElements.push(hcmSubHeader);
+
+      horizontalCmItems.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'cat-item';
+        el.draggable = true;
+        el.title = `${item.name} (${item.heightUnits}U)`;
+        el.innerHTML = `
+          <div class="cat-item-dot" style="background: #38bdf8;"></div>
+          <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.name}</div>
+          <span class="cat-item-meta">${item.heightUnits}U</span>
+        `;
+        el.ondragstart = (e) => {
+          e.dataTransfer?.setData('application/json', JSON.stringify({ templateId: item.id }));
+        };
+        cmElements.push(el);
+      });
+    }
+
+    appendRow(
+      'Cable Managers',
+      '#10b981',
+      icon('<path d="M4 6h16M4 10h16M4 14h16M4 18h16"/>'),
+      cmElements
+    );
 
     const filteredCables = CABLE_TEMPLATES.filter(c =>
       c.name.toLowerCase().includes(this.searchTerm) ||

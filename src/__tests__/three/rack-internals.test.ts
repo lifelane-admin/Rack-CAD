@@ -68,7 +68,7 @@ describe('buildRackInternals', () => {
     }
   });
 
-  it('places front face plates at z = 297.5', () => {
+  it('places front face plates recessed at z = 269.5', () => {
     const group = buildRackInternals(rack, bodyH, materials);
     const frontFaces = group.children.filter((c: any) =>
       c.name.startsWith('rack-rail-front-face')
@@ -76,7 +76,7 @@ describe('buildRackInternals', () => {
     expect(frontFaces).toHaveLength(2);
     for (const face of frontFaces) {
       expect((face as any).position.set).toHaveBeenCalledWith(
-        expect.any(Number), 0, 297.5
+        expect.any(Number), 0, 269.5
       );
     }
   });
@@ -102,11 +102,11 @@ describe('buildRackInternals', () => {
     expect(xs).toContain( (RACK_INNER_WIDTH / 2 - RAIL_WIDTH / 2));
   });
 
-  it('depth bars have barLen = 540', async () => {
+  it('depth bars have barLen spanning front to rear rails', async () => {
     const { BoxGeometry } = await import('three');
     buildRackInternals(rack, bodyH, materials);
     const barCalls = vi.mocked(BoxGeometry).mock.calls.filter(
-      (args) => args[2] === 540
+      (args) => args[2] === 517
     );
     expect(barCalls.length).toBeGreaterThanOrEqual(1);
   });

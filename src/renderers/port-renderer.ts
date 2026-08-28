@@ -102,7 +102,7 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
     const hitTarget = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     hitTarget.setAttribute('cx', '0');
     hitTarget.setAttribute('cy', '0');
-    hitTarget.setAttribute('r', '1.5');
+    hitTarget.setAttribute('r', '3.5');
     hitTarget.setAttribute('fill', 'transparent');
     hitTarget.setAttribute('class', 'port-hover-target');
     portGroup.appendChild(hitTarget);

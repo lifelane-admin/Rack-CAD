@@ -3,6 +3,9 @@ import type { RackData } from '../core/types';
 import { RACK_CONSTANTS } from '../core/types';
 import type { MaterialManager } from './MaterialManager';
 import { buildRackInternals } from './rack-internals';
+import { stateManager } from '../core/state';
+import { getTemplate } from '../library/device-catalog';
+import { getSidePdu3DMaterial, getVcm3DMaterial } from './svg-texture';
 
 const { RU_HEIGHT, RACK_OUTER_WIDTH, RACK_INNER_WIDTH, RAIL_WIDTH, RACK_PADDING_TOP, RACK_PADDING_BOTTOM } = RACK_CONSTANTS;
 
@@ -15,11 +18,11 @@ export const RACK_DEPTH = 600;
 export type RackColorKey = 'white' | 'grey' | 'ivory' | 'black' | 'matte-black';
 
 export const RACK_COLOR_PRESETS: Record<RackColorKey, { label: string; color: string; roughness: number; metalness: number }> = {
-  white:         { label: 'White',       color: '#e8e8e4', roughness: 0.45, metalness: 0.15 },
-  grey:          { label: 'Grey',        color: '#8a8d90', roughness: 0.50, metalness: 0.25 },
-  ivory:         { label: 'Ivory',       color: '#efe7d0', roughness: 0.48, metalness: 0.12 },
-  black:         { label: 'Black',       color: '#0c0e12', roughness: 0.35, metalness: 0.40 },
-  'matte-black': { label: 'Matte Black', color: '#131416', roughness: 0.92, metalness: 0.10 },
+  white:         { label: 'White',       color: '#d4d4d0', roughness: 0.65, metalness: 0.15 },
+  grey:          { label: 'Grey',        color: '#6e747d', roughness: 0.55, metalness: 0.25 },
+  ivory:         { label: 'Ivory',       color: '#ded8c8', roughness: 0.65, metalness: 0.12 },
+  black:         { label: 'Black',       color: '#242830', roughness: 0.45, metalness: 0.35 },
+  'matte-black': { label: 'Matte Black', color: '#1c2026', roughness: 0.70, metalness: 0.20 },
 };
 
 const DEFAULT_RACK_COLOR: RackColorKey = 'black';
@@ -41,6 +44,9 @@ const FAN_DEPTH = 28;    // fan assembly thickness
 // RACK_PADDING_TOP (which stays the overall top headroom/allowance used elsewhere for totalH,
 // vent header, U-label, and fan placement — a shared 2D/3D constant, not just this mesh's depth).
 export const TOP_PLATE_THICKNESS = 2; // ~1mm real-world scale
+
+export const FRONT_RAIL_RECESS = 28;
+export const DEVICE_FACE_Z = RACK_DEPTH / 2 - FRONT_RAIL_RECESS; // 272
 
 // Fan positions in rack-group local space (X, Z)
 const FAN_POSITIONS: [number, number][] = [
@@ -97,35 +103,165 @@ function makeBodyMat(color: string, roughness: number, metalness: number): THREE
   return new THREE.MeshStandardMaterial({ color, metalness, roughness, transparent: false, opacity: 1 });
 }
 
-function makePerforatedMat(panelW: number, panelH: number): THREE.MeshStandardMaterial {
-  const TW = 64, TH = 128;
+function drawHex(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+  ctx.beginPath();
+  // Pointy-topped regular hexagon matching reference image (vertical left/right sides, top/bottom peaks)
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 3) * i + Math.PI / 2;
+    const x = cx + r * Math.cos(angle);
+    const y = cy + r * Math.sin(angle);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+}
+
+function makePerforatedMat(panelW: number, panelH: number, style = 'perforated'): THREE.MeshStandardMaterial {
+  const isHoneycomb = style.includes('honeycomb');
+
+  // Canvas size configured to tile seamlessly
+  const TW = 1024, TH = 1024;
   const canvas = document.createElement('canvas');
   canvas.width = TW; canvas.height = TH;
   const ctx = canvas.getContext('2d');
-  if (!ctx) return new THREE.MeshStandardMaterial({ color: 0x050709, metalness: 0.5, roughness: 0.7 });
+  if (!ctx) return new THREE.MeshStandardMaterial({ color: 0x141820, metalness: 0.35, roughness: 0.55 });
 
-  // Flat matte black
-  ctx.fillStyle = '#06080c';
+  // 1. Dark structural enterprise steel plate background
+  ctx.fillStyle = '#1c222b';
   ctx.fillRect(0, 0, TW, TH);
 
-  // Round perforations — offset rows (real hex-pack spacing)
-  const holeR = 5;
-  const spacingX = 14, spacingY = 12;
-  ctx.fillStyle = '#020406';
-  for (let row = -1; row <= TH / spacingY + 1; row++) {
-    for (let col = -1; col <= TW / spacingX + 1; col++) {
-      const x = col * spacingX + (row % 2 === 0 ? 0 : spacingX / 2) + 7;
-      const y = row * spacingY + 7;
-      ctx.beginPath();
-      ctx.arc(x, y, holeR, 0, Math.PI * 2);
-      ctx.fill();
+  let unitMM = 70; // physical millimeter size of one 1024x1024 texture tile
+
+  if (isHoneycomb) {
+    // Pointy-topped honeycomb hex with thick, strong structural walls matching reference pattern
+    let cellPitchR = 45;      // outer cell radius defining the grid pitch
+    let wallThickness = 8.5;  // thick steel wall between neighboring hexagons
+    let rimBevel = 2.8;
+    unitMM = 52;
+
+    if (style.includes('large')) {
+      cellPitchR = 64;
+      wallThickness = 12.0;
+      rimBevel = 3.5;
+      unitMM = 70;
+    } else if (style.includes('small')) {
+      cellPitchR = 30;
+      wallThickness = 6.0;
+      rimBevel = 2.0;
+      unitMM = 36;
+    } else if (style.includes('tiny')) {
+      cellPitchR = 20;
+      wallThickness = 4.2;
+      rimBevel = 1.5;
+      unitMM = 25;
     }
+
+    const voidR = cellPitchR - wallThickness; // void opening radius leaving thick solid steel walls
+    const spacingX = cellPitchR * 1.7320508;  // sqrt(3) * R
+    const spacingY = cellPitchR * 1.5;
+
+    const numRows = Math.ceil(TH / spacingY) + 4;
+    const numCols = Math.ceil(TW / spacingX) + 4;
+
+    // A. Draw metallic rim bevel highlights around the thick walls
+    ctx.fillStyle = '#3e4b5d';
+    for (let row = -2; row <= numRows; row++) {
+      for (let col = -2; col <= numCols; col++) {
+        const cx = col * spacingX + (Math.abs(row) % 2 === 0 ? 0 : spacingX / 2);
+        const cy = row * spacingY;
+        drawHex(ctx, cx, cy, voidR + rimBevel);
+        ctx.fill();
+      }
+    }
+
+    // B. Cut out true pass-through transparent void holes with thick structural walls intact
+    ctx.globalCompositeOperation = 'destination-out';
+    for (let row = -2; row <= numRows; row++) {
+      for (let col = -2; col <= numCols; col++) {
+        const cx = col * spacingX + (Math.abs(row) % 2 === 0 ? 0 : spacingX / 2);
+        const cy = row * spacingY;
+        drawHex(ctx, cx, cy, voidR);
+        ctx.fill();
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+  } else {
+    // Round hole perforations with strong solid steel webbing across all 4 tiers
+    let holeR_px = 35;
+    let spacingX = 100, spacingY = 86.60;
+    let rimBevel = 2.6;
+    unitMM = 65;
+
+    if (style.includes('large')) {
+      holeR_px = 54;
+      spacingX = 150;
+      spacingY = 129.90;
+      rimBevel = 3.5;
+      unitMM = 85;
+    } else if (style.includes('small')) {
+      holeR_px = 22;
+      spacingX = 65;
+      spacingY = 56.29;
+      rimBevel = 2.0;
+      unitMM = 45;
+    } else if (style.includes('tiny')) {
+      holeR_px = 13;
+      spacingX = 40;
+      spacingY = 34.64;
+      rimBevel = 1.4;
+      unitMM = 30;
+    }
+
+    const numRows = Math.ceil(TH / spacingY) + 4;
+    const numCols = Math.ceil(TW / spacingX) + 4;
+
+    // A. Draw metallic rim bevel highlights
+    ctx.fillStyle = '#3e4b5d';
+    for (let row = -2; row <= numRows; row++) {
+      for (let col = -2; col <= numCols; col++) {
+        const cx = col * spacingX + (Math.abs(row) % 2 === 0 ? 0 : spacingX / 2);
+        const cy = row * spacingY;
+        ctx.beginPath();
+        ctx.arc(cx, cy, holeR_px + rimBevel, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // B. Cut out true pass-through transparent void holes with thick solid webbing
+    ctx.globalCompositeOperation = 'destination-out';
+    for (let row = -2; row <= numRows; row++) {
+      for (let col = -2; col <= numCols; col++) {
+        const cx = col * spacingX + (Math.abs(row) % 2 === 0 ? 0 : spacingX / 2);
+        const cy = row * spacingY;
+        ctx.beginPath();
+        ctx.arc(cx, cy, holeR_px, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(panelW / 50, panelH / 50);
-  return new THREE.MeshStandardMaterial({ map: tex, metalness: 0.2, roughness: 0.85 });
+  // Identical unitMM in X and Y guarantees 100% perfect round circles and 100% perfect regular hexagons
+  tex.repeat.set(panelW / unitMM, panelH / unitMM);
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.anisotropy = 16;
+
+  // True pass-through cutout material
+  return new THREE.MeshStandardMaterial({
+    map: tex,
+    metalness: 0.35,
+    roughness: 0.50,
+    transparent: true,
+    alphaTest: 0.15,
+    side: THREE.DoubleSide,
+    depthWrite: true,
+  });
 }
 
 function makeVentHeaderMat(): THREE.MeshStandardMaterial {
@@ -133,77 +269,145 @@ function makeVentHeaderMat(): THREE.MeshStandardMaterial {
   const canvas = document.createElement('canvas');
   canvas.width = TW; canvas.height = TH;
   const ctx = canvas.getContext('2d');
-  if (!ctx) return new THREE.MeshStandardMaterial({ color: 0x04060a });
+  if (!ctx) return new THREE.MeshStandardMaterial({ color: 0x080c10 });
 
-  ctx.fillStyle = '#060a0e';
+  ctx.fillStyle = '#0d1117';
   ctx.fillRect(0, 0, TW, TH);
 
-  // Zig-zag vent slots
-  ctx.fillStyle = '#020406';
-  const tw = 15, th = Math.round(TH * 0.6), gap = 6;
+  // Clean vent slots
+  ctx.fillStyle = '#030508';
+  const tw = 16, th = Math.round(TH * 0.6), gap = 8;
   let tx = gap;
   while (tx + tw < TW - gap) {
-    ctx.fillRect(tx, (TH - th) / 2, tw, th);
+    ctx.beginPath();
+    ctx.roundRect(tx, (TH - th) / 2, tw, th, 1.5);
+    ctx.fill();
     tx += tw + gap;
   }
-  ctx.fillStyle = 'rgba(255,255,255,0.07)';
-  ctx.fillRect(0, 0, TW, 1);
 
   const tex = new THREE.CanvasTexture(canvas);
-  return new THREE.MeshStandardMaterial({ map: tex, metalness: 0.3, roughness: 0.75 });
+  tex.anisotropy = 8;
+  return new THREE.MeshStandardMaterial({ map: tex, metalness: 0.25, roughness: 0.65 });
 }
 
 function makeSidePanelMat(color: string, roughness: number, metalness: number): THREE.MeshStandardMaterial {
-  const TW = 128, TH = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = TW; canvas.height = TH;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return new THREE.MeshStandardMaterial({ color, metalness, roughness, transparent: false, opacity: 1 });
-
-  // Body color with very subtle horizontal sheen (lighter band down the middle)
-  const sheen = shade(color, 12);
-  const g = ctx.createLinearGradient(0, 0, TW, 0);
-  g.addColorStop(0, color);
-  g.addColorStop(0.45, sheen);
-  g.addColorStop(0.55, sheen);
-  g.addColorStop(1, color);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, TW, TH);
-
-  ctx.globalAlpha = 0.03;
-  for (let x = 0; x < TW; x += 2) {
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x, 0, 1, TH);
-  }
-  ctx.globalAlpha = 1;
-
-  // Edge specular highlights (vertical)
-  const eg = ctx.createLinearGradient(0, 0, TW, 0);
-  eg.addColorStop(0, 'rgba(255,255,255,0.06)');
-  eg.addColorStop(0.08, 'rgba(255,255,255,0)');
-  eg.addColorStop(0.92, 'rgba(255,255,255,0)');
-  eg.addColorStop(1, 'rgba(255,255,255,0.04)');
-  ctx.fillStyle = eg;
-  ctx.fillRect(0, 0, TW, TH);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(1, 4);
-  // Explicitly opaque — side panels are a solid outer skin; PANEL OPACITY control overrides this.
-  return new THREE.MeshStandardMaterial({ map: tex, metalness, roughness, transparent: false, opacity: 1 });
+  // Smooth, high quality powder-coated metallic finish without artificial striped brush grain
+  return new THREE.MeshStandardMaterial({
+    color,
+    metalness: Math.min(metalness, 0.3),
+    roughness: Math.max(roughness, 0.55),
+    transparent: false,
+    opacity: 1
+  });
 }
 
 /** Fresh shell (side panel + body) materials for a given rack color preset — used both by
  *  buildRackGroup and by SceneManager for live color swaps on already-built racks. */
-export function buildShellMaterials(colorKey: RackColorKey): {
+export function buildShellMaterials(colorKeyOrHex: string): {
   bodyMat: THREE.MeshStandardMaterial;
   sideMat: THREE.MeshStandardMaterial;
 } {
-  const preset = RACK_COLOR_PRESETS[colorKey] ?? RACK_COLOR_PRESETS[DEFAULT_RACK_COLOR];
+  if (colorKeyOrHex && colorKeyOrHex.startsWith('#')) {
+    return {
+      bodyMat: makeBodyMat(colorKeyOrHex, 0.40, 0.30),
+      sideMat: makeSidePanelMat(colorKeyOrHex, 0.45, 0.25),
+    };
+  }
+  const preset = (RACK_COLOR_PRESETS as any)[colorKeyOrHex] ?? RACK_COLOR_PRESETS[DEFAULT_RACK_COLOR];
   return {
     bodyMat: makeBodyMat(preset.color, preset.roughness, preset.metalness),
     sideMat: makeSidePanelMat(preset.color, preset.roughness, preset.metalness),
   };
+}
+
+function make3DPduFaceMat(side: 'left' | 'right'): THREE.MeshStandardMaterial {
+  const TW = 64, TH = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = TW;
+  canvas.height = TH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return new THREE.MeshStandardMaterial({ color: 0x161a22, metalness: 0.8, roughness: 0.2 });
+
+  // PDU body
+  ctx.fillStyle = '#16191f';
+  ctx.fillRect(0, 0, TW, TH);
+
+  // Status LED
+  ctx.fillStyle = side === 'left' ? '#00e676' : '#2979ff';
+  ctx.beginPath();
+  ctx.arc(TW / 2, 16, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Digital readout
+  ctx.fillStyle = '#0a0d12';
+  ctx.fillRect(8, 26, TW - 16, 18);
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = 'bold 9px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('230V', TW / 2, 39);
+
+  // Breaker
+  ctx.fillStyle = '#222730';
+  ctx.fillRect(16, 52, TW - 32, 14);
+  ctx.fillStyle = '#e63946';
+  ctx.fillRect(20, 55, (TW - 40) / 2, 8);
+
+  // Outlets
+  const numSockets = 16;
+  const socketGap = (TH - 80) / numSockets;
+  for (let i = 0; i < numSockets; i++) {
+    const sy = 75 + i * socketGap;
+    ctx.fillStyle = '#090b0e';
+    ctx.fillRect(10, sy, TW - 20, socketGap - 4);
+    ctx.strokeStyle = '#282f3a';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(10, sy, TW - 20, socketGap - 4);
+
+    // Socket pin holes
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(TW / 2 - 8, sy + 3, 4, 3);
+    ctx.fillRect(TW / 2 + 4, sy + 3, 4, 3);
+    ctx.fillRect(TW / 2 - 2, sy + 7, 4, 3);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  return new THREE.MeshStandardMaterial({ map: tex, metalness: 0.5, roughness: 0.4 });
+}
+
+function make3DVcmFaceMat(color: string, units: number): THREE.MeshStandardMaterial {
+  const TW = 128, TH = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = TW;
+  canvas.height = TH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return new THREE.MeshStandardMaterial({ color: new THREE.Color(color), metalness: 0.3, roughness: 0.7 });
+
+  // Duct channel
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, TW, TH);
+
+  // Finger slits for each RU
+  const slotPitch = TH / Math.max(units, 1);
+  for (let u = 0; u < units; u++) {
+    const y = u * slotPitch;
+    ctx.fillStyle = '#080a0e';
+    ctx.fillRect(8, y + 2, TW - 16, Math.max(3, slotPitch - 4));
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(8, y + 2, TW - 16, Math.max(3, slotPitch - 4));
+  }
+
+  // Vertical center accent line
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 8]);
+  ctx.beginPath();
+  ctx.moveTo(TW / 2, 0);
+  ctx.lineTo(TW / 2, TH);
+  ctx.stroke();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  return new THREE.MeshStandardMaterial({ map: tex, metalness: 0.3, roughness: 0.7 });
 }
 
 // ── Fan assembly ──────────────────────────────────────────────────────────────
@@ -366,27 +570,7 @@ function buildFanAssembly(): THREE.Group {
   return fan;
 }
 
-// ── U-number label ────────────────────────────────────────────────────────────
 
-function makeULabel(u: number): THREE.Sprite {
-  const canvas = document.createElement('canvas');
-  canvas.width = 32; canvas.height = 20;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    ctx.fillRect(1, 1, 30, 18);
-    ctx.fillStyle = '#8090a0';
-    ctx.font = 'bold 10px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(String(u), 16, 10);
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.SpriteMaterial({ map: texture, depthTest: true });
-  const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(16, 10, 1);
-  return sprite;
-}
 
 // ── Main build function ───────────────────────────────────────────────────────
 
@@ -411,10 +595,13 @@ export function buildRackGroup(
   const PERF_W     = PERF_END - PERF_START; // 100
   const PERF_CX    = (PERF_START + PERF_END) / 2; // 150
 
-  // Materials
-  const { bodyMat, sideMat } = buildShellMaterials(colorKey);
+  const doorStyle = rack.frontDoor ?? 'perforated';
+
+  // Materials (prioritize individual rack.rackColor if defined)
+  const effectiveColorKey = rack.rackColor || colorKey;
+  const { bodyMat, sideMat } = buildShellMaterials(effectiveColorKey);
   const railMat   = materials.get('rail');
-  const perfMat   = makePerforatedMat(PERF_W, bodyH);
+  const perfMat   = makePerforatedMat(PERF_W, bodyH, doorStyle);
   const ventMat   = makeVentHeaderMat();
   const glassMat  = new THREE.MeshStandardMaterial({
     color: 0x0d2035, transparent: true, opacity: 0.20,
@@ -436,27 +623,30 @@ export function buildRackGroup(
   const shellCenterY = (RACK_PADDING_BOTTOM - TOP_PLATE_THICKNESS) / 2;
 
   // ── Side outer panels ──────────────────────────────────────────────────────
-  const sideGeo = new THREE.BoxGeometry(SIDE_T, shellH, RACK_DEPTH);
-  const leftSide = new THREE.Mesh(sideGeo, sideMat);
-  leftSide.name = 'rack-side-L';
-  leftSide.position.set(-(RACK_OUTER_WIDTH / 2 - SIDE_T / 2), shellCenterY, 0);
-  group.add(leftSide);
+  const hasSidePanels = rack.sidePanels !== false && rack.rackType !== 'open-frame';
+  if (hasSidePanels) {
+    const sideGeo = new THREE.BoxGeometry(SIDE_T, shellH, RACK_DEPTH);
+    const leftSide = new THREE.Mesh(sideGeo, sideMat);
+    leftSide.name = 'rack-side-L';
+    leftSide.position.set(-(RACK_OUTER_WIDTH / 2 - SIDE_T / 2), shellCenterY, 0);
+    group.add(leftSide);
 
-  const rightSide = new THREE.Mesh(sideGeo, sideMat);
-  rightSide.name = 'rack-side-R';
-  rightSide.position.set(RACK_OUTER_WIDTH / 2 - SIDE_T / 2, shellCenterY, 0);
-  group.add(rightSide);
+    const rightSide = new THREE.Mesh(sideGeo, sideMat);
+    rightSide.name = 'rack-side-R';
+    rightSide.position.set(RACK_OUTER_WIDTH / 2 - SIDE_T / 2, shellCenterY, 0);
+    group.add(rightSide);
+  }
 
   // ── Back panel ─────────────────────────────────────────────────────────────
-  const backGeo  = new THREE.BoxGeometry(RACK_OUTER_WIDTH, shellH, 10);
-  const backPanel = new THREE.Mesh(backGeo, bodyMat);
-  backPanel.name  = 'rack-back';
-  backPanel.position.set(0, shellCenterY, -fz + 5);
-  group.add(backPanel);
+  if (rack.rackType !== 'open-frame') {
+    const backGeo  = new THREE.BoxGeometry(RACK_OUTER_WIDTH, shellH, 10);
+    const backPanel = new THREE.Mesh(backGeo, bodyMat);
+    backPanel.name  = 'rack-back';
+    backPanel.position.set(0, shellCenterY, -fz + 5);
+    group.add(backPanel);
+  }
 
   // ── Top cap — thin sheet-metal plate, through-cut circular vents above each fan ──────────
-  // Top surface stays flush with the cabinet's actual top (totalH/2); only the plate's own
-  // thickness shrank, not RACK_PADDING_TOP's overall headroom allowance.
   const topGeo  = buildTopCapGeometry();
   const topCap  = new THREE.Mesh(topGeo, bodyMat);
   topCap.name   = 'rack-top';
@@ -470,80 +660,347 @@ export function buildRackGroup(
   botPlinth.position.set(0, -(totalH - RACK_PADDING_BOTTOM) / 2, 0);
   group.add(botPlinth);
 
-  // ── Front vent header strip ────────────────────────────────────────────────
+  // ── Front vent header strip (spans between left & right side walls) ───────
   const ventH   = 14;
-  const ventGeo = new THREE.BoxGeometry(RACK_OUTER_WIDTH, ventH, 6);
+  const ventGeo = new THREE.BoxGeometry(RACK_INNER_WIDTH, ventH, 4);
   const vent    = new THREE.Mesh(ventGeo, ventMat);
   vent.name     = 'rack-vent-header';
-  vent.position.set(0, bodyH / 2 - ventH / 2, fz - 3);
+  vent.position.set(0, bodyH / 2 - ventH / 2, fz - 2);
   group.add(vent);
 
-  // ── Front header trim — closes the gap between the vent header's top and the top cap's
-  // underside. The door/vent assembly is sized off bodyH, not "totalH minus cap thickness", so
-  // shrinking the top cap to a thin sheet (TOP_PLATE_THICKNESS) opened a real hole here that
-  // didn't exist when the cap was RACK_PADDING_TOP-thick (which happened to reach exactly down
-  // to bodyH/2, since RACK_PADDING_TOP === RACK_PADDING_BOTTOM in this constant set).
   const frontHeaderTop = totalH / 2 - TOP_PLATE_THICKNESS;
   const frontHeaderBottom = bodyH / 2;
   const frontHeaderH = frontHeaderTop - frontHeaderBottom;
   if (frontHeaderH > 0) {
-    const frontHeaderGeo = new THREE.BoxGeometry(RACK_OUTER_WIDTH, frontHeaderH, 6);
+    const frontHeaderGeo = new THREE.BoxGeometry(RACK_INNER_WIDTH, frontHeaderH, 4);
     const frontHeader = new THREE.Mesh(frontHeaderGeo, bodyMat);
     frontHeader.name = 'rack-front-header';
-    frontHeader.position.set(0, (frontHeaderTop + frontHeaderBottom) / 2, fz - 3);
+    frontHeader.position.set(0, (frontHeaderTop + frontHeaderBottom) / 2, fz - 2);
     group.add(frontHeader);
   }
 
-  // ── Door group (hinge pivot at right outer edge of door assembly) ────────────
-  // Pivot = PERF_END (x=200) — the right edge where door meets the side wall.
-  // All child local positions: local_x = world_x - PERF_END.
-  const doorGroup = new THREE.Group();
-  doorGroup.name  = 'rack-door';
-  doorGroup.position.set(PERF_END, 0, fz);
+  // ── Door groups (Single, Split / Dual Wardrobe, Multi-Compartment) ────────────
+  const hasDoor = (rack.frontDoor !== 'none') && (rack.rackType !== 'open-frame');
+  if (hasDoor) {
+    if (doorStyle.startsWith('split-')) {
+      // ── Twin Doors (Dual / Split Doors) ──
+      const leafW = PERF_END - 1.5; // width of each door leaf
+      const frameBorder = 16;       // perimeter steel frame border width
+      const windowW = leafW - frameBorder * 2;
+      const windowH = bodyH - frameBorder * 2;
+      const frameD = 4.0;           // frame depth
+      const insertD = 1.6;          // mesh / window insert depth
 
-  const glassGeo  = new THREE.BoxGeometry(GLASS_HW * 2, bodyH, 4);
-  const glassDoor = new THREE.Mesh(glassGeo, glassMat);
-  glassDoor.name  = 'rack-glass';
-  glassDoor.position.set(-PERF_END, 0, -2);                        // world 0
-  doorGroup.add(glassDoor);
+      const splitMat = doorStyle === 'split-solid' ? bodyMat : doorStyle === 'split-glass' ? glassMat : makePerforatedMat(windowW, windowH, doorStyle);
 
-  const handleGeo = new THREE.BoxGeometry(5, 65, 10);
-  const handle    = new THREE.Mesh(handleGeo, handleMat);
-  handle.name     = 'rack-handle';
-  handle.position.set(-PERF_END - GLASS_HW + 10, 0, 3);           // world -85
-  doorGroup.add(handle);
+      // 1. Left Door Leaf (Hinged at left outer edge x = -PERF_END)
+      const leftDoorGroup = new THREE.Group();
+      leftDoorGroup.name = 'rack-door-left';
+      leftDoorGroup.position.set(-PERF_END, 0, fz + 1.5);
 
-  for (const hingeY of [-bodyH * 0.35, bodyH * 0.35]) {
-    const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 14, 5), hingeMat);
-    hinge.position.set(0, hingeY, -1);                             // world PERF_END
-    doorGroup.add(hinge);
+      if (doorStyle === 'split-solid') {
+        // Solid split door: single clean steel panel
+        const solidPanel = new THREE.Mesh(new THREE.BoxGeometry(leafW, bodyH, frameD), bodyMat);
+        solidPanel.position.set(leafW / 2, 0, 0);
+        leftDoorGroup.add(solidPanel);
+      } else {
+        // Hollow perimeter frame: 4 individual steel border beams
+        // Left vertical beam
+        const leftBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
+        leftBeam.position.set(frameBorder / 2, 0, 0);
+        leftDoorGroup.add(leftBeam);
+
+        // Right vertical beam
+        const rightBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
+        rightBeam.position.set(leafW - frameBorder / 2, 0, 0);
+        leftDoorGroup.add(rightBeam);
+
+        // Top horizontal beam
+        const topBeam = new THREE.Mesh(new THREE.BoxGeometry(windowW, frameBorder, frameD), bodyMat);
+        topBeam.position.set(leafW / 2, bodyH / 2 - frameBorder / 2, 0);
+        leftDoorGroup.add(topBeam);
+
+        // Bottom horizontal beam
+        const botBeam = new THREE.Mesh(new THREE.BoxGeometry(windowW, frameBorder, frameD), bodyMat);
+        botBeam.position.set(leafW / 2, -bodyH / 2 + frameBorder / 2, 0);
+        leftDoorGroup.add(botBeam);
+
+        // Recessed Center Insert (Perforated Mesh / Glass) — 1 single thin layer, 0 double-mesh ghosting, fully covering top to bottom
+        const insertGeo = doorStyle === 'split-glass' ? new THREE.BoxGeometry(windowW, windowH, insertD) : new THREE.PlaneGeometry(windowW, windowH);
+        const leftInsert = new THREE.Mesh(insertGeo, splitMat);
+        leftInsert.position.set(leafW / 2, 0, 0);
+        leftDoorGroup.add(leftInsert);
+      }
+
+      // Left Center Swing-Handle Lock with Escutcheon Plate
+      const leftEscutcheon = new THREE.Mesh(new THREE.BoxGeometry(7, 70, 4.5), bodyMat);
+      leftEscutcheon.position.set(leafW - 7, 0, 2);
+      leftDoorGroup.add(leftEscutcheon);
+
+      const leftHandle = new THREE.Mesh(new THREE.BoxGeometry(4, 55, 9), handleMat);
+      leftHandle.position.set(leafW - 7, 0, 4);
+      leftDoorGroup.add(leftHandle);
+
+      // Left Hinges (Top & Bottom)
+      for (const hingeY of [-bodyH * 0.38, bodyH * 0.38]) {
+        const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 16, 5), hingeMat);
+        hinge.position.set(0, hingeY, -1);
+        leftDoorGroup.add(hinge);
+      }
+      group.add(leftDoorGroup);
+
+      // 2. Right Door Leaf (Hinged at right outer edge x = PERF_END)
+      const rightDoorGroup = new THREE.Group();
+      rightDoorGroup.name = 'rack-door-right';
+      rightDoorGroup.position.set(PERF_END, 0, fz + 1.5);
+
+      if (doorStyle === 'split-solid') {
+        // Solid split door: single clean steel panel
+        const solidPanel = new THREE.Mesh(new THREE.BoxGeometry(leafW, bodyH, frameD), bodyMat);
+        solidPanel.position.set(-leafW / 2, 0, 0);
+        rightDoorGroup.add(solidPanel);
+      } else {
+        // Hollow perimeter frame: 4 individual steel border beams
+        // Right vertical beam (at outer hinge edge)
+        const rightBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
+        rightBeam.position.set(-frameBorder / 2, 0, 0);
+        rightDoorGroup.add(rightBeam);
+
+        // Left vertical beam (at inner meeting edge)
+        const leftBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
+        leftBeam.position.set(-leafW + frameBorder / 2, 0, 0);
+        rightDoorGroup.add(leftBeam);
+
+        // Top horizontal beam
+        const topBeam = new THREE.Mesh(new THREE.BoxGeometry(windowW, frameBorder, frameD), bodyMat);
+        topBeam.position.set(-leafW / 2, bodyH / 2 - frameBorder / 2, 0);
+        rightDoorGroup.add(topBeam);
+
+        // Bottom horizontal beam
+        const botBeam = new THREE.Mesh(new THREE.BoxGeometry(windowW, frameBorder, frameD), bodyMat);
+        botBeam.position.set(-leafW / 2, -bodyH / 2 + frameBorder / 2, 0);
+        rightDoorGroup.add(botBeam);
+
+        // Recessed Center Insert (Perforated Mesh / Glass) — 1 single thin layer, 0 double-mesh ghosting, fully covering top to bottom
+        const insertGeo = doorStyle === 'split-glass' ? new THREE.BoxGeometry(windowW, windowH, insertD) : new THREE.PlaneGeometry(windowW, windowH);
+        const rightInsert = new THREE.Mesh(insertGeo, splitMat);
+        rightInsert.position.set(-leafW / 2, 0, 0);
+        rightDoorGroup.add(rightInsert);
+      }
+
+      // Right Center Swing-Handle Lock with Escutcheon Plate
+      const rightEscutcheon = new THREE.Mesh(new THREE.BoxGeometry(7, 70, 4.5), bodyMat);
+      rightEscutcheon.position.set(-leafW + 7, 0, 2);
+      rightDoorGroup.add(rightEscutcheon);
+
+      const rightHandle = new THREE.Mesh(new THREE.BoxGeometry(4, 55, 9), handleMat);
+      rightHandle.position.set(-leafW + 7, 0, 4);
+      rightDoorGroup.add(rightHandle);
+
+      // Right Hinges (Top & Bottom)
+      for (const hingeY of [-bodyH * 0.38, bodyH * 0.38]) {
+        const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 16, 5), hingeMat);
+        hinge.position.set(0, hingeY, -1);
+        rightDoorGroup.add(hinge);
+      }
+      group.add(rightDoorGroup);
+
+    } else if (doorStyle === 'multi-compartment-2' || doorStyle === 'multi-compartment-4') {
+      // ── Multi-Compartment Colocation Doors ──
+      const numCompartments = doorStyle === 'multi-compartment-4' ? 4 : 2;
+      const compH = (bodyH - (numCompartments - 1) * 6) / numCompartments;
+      const dividerH = 6;
+      const compPerfMat = makePerforatedMat(GLASS_HW * 2, compH, doorStyle);
+      const compWingMat = makePerforatedMat(PERF_W, compH, doorStyle);
+
+      for (let c = 0; c < numCompartments; c++) {
+        const compDoorGroup = new THREE.Group();
+        compDoorGroup.name = `rack-door-comp-${c}`;
+        const centerY = (bodyH / 2) - (c * (compH + dividerH)) - (compH / 2);
+        compDoorGroup.position.set(PERF_END, centerY, fz);
+
+        const compGeo = new THREE.PlaneGeometry(GLASS_HW * 2, compH);
+        const compDoor = new THREE.Mesh(compGeo, compPerfMat);
+        compDoor.position.set(-PERF_END, 0, 0);
+        compDoorGroup.add(compDoor);
+
+        // Handle for each compartment
+        const compHandle = new THREE.Mesh(new THREE.BoxGeometry(4, 30, 8), handleMat);
+        compHandle.position.set(-PERF_END - GLASS_HW + 10, 0, 3);
+        compDoorGroup.add(compHandle);
+
+        // Hinges for each compartment
+        for (const hingeY of [-compH * 0.3, compH * 0.3]) {
+          const hinge = new THREE.Mesh(new THREE.BoxGeometry(4, 10, 4), hingeMat);
+          hinge.position.set(0, hingeY, -1);
+          compDoorGroup.add(hinge);
+        }
+
+        // Side mesh wings for compartment (single plane)
+        const compPerfGeo = new THREE.PlaneGeometry(PERF_W, compH);
+        const leftPerf = new THREE.Mesh(compPerfGeo, compWingMat);
+        leftPerf.position.set(-(PERF_END + PERF_CX), 0, 0);
+        compDoorGroup.add(leftPerf);
+
+        const rightPerf = new THREE.Mesh(compPerfGeo, compWingMat);
+        rightPerf.position.set(PERF_CX - PERF_END, 0, 0);
+        compDoorGroup.add(rightPerf);
+
+        group.add(compDoorGroup);
+
+        // Horizontal steel divider bar between compartments
+        if (c < numCompartments - 1) {
+          const divY = (bodyH / 2) - ((c + 1) * compH + c * dividerH) - (dividerH / 2);
+          const divider = new THREE.Mesh(new THREE.BoxGeometry(RACK_INNER_WIDTH + 8, dividerH, 12), bodyMat);
+          divider.name = 'rack-colo-divider';
+          divider.position.set(0, divY, fz - 2);
+          group.add(divider);
+        }
+      }
+
+    } else {
+      // ── Single Door Styles (glass, perforated, solid, louvered) ──
+      const doorGroup = new THREE.Group();
+      doorGroup.name  = 'rack-door';
+      doorGroup.position.set(PERF_END, 0, fz);
+
+      const isMeshDoor = doorStyle.includes('perforated') || doorStyle.includes('honeycomb');
+      const doorMeshMat = makePerforatedMat(GLASS_HW * 2, bodyH, doorStyle);
+      const wingMat = makePerforatedMat(PERF_W, bodyH, doorStyle);
+      const activeDoorMat = doorStyle === 'solid' ? bodyMat : doorStyle === 'glass' ? glassMat : doorStyle === 'louvered' ? bodyMat : doorMeshMat;
+      const glassGeo  = isMeshDoor ? new THREE.PlaneGeometry(GLASS_HW * 2, bodyH) : new THREE.BoxGeometry(GLASS_HW * 2, bodyH, 4);
+      const glassDoor = new THREE.Mesh(glassGeo, activeDoorMat);
+      glassDoor.name  = 'rack-glass';
+      glassDoor.position.set(-PERF_END, 0, isMeshDoor ? 0 : -2);
+      doorGroup.add(glassDoor);
+
+      // Louvered slats for louvered door
+      if (doorStyle === 'louvered') {
+        const slatGeo = new THREE.BoxGeometry(GLASS_HW * 1.8, 3, 2);
+        const numSlats = Math.floor(bodyH / 18);
+        for (let s = 0; s < numSlats; s++) {
+          const slat = new THREE.Mesh(slatGeo, handleMat);
+          const slatY = -bodyH / 2 + 15 + s * 18;
+          slat.position.set(-PERF_END, slatY, 1);
+          slat.rotation.x = 0.4; // tilted louver slat
+          doorGroup.add(slat);
+        }
+      }
+
+      const handleGeo = new THREE.BoxGeometry(5, 65, 10);
+      const handle    = new THREE.Mesh(handleGeo, handleMat);
+      handle.name     = 'rack-handle';
+      handle.position.set(-PERF_END - GLASS_HW + 10, 0, 3);           // world -85
+      doorGroup.add(handle);
+
+      for (const hingeY of [-bodyH * 0.35, bodyH * 0.35]) {
+        const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 14, 5), hingeMat);
+        hinge.position.set(0, hingeY, -1);                             // world PERF_END
+        doorGroup.add(hinge);
+      }
+
+      // Red accent strips — local x = world_x - PERF_END
+      const redGeo  = new THREE.BoxGeometry(RED_W, bodyH, 11);
+      const leftRed = new THREE.Mesh(redGeo, redMat);
+      leftRed.name  = 'rack-red-L';
+      leftRed.position.set(-(PERF_END + GLASS_HW + RED_W / 2), 0, -5.5); // world -97.5
+      doorGroup.add(leftRed);
+
+      const rightRed = new THREE.Mesh(redGeo, redMat);
+      rightRed.name  = 'rack-red-R';
+      rightRed.position.set(GLASS_HW + RED_W / 2 - PERF_END, 0, -5.5);   // world 97.5
+      doorGroup.add(rightRed);
+
+      // Perforated mesh wings (single plane to eliminate any 2-layer ghosting, full body height)
+      const perfGeo  = new THREE.PlaneGeometry(PERF_W, bodyH);
+      const leftPerf = new THREE.Mesh(perfGeo, wingMat);
+      leftPerf.name  = 'rack-perf-L';
+      leftPerf.position.set(-(PERF_END + PERF_CX), 0, 0);    // world -150
+      doorGroup.add(leftPerf);
+
+      const rightPerf = new THREE.Mesh(perfGeo, wingMat);
+      rightPerf.name  = 'rack-perf-R';
+      rightPerf.position.set(PERF_CX - PERF_END, 0, 0);      // world 150
+      doorGroup.add(rightPerf);
+
+      group.add(doorGroup);
+    }
   }
 
-  // Red accent strips — local x = world_x - PERF_END
-  const redGeo  = new THREE.BoxGeometry(RED_W, bodyH, 11);
-  const leftRed = new THREE.Mesh(redGeo, redMat);
-  leftRed.name  = 'rack-red-L';
-  leftRed.position.set(-(PERF_END + GLASS_HW + RED_W / 2), 0, -5.5); // world -97.5
-  doorGroup.add(leftRed);
+  // ── 3D Vertical Cable Managers (Left & Right Side Ducts) ───────────────────
+  const get3DVcmWidth = (w?: string): number => {
+    switch (w) {
+      case '2-inch': return 25;
+      case '4-inch': return 45;
+      case '6-inch': return 65;
+      case '8-inch': return 85;
+      default: return 0;
+    }
+  };
 
-  const rightRed = new THREE.Mesh(redGeo, redMat);
-  rightRed.name  = 'rack-red-R';
-  rightRed.position.set(GLASS_HW + RED_W / 2 - PERF_END, 0, -5.5);   // world 97.5
-  doorGroup.add(rightRed);
+  // ── 3D 0U Side-Mount PDUs & Vertical Cable Managers ──────────────────────
+  const pduMat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#1a1e26'), roughness: 0.45, metalness: 0.55 });
+  const has3DLeftPdu = !!rack.leftPduId;
+  const has3DRightPdu = !!rack.rightPduId;
 
-  // Perforated mesh wings — local x = world_x - PERF_END
-  const perfGeo  = new THREE.BoxGeometry(PERF_W, bodyH - ventH, 9);
-  const leftPerf = new THREE.Mesh(perfGeo, perfMat);
-  leftPerf.name  = 'rack-perf-L';
-  leftPerf.position.set(-(PERF_END + PERF_CX), -ventH / 2, -4.5);    // world -150
-  doorGroup.add(leftPerf);
+  if (has3DLeftPdu) {
+    const leftPduDevice = rack.leftPduId ? stateManager.getDevice(rack.leftPduId) : null;
+    const leftPduTemplate = leftPduDevice ? getTemplate(leftPduDevice.templateId) : null;
+    const pduW = 22;
+    const leftPduFaceMat = (leftPduDevice && leftPduTemplate)
+      ? getSidePdu3DMaterial(rack, 'left', leftPduDevice, leftPduTemplate, pduW, bodyH)
+      : make3DPduFaceMat('left');
+    // BoxGeometry face order: 0=+X, 1=-X, 2=+Y, 3=-Y, 4=+Z(front), 5=-Z(back)
+    const pduMats = [pduMat, pduMat, pduMat, pduMat, leftPduFaceMat, pduMat];
+    const pduGeo = new THREE.BoxGeometry(pduW, shellH, 50);
+    const pduMesh = new THREE.Mesh(pduGeo, pduMats);
+    pduMesh.name = 'rack-pdu-left';
+    pduMesh.position.set(-(RACK_OUTER_WIDTH / 2 + pduW / 2 + 2), shellCenterY, fz - 45);
+    group.add(pduMesh);
+  }
 
-  const rightPerf = new THREE.Mesh(perfGeo, perfMat);
-  rightPerf.name  = 'rack-perf-R';
-  rightPerf.position.set(PERF_CX - PERF_END, -ventH / 2, -4.5);      // world 150
-  doorGroup.add(rightPerf);
+  if (has3DRightPdu) {
+    const rightPduDevice = rack.rightPduId ? stateManager.getDevice(rack.rightPduId) : null;
+    const rightPduTemplate = rightPduDevice ? getTemplate(rightPduDevice.templateId) : null;
+    const pduW = 22;
+    const rightPduFaceMat = (rightPduDevice && rightPduTemplate)
+      ? getSidePdu3DMaterial(rack, 'right', rightPduDevice, rightPduTemplate, pduW, bodyH)
+      : make3DPduFaceMat('right');
+    const pduMats = [pduMat, pduMat, pduMat, pduMat, rightPduFaceMat, pduMat];
+    const pduGeo = new THREE.BoxGeometry(pduW, shellH, 50);
+    const pduMesh = new THREE.Mesh(pduGeo, pduMats);
+    pduMesh.name = 'rack-pdu-right';
+    pduMesh.position.set(RACK_OUTER_WIDTH / 2 + pduW / 2 + 2, shellCenterY, fz - 45);
+    group.add(pduMesh);
+  }
 
-  group.add(doorGroup);
+  const leftVcmW = get3DVcmWidth(rack.leftCableManagerWidth);
+  if (leftVcmW > 0) {
+    const leftVcmColor = rack.leftCableManagerColor || rack.rackColor || '#11141a';
+    const vcmBodyMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(leftVcmColor), roughness: 0.75, metalness: 0.25 });
+    const vcmFaceMat = getVcm3DMaterial(rack, 'left', leftVcmW, totalH, rack.units);
+    const vcmMats = [vcmBodyMat, vcmBodyMat, vcmBodyMat, vcmBodyMat, vcmFaceMat, vcmBodyMat];
+    const vcmGeo = new THREE.BoxGeometry(leftVcmW, shellH, 120);
+    const leftVcmMesh = new THREE.Mesh(vcmGeo, vcmMats);
+    leftVcmMesh.name = 'rack-vcm-left';
+    const leftOffset = has3DLeftPdu ? (26 + leftVcmW / 2 + 4) : (leftVcmW / 2 + 2);
+    leftVcmMesh.position.set(-(RACK_OUTER_WIDTH / 2 + leftOffset), shellCenterY, fz - 65);
+    group.add(leftVcmMesh);
+  }
+
+  const rightVcmW = get3DVcmWidth(rack.rightCableManagerWidth);
+  if (rightVcmW > 0) {
+    const rightVcmColor = rack.rightCableManagerColor || rack.rackColor || '#11141a';
+    const vcmBodyMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(rightVcmColor), roughness: 0.75, metalness: 0.25 });
+    const vcmFaceMat = getVcm3DMaterial(rack, 'right', rightVcmW, totalH, rack.units);
+    const vcmMats = [vcmBodyMat, vcmBodyMat, vcmBodyMat, vcmBodyMat, vcmFaceMat, vcmBodyMat];
+    const vcmGeo = new THREE.BoxGeometry(rightVcmW, shellH, 120);
+    const rightVcmMesh = new THREE.Mesh(vcmGeo, vcmMats);
+    rightVcmMesh.name = 'rack-vcm-right';
+    const rightOffset = has3DRightPdu ? (26 + rightVcmW / 2 + 4) : (rightVcmW / 2 + 2);
+    rightVcmMesh.position.set(RACK_OUTER_WIDTH / 2 + rightOffset, shellCenterY, fz - 65);
+    group.add(rightVcmMesh);
+  }
 
   // ── 4-post L-angle rails, EIA-310 holes, depth bars ────────────────────────
   group.add(buildRackInternals(rack, bodyH, materials));
@@ -567,14 +1024,6 @@ export function buildRackGroup(
     const fanGroup = buildFanAssembly();
     fanGroup.position.set(fx, panelUnderside - FAN_DEPTH / 2, fz2);
     group.add(fanGroup);
-  }
-
-  // ── U-number sprite labels (placed directly on the front-left Z pillar next to the mounting holes) ──
-  for (let u = 1; u <= rack.units; u++) {
-    const sprite      = makeULabel(u);
-    const slotCenterY = -totalH / 2 + RACK_PADDING_BOTTOM + (u - 1) * RU_HEIGHT + RU_HEIGHT / 2;
-    sprite.position.set(-(RACK_INNER_WIDTH / 2 - 8), slotCenterY, fz - 2.0);
-    group.add(sprite);
   }
 
   group.position.set(rack.x + RACK_OUTER_WIDTH / 2, totalH / 2, 0);

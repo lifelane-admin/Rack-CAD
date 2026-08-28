@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { DeviceData, DeviceTemplate, PortData } from '../core/types';
 import { RACK_CONSTANTS } from '../core/types';
-import { RACK_DEPTH } from './rack-builder';
+import { RACK_DEPTH, DEVICE_FACE_Z } from './rack-builder';
 
 const { RACK_INNER_WIDTH, RAIL_WIDTH, RU_HEIGHT } = RACK_CONSTANTS;
 const DEFAULT_W = RACK_INNER_WIDTH - 2 * RAIL_WIDTH; // 350
@@ -21,7 +21,7 @@ interface LedDef {
 function ledDefs(template: DeviceTemplate, cfg: { width: number; depth: number }, deviceH: number): LedDef[] {
   const hw = cfg.width / 2;
   const hh = deviceH / 2;
-  const fz = RACK_DEPTH / 2 + 2; // slightly in front of front face
+  const fz = DEVICE_FACE_Z + 1.5; // slightly in front of front face
   const cat = template.category;
 
   const leds: LedDef[] = [];
@@ -105,7 +105,7 @@ export function buildLedMeshes(
   deviceH: number,
   deviceY: number,       // world Y of device center within rack group
 ): THREE.Mesh[] {
-  const fz = RACK_DEPTH / 2 + 0.45; // flush with front face plate
+  const fz = DEVICE_FACE_Z + 0.45; // flush with front face plate
   const meshes: THREE.Mesh[] = [];
 
   for (const def of ledDefs(template, cfg, deviceH)) {
@@ -170,7 +170,7 @@ export function buildPortBezels(
   const meshes: THREE.Mesh[] = [];
   const scaleX = cfg.width / DEFAULT_W;
   const scaleY = deviceH / (heightUnits * RU_HEIGHT);
-  const fz = RACK_DEPTH / 2 + 0.4;                   // front face Z
+  const fz = DEVICE_FACE_Z + 0.4;                   // front face Z
   const MAX_PORTS = 120; // Allow more ports to accommodate ear ports comfortably
 
   // Shared materials for accessories
@@ -192,56 +192,8 @@ export function buildPortBezels(
     const localX = -cfg.width / 2 + (port.relativeX / DEFAULT_W) * cfg.width;
     const localY = deviceH / 2 - (port.relativeY / (heightUnits * RU_HEIGHT)) * deviceH;
 
-    const isEarPort = port.id.includes('-ear-');
-    if (isEarPort) {
-      const isPower = port.type === 'power';
-      const isHybrid = port.type === 'hybrid';
-
-      const r = isPower ? 2.2 : 1.8;
-      const br = r + 1.0;
-      const depth = 4.0;
-
-      const bezelMat = isPower
-        ? new THREE.MeshStandardMaterial({ color: 0xcc1a00, metalness: 0.8, roughness: 0.3 })
-        : isHybrid
-        ? new THREE.MeshStandardMaterial({ color: 0x7b4a94, metalness: 0.8, roughness: 0.3 })
-        : new THREE.MeshStandardMaterial({ color: 0x3a3a42, metalness: 0.8, roughness: 0.3 });
-
-      const bezelGeo = new THREE.CylinderGeometry(br, br, 1.5, 12);
-      bezelGeo.rotateX(Math.PI / 2);
-      const bezel = new THREE.Mesh(bezelGeo, bezelMat);
-      bezel.name = 'ear-port-bezel';
-      bezel.position.set(localX, deviceY + localY, fz + 0.75);
-      meshes.push(bezel);
-
-      const isConnected = port.connected;
-      const holeColor = isConnected
-        ? (isPower ? 0xe53935 : isHybrid ? 0xc837ff : 0x00e676)
-        : 0x0d0d10;
-
-      const earHoleMat = new THREE.MeshStandardMaterial({ color: holeColor, roughness: 0.8, metalness: 0.2 });
-      const holeGeo = new THREE.CylinderGeometry(r, r, depth, 12);
-      holeGeo.rotateX(Math.PI / 2);
-      const hole = new THREE.Mesh(holeGeo, earHoleMat);
-      hole.name = 'ear-port-hole';
-      hole.position.set(localX, deviceY + localY, fz - depth / 2 + 0.2);
-      meshes.push(hole);
-
-      const pinColor = isConnected ? 0xffffff : (isHybrid ? 0xd8a3ff : 0xffb74d);
-      const pinMat = new THREE.MeshStandardMaterial({
-        color: pinColor,
-        roughness: 0.5,
-        metalness: 0.7,
-        emissive: pinColor,
-        emissiveIntensity: isConnected ? 0.8 : 0.1
-      });
-      const pinGeo = new THREE.CylinderGeometry(0.6, 0.6, depth + 0.2, 8);
-      pinGeo.rotateX(Math.PI / 2);
-      const pin = new THREE.Mesh(pinGeo, pinMat);
-      pin.name = 'ear-port-pin';
-      pin.position.set(localX, deviceY + localY, fz - depth / 2 + 0.3);
-      meshes.push(pin);
-
+    // Skip ear-mounted ports — their sockets, screws, and labels are drawn directly on the ear plate texture
+    if (port.id.includes('-ear-') || port.relativeX < 24 || port.relativeX > DEFAULT_W - 24) {
       continue;
     }
 
@@ -572,7 +524,7 @@ export function buildLogoPlaque(
   plaque.position.set(
     cfg.width / 2 + 1,         // right face of device
     deviceY + deviceH * 0.15,  // slightly above center
-    RACK_DEPTH / 2 - cfg.depth / 2, // align with shifted side of device
+    DEVICE_FACE_Z - cfg.depth / 2, // align with shifted side of device
   );
 
   return plaque;
@@ -590,7 +542,7 @@ export function buildServerAccessories(
   if (cat !== 'server' && cat !== 'storage') return [];
 
   const meshes: THREE.Mesh[] = [];
-  const fz = RACK_DEPTH / 2 + 0.4; // front face Z
+  const fz = DEVICE_FACE_Z + 0.4; // front face Z
   const H = template.heightUnits * RU_HEIGHT;
   const chH = H - 4;
   const chY = 2;

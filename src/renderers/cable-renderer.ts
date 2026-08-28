@@ -2,7 +2,7 @@ import { CableData, Point, CableType, RACK_CONSTANTS, CABLE_COLORS } from '../co
 import { createGroup, createPath, createRect, createLine, createSVGElement as createSVGEl, setAttributes } from '../utils/svg-helpers';
 import { generateOrthogonalPath } from '../utils/geometry';
 import { stateManager } from '../core/state';
-import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
+import { computeSmartRouting, get3DefaultAnchors, getPortOrientation } from '../utils/routing';
 import { getExitDirection } from '../utils/routing';
 import { getMaterialProfile } from '../core/cable-materials';
 import { getTemplate } from '../library/device-catalog';
@@ -34,19 +34,137 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
 
   const s = stateManager.getState();
   const isSelected = s.selection.some(item => item.type === 'cable' && item.id === cable.id);
+  if (isSelected) {
+    group.classList.add('selected');
+  }
 
   // Get material specification profile
   const mat = getMaterialProfile(cable.type);
+
+  const srcPortObj  = cable.sourcePortId ? stateManager.getPort(cable.sourcePortId) : null;
+  const srcDevObj   = srcPortObj ? stateManager.getDevice(srcPortObj.deviceId) : null;
+  const srcTpl      = srcDevObj ? getTemplate(srcDevObj.templateId, s.customTemplates || []) : null;
+
+  const dstPortObj  = cable.destPortId ? stateManager.getPort(cable.destPortId) : null;
+  const dstDevObj   = dstPortObj ? stateManager.getDevice(dstPortObj.deviceId) : null;
+  const dstTpl      = dstDevObj ? getTemplate(dstDevObj.templateId, s.customTemplates || []) : null;
+
+  const isCompactCategory = (category: string | undefined): boolean => {
+    if (!category) return true; // Custom switches and airdrop endpoints default to compact
+    const cat = category.toLowerCase();
+    return cat !== 'server' && cat !== 'storage' && cat !== 'pdu' && cat !== 'ups';
+  };
+  const srcCompact  = isCompactCategory(srcTpl?.category);
+  const dstCompact  = isCompactCategory(dstTpl?.category);
+
+  const cableType = cable.type || 'general';
+  const typeClass = classifyCableConnector(cableType);
+  const isSFP = typeClass.isSFP;
+  const isFiber = typeClass.isFiber;
+  const isPower = cable.powerCableType === 'power'
+    || !!cable.sourcePortId?.startsWith('outlet-')
+    || !!cable.destPortId?.startsWith('outlet-')
+    || typeClass.isPower;
+  const isEthernet = !isFiber && !isPower && !isSFP;
+
+  const srcHasOverride = cable.sourceOrientation && cable.sourceOrientation !== 'auto';
+  const srcOrient = (!cable.sourcePortId && !srcHasOverride)
+    ? (isPower ? 'down' : (Math.abs(destPos.x - sourcePos.x) > Math.abs(destPos.y - sourcePos.y)
+        ? (destPos.x >= sourcePos.x ? 'left' : 'right')
+        : (destPos.y >= sourcePos.y ? 'up' : 'down')))
+    : getPortOrientation(cable, 'source');
+
+  const destHasOverride = cable.destOrientation && cable.destOrientation !== 'auto';
+  const destOrient = (!cable.destPortId && !destHasOverride)
+    ? (isPower ? 'down' : (Math.abs(destPos.x - sourcePos.x) > Math.abs(destPos.y - sourcePos.y)
+        ? (destPos.x >= sourcePos.x ? 'right' : 'left')
+        : (destPos.y >= sourcePos.y ? 'down' : 'up')))
+    : getPortOrientation(cable, 'dest');
+
+  // Dynamic scale calculation based on device type and port pitch to avoid oversized connectors
+  const getPortConnectorScale = (portId: string | null): number => {
+    if (!portId) return 1.0;
+    if (portId.includes('-ear-')) {
+      // Ear port: compact vertical column, scale to 0.58 so it fits perfectly without obscuring port labels
+      return 0.58;
+    }
+    const portObj = stateManager.getPort(portId);
+    if (!portObj) return 1.0;
+    const devObj = stateManager.getDevice(portObj.deviceId);
+    if (!devObj) return 1.0;
+    const tpl = getTemplate(devObj.templateId, s.customTemplates || []);
+    const isServer = devObj.templateId.includes('server') || tpl?.category === 'server' || tpl?.category === 'storage';
+    if (isServer) {
+      const totalPorts = (devObj.ports?.length || tpl?.ports?.length || 1);
+      if (totalPorts >= 8) return 0.65;
+      if (totalPorts >= 4) return 0.75;
+      return 0.85;
+    }
+    const isCompact = isCompactCategory(tpl?.category);
+    return isCompact ? 1.0 : 1.1;
+  };
+
+  const srcScale = getPortConnectorScale(cable.sourcePortId);
+  const dstScale = getPortConnectorScale(cable.destPortId);
+
+  let effectiveSrcPos = { ...sourcePos };
+  let srcExitDir: 'up' | 'down' | 'left' | 'right' = 'down';
+
+  if (srcOrient === 'left') {
+    srcExitDir = 'left';
+    const L = 11.0 * srcScale;
+    effectiveSrcPos.x -= L;
+  } else if (srcOrient === 'right') {
+    srcExitDir = 'right';
+    const L = 11.0 * srcScale;
+    effectiveSrcPos.x += L;
+  } else if (srcOrient === 'up') {
+    srcExitDir = 'up';
+    const L = 11.0 * srcScale;
+    effectiveSrcPos.y -= L;
+  } else if (srcOrient === 'down') {
+    srcExitDir = 'down';
+    const L = 11.0 * srcScale;
+    effectiveSrcPos.y += L;
+  } else {
+    srcExitDir = 'up';
+    const L = 11.0 * srcScale;
+    effectiveSrcPos.y -= L;
+  }
+
+  let effectiveDestPos = { ...destPos };
+  let destExitDir: 'up' | 'down' | 'left' | 'right' = 'down';
+
+  if (destOrient === 'left') {
+    destExitDir = 'left';
+    const L = 11.0 * dstScale;
+    effectiveDestPos.x -= L;
+  } else if (destOrient === 'right') {
+    destExitDir = 'right';
+    const L = 11.0 * dstScale;
+    effectiveDestPos.y += L;
+  } else if (destOrient === 'up') {
+    destExitDir = 'up';
+    const L = 11.0 * dstScale;
+    effectiveDestPos.y -= L;
+  } else if (destOrient === 'down') {
+    destExitDir = 'down';
+    const L = 11.0 * dstScale;
+    effectiveDestPos.y += L;
+  } else {
+    destExitDir = 'up';
+    const L = 11.0 * dstScale;
+    effectiveDestPos.y -= L;
+  }
 
   // Always recompute fresh routing anchors unless user explicitly locked them via dragging
   // This ensures routing algorithm changes always apply to existing cables
   const anchors: Point[] = (cable.anchorsLocked && cable.anchorPoints && cable.anchorPoints.length > 0)
     ? cable.anchorPoints
-    : computeSmartRouting(cable, sourcePos, destPos);
-
+    : computeSmartRouting(cable, effectiveSrcPos, effectiveDestPos);
 
   // Full ordered points: source → anchors → dest
-  const allPoints: Point[] = [sourcePos, ...anchors, destPos];
+  const allPoints: Point[] = [effectiveSrcPos, ...anchors, effectiveDestPos];
 
   const bendR = cable.bendRadius ?? RACK_CONSTANTS.CABLE_BEND_RADIUS;
   const pathData = generateOrthogonalPath(
@@ -80,27 +198,40 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   // Detect power cable override
   const isPowerCable = cable.powerCableType === 'power';
   const powerStrokeColor = cable.color && cable.color !== '#212529' ? cable.color : '#ff4422';
-  const effectiveThickness = isPowerCable ? 3 : (cable.thickness || mat.renderThicknessPx || 3);
+  const effectiveThickness = isPowerCable ? 3.2 : (cable.thickness || mat.renderThicknessPx || 3.0);
+  const baseColor = isPowerCable ? powerStrokeColor : (cable.color || mat.defaultColor);
 
-  // Cable Outer Jacket Shadow (Soft drop-shadow for 3D depth)
+  // 1. Soft Ambient Depth Shadow (Separates overlapping cables with natural optical depth)
   const shadowPath = createPath(pathData, {
     fill: 'none',
-    stroke: 'rgba(0, 0, 0, 0.45)',
-    'stroke-width': effectiveThickness + 1.5,
+    stroke: 'rgba(0, 0, 0, 0.46)',
+    'stroke-width': effectiveThickness + 1.8,
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
-    style: 'transform: translate(1px, 2px); pointer-events: none;'
+    style: 'transform: translate(0.8px, 1.6px); filter: blur(0.6px); pointer-events: none;'
   });
   group.appendChild(shadowPath);
 
-  // Main cable jacket path (solid PBR core)
+  // 2. Darkened PVC Jacket Outer Rim (defines authentic cylindrical plastic boundary)
+  const outerRim = createPath(pathData, {
+    fill: 'none',
+    stroke: 'rgba(12, 16, 26, 0.78)',
+    'stroke-width': effectiveThickness + 0.6,
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'pointer-events': 'none'
+  });
+  group.appendChild(outerRim);
+
+  // 3. Rich Saturated PVC Plastic Body (semi-translucent polymer core)
   const path = createPath(pathData, {
     fill: 'none',
-    stroke: isPowerCable ? powerStrokeColor : (cable.color || mat.defaultColor),
+    stroke: baseColor,
     'stroke-width': effectiveThickness,
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
     'pointer-events': 'none',
+    opacity: 0.95,
     ...(isPowerCable ? { 'stroke-dasharray': '6 3' } : {})
   });
   group.appendChild(path);
@@ -132,30 +263,30 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
       glowPath.setAttribute('d', pathData);
       glowPath.setAttribute('fill', 'none');
       glowPath.setAttribute('stroke', '#ffd600');
-      glowPath.setAttribute('stroke-width', String((cable.thickness || mat.renderThicknessPx || 3) + 4));
-      glowPath.setAttribute('opacity', '0.4');
+      glowPath.setAttribute('stroke-width', String(effectiveThickness + 4));
+      glowPath.setAttribute('opacity', '0.45');
       glowPath.setAttribute('pointer-events', 'none');
       group.insertBefore(glowPath, group.firstChild);
     }
   }
 
-  // 3D Specular Highlight path overlay (glassmorphism sheen)
-  const highlight = createPath(pathData, {
+  // 4. Subtle Matte Bevel (Very soft micro-sheen, no harsh white glare)
+  const subtleMatteBevel = createPath(pathData, {
     fill: 'none',
-    stroke: 'rgba(255, 255, 255, 0.35)',
-    'stroke-width': (cable.thickness || mat.renderThicknessPx || 3) * 0.32,
+    stroke: 'rgba(255, 255, 255, 0.10)',
+    'stroke-width': effectiveThickness * 0.35,
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
     style: 'pointer-events: none;'
   });
-  group.appendChild(highlight);
+  group.appendChild(subtleMatteBevel);
 
   // Animated Data Packet Flow Overlay
   if (cable.animatedFlow || cable.status === 'active') {
     const flowLine = createPath(pathData, {
       fill: 'none',
       stroke: 'rgba(255, 255, 255, 0.85)',
-      'stroke-width': (cable.thickness || mat.renderThicknessPx || 3) * 0.35,
+      'stroke-width': effectiveThickness * 0.35,
       'stroke-linecap': 'round',
       'stroke-dasharray': '4, 10',
       'class': 'cable-flow-line',
@@ -164,122 +295,14 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     group.appendChild(flowLine);
   }
 
-  // Determine port orientation for connector facing direction.
-  // Since all cables route HORIZONTALLY first to the side rail hole,
-  // connectors must always face left or right (never up/down in auto mode).
-  // 'right' orientation → cable exits to the RIGHT  (plug faces left into port)
-  // 'left'  orientation → cable exits to the LEFT   (plug faces right into port)
-  const getEffectiveOrientation = (
-    cable: CableData,
-    end: 'source' | 'dest',
-    points: Point[]
-  ): 'up' | 'down' | 'left' | 'right' => {
-    const portId  = end === 'source' ? cable.sourcePortId  : cable.destPortId;
-    const isEarPort = portId && portId.includes('-ear-');
-
-    // User explicit override always wins, EXCEPT for ear-ports which have fixed orientations
-    const userOverride = end === 'source' ? cable.sourceOrientation : cable.destOrientation;
-    if (userOverride && userOverride !== 'auto' && !isEarPort) {
-      return userOverride;
-    }
-
-    const port    = portId ? stateManager.getPort(portId) : null;
-    if (!port) {
-      // Floating endpoint (Airdrop Destination — no real port to derive a device-relative
-      // orientation from). The old hardcoded 'right' fallback made the connector always face
-      // right regardless of where the user actually dropped it, visually displacing it from the
-      // exact drop point whenever the real direction wasn't rightward — derive it from the
-      // actual route direction instead, same dominant-axis rule the device-aware branches below
-      // already use for their own dynamic case.
-      if (points.length >= 2) {
-        const start = end === 'source' ? points[0] : points[points.length - 1];
-        const target = end === 'source' ? points[1] : points[points.length - 2];
-        const dx = target.x - start.x;
-        const dy = target.y - start.y;
-        if (Math.abs(dx) > Math.abs(dy)) return dx >= 0 ? 'right' : 'left';
-        return dy >= 0 ? 'up' : 'down';
-      }
-      return cable.sidePreference || 'right';
-    }
-
-    const device = stateManager.getDevice(port.deviceId);
-    const template = device ? getTemplate(device.templateId) : null;
-    const height = template ? template.heightUnits * 30 : 30;
-
-    // Check device category formatting rules (PBR rules)
-    const isHorizontalDevice = device && (
-      device.templateId.includes('server') ||
-      template?.category === 'server' ||
-      template?.category === 'storage' ||
-      template?.category === 'ups'
-    );
-
-    // Dynamic flow-based orientation: align with the direction the cable is running!
-    if (points.length >= 2) {
-      const start = end === 'source' ? points[0] : points[points.length - 1];
-      const target = end === 'source' ? points[1] : points[points.length - 2];
-      
-      const dx = target.x - start.x;
-      const dy = target.y - start.y;
-      
-      if (isEarPort) {
-        // Ear ports: horizontal connector, direction from relativeX not dx
-        // (cable now routes vertically so dx=0; relativeX tells us which side)
-        return port.relativeX > 175 ? 'right' : 'left';
-      } else if (isHorizontalDevice) {
-        // Servers plug in horizontally, direction follows cable flow
-        return dx >= 0 ? 'right' : 'left';
-      } else {
-        // Switch data ports plug in vertically (up or down)
-        return dy >= 0 ? 'up' : 'down';
-      }
-    }
-
-    // Static fallback if points list is empty
-    if (isHorizontalDevice || isEarPort) {
-      return port.relativeX > 175 ? 'right' : 'left';
-    }
-    // Switch/patch panels / other network devices:
-    // Top-row port (relativeY < height / 2) -> cable exits UPWARD (orientation 'down')
-    // Bottom-row port (relativeY >= height / 2) -> cable exits DOWNWARD (orientation 'up')
-    return port.relativeY < height / 2 ? 'down' : 'up';
-  };
-
-  const srcOrient  = getEffectiveOrientation(cable, 'source', allPoints);
-  const destOrient = getEffectiveOrientation(cable, 'dest', allPoints);
-
-  // Determine connector type from cable type. `cable.type` alone isn't reliable for PDU-outlet
-  // cables — the outlet-click flow only ever sets `powerCableType`/`plugType` (see app.ts's
-  // commitCable), leaving `type` at whatever the cable-type tool was selected to (often
-  // 'general'), which would otherwise fall through to the plain Ethernet connector instead of
-  // the C13/C14 plug graphic.
-  const cableType = cable.type || 'general';
-  const typeClass = classifyCableConnector(cableType);
-  const isSFP = typeClass.isSFP;
-  const isFiber = typeClass.isFiber;
-  const isPower = cable.powerCableType === 'power'
-    || !!cable.sourcePortId?.startsWith('outlet-')
-    || !!cable.destPortId?.startsWith('outlet-')
-    || typeClass.isPower;
-
-  // Compact connector mode: switch ports have tiny 9px sockets — full-size connectors float above them
-  const srcPortObj  = cable.sourcePortId ? stateManager.getPort(cable.sourcePortId) : null;
-  const srcDevObj   = srcPortObj ? stateManager.getDevice(srcPortObj.deviceId) : null;
-  const srcTpl      = srcDevObj ? getTemplate(srcDevObj.templateId) : null;
-  const srcCompact  = srcTpl?.category === 'switch';
-
-  const dstPortObj  = cable.destPortId ? stateManager.getPort(cable.destPortId) : null;
-  const dstDevObj   = dstPortObj ? stateManager.getDevice(dstPortObj.deviceId) : null;
-  const dstTpl      = dstDevObj ? getTemplate(dstDevObj.templateId) : null;
-  const dstCompact  = dstTpl?.category === 'switch';
 
   // Source connector
-  group.appendChild(createConnector(sourcePos, cable.color, srcOrient, isFiber, isPower, isSFP, srcCompact, cable.plugType));
+  const srcConnectorOrient = isEthernet ? `inward-${srcExitDir}` : srcExitDir;
+  group.appendChild(createConnector(sourcePos, cable.color, srcConnectorOrient, isFiber, isPower, isSFP, srcCompact, cable.plugType, srcScale));
 
-  // Dest connector — drawn regardless of whether the destination is a real port or a floating
-  // point (Airdrop Destination): the endpoint should always read as the actual connector shape
-  // for this cable's type (Ethernet jack / power plug / fiber / SFP), never a bare dot.
-  group.appendChild(createConnector(destPos, cable.color, destOrient, isFiber, isPower, isSFP, dstCompact, cable.plugType));
+  // Dest connector
+  const destConnectorOrient = isEthernet ? `inward-${destExitDir}` : destExitDir;
+  group.appendChild(createConnector(destPos, cable.color, destConnectorOrient, isFiber, isPower, isSFP, dstCompact, cable.plugType, dstScale));
 
   // Render tip drag handles only when the cable is selected — a finished Airdrop-Destination
   // cable (destPortId null, floatingDest set permanently) previously kept the glowing handle dot
@@ -288,8 +311,9 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   // drag the end onto a real port later) once the cable is actually selected — same as a cable
   // with a real destination port already behaved.
   if (isSelected) {
-    group.appendChild(createDragHandle(sourcePos, cable.id, 'source', cable.color));
-    group.appendChild(createDragHandle(destPos, cable.id, 'dest', cable.color));
+    const activeEnd = s.activeCableEnd || 'dest';
+    group.appendChild(createDragHandle(sourcePos, cable.id, 'source', cable.color, activeEnd === 'source'));
+    group.appendChild(createDragHandle(destPos, cable.id, 'dest', cable.color, activeEnd === 'dest'));
   }
 
   // Render bundle velcro wraps if bundled
@@ -336,23 +360,14 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     });
     group.appendChild(anchorConnLine);
 
-    // Always show exactly 3 handles (first, middle, last of anchor array).
-    // Store real index into the anchor array so drag can update the right point.
-    const realIdxA2 = Math.floor(anchors.length / 2);
-    const handleDefs = [
-      { pt: anchors[0],               realIdx: 0,                   label: 'A1' },
-      { pt: anchors[realIdxA2],       realIdx: realIdxA2,           label: 'A2' },
-      { pt: anchors[anchors.length - 1], realIdx: anchors.length - 1, label: 'A3' },
-    ];
-
-    handleDefs.forEach(({ pt, realIdx }, displayIdx) => {
+    // Render an anchor handle for every waypoint/bend point in the route
+    anchors.forEach((pt, idx) => {
       if (!pt) return;
-      const idx = displayIdx;
       const anchorGroup = createGroup(`cable-anchor-${cable.id}-${idx}`, 'cable-anchor-handle');
       setAttributes(anchorGroup, {
         'data-cable-id': cable.id,
         'data-anchor-index': String(idx),
-        'data-anchor-real-index': String(realIdx),
+        'data-anchor-real-index': String(idx),
         transform: `translate(${pt.x}, ${pt.y})`,
         style: 'cursor: grab;'
       });
@@ -462,137 +477,7 @@ export function renderCableInProgress(sourcePos: Point, currentPos: Point, cable
  * clear polycarbonate crystal body, glass sheen overlays, snagless latch release,
  * and molded rubber strain-relief boot with flex collar ridges.
  */
-/**
- * Enterprise Ethernet RJ45 Connector
- * Matches user's exact provided SVG image with dark indigo outer silhouette frame,
- * crystal clear polycarbonate shell, 8 gold contact pins, T568B color-coded wires,
- * inner clamp collar, molded strain-relief boot with center recess box,
- * 2 flex collar ridges, and cylindrical wire jacket.
- */
-function createEthernetConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right', compact = false): SVGGElement {
-  const g = createGroup();
 
-  let rot = 0;
-  if (orientation === 'up')    rot = 0;
-  else if (orientation === 'down')  rot = 180;
-  else if (orientation === 'right') rot = -90;
-  else if (orientation === 'left')  rot = 90;
-
-  // compact=true (switch 1U ports ~9px): scale 0.14.  compact=false (servers): scale 0.35
-  // (25% larger than the original 0.28, per explicit request — the switch-port compact scale is
-  // deliberately left alone since those sit tightly packed and a 25% bump risks them overlapping).
-  const S = compact ? 0.14 : 0.35;
-  const TAIL_Y = 38;     // native y of boot end (cable exit point)
-  const CRYSTAL_Y = 17;  // native y of crystal/boot junction
-
-  let ax = pos.x;
-  let ay = pos.y;
-
-  // Compact (switch) ports: anchor the crystal/boot junction at the port center — crystal
-  // sits inside the drawn socket rectangle, boot visible outside toward the cable.
-  // Server ports: anchor the boot tail at port center so cable exits from the boot end.
-  const TAIL_OFFSET = compact ? CRYSTAL_Y * S : TAIL_Y * S;
-  if (orientation === 'right') ax -= TAIL_OFFSET;
-  else if (orientation === 'left')  ax += TAIL_OFFSET;
-  else if (orientation === 'up')    ay -= TAIL_OFFSET;
-  else if (orientation === 'down')  ay += TAIL_OFFSET;
-
-  setAttributes(g, { transform: `translate(${ax}, ${ay}) rotate(${rot}) scale(${S}) translate(-14, 0)`, opacity: '0.92' });
-
-  const mainColor = color || '#7b2fbe';
-  const glassWhite = 'rgba(220, 240, 255, 0.82)';
-  const outline = 'rgba(20, 28, 50, 0.75)';
-
-  // ── Outer silhouette shell (semi-transparent) ─────────────────────────────
-  const outerShell = createPath('M 7 0 L 21 0 L 22 14 L 23 28 L 20 40 L 20 50 L 8 50 L 8 40 L 5 28 L 6 14 Z', {
-    fill: 'rgba(18, 24, 48, 0.6)',
-    stroke: outline,
-    'stroke-width': 0.8,
-  });
-  g.appendChild(outerShell);
-
-  // ── Crystal polycarbonate head (highly translucent glass) ─────────────────
-  const head = createRect(6, 1, 16, 16, {
-    fill: glassWhite,
-    stroke: 'rgba(100, 160, 255, 0.5)',
-    'stroke-width': 0.7,
-    rx: 1.5, ry: 1.5
-  });
-  g.appendChild(head);
-
-  // ── Primary glass glare (top-left bright reflection) ─────────────────────
-  const glare1 = createPath('M 7 2 L 10 2 L 8 16 L 7 16 Z', {
-    fill: 'rgba(255, 255, 255, 0.7)'
-  });
-  g.appendChild(glare1);
-
-  // ── Secondary soft glare (right edge rim light) ───────────────────────────
-  const glare2 = createPath('M 19 2 L 21 2 L 21 14 L 20 14 Z', {
-    fill: 'rgba(255, 255, 255, 0.35)'
-  });
-  g.appendChild(glare2);
-
-  // ── 8 gold contact pins (25% larger than the original "ultra-thin" size) ──
-  for (let i = 0; i < 8; i++) {
-    const px = 7.2 + i * 1.65;
-    const pin = createRect(px, 2, 0.9 * 1.25, 4.5 * 1.25, {
-      fill: '#f5c518',
-      stroke: '#b8860b',
-      'stroke-width': 0.2,
-      rx: 0.1
-    });
-    g.appendChild(pin);
-  }
-
-  // ── T568B micro wires (thin, visible through glass) ───────────────────────
-  const wireColors = ['#ff9800','#e65100','#81c784','#1e88e5','#90caf9','#43a047','#d7ccc8','#6d4c41'];
-  for (let i = 0; i < 8; i++) {
-    const wx = 7.3 + i * 1.65;
-    const wire = createLine(wx, 7, wx, 12, {
-      stroke: wireColors[i],
-      'stroke-width': 0.85,
-      'stroke-linecap': 'butt',
-      opacity: '0.85'
-    });
-    g.appendChild(wire);
-  }
-
-  // ── Thin latch tab (snagless clip) ────────────────────────────────────────
-  const latch = createRect(9, 13, 10, 3, {
-    fill: 'rgba(180, 200, 230, 0.6)',
-    stroke: 'rgba(100, 140, 200, 0.5)',
-    'stroke-width': 0.5,
-    rx: 0.8
-  });
-  g.appendChild(latch);
-
-  // ── Boot body (tapered, semi-transparent jacket) ──────────────────────────
-  const boot = createPath('M 6 17 L 22 17 L 21 28 L 19 38 L 9 38 L 7 28 Z', {
-    fill: `${mainColor}cc`,   // color + 80% opacity hex
-    stroke: outline,
-    'stroke-width': 0.6
-  });
-  g.appendChild(boot);
-
-  // ── Boot gloss highlight ──────────────────────────────────────────────────
-  const bootGloss = createPath('M 7 18 L 10 18 L 8 37 L 7 37 Z', {
-    fill: 'rgba(255,255,255,0.22)'
-  });
-  g.appendChild(bootGloss);
-
-  // ── Single slim flex rib ──────────────────────────────────────────────────
-  const rib = createRect(8, 31, 12, 2.5, {
-    fill: `${mainColor}bb`,
-    stroke: outline,
-    'stroke-width': 0.5,
-    rx: 0.8
-  });
-  g.appendChild(rib);
-
-  // Tail wire jacket removed (as requested, cable lines render directly out of boot)
-
-  return g;
-}
 
 
 
@@ -680,60 +565,58 @@ function createSFPConnector(pos: Point, color: string, orientation: 'up' | 'down
 function createPowerConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right', plugType?: string): SVGGElement {
   const g = createGroup();
   let rot = 0;
-  if (orientation === 'up') rot = 0;
-  else if (orientation === 'down') rot = 180;
+  if (orientation === 'down') rot = 0;
+  else if (orientation === 'up') rot = 180;
   else if (orientation === 'right') rot = -90;
   else if (orientation === 'left') rot = 90;
-  setAttributes(g, { transform: `translate(${pos.x}, ${pos.y}) rotate(${rot}) scale(0.38) translate(-15, -10)` });
+  setAttributes(g, { transform: `translate(${pos.x}, ${pos.y}) rotate(${rot}) scale(0.38) translate(-15, -16)` });
 
   const pt = (plugType ?? '').toUpperCase();
   const isC19 = pt.includes('C19');
   const isIndian = pt.includes('IS6538') || pt.includes('IS1293');
   const isNEMA = !isIndian && (pt.includes('NEMA') || pt.includes('BS') || pt.includes('SCHUKO'));
 
-  // IEC body shape: C19 uses rect, Indian uses round 3-pin, C13/C14/C15 uses the IEC pentagon
-  // shroud, NEMA/BS/Schuko uses a rounded rect.
   if (isC19) {
-    // C19 body — wider rect
-    g.appendChild(createRect(4, 8, 22, 22, { fill: '#1b2a32', stroke: '#0a1a22', 'stroke-width': 1.2, rx: 2 }));
-    // Horizontal slots (L, N, Earth)
-    g.appendChild(createRect(7,  15, 6, 2, { fill: '#000', rx: 0.4 }));
-    g.appendChild(createRect(17, 15, 6, 2, { fill: '#000', rx: 0.4 }));
-    g.appendChild(createRect(12, 22, 6, 2, { fill: '#000', rx: 0.4 }));
+    // C19 plug housing (inserted)
+    g.appendChild(createRect(4, 6, 22, 20, { fill: '#14181c', stroke: '#080b0e', 'stroke-width': 1.2, rx: 2 }));
+    g.appendChild(createRect(7, 10, 16, 12, { fill: '#1f262d', stroke: '#2a343d', 'stroke-width': 0.6, rx: 1.5 }));
+    for (let i = 0; i < 3; i++) {
+      g.appendChild(createRect(6, 11 + i * 4, 18, 1.2, { fill: '#0a0d10' }));
+    }
   } else if (isIndian) {
-    // Indian IS1293 (2+E) / IS6538 (Type D/M) — round face, 3 round brass pins in a
-    // triangular arrangement (larger pins for the 15A/16A variants), matching the round-pin
-    // socket look already used for these types in pdu-renderer.ts's drawSocketFacePlate().
-    const cx = 15, cy = 19, r = 11;
-    const pinR = (pt.includes('15A') || pt.includes('16A')) ? 2.2 : 1.7;
-    g.appendChild(createSVGEl('circle', { cx, cy, r, fill: '#1b2a32', stroke: '#0a1a22', 'stroke-width': 1.2 }));
-    [[cx - 4.5, cy + 3], [cx, cy - 4], [cx + 4.5, cy + 3]].forEach(([px, py]) => {
-      g.appendChild(createSVGEl('circle', { cx: px, cy: py, r: pinR, fill: '#d4af37', stroke: '#8a6d1c', 'stroke-width': 0.4 }));
-    });
+    const cx = 15, cy = 16, r = 11;
+    g.appendChild(createSVGEl('circle', { cx, cy, r, fill: '#14181c', stroke: '#080b0e', 'stroke-width': 1.2 }));
+    g.appendChild(createSVGEl('circle', { cx, cy, r: r - 2.5, fill: '#1f262d', stroke: '#2a343d', 'stroke-width': 0.6 }));
   } else if (isNEMA) {
-    // NEMA/Schuko/BS — rounded rect
-    g.appendChild(createRect(5, 8, 20, 22, { fill: '#1b2a32', stroke: '#0a1a22', 'stroke-width': 1.2, rx: 6 }));
-    // Blade slots (vertical)
-    g.appendChild(createRect(8,  14, 3, 7, { fill: '#000', rx: 0.4 }));
-    g.appendChild(createRect(19, 14, 3, 7, { fill: '#000', rx: 0.4 }));
-    // Ground hole (center)
-    g.appendChild(createSVGEl('circle', { cx: 15, cy: 25, r: 2, fill: '#000' }));
+    g.appendChild(createRect(5, 6, 20, 20, { fill: '#14181c', stroke: '#080b0e', 'stroke-width': 1.2, rx: 4 }));
+    g.appendChild(createRect(7, 9, 16, 14, { fill: '#1f262d', stroke: '#2a343d', 'stroke-width': 0.6, rx: 2 }));
   } else {
-    // Default: IEC C14 male plug — the pentagon shroud from New_Development/SVG - Power Plug
-    // Types/C14.svg, with brass Live/Neutral/Earth pins (this is the cable-end connector that
-    // plugs INTO a PDU's C13 receptacle, so it shows solid pins rather than recessed slots).
-    const cx = 15, cy = 20, w = 18, h = 20;
-    g.appendChild(createPath(iecShroudPath(cx, cy, w, h), { fill: '#1b2a32', stroke: '#0a1a22', 'stroke-width': 1.2 }));
-    const pinW = w * 0.14, pinH = h * 0.28;
-    [IEC_CONTACTS.live, IEC_CONTACTS.neutral, IEC_CONTACTS.earth].forEach(({ dx, dy }) => {
-      g.appendChild(createRect(cx + dx * w - pinW / 2, cy + dy * h - pinH / 2, pinW, pinH, {
-        fill: '#d4af37', stroke: '#8a6d1c', 'stroke-width': 0.4, rx: pinW * 0.25,
-      }));
-    });
+    // Default IEC C14 Male Plug — inserted flush into socket
+    const cx = 15, cy = 16, w = 18, h = 18;
+    // Outer molded collar
+    g.appendChild(createPath(iecShroudPath(cx, cy, w, h), { fill: '#14181c', stroke: '#080b0e', 'stroke-width': 1.2 }));
+    // Molded body face with inner bevel & grip contour
+    g.appendChild(createPath(iecShroudPath(cx, cy, w - 3, h - 3), { fill: '#1e242a', stroke: '#2a333d', 'stroke-width': 0.6 }));
+    // Textured grip indent / molded insignia
+    g.appendChild(createRect(cx - 4, cy - 2, 8, 5, { fill: '#12161a', rx: 1 }));
+    g.appendChild(createRect(cx - 3, cy - 1, 6, 1, { fill: '#2e3842' }));
+    g.appendChild(createRect(cx - 3, cy + 1, 6, 1, { fill: '#2e3842' }));
   }
 
-  // Rubber boot / cable strain relief
-  g.appendChild(createRect(8, 30, 14, 14, { fill: color || '#212529', stroke: '#000', 'stroke-width': 0.8, rx: 2 }));
+  // Molded rubber strain-relief boot (cable exits naturally downwards from the plug body)
+  const bootW = 10, bootH = 14;
+  g.appendChild(createRect(15 - bootW / 2, 24, bootW, bootH, {
+    fill: color || '#ff4422',
+    stroke: '#080b0e',
+    'stroke-width': 0.8,
+    rx: 2
+  }));
+  // Boot flex ribs
+  for (let b = 0; b < 3; b++) {
+    g.appendChild(createRect(15 - (bootW - 2) / 2, 26 + b * 3.5, bootW - 2, 1, {
+      fill: 'rgba(0, 0, 0, 0.45)'
+    }));
+  }
 
   return g;
 }
@@ -754,20 +637,170 @@ export function classifyCableConnector(cableType: string): { isFiber: boolean; i
 }
 
 /**
- * Route to correct connector renderer.
+ * RJ45 "Plugged In" Front-Face View — orientation: 'inward'
+ * Renders the connector as if looking straight at it going INTO the port.
+ * Shows the translucent tinted crystal body inside socket, molded rubber boot,
+ * 3 flex collar ridges, and cable exit sleeve.
+ * Supports all 4 orientations (up, down, left, right) with dynamic auto-scaling.
  */
-export function createConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right', isFiber: boolean, isPower: boolean, isSFP: boolean, compact = false, plugType?: string): SVGGElement {
-  if (isSFP) return createSFPConnector(pos, color, orientation);
-  if (isFiber) return createFiberConnector(pos, color, orientation);
-  if (isPower) return createPowerConnector(pos, color, orientation, plugType);
-  return createEthernetConnector(pos, color, orientation, compact);
+function createEthernetConnectorInward(
+  pos: Point,
+  color: string,
+  orientation: 'up' | 'down' | 'left' | 'right' | string = 'down',
+  compact = false,
+  customScale?: number
+): SVGGElement {
+  const g = createGroup();
+  const S = customScale !== undefined ? customScale : (compact ? 1.0 : 1.15);
+  const mainColor = color || '#7b2fbe';
+  const outline = 'rgba(15, 20, 32, 0.85)';
+
+  let rot = 0;
+  if (orientation === 'up' || orientation === 'inward-up') {
+    rot = 180;
+  } else if (orientation === 'down' || orientation === 'inward-down') {
+    rot = 0;
+  } else if (orientation === 'left' || orientation === 'inward-left') {
+    rot = 90;
+  } else if (orientation === 'right' || orientation === 'inward-right') {
+    rot = -90;
+  }
+
+  setAttributes(g, {
+    transform: `translate(${pos.x}, ${pos.y}) rotate(${rot}) scale(${S})`,
+    opacity: '0.98'
+  });
+
+  // ── 1. Translucent Polycarbonate Crystal Plug Head (Inside RJ45 Port Socket) ───────
+  // Dark socket cavity void
+  const socketCavity = createRect(-3.9, -4.4, 7.8, 4.6, {
+    fill: 'rgba(8, 12, 20, 0.88)',
+    rx: 0.8, ry: 0.8
+  });
+  g.appendChild(socketCavity);
+
+  // 8 Gilded 50µ Gold Contact Pins inside the socket cavity
+  for (let i = 0; i < 8; i++) {
+    const px = -2.8 + i * 0.8;
+    const pin = createRect(px - 0.25, -4.0, 0.5, 2.2, {
+      fill: '#fbbf24',
+      stroke: '#b45309',
+      'stroke-width': 0.15,
+      rx: 0.15
+    });
+    g.appendChild(pin);
+  }
+
+  // Translucent tinted polycarbonate crystal body
+  const crystalBody = createRect(-3.8, -4.2, 7.6, 4.4, {
+    fill: `${mainColor}38`,
+    stroke: `${mainColor}99`,
+    'stroke-width': 0.45,
+    rx: 0.6, ry: 0.6
+  });
+  g.appendChild(crystalBody);
+
+  // Translucent inner latch tab
+  const innerLatch = createRect(-1.8, -3.6, 3.6, 3.8, {
+    fill: `${mainColor}55`,
+    stroke: `${mainColor}88`,
+    'stroke-width': 0.35,
+    rx: 0.4, ry: 0.4
+  });
+  g.appendChild(innerLatch);
+
+  // ── 2. Molded Matte Rubber Strain-Relief Boot (Upper Collar Block) ──────────
+  const bootBlock = createRect(-3.1, 0, 6.2, 4.6, {
+    fill: mainColor,
+    stroke: outline,
+    'stroke-width': 0.5,
+    rx: 1.0, ry: 1.0
+  });
+  g.appendChild(bootBlock);
+
+  // Molded Snagless Latch Arch Cover (center bump)
+  const latchArch = createRect(-1.4, -0.6, 2.8, 3.5, {
+    fill: mainColor,
+    stroke: outline,
+    'stroke-width': 0.4,
+    rx: 0.7, ry: 0.7
+  });
+  g.appendChild(latchArch);
+
+  // Soft ambient depth shadow on right side
+  const rightShadow = createRect(1.9, 0.3, 1.0, 4.0, {
+    fill: 'rgba(0, 0, 0, 0.25)',
+    rx: 0.4
+  });
+  g.appendChild(rightShadow);
+
+  // ── 3. Three Detailed Flex Collar Ridges (Ribs) with Inset Grooves ─────────
+  const grooveCore = createRect(-1.7, 4.6, 3.4, 4.3, {
+    fill: 'rgba(10, 15, 25, 0.85)',
+    rx: 0.3
+  });
+  g.appendChild(grooveCore);
+
+  // Ridge 1
+  const r1 = createRect(-2.6, 4.6, 5.2, 1.3, {
+    fill: mainColor, stroke: outline, 'stroke-width': 0.4, rx: 0.5
+  });
+  const r1Sh = createLine(-2.3, 5.7, 2.3, 5.7, { stroke: 'rgba(0, 0, 0, 0.35)', 'stroke-width': 0.35 });
+  g.appendChild(r1); g.appendChild(r1Sh);
+
+  // Ridge 2
+  const r2 = createRect(-2.3, 6.1, 4.6, 1.3, {
+    fill: mainColor, stroke: outline, 'stroke-width': 0.4, rx: 0.5
+  });
+  const r2Sh = createLine(-2.0, 7.2, 2.0, 7.2, { stroke: 'rgba(0, 0, 0, 0.35)', 'stroke-width': 0.35 });
+  g.appendChild(r2); g.appendChild(r2Sh);
+
+  // Ridge 3
+  const r3 = createRect(-2.0, 7.6, 4.0, 1.3, {
+    fill: mainColor, stroke: outline, 'stroke-width': 0.4, rx: 0.5
+  });
+  const r3Sh = createLine(-1.7, 8.7, 1.7, 8.7, { stroke: 'rgba(0, 0, 0, 0.35)', 'stroke-width': 0.35 });
+  g.appendChild(r3); g.appendChild(r3Sh);
+
+  // ── 4. Cable Exit Sleeve ──────────────────────────────────────────────────
+  const exitSleeve = createRect(-1.6, 9.1, 3.2, 2.0, {
+    fill: mainColor,
+    stroke: outline,
+    'stroke-width': 0.4,
+    rx: 0.4
+  });
+  g.appendChild(exitSleeve);
+
+  return g;
+}
+
+export function createConnector(
+  pos: Point,
+  color: string,
+  orientation: 'up' | 'down' | 'left' | 'right' | 'inward' | string,
+  isFiber: boolean,
+  isPower: boolean,
+  isSFP: boolean,
+  compact = false,
+  plugType?: string,
+  customScale?: number
+): SVGGElement {
+  if (isSFP) return createSFPConnector(pos, color, orientation as any);
+  if (isFiber) return createFiberConnector(pos, color, orientation as any);
+  if (isPower) return createPowerConnector(pos, color, orientation as any, plugType);
+  
+  // Standard Default for ALL Ethernet RJ45 cables: inserted inward style
+  const dir = orientation.startsWith('inward-')
+    ? orientation.split('-')[1]
+    : orientation;
+  return createEthernetConnectorInward(pos, color, dir, compact, customScale);
 }
 
 /**
  * Draggable Endpoint Handle.
  */
-function createDragHandle(pos: Point, cableId: string, handleType: 'source' | 'dest', color: string): SVGGElement {
-  const handleGroup = createGroup(`cable-handle-${cableId}-${handleType}`, 'cable-drag-handle');
+function createDragHandle(pos: Point, cableId: string, handleType: 'source' | 'dest', color: string, isActive = false): SVGGElement {
+  const handleGroup = createGroup(`cable-handle-${cableId}-${handleType}`, `cable-drag-handle ${isActive ? 'active-endpoint-handle' : ''}`);
   setAttributes(handleGroup, {
     'data-cable-id-handle': cableId,
     'data-handle-type': handleType,
@@ -775,17 +808,31 @@ function createDragHandle(pos: Point, cableId: string, handleType: 'source' | 'd
     style: 'cursor: pointer;'
   });
   const glow = createSVGEl('circle', {
-    cx: 0, cy: 0, r: 10,
-    fill: color, opacity: 0.45,
-    class: 'handle-glow'
+    cx: 0, cy: 0, r: isActive ? 12 : 10,
+    fill: color, opacity: isActive ? 0.75 : 0.45,
+    class: 'handle-glow',
+    stroke: isActive ? '#00e5ff' : 'none',
+    'stroke-width': isActive ? 1.5 : 0
   });
   const core = createSVGEl('circle', {
-    cx: 0, cy: 0, r: 5,
-    fill: '#ffffff',
+    cx: 0, cy: 0, r: isActive ? 6 : 5,
+    fill: isActive ? '#00e5ff' : '#ffffff',
     stroke: color,
     'stroke-width': 2
   });
+  const label = createSVGEl('text', {
+    x: 0, y: 3,
+    'font-size': '8',
+    fill: isActive ? '#000000' : '#1a1a2e',
+    'font-family': 'monospace',
+    'font-weight': 'bold',
+    'text-anchor': 'middle',
+    'pointer-events': 'none'
+  });
+  label.textContent = handleType === 'source' ? '1' : '2';
+
   handleGroup.appendChild(glow);
   handleGroup.appendChild(core);
+  handleGroup.appendChild(label);
   return handleGroup;
 }

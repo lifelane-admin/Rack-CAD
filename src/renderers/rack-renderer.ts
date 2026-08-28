@@ -5,6 +5,16 @@ import { renderSidePdu } from './pdu-renderer';
 import { getTemplate } from '../library/device-catalog';
 import { sidePduOffsetX } from './pdu-layout';
 
+function adjustHex(hex: string, amt: number): string {
+  const clean = hex.replace('#', '');
+  const full = clean.length === 3 ? clean.split('').map(c => c + c).join('') : clean;
+  const num = parseInt(full, 16) || 0x16161a;
+  const r = Math.max(0, Math.min(255, ((num >> 16) & 0xff) + amt));
+  const g = Math.max(0, Math.min(255, ((num >> 8) & 0xff) + amt));
+  const b = Math.max(0, Math.min(255, (num & 0xff) + amt));
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
 export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverride?: Partial<AppState>): SVGGElement {
   const rackGroup = createGroup('rack-' + rack.id, 'rack');
   setAttributes(rackGroup, {
@@ -25,13 +35,18 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
     createSVGElement('feDropShadow', { dx: 0, dy: 6, stdDeviation: 8, 'flood-opacity': 0.6, 'flood-color': '#000' })
   ]);
   
+  const baseRackColor = rack.rackColor || '#16161a';
+  const c0 = baseRackColor;
+  const c1 = adjustHex(baseRackColor, 18);
+  const c2 = adjustHex(baseRackColor, 32);
+
   // Metallic post / frame gradient
   const gradient = createLinearGradient('rack-gradient-' + rack.id, [
-    { offset: '0%', color: '#16161a' },
-    { offset: '15%', color: '#2b2b32' },
-    { offset: '50%', color: '#3a3a42' },
-    { offset: '85%', color: '#2b2b32' },
-    { offset: '100%', color: '#16161a' }
+    { offset: '0%', color: c0 },
+    { offset: '15%', color: c1 },
+    { offset: '50%', color: c2 },
+    { offset: '85%', color: c1 },
+    { offset: '100%', color: c0 }
   ]);
   gradient.setAttribute('x1', '0%');
   gradient.setAttribute('y1', '0%');
@@ -56,8 +71,9 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
 
   const state = { ...stateManager.getState(), ...stateOverride };
   const isSkel = state.cabinetDrawMode === 'skeleton';
-  const hasCover = state.cabinetCoverVisible;
   const isIso = state.isometricMode;
+  const hasCover = state.cabinetCoverVisible;
+  const showEarBlade = (state as any).showEarBlades ?? true;
   const OUTER_W = RACK_CONSTANTS.RACK_OUTER_WIDTH;
 
   // PDU width computation from attached side-mount devices
@@ -68,13 +84,39 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
   const rightPduTemplate = rightPduDevice ? getTemplate(rightPduDevice.templateId) : null;
   const leftPduW = leftPduTemplate?.pduWidth ?? 0;
   const rightPduW = rightPduTemplate?.pduWidth ?? 0;
-  // Layout order (innermost to outermost) is always Rack -> Cable Manager -> PDU, so a PDU
-  // never overlaps a vertical cable manager on the same side — see pdu-layout.ts's
-  // sidePduOffsetX(), also used by core/state.ts's getPortWorldPosition() for cable endpoints.
-  const leftPduX = sidePduOffsetX(rack, 'left', leftPduW);
-  const rightPduX = sidePduOffsetX(rack, 'right', rightPduW);
-  const pduOffset = -leftPduX;
-  const OUTER_W_TOTAL = (rightPduX + rightPduW) - leftPduX;
+  const hasLeftPdu = !!(leftPduDevice && leftPduTemplate);
+  const hasRightPdu = !!(rightPduDevice && rightPduTemplate);
+
+  // Layout order (innermost to outermost): Rack Frame -> 0U Side PDU -> Vertical Cable Manager (VCM)
+  const leftPduX = sidePduOffsetX(rack, 'left', leftPduW || 20);
+  const rightPduX = sidePduOffsetX(rack, 'right', rightPduW || 20);
+
+  const getVcmWidthPx = (w?: string): number => {
+    switch (w) {
+      case '2-inch': return 16;
+      case '4-inch': return 26;
+      case '6-inch': return 40;
+      case '8-inch': return 54;
+      default: return 26;
+    }
+  };
+
+  const showLeft = rack.leftCableManagerWidth !== undefined && rack.leftCableManagerWidth !== 'none';
+  const showRight = rack.rightCableManagerWidth !== undefined && rack.rightCableManagerWidth !== 'none';
+  const leftVcmWidth = showLeft ? getVcmWidthPx(rack.leftCableManagerWidth) : 0;
+  const rightVcmWidth = showRight ? getVcmWidthPx(rack.rightCableManagerWidth) : 0;
+
+  const leftDuctX = showLeft ? (hasLeftPdu ? (-leftPduW - 4 - leftVcmWidth - 4) : (-leftVcmWidth - 4)) : 0;
+  const rightDuctX = showRight ? (hasRightPdu ? (OUTER_W + rightPduW + 4 + 4) : (OUTER_W + 4)) : OUTER_W;
+
+  const leftHandleX = showLeft ? (leftDuctX - 20 - 4) : sidePduOffsetX(rack, 'left', 20);
+  const rightHandleX = showRight ? (rightDuctX + rightVcmWidth + 4) : sidePduOffsetX(rack, 'right', 20);
+
+  const minLeftX = Math.min(0, hasLeftPdu ? leftPduX : leftHandleX, showLeft ? leftDuctX : 0);
+  const maxRightX = Math.max(OUTER_W, hasRightPdu ? (rightPduX + rightPduW) : (rightHandleX + 20), showRight ? (rightDuctX + rightVcmWidth) : OUTER_W);
+
+  const pduOffset = -minLeftX;
+  const OUTER_W_TOTAL = maxRightX - minLeftX;
 
   // === 3D ISOMETRIC / PERSPECTIVE WALL DRAWINGS ===
   if (isIso) {
@@ -236,8 +278,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
     leftPduGrp.setAttribute('style', 'cursor:pointer');
     rackGroup.appendChild(leftPduGrp);
   } else {
-    // "+" add handle — dashed strip on left side, beyond any left cable manager
-    const leftHandleX = sidePduOffsetX(rack, 'left', PDU_HANDLE_W);
+    // "+" add handle — dashed strip on left side, outside any left cable manager
     const addHandle = createGroup('rack-' + rack.id + '-pdu-add-left', 'pdu-add-left');
     addHandle.setAttribute('data-pdu-add-side', 'left');
     addHandle.setAttribute('data-rack-id', rack.id);
@@ -280,13 +321,13 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
     rightPduGrp.setAttribute('style', 'cursor:pointer');
     rackGroup.appendChild(rightPduGrp);
   } else {
-    // "+" add handle — dashed strip on right side
+    // "+" add handle — dashed strip on right side, outside any right cable manager
     const addHandleR = createGroup('rack-' + rack.id + '-pdu-add-right', 'pdu-add-right');
     addHandleR.setAttribute('data-pdu-add-side', 'right');
     addHandleR.setAttribute('data-rack-id', rack.id);
     addHandleR.setAttribute('style', 'cursor:pointer');
 
-    const handleRectR = createRect(rightPduX, innerY, PDU_HANDLE_W, innerHeight, {
+    const handleRectR = createRect(rightHandleX, innerY, PDU_HANDLE_W, innerHeight, {
       fill: 'none',
       stroke: '#2a5a3a',
       'stroke-width': 1.2,
@@ -295,7 +336,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
     });
     addHandleR.appendChild(handleRectR);
 
-    const plusTxtR = createText(rightPduX + PDU_HANDLE_W / 2, innerY + innerHeight / 2 + 5, '+', {
+    const plusTxtR = createText(rightHandleX + PDU_HANDLE_W / 2, innerY + innerHeight / 2 + 5, '+', {
       'text-anchor': 'middle',
       'font-size': 14,
       'font-weight': 'bold',
@@ -324,20 +365,28 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
   rackGroup.appendChild(nameLabel);
 
   // === 6. VERTICAL CABLE MANAGERS ===
+  const getVcmLabel = (w?: string): string => {
+    switch (w) {
+      case '2-inch': return '2" SLIM VCM';
+      case '4-inch': return '4" STANDARD VCM';
+      case '6-inch': return '6" HIGH-CAP VCM';
+      case '8-inch': return '8" BACKBONE VCM';
+      default: return '4" VCM';
+    }
+  };
   
   // Left Vertical Cable Manager
-  const showLeft = rack.leftCableManagerWidth !== undefined && rack.leftCableManagerWidth !== 'none';
   if (showLeft) {
-    const leftWidth = rack.leftCableManagerWidth === '6-inch' ? 40 : 26;
-    const ductX = -leftWidth - 6;
+    const ductX = leftDuctX;
     const leftMgrGroup = createGroup('rack-' + rack.id + '-mgr-left', 'cable-manager-vertical');
     leftMgrGroup.setAttribute('data-vertical-mgr-id', rack.id);
     leftMgrGroup.setAttribute('data-side', 'left');
     
     // Duct background channel
-    const channel = createRect(ductX, 0, leftWidth, totalHeight, {
-      fill: '#151518',
-      stroke: '#30363d',
+    const leftVcmFill = rack.leftCableManagerColor || adjustHex(baseRackColor, -4);
+    const channel = createRect(ductX, 0, leftVcmWidth, totalHeight, {
+      fill: leftVcmFill,
+      stroke: adjustHex(leftVcmFill, 25),
       'stroke-width': 1.2,
       rx: 3
     });
@@ -346,7 +395,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
     // Slits / fingers for each RU
     for (let u = 1; u <= rack.units; u++) {
       const yOffset = innerY + innerHeight - (u * RACK_CONSTANTS.RU_HEIGHT);
-      const slit = createRect(ductX + 4, yOffset + 6, leftWidth - 8, 12, {
+      const slit = createRect(ductX + 2, yOffset + 6, Math.max(8, leftVcmWidth - 4), 12, {
         fill: '#08080a',
         stroke: '#21262d',
         'stroke-width': 0.6,
@@ -356,7 +405,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
 
       // Silver loop
       const loop = createSVGElement('path', {
-        d: `M ${ductX + 4} ${yOffset + 12} Q ${ductX - 2} ${yOffset + 12} ${ductX + 4} ${yOffset + 20}`,
+        d: `M ${ductX + 3} ${yOffset + 12} Q ${ductX - 2} ${yOffset + 12} ${ductX + 3} ${yOffset + 20}`,
         fill: 'none',
         stroke: '#8b949e',
         'stroke-width': 1.2
@@ -366,9 +415,9 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
 
     // Cover line detail
     leftMgrGroup.appendChild(createSVGElement('line', {
-      x1: ductX + leftWidth / 2,
+      x1: ductX + leftVcmWidth / 2,
       y1: 10,
-      x2: ductX + leftWidth / 2,
+      x2: ductX + leftVcmWidth / 2,
       y2: totalHeight - 10,
       stroke: '#30363d',
       'stroke-width': 1,
@@ -376,12 +425,12 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
     }));
 
     // Text label
-    const label = createText(ductX + leftWidth / 2 - 2, totalHeight - 40, `LEFT VERTICAL MANAGER (${rack.leftCableManagerWidth === '6-inch' ? '6"' : '4"'})`, {
+    const label = createText(ductX + leftVcmWidth / 2 - 2, totalHeight - 40, `LEFT ${getVcmLabel(rack.leftCableManagerWidth)}`, {
       fill: '#58a6ff',
       'font-size': 4,
       'font-family': 'Inter, sans-serif',
       'font-weight': 'bold',
-      transform: `rotate(-90, ${ductX + leftWidth / 2 - 2}, ${totalHeight - 40})`,
+      transform: `rotate(-90, ${ductX + leftVcmWidth / 2 - 2}, ${totalHeight - 40})`,
       opacity: 0.8
     });
     leftMgrGroup.appendChild(label);
@@ -390,18 +439,17 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
   }
 
   // Right Vertical Cable Manager
-  const showRight = rack.rightCableManagerWidth !== undefined && rack.rightCableManagerWidth !== 'none';
   if (showRight) {
-    const rightWidth = rack.rightCableManagerWidth === '6-inch' ? 40 : 26;
-    const ductX = RACK_CONSTANTS.RACK_OUTER_WIDTH + 6;
+    const ductX = rightDuctX;
     const rightMgrGroup = createGroup('rack-' + rack.id + '-mgr-right', 'cable-manager-vertical');
     rightMgrGroup.setAttribute('data-vertical-mgr-id', rack.id);
     rightMgrGroup.setAttribute('data-side', 'right');
     
     // Duct background channel
-    const channel = createRect(ductX, 0, rightWidth, totalHeight, {
-      fill: '#151518',
-      stroke: '#30363d',
+    const rightVcmFill = rack.rightCableManagerColor || adjustHex(baseRackColor, -4);
+    const channel = createRect(ductX, 0, rightVcmWidth, totalHeight, {
+      fill: rightVcmFill,
+      stroke: adjustHex(rightVcmFill, 25),
       'stroke-width': 1.2,
       rx: 3
     });
@@ -410,7 +458,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
     // Slits / fingers for each RU
     for (let u = 1; u <= rack.units; u++) {
       const yOffset = innerY + innerHeight - (u * RACK_CONSTANTS.RU_HEIGHT);
-      const slit = createRect(ductX + 4, yOffset + 6, rightWidth - 8, 12, {
+      const slit = createRect(ductX + 2, yOffset + 6, Math.max(8, rightVcmWidth - 4), 12, {
         fill: '#08080a',
         stroke: '#21262d',
         'stroke-width': 0.6,
@@ -420,7 +468,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
 
       // Silver loop
       const loop = createSVGElement('path', {
-        d: `M ${ductX + rightWidth - 4} ${yOffset + 12} Q ${ductX + rightWidth + 2} ${yOffset + 12} ${ductX + rightWidth - 4} ${yOffset + 20}`,
+        d: `M ${ductX + rightVcmWidth - 3} ${yOffset + 12} Q ${ductX + rightVcmWidth + 2} ${yOffset + 12} ${ductX + rightVcmWidth - 3} ${yOffset + 20}`,
         fill: 'none',
         stroke: '#8b949e',
         'stroke-width': 1.2
@@ -430,9 +478,9 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
 
     // Cover line detail
     rightMgrGroup.appendChild(createSVGElement('line', {
-      x1: ductX + rightWidth / 2,
+      x1: ductX + rightVcmWidth / 2,
       y1: 10,
-      x2: ductX + rightWidth / 2,
+      x2: ductX + rightVcmWidth / 2,
       y2: totalHeight - 10,
       stroke: '#30363d',
       'stroke-width': 1,
@@ -440,12 +488,12 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
     }));
 
     // Text label
-    const label = createText(ductX + rightWidth / 2 + 2, totalHeight - 40, `RIGHT VERTICAL MANAGER (${rack.rightCableManagerWidth === '6-inch' ? '6"' : '4"'})`, {
+    const label = createText(ductX + rightVcmWidth / 2 - 2, totalHeight - 40, `RIGHT ${getVcmLabel(rack.rightCableManagerWidth)}`, {
       fill: '#58a6ff',
       'font-size': 4,
       'font-family': 'Inter, sans-serif',
       'font-weight': 'bold',
-      transform: `rotate(-90, ${ductX + rightWidth / 2 + 2}, ${totalHeight - 40})`,
+      transform: `rotate(-90, ${ductX + rightVcmWidth / 2 - 2}, ${totalHeight - 40})`,
       opacity: 0.8
     });
     rightMgrGroup.appendChild(label);

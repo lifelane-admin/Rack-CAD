@@ -50,11 +50,20 @@ vi.mock('three', () => {
     this.translate = vi.fn().mockReturnThis();
     this.dispose = vi.fn();
   });
+  const PlaneGeometry = vi.fn().mockImplementation(function(this: any, w: number, h: number) {
+    this.parameters = { width: w, height: h };
+    this.clone = vi.fn().mockReturnThis();
+    this.dispose = vi.fn();
+  });
+  function Color(this: any, c: any) { this.value = c; this.set = vi.fn(); }
   const BackSide = 1;
   const DoubleSide = 2;
   const RepeatWrapping = 1000;
   const ClampToEdgeWrapping = 1001;
-  return { Group, Mesh, BoxGeometry, MeshStandardMaterial, MeshBasicMaterial, RingGeometry, Sprite, SpriteMaterial, CanvasTexture, Shape, Path, ExtrudeGeometry, BackSide, DoubleSide, RepeatWrapping, ClampToEdgeWrapping };
+  const SRGBColorSpace = 'srgb';
+  const LinearMipmapLinearFilter = 1008;
+  const LinearFilter = 1006;
+  return { Group, Mesh, BoxGeometry, PlaneGeometry, MeshStandardMaterial, MeshBasicMaterial, RingGeometry, Sprite, SpriteMaterial, CanvasTexture, Shape, Path, ExtrudeGeometry, Color, BackSide, DoubleSide, RepeatWrapping, ClampToEdgeWrapping, SRGBColorSpace, LinearMipmapLinearFilter, LinearFilter };
 });
 
 vi.mock('../../three/MaterialManager', () => {
@@ -108,20 +117,11 @@ describe('buildRackGroup', () => {
     expect(usesShellH).toBe(true);
   });
 
-  it('adds exactly rack.units U-number sprites', () => {
+  it('does not add redundant floating sprites since U-numbers are silk-screened on EIA rails', () => {
     const rack = { id: 'r3', name: 'Rack 3', units: 42, x: 0, y: 0 } as any;
     const group = buildRackGroup(rack, materials);
     const sprites = group.children.filter((c: any) => c.isSprite);
-    expect(sprites).toHaveLength(42);
-  });
-
-  it('U-label sprites are scaled consistently', () => {
-    const rack = { id: 'r4', name: 'Rack 4', units: 10, x: 0, y: 0 } as any;
-    const group = buildRackGroup(rack, materials);
-    const sprites = group.children.filter((c: any) => c.isSprite);
-    for (const s of sprites) {
-      expect((s as any).scale.set).toHaveBeenCalledWith(16, 10, 1);
-    }
+    expect(sprites).toHaveLength(0);
   });
 
   // Rail internals (buildRackInternals) are paused — their posts sit almost entirely inside the

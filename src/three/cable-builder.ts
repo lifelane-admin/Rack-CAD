@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import type { CableData, AppState, DeviceData, RackData, Point } from '../core/types';
 import { RACK_CONSTANTS } from '../core/types';
-import { RACK_DEPTH } from './rack-builder';
+import { RACK_DEPTH, DEVICE_FACE_Z } from './rack-builder';
 import { getTemplate } from '../library/device-catalog';
+import { getPortOrientation, computeSmartRouting } from '../utils/routing';
+import { stateManager } from '../core/state';
 
 const { RACK_INNER_WIDTH, RAIL_WIDTH, RACK_OUTER_WIDTH, RACK_PADDING_TOP, RACK_PADDING_BOTTOM, RU_HEIGHT } = RACK_CONSTANTS;
 
@@ -12,7 +14,7 @@ const CH_INSET = 15; // px inside from inner rail edge
 const LEFT_CH_LOCAL  = -(RACK_INNER_WIDTH / 2 - CH_INSET);  // -185 (left side, inside rack)
 const RIGHT_CH_LOCAL =  (RACK_INNER_WIDTH / 2 - CH_INSET);  // +185 (right side, inside rack)
 const BEND_R = 25;   // corner bend radius (same unit as RU_HEIGHT)
-const FRONT_Z = RACK_DEPTH / 2 + 12; // just in front of rack face so cables are always visible
+const FRONT_Z = DEVICE_FACE_Z + 10; // in front of device face, behind front door
 
 const POWER_TYPES = new Set(['power', 'c13-power', 'c19-power']);
 
@@ -108,6 +110,9 @@ function laneIndexFor(cable: CableData, rackId: string, side: 'left' | 'right', 
 
 function portWorldPos2D(portId: string | null, state: AppState): Point | null {
   if (!portId) return null;
+  const worldPos = stateManager.getPortWorldPosition(portId);
+  if (worldPos) return worldPos;
+
   const found = findPort(portId, state.devices);
   if (!found) return null;
   const { port, device } = found;
@@ -127,83 +132,14 @@ function portWorldPos2D(portId: string | null, state: AppState): Point | null {
   };
 }
 
-function getPortOrientationLocal(
-  cable: CableData,
-  end: 'source' | 'dest',
-  state: AppState
-): 'up' | 'down' | 'left' | 'right' {
-  const portId = end === 'source' ? cable.sourcePortId : cable.destPortId;
-  const isEarPort = portId && portId.includes('-ear-');
 
-  const userOverride = end === 'source' ? cable.sourceOrientation : cable.destOrientation;
-  if (userOverride && userOverride !== 'auto' && !isEarPort) {
-    return userOverride;
-  }
-
-  const found = portId ? findPort(portId, state.devices) : null;
-  if (!found) {
-    return cable.sidePreference || 'right';
-  }
-  const { port, device } = found;
-
-  const template = getTemplate(device.templateId, state.customTemplates);
-  const height = template ? template.heightUnits * 30 : 30;
-
-  if (device.templateId.includes('server') || template?.category === 'server' || template?.category === 'storage' || template?.category === 'ups') {
-    return port.relativeX > 175 ? 'right' : 'left';
-  }
-
-  return port.relativeY < height / 2 ? 'down' : 'up';
-}
-
-function getExitPoint(
-  pos: Point,
-  orientation: 'up' | 'down' | 'left' | 'right',
-  offset: number
-): Point {
-  if (orientation === 'left') {
-    return { x: pos.x - offset, y: pos.y };
-  } else if (orientation === 'right') {
-    return { x: pos.x + offset, y: pos.y };
-  } else if (orientation === 'down') {
-    return { x: pos.x, y: pos.y - offset };
-  } else {
-    return { x: pos.x, y: pos.y + offset };
-  }
-}
-
-function computeSmartRoutingLocal(
-  cable: CableData,
-  sourcePos: Point,
-  destPos: Point,
-  state: AppState
-): Point[] {
-  const srcOrient  = getPortOrientationLocal(cable, 'source', state);
-  const destHasOverride = cable.destOrientation && cable.destOrientation !== 'auto';
-  const destOrient = (!cable.destPortId && !destHasOverride)
-    ? (Math.abs(destPos.x - sourcePos.x) > Math.abs(destPos.y - sourcePos.y)
-        ? (destPos.x >= sourcePos.x ? 'right' : 'left')
-        : (destPos.y >= sourcePos.y ? 'up' : 'down'))
-    : getPortOrientationLocal(cable, 'dest', state);
-  const exitOffset = cable.exitStraightOffset ?? 15;
-
-  const srcExit  = getExitPoint(sourcePos, srcOrient,  exitOffset);
-  const destExit = getExitPoint(destPos,   destOrient, exitOffset);
-
-  const mid: Point = {
-    x: (srcExit.x + destExit.x) / 2,
-    y: (srcExit.y + destExit.y) / 2,
-  };
-
-  return [srcExit, mid, destExit];
-}
 
 export function buildOrthogonal3DCurve(points2D: Point[], bendRadius: number, rack: RackData, laneZ: number): THREE.CurvePath<THREE.Vector3> {
   const path = new THREE.CurvePath<THREE.Vector3>();
   const totalH = RACK_PADDING_TOP + rack.units * RU_HEIGHT + RACK_PADDING_BOTTOM;
   const to3D = (p: Point, z: number) => new THREE.Vector3(p.x, (rack.y + totalH) - p.y, z);
 
-  const fz = RACK_DEPTH / 2 + 0.4;
+  const fz = DEVICE_FACE_Z + 0.4;
   const portZ = fz - 1.0;
   const bootZ = fz + 9.5;
 
@@ -290,119 +226,129 @@ export function buildOrthogonal3DCurve(points2D: Point[], bendRadius: number, ra
   return path;
 }
 
-function buildPlugGroup(pos2D: Point, rack: RackData, totalH: number, color: string): THREE.Group {
+function buildPlugGroup(
+  pos2D: Point,
+  rack: RackData,
+  totalH: number,
+  color: string,
+  orientation: 'up' | 'down' = 'down'
+): THREE.Group {
   const group = new THREE.Group();
 
   const x = pos2D.x;
   const y = (rack.y + totalH) - pos2D.y;
-  const fz = RACK_DEPTH / 2 + 0.4;
+  const fz = DEVICE_FACE_Z + 0.4;
 
-  // Materials
-  const clearPlugMat = new THREE.MeshStandardMaterial({
-    color: 0xddf0ff,
+  const cableColor = new THREE.Color(color);
+
+  // 1. Crystal Polycarbonate Material (translucent tinted, matches 2D head)
+  const crystalMat = new THREE.MeshStandardMaterial({
+    color: cableColor,
     transparent: true,
-    opacity: 0.65,
+    opacity: 0.52,
     roughness: 0.1,
-    metalness: 0.1,
+    metalness: 0.12,
   });
 
-  const goldPinMat = new THREE.MeshStandardMaterial({
-    color: 0xffcc00,
-    metalness: 0.95,
-    roughness: 0.1,
-  });
-
+  // 2. Solid Rubber Boot Material (matches 2D boot)
   const bootMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(color),
-    roughness: 0.4,
+    color: cableColor,
+    roughness: 0.35,
+    metalness: 0.08,
+  });
+
+  // 3. Dark Recess / Groove Material
+  const grooveMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x181a20),
+    roughness: 0.6,
     metalness: 0.1,
   });
 
-  // 1. Transparent clear plastic RJ45 body
-  const plugGeo = new THREE.BoxGeometry(6.5, 4.5, 8.0);
-  const plug = new THREE.Mesh(plugGeo, clearPlugMat);
-  plug.position.set(x, y, fz + 0.5);
-  group.add(plug);
+  // 4. Glare / Highlight line material (top reflection)
+  const glareMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.75,
+    roughness: 0.05,
+    metalness: 0.3,
+  });
 
-  // 2. Slanted plastic retention clip/tab on the BOTTOM of the plug (tab-down orientation)
-  const clipGeo = new THREE.BoxGeometry(2.0, 1.2, 5.0);
-  clipGeo.rotateX(-0.25); // Slanted downwards/backwards
-  const clip = new THREE.Mesh(clipGeo, clearPlugMat);
-  clip.position.set(x, y - 2.4, fz + 1.2);
-  group.add(clip);
+  const isUp = orientation === 'up';
+  const flipY = isUp ? -1 : 1;
 
-  // 3. 8 internal colored wires representing the twisted-pair conductors inside the clear body (T568B configuration, top side)
-  const wireColors = [
-    0xffaa66, // Orange-White (1)
-    0xff5500, // Orange (2)
-    0xaaffaa, // Green-White (3)
-    0x0088ff, // Blue (4)
-    0x88ccff, // Blue-White (5)
-    0x00aa00, // Green (6)
-    0xaa7744, // Brown-White (7)
-    0x553311, // Brown (8)
-  ];
+  // 5. 50µ Gold Contact Pins Material (metallic gold gleam)
+  const goldMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0xf59e0b),
+    roughness: 0.15,
+    metalness: 0.85,
+  });
 
-  const wireW = 0.35;
-  const wireSpacing = 0.65;
-  const startWireX = -2.275;
+  // ── 1. Translucent Tinted Crystal Head (Inside Socket Cavity) ───────────────
+  const crystalGeo = new THREE.BoxGeometry(6.8, 4.4, 4.5);
+  const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+  crystal.position.set(x, y, fz - 0.25);
+  group.add(crystal);
 
-  const wireGeo = new THREE.BoxGeometry(wireW, 1.4, 4.0);
-
-  for (let wIdx = 0; wIdx < 8; wIdx++) {
-    const wireMat = new THREE.MeshStandardMaterial({
-      color: wireColors[wIdx],
-      roughness: 0.5,
-      metalness: 0.0,
-    });
-    const wire = new THREE.Mesh(wireGeo, wireMat);
-    wire.position.set(x + startWireX + wIdx * wireSpacing, y + 0.4, fz - 0.5);
-    group.add(wire);
-  }
-
-  // 4. 8 gold pins/contacts at the top-front of the clear body (where they contact the jack)
-  const pinW = 0.22;
-  const startPinX = -2.275;
-  const pinGeo = new THREE.BoxGeometry(pinW, 0.4, 0.8);
-
-  for (let pIdx = 0; pIdx < 8; pIdx++) {
-    const pin = new THREE.Mesh(pinGeo, goldPinMat);
-    pin.position.set(x + startPinX + pIdx * wireSpacing, y + 1.6, fz - 2.8);
+  // 8 Gold Contact Pins inside crystal head
+  for (let i = 0; i < 8; i++) {
+    const px = -2.6 + i * 0.74;
+    const pinGeo = new THREE.BoxGeometry(0.45, 1.8, 0.4);
+    const pin = new THREE.Mesh(pinGeo, goldMat);
+    pin.position.set(x + px, y + 1.0 * flipY, fz - 0.2);
     group.add(pin);
   }
 
-  // 5. Rectangular colored strain-relief boot sitting flush against the plug body
-  const bootGeo = new THREE.BoxGeometry(4.8, 3.8, 3.0);
+  // Inner latch clip tab inside crystal
+  const innerLatchGeo = new THREE.BoxGeometry(3.0, 1.2, 3.5);
+  const innerLatch = new THREE.Mesh(innerLatchGeo, crystalMat);
+  innerLatch.position.set(x, y - 1.2 * flipY, fz - 0.2);
+  group.add(innerLatch);
+
+  // ── 2. Solid Rubber Strain-Relief Boot (Collar Block) ────────────────────────
+  const bootGeo = new THREE.BoxGeometry(5.8, 4.2, 3.2);
   const boot = new THREE.Mesh(bootGeo, bootMat);
-  boot.position.set(x, y, fz + 6.0);
+  boot.position.set(x, y, fz + 3.4);
   group.add(boot);
 
-  // 6. Anti-snag boot arch over the retention clip (BOTTOM side)
-  // A. Vertical riser from the bottom-front of the boot
-  const riserGeo = new THREE.BoxGeometry(2.0, 1.2, 0.6);
-  const riser = new THREE.Mesh(riserGeo, bootMat);
-  riser.position.set(x, y - 2.5, fz + 4.8);
-  group.add(riser);
+  // Molded Snagless Latch Arch Cover (center bump)
+  const archGeo = new THREE.BoxGeometry(2.4, 1.6, 2.8);
+  const arch = new THREE.Mesh(archGeo, bootMat);
+  arch.position.set(x, y - 2.0 * flipY, fz + 2.8);
+  group.add(arch);
 
-  // B. Arched cover slanting down-forward over the clip tab
-  const archCoverGeo = new THREE.BoxGeometry(2.0, 0.4, 3.5);
-  archCoverGeo.rotateX(-0.25);
-  const archCover = new THREE.Mesh(archCoverGeo, bootMat);
-  archCover.position.set(x, y - 3.0, fz + 2.8);
-  group.add(archCover);
+  // Snagless ramp
+  const rampGeo = new THREE.BoxGeometry(2.4, 0.8, 2.0);
+  rampGeo.rotateX(flipY * 0.3);
+  const ramp = new THREE.Mesh(rampGeo, bootMat);
+  ramp.position.set(x, y - 2.4 * flipY, fz + 1.2);
+  group.add(ramp);
 
-  // 7. Ribbed boot tail segments for realistic flexible strain relief
-  const rib1 = new THREE.Mesh(new THREE.BoxGeometry(4.2, 3.2, 0.6), bootMat);
-  rib1.position.set(x, y, fz + 7.8);
+  // ── 3. Three Detailed Flex Collar Ridges (Ribs) ──────────────────────────────
+  // Groove core
+  const coreGeo = new THREE.BoxGeometry(3.2, 2.2, 4.0);
+  const core = new THREE.Mesh(coreGeo, grooveMat);
+  core.position.set(x, y, fz + 7.0);
+  group.add(core);
+
+  // Ridge 1
+  const rib1 = new THREE.Mesh(new THREE.BoxGeometry(5.0, 3.6, 0.9), bootMat);
+  rib1.position.set(x, y, fz + 5.5);
   group.add(rib1);
 
-  const rib2 = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.6, 0.6), bootMat);
-  rib2.position.set(x, y, fz + 8.4);
+  // Ridge 2
+  const rib2 = new THREE.Mesh(new THREE.BoxGeometry(4.4, 3.0, 0.9), bootMat);
+  rib2.position.set(x, y, fz + 6.8);
   group.add(rib2);
 
-  const rib3 = new THREE.Mesh(new THREE.BoxGeometry(3.0, 2.0, 0.6), bootMat);
-  rib3.position.set(x, y, fz + 9.0);
+  // Ridge 3
+  const rib3 = new THREE.Mesh(new THREE.BoxGeometry(3.8, 2.5, 0.9), bootMat);
+  rib3.position.set(x, y, fz + 8.1);
   group.add(rib3);
+
+  // ── 4. Cable Exit Sleeve ─────────────────────────────────────────────────────
+  const exitSleeve = new THREE.Mesh(new THREE.BoxGeometry(3.0, 2.0, 1.6), bootMat);
+  exitSleeve.position.set(x, y, fz + 9.3);
+  group.add(exitSleeve);
 
   return group;
 }
@@ -433,7 +379,7 @@ export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | 
 
   const anchors = (cable.anchorsLocked && cable.anchorPoints && cable.anchorPoints.length > 0)
     ? cable.anchorPoints
-    : computeSmartRoutingLocal(cable, src2D, dest2D, state);
+    : computeSmartRouting(cable, src2D, dest2D);
 
   const allPoints2D = [src2D, ...anchors, dest2D];
   // Increase bend radius in 3D (to 22) for a smoother, realistic cable turn loop, capped dynamically by segment length
@@ -445,10 +391,10 @@ export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | 
 
   const mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(cable.color),
-    emissive: new THREE.Color(cable.color),
-    emissiveIntensity: 0.15,
-    roughness: 0.4,
-    metalness: 0.1,
+    roughness: 0.65,
+    metalness: 0.04,
+    transparent: true,
+    opacity: 0.96,
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = `cable-tube-${cable.id}`;
@@ -460,13 +406,18 @@ export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | 
 
   // Add source plug & boot (only if not an ear port and not floating)
   if (cable.sourcePortId && !cable.sourcePortId.includes('-ear-')) {
-    const srcPlug = buildPlugGroup(src2D, rack, totalH, cable.color);
+    const rawOrient = getPortOrientation(cable, 'source');
+    const srcOrient = (rawOrient === 'up' || rawOrient === 'down') ? rawOrient : ((anchors[0] && anchors[0].y < src2D.y) ? 'up' : 'down');
+    const srcPlug = buildPlugGroup(src2D, rack, totalH, cable.color, srcOrient);
     group.add(srcPlug);
   }
 
   // Add dest plug & boot (if not floating and not an ear port)
   if (cable.destPortId && !cable.destPortId.includes('-ear-')) {
-    const destPlug = buildPlugGroup(dest2D, rack, totalH, cable.color);
+    const rawOrient = getPortOrientation(cable, 'dest');
+    const lastAnchor = anchors.length > 0 ? anchors[anchors.length - 1] : src2D;
+    const destOrient = (rawOrient === 'up' || rawOrient === 'down') ? rawOrient : ((lastAnchor && lastAnchor.y < dest2D.y) ? 'up' : 'down');
+    const destPlug = buildPlugGroup(dest2D, rack, totalH, cable.color, destOrient);
     group.add(destPlug);
   }
 

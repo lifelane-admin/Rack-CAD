@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { DeviceData, DeviceTemplate, RackData } from '../core/types';
 import { RACK_CONSTANTS } from '../core/types';
 import type { MaterialManager } from './MaterialManager';
-import { RACK_DEPTH } from './rack-builder';
+import { RACK_DEPTH, DEVICE_FACE_Z } from './rack-builder';
 import { getDeviceFrontMaterial } from './svg-texture';
 import { buildLedMeshes, buildPortBezels, buildLogoPlaque, buildServerAccessories } from './device-accessories';
 
@@ -18,65 +18,20 @@ function makeDeviceBodyMat(color: string, category: string): THREE.MeshStandardM
   // Boost switch/router to silver-gray; keep servers/storage dark gunmetal
   const baseHex = isLight ? '#7a8c9a' : (color || '#1a1e24');
 
-  const TW = 256, TH = 64;
-  const canvas = document.createElement('canvas');
-  canvas.width = TW;
-  canvas.height = TH;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    return new THREE.MeshStandardMaterial({
-      color: isLight ? 0x7a8c9a : 0x1a1e24, metalness: isLight ? 0.45 : 0.35, roughness: 0.55,
-    });
-  }
-
-  // Base gradient (very subtle, mimics horizontal brushing)
-  const g = ctx.createLinearGradient(0, 0, 0, TH);
-  g.addColorStop(0, isLight ? '#9aaabb' : '#222830');
-  g.addColorStop(0.5, isLight ? '#7a8c9a' : '#181e26');
-  g.addColorStop(1, isLight ? '#6a7c8a' : '#141820');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, TW, TH);
-
-  // Top highlight edge
-  ctx.fillStyle = isLight ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)';
-  ctx.fillRect(0, 0, TW, 1);
-  // Bottom shadow edge
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.fillRect(0, TH - 1, TW, 1);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(4, 1);
   return new THREE.MeshStandardMaterial({
-    map: tex, metalness: isLight ? 0.5 : 0.4, roughness: 0.5,
+    color: isLight ? 0x7a8c9a : 0x1a1e24,
+    metalness: isLight ? 0.35 : 0.25,
+    roughness: 0.55,
   });
 }
 
 function makeDeviceTopMat(color: string, category: string): THREE.MeshStandardMaterial {
   const isLight = category === 'switch' || category === 'router';
-  const TW = 256, TH = 128;
-  const canvas = document.createElement('canvas');
-  canvas.width = TW;
-  canvas.height = TH;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    return new THREE.MeshStandardMaterial({
-      color: isLight ? 0x8a9caa : 0x1e2530, metalness: 0.6, roughness: 0.4,
-    });
-  }
-
-  // Horizontal brushed grain (top-down view)
-  const g = ctx.createLinearGradient(0, 0, TW, 0);
-  g.addColorStop(0, isLight ? '#8a9caa' : '#1c2430');
-  g.addColorStop(0.5, isLight ? '#aabbcc' : '#242e3e');
-  g.addColorStop(1, isLight ? '#8a9caa' : '#1c2430');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, TW, TH);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(2, 1);
-  return new THREE.MeshStandardMaterial({ map: tex, metalness: 0.6, roughness: 0.35 });
+  return new THREE.MeshStandardMaterial({
+    color: isLight ? 0x8a9caa : 0x1e2530,
+    metalness: isLight ? 0.35 : 0.25,
+    roughness: 0.55,
+  });
 }
 
 type EarStyle = 'server' | 'switch' | 'default';
@@ -106,8 +61,8 @@ function makeBracketFaceMat(
 ): THREE.MeshStandardMaterial {
   const style = earStyle(category);
   const c = EAR_COLORS[style];
-  const W = Math.max(Math.round(earW * 4), 8);
-  const H = Math.max(Math.round(earH * 4), 8);
+  const W = 256;
+  const H = Math.max(Math.round(earH * 8), 64);
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -127,21 +82,21 @@ function makeBracketFaceMat(
 
   // Rounded plate outline
   ctx.beginPath();
-  const radius = 6;
-  ctx.roundRect(1, 1, W - 2, H - 2, radius);
+  const radius = 10;
+  ctx.roundRect(2, 2, W - 4, H - 4, radius);
   ctx.fillStyle = grad;
   ctx.fill();
 
   // Dark sheet-metal border
-  ctx.strokeStyle = '#222225';
-  ctx.lineWidth = 2.0;
+  ctx.strokeStyle = '#1b1d22';
+  ctx.lineWidth = 3.5;
   ctx.stroke();
 
   // 3D inner bevel highlight
   ctx.beginPath();
-  ctx.roundRect(2.5, 2.5, W - 5, H - 5, Math.max(0.5, radius - 1.5));
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-  ctx.lineWidth = 0.8;
+  ctx.roundRect(5, 5, W - 10, H - 10, Math.max(0.5, radius - 3));
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+  ctx.lineWidth = 1.5;
   ctx.stroke();
 
   // Filter ports for ear ports on this side
@@ -149,8 +104,8 @@ function makeBracketFaceMat(
 
   if (sidePorts.length === 0) {
     // Mounting slot (elongated oval in center)
-    const slotH = Math.min(H * 0.45, 40);
-    const slotW = W * 0.3;
+    const slotH = Math.min(H * 0.45, 90);
+    const slotW = W * 0.35;
     const slotX = W / 2;
     const slotY = H / 2;
     ctx.beginPath();
@@ -158,55 +113,42 @@ function makeBracketFaceMat(
     ctx.fillStyle = c.shade;
     ctx.fill();
     ctx.beginPath();
-    ctx.ellipse(slotX, slotY, slotW / 2 - 2, slotH / 2 - 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(slotX, slotY, slotW / 2 - 4, slotH / 2 - 4, 0, 0, Math.PI * 2);
     ctx.fillStyle = c.hole;
     ctx.fill();
 
     // Screw holes at top and bottom
-    const screwY = [H * 0.12, H * 0.88];
+    const screwY = [H * 0.14, H * 0.86];
     for (const sy of screwY) {
       ctx.beginPath();
-      ctx.arc(W / 2, sy, W * 0.28, 0, Math.PI * 2);
+      ctx.arc(W / 2, sy, W * 0.22, 0, Math.PI * 2);
       ctx.fillStyle = c.shade;
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(W / 2, sy, W * 0.15, 0, Math.PI * 2);
+      ctx.arc(W / 2, sy, W * 0.14, 0, Math.PI * 2);
       ctx.fillStyle = c.hole;
       ctx.fill();
       // Phillips cross
       ctx.strokeStyle = c.cross;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(W / 2 - W * 0.11, sy); ctx.lineTo(W / 2 + W * 0.11, sy);
+      ctx.moveTo(W / 2 - W * 0.10, sy); ctx.lineTo(W / 2 + W * 0.10, sy);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(W / 2, sy - W * 0.11); ctx.lineTo(W / 2, sy + W * 0.11);
+      ctx.moveTo(W / 2, sy - W * 0.10); ctx.lineTo(W / 2, sy + W * 0.10);
       ctx.stroke();
     }
   } else {
-    // Draw background shadows/holes and labels for dynamic ear ports
+    // Draw background shadows/holes and ultra-crisp high-contrast labels for dynamic ear ports
     const H_total = heightUnits * RU_HEIGHT;
-    ctx.font = 'bold 11px monospace, sans-serif';
-    ctx.fillStyle = '#ffffff';
+    const labelFont = '900 24px "Arial Black", Arial, sans-serif';
+    ctx.font = labelFont;
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = '#000000';
-    ctx.shadowBlur = 3;
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
 
     for (const port of sidePorts) {
       // Calculate canvas Y position based on port's relativeY
       const canvasY = (port.relativeY / H_total) * H;
 
-      // Draw dark recess hole shadow behind the 3D cylinder
-      const r_px = (port.type === 'power' ? 2.2 : 1.8) * 4; // scale 3D radius (4x)
-      ctx.beginPath();
-      ctx.arc(W / 2, canvasY, r_px + 1, 0, Math.PI * 2);
-      ctx.fillStyle = c.shade;
-      ctx.fill();
-
-      // Extract slot/port label directly from port.name set by injectEarPorts
-      // e.g. "Left Ear S2-P3" → 'S2' / 'P3'  |  "Left Ear Power" → 'PW' / 'Res'
       const isPowerPort = port.type === 'power';
       let leftVal = 'PW';
       let rightVal = 'Res';
@@ -221,21 +163,69 @@ function makeBracketFaceMat(
         }
       }
 
-      ctx.fillStyle = '#ffffff';
-      // Draw Slot / PW label
-      ctx.textAlign = 'right';
-      ctx.fillText(leftVal, W / 2 - r_px - 4, canvasY);
+      // Draw recessed socket housing
+      const r_outer = 18;
+      const r_inner = 13;
 
-      // Draw Port / Res label
-      ctx.textAlign = 'left';
-      ctx.fillText(rightVal, W / 2 + r_px + 4, canvasY);
+      // Outer metallic bezel ring
+      ctx.beginPath();
+      ctx.arc(W / 2, canvasY, r_outer, 0, Math.PI * 2);
+      ctx.fillStyle = isPowerPort ? '#7a2214' : '#1f2937';
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = isPowerPort ? '#cc3322' : '#4b5563';
+      ctx.stroke();
+
+      // Inner socket cavity
+      ctx.beginPath();
+      ctx.arc(W / 2, canvasY, r_inner, 0, Math.PI * 2);
+      ctx.fillStyle = isPowerPort ? (port.connected ? '#e53935' : '#1a0505') : (port.connected ? '#00e676' : '#0a0d14');
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#05070a';
+      ctx.stroke();
+
+      // Center gold contact / power indicator pin
+      ctx.beginPath();
+      ctx.arc(W / 2, canvasY, isPowerPort ? 6 : 4, 0, Math.PI * 2);
+      ctx.fillStyle = isPowerPort ? '#ff5252' : (port.connected ? '#ffffff' : '#ffd54f');
+      ctx.fill();
+
+      // Draw Slot / PW label on the left with high contrast outline badge
+      if (leftVal) {
+        ctx.textAlign = 'right';
+        const lx = W / 2 - r_outer - 10;
+        ctx.font = labelFont;
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#000000';
+        ctx.strokeText(leftVal, lx, canvasY);
+        ctx.fillStyle = isPowerPort ? '#ffb74d' : '#00e5ff';
+        ctx.fillText(leftVal, lx, canvasY);
+      }
+
+      // Draw Port / Res label on the right with high contrast outline badge
+      if (rightVal) {
+        ctx.textAlign = 'left';
+        const rx = W / 2 + r_outer + 10;
+        ctx.font = labelFont;
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#000000';
+        ctx.strokeText(rightVal, rx, canvasY);
+        ctx.fillStyle = isPowerPort ? '#ff5252' : '#ffffff';
+        ctx.fillText(rightVal, rx, canvasY);
+      }
     }
   }
 
-  ctx.fillStyle = 'rgba(255,255,255,0.1)';
-  ctx.fillRect(0, 0, W, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillRect(0, 0, W, 2);
 
   const tex = new THREE.CanvasTexture(canvas);
+  tex.anisotropy = 16;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+
   return new THREE.MeshStandardMaterial({
     map: tex,
     metalness: 0.85,
@@ -288,7 +278,7 @@ export function buildDeviceMesh(
   mesh.name = `device-${device.id}`;
 
   const deviceYFromBottom = RACK_PADDING_BOTTOM + (device.startUnit - 1 + template.heightUnits / 2) * RU_HEIGHT;
-  const zOffset = RACK_DEPTH / 2 - cfg.depth / 2 + 0.4;
+  const zOffset = DEVICE_FACE_Z - cfg.depth / 2;
   mesh.position.set(0, -totalH / 2 + deviceYFromBottom, zOffset);
 
   const deviceY = -totalH / 2 + deviceYFromBottom;
@@ -299,8 +289,8 @@ export function buildDeviceMesh(
   if (earW > 0) {
     // Ears align flush with device front face, extend back ~20% of device depth
     const earDepth = Math.min(cfg.depth * 0.20, 80);
-    // Z offset so ear front face is flush with device front face
-    const earZ = (cfg.depth - earDepth) / 2;
+    // Z offset sits flush inline with rail post face (+0.05mm for z-buffer precision)
+    const earZ = (cfg.depth - earDepth) / 2 + 0.05;
 
     const earSideMat  = makeEarSideMat(template.category);
     const leftEarFrontMat = makeBracketFaceMat(earW, deviceH, template.category, device.ports || [], true, template.heightUnits);
@@ -321,9 +311,8 @@ export function buildDeviceMesh(
     earMeshes.push(rightEar);
   }
 
-  // Always build LEDs and port bezels for all ports (including front panel ports)
-  // to give them real depth and realism, regardless of whether a front panel image is active.
-  const ledMeshes = buildLedMeshes(template, cfg, deviceH, deviceY);
+  // Build generic LEDs and server accessories only when there is NO custom front panel image
+  const ledMeshes = cfg.frontPanelImage ? [] : buildLedMeshes(template, cfg, deviceH, deviceY);
   const portMeshes = buildPortBezels(device.ports || [], cfg, deviceH, deviceY, template.heightUnits);
 
   if (!cfg.frontPanelImage) {

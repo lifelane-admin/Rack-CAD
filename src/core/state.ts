@@ -43,6 +43,7 @@ class StateManager {
       selection: [],
       cableInProgress: null,
       airdropDestination: false,
+      activeCableEnd: 'dest',
       sidebarCollapsed: false,
       propertiesCollapsed: false,
       showLegends: true,

@@ -422,7 +422,8 @@ function drawPduMeter(parent: SVGElement, uid: string, x: number, y: number, w: 
   const ledColor = oled ? '#4dd8ff' : '#39ff5a';
   parent.appendChild(el('rect', { x, y, width: w, height: h, rx: 2, fill: oled ? '#020a12' : '#020a06', stroke: oled ? '#0a1a2a' : '#0a2016', 'stroke-width': 1 }));
 
-  const lines = [`${Math.round(voltage)}V`, `${Math.round(amps)}A`, `${Math.round(watts)}W`];
+  const ampStr = amps.toFixed(1);
+  const lines = [`${Math.round(voltage)}V`, `${ampStr}A`, `${Math.round(watts)}W`];
   const lineH = h / 3;
   const longest = lines.reduce((a, b) => (b.length > a.length ? b : a));
   const digitCount = longest.match(/^[\d.]+/)?.[0].length ?? longest.length;
@@ -437,9 +438,12 @@ function drawPduMeter(parent: SVGElement, uid: string, x: number, y: number, w: 
 }
 
 function drawSocket(parent: SVGElement, uid: string, type: string, cx: number, cy: number, outletFace: 'white' | 'black' = 'black', rotationDeg = 0): void {
-  if (type === 'C13' || type === 'iec-c13') return drawC13(parent, uid, cx, cy, outletFace, rotationDeg);
-  if (type === 'C19' || type === 'iec-c19') return drawC19(parent, uid, cx, cy, outletFace, rotationDeg);
-  drawNema515(parent, uid, cx, cy, outletFace, rotationDeg);
+  const ow = socketWidth(type);
+  const oh = socketHeight(type);
+  const target = rotationDeg !== 0
+    ? (() => { const wrap = el('g', { transform: `rotate(${rotationDeg} ${cx} ${cy})` }); parent.appendChild(wrap); return wrap; })()
+    : parent;
+  drawSocketFacePlate(target, uid, cx, cy, ow, oh, type as SocketType, false, outletFace);
 }
 /** Draws the IEC 60320 pentagon shroud (shared shape) centered at (cx,cy), sized w x h. */
 function drawIecShroud(parent: SVGElement, uid: string, cx: number, cy: number, w: number, h: number, outletFace: 'white' | 'black' = 'black'): void {
@@ -807,7 +811,8 @@ export function renderSidePdu(
     ns.appendChild(el('rect', { x: 3, y: 6, width: pduWidth - 6, height: lcdH, rx: 2, fill: '#04120a', stroke: '#000', 'stroke-width': 0.6 }));
     ns.appendChild(el('rect', { x: 4, y: 7, width: pduWidth - 8, height: lcdH - 2, rx: 1.5, fill: 'none', stroke: ledColor, 'stroke-width': 0.3, opacity: 0.2 }));
 
-    const lines = [`${Math.round(voltage)}V`, `${Math.round(amps)}A`, `${Math.round(watts)}W`];
+    const ampStr = amps.toFixed(1);
+    const lines = [`${Math.round(voltage)}V`, `${ampStr}A`, `${Math.round(watts)}W`];
     const lineH = lcdH / 3;
     // Size digit glyphs to fit both the line height and the longest line's width (the widest
     // reading, e.g. "12500W", must still fit inside the narrowest vertical PDU chassis).

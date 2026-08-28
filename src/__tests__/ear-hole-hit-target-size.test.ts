@@ -28,13 +28,13 @@ describe('ear-hole hit-target size', () => {
     };
   }
 
-  it('renders a hit-target circle of r=1.5, well under half the tightest hole pitch (3.75px)', () => {
+  it('renders a hit-target circle of r=3.5, well under half the tightest hole pitch (3.75px)', () => {
     const deviceGroup = createGroup('device-devX', 'device');
     const portGroup = renderPort(earPort(), deviceGroup);
 
     const hitTarget = portGroup.querySelector('.port-hover-target') as SVGCircleElement;
     expect(hitTarget).toBeTruthy();
-    expect(parseFloat(hitTarget.getAttribute('r')!)).toBe(1.5);
+    expect(parseFloat(hitTarget.getAttribute('r')!)).toBe(3.5);
   });
 
   it('makes the visible bezel/hole/pin/glow-ring non-interactive, so only the hitTarget can be clicked', () => {
@@ -63,12 +63,12 @@ describe('ear-hole hit-target size', () => {
 
     const powerGroup = renderPort(earPort({ id: 'devX-ear-left-nic2', type: 'power' }), deviceGroup);
     const powerHit = powerGroup.querySelector('.port-hover-target') as SVGCircleElement;
-    expect(parseFloat(powerHit.getAttribute('r')!)).toBe(1.5);
+    expect(parseFloat(powerHit.getAttribute('r')!)).toBe(3.5);
     expect(powerGroup.querySelector('.ear-port-hole')!.getAttribute('pointer-events')).toBe('none');
 
     const hybridGroup = renderPort(earPort({ id: 'devX-ear-right-nic4', type: 'hybrid' }), deviceGroup);
     const hybridHit = hybridGroup.querySelector('.port-hover-target') as SVGCircleElement;
-    expect(parseFloat(hybridHit.getAttribute('r')!)).toBe(1.5);
-    expect(hybridGroup.querySelector('.ear-port-hole')!.getAttribute('pointer-events')).toBe('none');
+    expect(parseFloat(hybridHit.getAttribute('r')!)).toBe(3.5);
+    expect(powerGroup.querySelector('.ear-port-hole')!.getAttribute('pointer-events')).toBe('none');
   });
 });

@@ -165,6 +165,14 @@ body.hybrid-active .splitter-hybrid {
   transition: opacity var(--transition-speed);
 }
 
+#minimap.hidden,
+#minimap:empty,
+#canvas-viewport:has(#canvas-3d:not(.hidden)) ~ #minimap,
+#canvas-split:has(#canvas-3d:not(.hidden)) ~ #minimap,
+#canvas-container:has(#canvas-3d:not(.hidden)) #minimap {
+  display: none !important;
+}
+
 #minimap:hover {
   opacity: 1;
 }
@@ -193,12 +201,14 @@ body.hybrid-active .splitter-hybrid {
 }
 
 /* Selected Element Outlines matching Desired-Design2.jpg glowing style */
-.selected {
+/* Exclude cable-element — outline on SVG groups creates a bounding-box rectangle */
+.selected:not(.cable-element) {
   outline: 2px solid var(--accent-primary) !important;
   outline-offset: -1px;
 }
 
-svg .selected {
+/* Generic SVG selection glow — exclude cable-element (handled separately below to avoid bounding-box rect artefact) */
+svg .selected:not(.cable-element) {
   filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.7)) !important;
 }
 
@@ -217,10 +227,9 @@ svg g.cable-manager-vertical.selected rect:first-of-type {
   stroke-width: 2px !important;
 }
 
-svg path.cable-element.selected {
-  stroke: var(--accent-primary) !important;
-  stroke-width: 3.5px !important;
-  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.9)) !important;
+/* Cable selection: subtle path-only glow (no bounding-box rectangle), 75% dimmer than before */
+svg g.cable-element.selected {
+  filter: drop-shadow(0 0 1px rgba(56, 189, 248, 0.5)) !important;
 }
 
 /* Cable Anchor Handles */

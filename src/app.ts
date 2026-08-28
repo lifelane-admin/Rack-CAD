@@ -34,6 +34,7 @@ import { renderCable, renderCableInProgress, resetPreviewDirection } from './ren
 import { renderTextLabel } from './renderers/text-label-renderer';
 import { renderImageAsset } from './renderers/image-asset-renderer';
 import { deviceCatalog, getTemplate } from './library/device-catalog';
+import { RACK_TEMPLATES, VCM_TEMPLATES, createRackFromTemplate } from './library/rack-catalog';
 import { generateId, distToSegment } from './utils/geometry';
 import { initExportHandlers, downloadFile, exportJSON } from './utils/export';
 import { computeSmartRouting, get3DefaultAnchors } from './utils/routing';
@@ -974,12 +975,13 @@ export class App {
     });
 
     // Rack add
-    (eventBus as any).on('rack:add', (data: { units: 42 | 48 }) => {
+    (eventBus as any).on('rack:add', (data?: { units?: number }) => {
       const rackCount = stateManager.getState().racks.length;
+      const units = data?.units ?? 42;
       const newRack: RackData = {
         id: generateId(),
         name: `Rack ${rackCount + 1}`,
-        units: data.units,
+        units,
         x: 200 + rackCount * 500,
         y: 100
       };
@@ -1352,6 +1354,49 @@ export class App {
       }
     });
 
+    // Double-click directly on any cable line instantly adds an anchor point at that spot
+    svgEl.addEventListener('dblclick', (e: MouseEvent) => {
+      const target = e.target as SVGElement;
+      const cableEl = target.closest?.('[data-cable-id]') as SVGElement | null;
+      const cableId = cableEl?.getAttribute('data-cable-id');
+      if (cableId) {
+        const mouseWorld = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+        const targetCable = stateManager.getCable(cableId);
+        if (targetCable) {
+          const sourcePos = targetCable.floatingSource || stateManager.getPortWorldPosition(targetCable.sourcePortId) || { x: 0, y: 0 };
+          const destPos = (targetCable.destPortId ? stateManager.getPortWorldPosition(targetCable.destPortId) : targetCable.floatingDest) || { x: 0, y: 0 };
+          const baseAnchors = (targetCable.anchorPoints && targetCable.anchorPoints.length > 0)
+            ? targetCable.anchorPoints
+            : computeSmartRouting(targetCable, sourcePos, destPos);
+
+          const points = [sourcePos, ...baseAnchors, destPos];
+          let minDistance = Infinity;
+          let insertIdx = baseAnchors.length;
+
+          for (let i = 0; i < points.length - 1; i++) {
+            const p1 = points[i], p2 = points[i + 1];
+            const dx = p2.x - p1.x, dy = p2.y - p1.y;
+            const l2 = dx * dx + dy * dy;
+            let t = l2 === 0 ? 0 : ((mouseWorld.x - p1.x) * dx + (mouseWorld.y - p1.y) * dy) / l2;
+            t = Math.max(0, Math.min(1, t));
+            const projX = p1.x + t * dx, projY = p1.y + t * dy;
+            const dist = Math.hypot(mouseWorld.x - projX, mouseWorld.y - projY);
+            if (dist < minDistance) {
+              minDistance = dist;
+              insertIdx = i;
+            }
+          }
+
+          const currentPts = [...baseAnchors];
+          currentPts.splice(insertIdx, 0, { x: Math.round(mouseWorld.x), y: Math.round(mouseWorld.y) });
+          eventBus.emit('cable:update', { id: cableId, data: { anchorPoints: currentPts, anchorsLocked: true } });
+          eventBus.emit('notification', { message: 'Anchor point added to cable', type: 'info' });
+          this.renderAll();
+        }
+        e.stopPropagation();
+      }
+    });
+
     svgEl.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       const target = e.target as SVGElement;
@@ -1411,10 +1456,30 @@ export class App {
       if (anchorEl) {
         const cableId = anchorEl.getAttribute('data-cable-id')!;
         const anchorIdx = parseInt(anchorEl.getAttribute('data-anchor-index') || '0', 10);
+        const realIdx = parseInt(anchorEl.getAttribute('data-anchor-real-index') || String(anchorIdx), 10);
+
+        if (e.shiftKey || e.altKey) {
+          // Shift-Click or Alt-Click instantly removes this anchor point
+          const targetCable = stateManager.getCable(cableId);
+          if (targetCable) {
+            const sourcePos = targetCable.floatingSource || stateManager.getPortWorldPosition(targetCable.sourcePortId) || { x: 0, y: 0 };
+            const destPos = (targetCable.destPortId ? stateManager.getPortWorldPosition(targetCable.destPortId) : targetCable.floatingDest) || { x: 0, y: 0 };
+            const currentPts = [...(targetCable.anchorPoints && targetCable.anchorPoints.length > 0 ? targetCable.anchorPoints : computeSmartRouting(targetCable, sourcePos, destPos))];
+            if (currentPts.length > 0) {
+              currentPts.splice(realIdx, 1);
+              eventBus.emit('cable:update', { id: cableId, data: { anchorPoints: currentPts, anchorsLocked: currentPts.length > 0 } });
+              eventBus.emit('notification', { message: 'Anchor point removed', type: 'info' });
+              this.renderAll();
+            }
+          }
+          e.stopPropagation();
+          return;
+        }
+
         this.isDraggingAnchor = true;
         this.draggedAnchorCableId = cableId;
         this.draggedAnchorIndex = anchorIdx;
-        this.draggedAnchorRealIndex = parseInt(anchorEl.getAttribute('data-anchor-real-index') || String(anchorIdx), 10);
+        this.draggedAnchorRealIndex = realIdx;
         this.dragStartWorldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
         this.dragStartCablesState = JSON.parse(JSON.stringify(stateManager.getState().cables));
         svgEl.classList.add('dragging-active');
@@ -1456,6 +1521,7 @@ export class App {
         const cableId = handleEl.getAttribute('data-cable-id-handle')!;
         const handleType = (handleEl.getAttribute('data-handle-type') as 'source' | 'dest') || 'dest';
         
+        stateManager.setState({ activeCableEnd: handleType });
         this.isDraggingCableEnd = true;
         this.draggedCableId = cableId;
         this.draggedHandleType = handleType;
@@ -1610,6 +1676,29 @@ export class App {
             e.stopPropagation();
             return;
           }
+        }
+
+        // Vertical Cable Manager click — checked ahead of rack drag so clicking/deleting VCM does not delete the rack
+        const vcmEl = target.closest('.cable-manager-vertical') as SVGElement;
+        if (vcmEl) {
+          const rackId = vcmEl.getAttribute('data-vertical-mgr-id')!;
+          const side = vcmEl.getAttribute('data-side') as 'left' | 'right';
+          const sel: SelectableItem = { type: 'vertical-mgr', id: rackId, side } as any;
+          stateManager.setState({ selection: [sel] });
+          eventBus.emit('selection:changed', [sel]);
+          this.highlightElement(vcmEl);
+          e.stopPropagation();
+          return;
+        }
+
+        // PDU "+" Add handle click
+        const addHandleEl = target.closest('[data-pdu-add-side]') as SVGElement;
+        if (addHandleEl) {
+          const side = addHandleEl.getAttribute('data-pdu-add-side') as 'left' | 'right';
+          const rackId = addHandleEl.getAttribute('data-rack-id') ?? '';
+          this.showPduPickerModal(rackId, side);
+          e.stopPropagation();
+          return;
         }
 
         // Side-mount PDU click — checked ahead of the generic rack-drag branch below, since
@@ -1866,7 +1955,7 @@ export class App {
               }
             }
             if (!targetPort) {
-              const EAR_SNAP_RADIUS = 1.5;
+              const EAR_SNAP_RADIUS = 12.0;
               let closestEarDist = EAR_SNAP_RADIUS;
               for (const dev of s.devices) {
                 for (const port of dev.ports) {
@@ -2345,7 +2434,7 @@ export class App {
               }
             }
             if (!closestPortId) {
-              const EAR_SNAP_RADIUS = 1.5;
+              const EAR_SNAP_RADIUS = 12.0;
               let closestEarDist = EAR_SNAP_RADIUS;
               for (const id of earCandidateIds) {
                 const pos = stateManager.getPortWorldPosition(id);
@@ -2852,7 +2941,7 @@ export class App {
       }
     }
     if (!closestPortId) {
-      const EAR_HIGHLIGHT_RADIUS = 1.5;
+      const EAR_HIGHLIGHT_RADIUS = 12.0;
       let closestEarDist = EAR_HIGHLIGHT_RADIUS;
       for (const dev of s.devices) {
         for (const port of dev.ports) {
@@ -2899,7 +2988,64 @@ export class App {
       if (!jsonData) return;
 
       try {
-        const { templateId, iconId } = JSON.parse(jsonData);
+        const payload = JSON.parse(jsonData);
+        const { templateId, iconId, rackTemplateId, vcmTemplateId } = payload;
+
+        // Convert drop position to world coordinates
+        const worldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
+        const s = stateManager.getState();
+
+        // ── 1. Dropping a full Rack / Cabinet ──
+        if (rackTemplateId) {
+          const rackTpl = RACK_TEMPLATES.find(r => r.id === rackTemplateId);
+          if (rackTpl) {
+            const newRack = createRackFromTemplate(rackTpl, worldPos.x - 225, 100);
+            stateManager.addRack(newRack);
+            eventBus.emit('notification', { message: `Deployed ${rackTpl.name} at canvas position`, type: 'success' });
+            return;
+          }
+        }
+
+        // ── 2. Dropping a Vertical Cable Manager (VCM) ──
+        if (vcmTemplateId || (templateId && templateId.startsWith('vcm-'))) {
+          const targetVcmId = vcmTemplateId || templateId;
+          const vcmTpl = VCM_TEMPLATES.find(v => v.id === targetVcmId);
+          const widthVal: any = vcmTpl?.width || (templateId === 'vertical-mgr-6' ? '6-inch' : '4-inch');
+
+          let closestRack: RackData | null = null;
+          let minDist = Infinity;
+          for (const rack of s.racks) {
+            const rx = rack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH / 2;
+            const ry = rack.y + (rack.units * RACK_CONSTANTS.RU_HEIGHT) / 2;
+            const dist = Math.sqrt(Math.pow(worldPos.x - rx, 2) + Math.pow(worldPos.y - ry, 2));
+            if (dist < minDist) {
+              minDist = dist;
+              closestRack = rack;
+            }
+          }
+
+          if (closestRack) {
+            const isLeft = worldPos.x < closestRack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH / 2;
+            const updatedRacks = s.racks.map(r => {
+              if (r.id === closestRack!.id) {
+                return isLeft
+                  ? { ...r, leftCableManagerWidth: widthVal }
+                  : { ...r, rightCableManagerWidth: widthVal };
+              }
+              return r;
+            });
+            stateManager.setState({ racks: updatedRacks });
+            eventBus.emit('notification', {
+              message: `Attached ${isLeft ? 'Left' : 'Right'} ${widthVal} Vertical Cable Manager to ${closestRack.name}!`,
+              type: 'success'
+            });
+            this.renderAll();
+          } else {
+            eventBus.emit('notification', { message: 'Drop near an existing rack to attach Vertical Cable Manager!', type: 'info' });
+          }
+          return;
+        }
+
         const template = getTemplate(templateId);
         if (!template) {
           // Hybrid "Merged" mode overlaps #cloud-viewport on top of #canvas-viewport with
@@ -2907,18 +3053,13 @@ export class App {
           // icon lands here, not on #cloud-canvas, whenever nothing was painted under the cursor
           // in the cloud layer. Split mode never routes a cloud-icon drop here in the first place
           // (the panes are spatially separate), so this only matters while merged.
-          const s = stateManager.getState();
           if (iconId && s.activeView === 'hybrid' && s.hybridLayoutMode === 'merged') {
             this.createCloudNodeFromDrop(iconId, { x: e.clientX, y: e.clientY });
           }
           return;
         }
 
-        // Convert drop position to world coordinates
-        const worldPos = this.canvas.screenToWorld({ x: e.clientX, y: e.clientY });
-        const s = stateManager.getState();
-
-        // Special handling for Vertical Cable Managers
+        // Special handling for legacy vertical-mgr-4 / vertical-mgr-6 items
         if (template.id === 'vertical-mgr-4' || template.id === 'vertical-mgr-6') {
           let closestRack: RackData | null = null;
           let minDist = Infinity;
@@ -3163,6 +3304,19 @@ export class App {
         e.preventDefault();
       }
 
+      // Cable / Object Visual Order hotkeys (Ctrl+], Ctrl+[, Ctrl+Shift+], Ctrl+Shift+[)
+      if ((e.ctrlKey || e.metaKey) && (e.key === ']' || e.key === '[')) {
+        if (s.selection.length === 1 && s.selection[0].type === 'cable') {
+          e.preventDefault();
+          const cableId = s.selection[0].id;
+          const dir: ZOrderDirection = e.key === ']' ? (e.shiftKey ? 'front' : 'forward') : (e.shiftKey ? 'back' : 'backward');
+          const updatedCables = reorderById(s.cables, cableId, dir);
+          stateManager.setState({ cables: updatedCables });
+          this.renderAll();
+          return;
+        }
+      }
+
       // Ctrl+Z = Undo
       if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -3296,6 +3450,12 @@ export class App {
           }
         }
       }
+
+      // Alt+P / F4 = Toggle Properties Panel (Hide/Unhide)
+      if ((e.altKey && (e.key === 'p' || e.key === 'P')) || e.key === 'F4') {
+        e.preventDefault();
+        eventBus.emit('properties:toggle', undefined);
+      }
     });
 
     document.addEventListener('keyup', (e) => {
@@ -3308,6 +3468,7 @@ export class App {
    */
   private setupSelectionHandling() {
     eventBus.on('selection:changed', (selection: SelectableItem[]) => {
+      this.properties.update(selection);
       this.clearHighlights();
       for (const item of selection) {
         if ((item as any).type === 'vertical-mgr') {
@@ -3363,10 +3524,11 @@ export class App {
               submenu: [
                 { label: '🔄 Auto-Detect (Recommended)', action: () => eventBus.emit('cable:update', { id: targetCableId, data: { sourceOrientation: 'auto', anchorPoints: [], anchorsLocked: false } }) },
                 { separator: true, label: '' },
+                { label: '🔌 Inward (Plugged In) — face-on inserted view', action: () => eventBus.emit('cable:update', { id: targetCableId, data: { sourceOrientation: 'inward', anchorPoints: [], anchorsLocked: false } }) },
                 { label: '➡️ Exit Right  — cable leaves rightward', action: () => eventBus.emit('cable:update', { id: targetCableId, data: { sourceOrientation: 'right', anchorPoints: [], anchorsLocked: false } }) },
                 { label: '⬅️ Exit Left   — cable leaves leftward',  action: () => eventBus.emit('cable:update', { id: targetCableId, data: { sourceOrientation: 'left',  anchorPoints: [], anchorsLocked: false } }) },
-                { label: '⬇️ Exit Down   — cable leaves downward',  action: () => eventBus.emit('cable:update', { id: targetCableId, data: { sourceOrientation: 'up',    anchorPoints: [], anchorsLocked: false } }) },
-                { label: '⬆️ Exit Up     — cable leaves upward',    action: () => eventBus.emit('cable:update', { id: targetCableId, data: { sourceOrientation: 'down',  anchorPoints: [], anchorsLocked: false } }) }
+                { label: '⬇️ Exit Down   — cable leaves downward',  action: () => eventBus.emit('cable:update', { id: targetCableId, data: { sourceOrientation: 'down', anchorPoints: [], anchorsLocked: false } }) },
+                { label: '⬆️ Exit Up     — cable leaves upward',    action: () => eventBus.emit('cable:update', { id: targetCableId, data: { sourceOrientation: 'up',   anchorPoints: [], anchorsLocked: false } }) }
               ]
             },
             {
@@ -3375,10 +3537,11 @@ export class App {
               submenu: [
                 { label: '🔄 Auto-Detect (Recommended)', action: () => eventBus.emit('cable:update', { id: targetCableId, data: { destOrientation: 'auto', anchorPoints: [], anchorsLocked: false } }) },
                 { separator: true, label: '' },
+                { label: '🔌 Inward (Plugged In) — face-on inserted view', action: () => eventBus.emit('cable:update', { id: targetCableId, data: { destOrientation: 'inward', anchorPoints: [], anchorsLocked: false } }) },
                 { label: '➡️ Exit Right  — cable leaves rightward', action: () => eventBus.emit('cable:update', { id: targetCableId, data: { destOrientation: 'right', anchorPoints: [], anchorsLocked: false } }) },
                 { label: '⬅️ Exit Left   — cable leaves leftward',  action: () => eventBus.emit('cable:update', { id: targetCableId, data: { destOrientation: 'left',  anchorPoints: [], anchorsLocked: false } }) },
-                { label: '⬇️ Exit Down   — cable leaves downward',  action: () => eventBus.emit('cable:update', { id: targetCableId, data: { destOrientation: 'up',    anchorPoints: [], anchorsLocked: false } }) },
-                { label: '⬆️ Exit Up     — cable leaves upward',    action: () => eventBus.emit('cable:update', { id: targetCableId, data: { destOrientation: 'down',  anchorPoints: [], anchorsLocked: false } }) }
+                { label: '⬇️ Exit Down   — cable leaves downward',  action: () => eventBus.emit('cable:update', { id: targetCableId, data: { destOrientation: 'down', anchorPoints: [], anchorsLocked: false } }) },
+                { label: '⬆️ Exit Up     — cable leaves upward',    action: () => eventBus.emit('cable:update', { id: targetCableId, data: { destOrientation: 'up',   anchorPoints: [], anchorsLocked: false } }) }
               ]
             },
 
@@ -3416,6 +3579,66 @@ export class App {
                 { label: '🌐 Cyan (#00acc1)', action: () => eventBus.emit('cable:update', { id: targetCableId, data: { color: '#00acc1' } }) }
               ]
             },
+            {
+              label: 'Visual Order',
+              icon: '📑',
+              submenu: [
+                {
+                  label: 'Bring to Front',
+                  icon: '⬆️',
+                  shortcut: 'Ctrl+Shift+]',
+                  action: () => {
+                    const sState = stateManager.getState();
+                    const updatedCables = reorderById(sState.cables, targetCableId, 'front');
+                    stateManager.setState({ cables: updatedCables });
+                    this.renderAll();
+                  }
+                },
+                {
+                  label: 'Bring Forward',
+                  icon: '🔼',
+                  shortcut: 'Ctrl+]',
+                  action: () => {
+                    const sState = stateManager.getState();
+                    const updatedCables = reorderById(sState.cables, targetCableId, 'forward');
+                    stateManager.setState({ cables: updatedCables });
+                    this.renderAll();
+                  }
+                },
+                {
+                  label: 'Send Backward',
+                  icon: '🔽',
+                  shortcut: 'Ctrl+[',
+                  action: () => {
+                    const sState = stateManager.getState();
+                    const updatedCables = reorderById(sState.cables, targetCableId, 'backward');
+                    stateManager.setState({ cables: updatedCables });
+                    this.renderAll();
+                  }
+                },
+                {
+                  label: 'Send to Back',
+                  icon: '⬇️',
+                  shortcut: 'Ctrl+Shift+[',
+                  action: () => {
+                    const sState = stateManager.getState();
+                    const updatedCables = reorderById(sState.cables, targetCableId, 'back');
+                    stateManager.setState({ cables: updatedCables });
+                    this.renderAll();
+                  }
+                }
+              ]
+            },
+            ...(cable.powerCableType === 'power' || cable.type?.includes('power') || (cable.sourcePortId && cable.sourcePortId.includes('-ear-')) || (cable.destPortId && cable.destPortId.includes('-ear-')) ? [{
+              label: 'Power Exit Direction',
+              icon: '🔄',
+              submenu: [
+                { label: '⬇ Down (Default / PDU)', action: () => eventBus.emit('cable:update', { id: targetCableId, data: { sourceOrientation: 'down', destOrientation: 'down', anchorPoints: [], anchorsLocked: false } }) },
+                { label: '⬅ Left (Left Channel / PDU)', action: () => eventBus.emit('cable:update', { id: targetCableId, data: { sourceOrientation: 'left', destOrientation: 'down', anchorPoints: [], anchorsLocked: false } }) },
+                { label: '➡ Right (Right Channel / PDU)', action: () => eventBus.emit('cable:update', { id: targetCableId, data: { sourceOrientation: 'right', destOrientation: 'down', anchorPoints: [], anchorsLocked: false } }) },
+                { label: '⬆ Up (Top Feed)', action: () => eventBus.emit('cable:update', { id: targetCableId, data: { sourceOrientation: 'up', destOrientation: 'down', anchorPoints: [], anchorsLocked: false } }) }
+              ]
+            }] : []),
             { separator: true, label: '' },
             {
               label: cable.animatedFlow ? '⚡ Disable Live Packet Flow' : '⚡ Enable Live Packet Flow',
@@ -3430,7 +3653,7 @@ export class App {
                 const destPos = (cable.destPortId ? stateManager.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
                 const baseAnchors = (cable.anchorPoints && cable.anchorPoints.length > 0)
                   ? cable.anchorPoints
-                  : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos));
+                  : computeSmartRouting(cable, sourcePos, destPos);
                 
                 const points = [sourcePos, ...baseAnchors, destPos];
                 let minDistance = Infinity;
@@ -3455,7 +3678,7 @@ export class App {
               action: () => {
                 const sourcePos = cable.floatingSource || stateManager.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
                 const destPos = (cable.destPortId ? stateManager.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
-                const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos)))];
+                const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : computeSmartRouting(cable, sourcePos, destPos))];
                 if (currentPts.length > 0) {
                   currentPts.splice(targetAnchorIdx, 1);
                   eventBus.emit('cable:update', { id: targetCableId, data: { anchorPoints: currentPts, anchorsLocked: currentPts.length > 0 } });
@@ -3563,6 +3786,137 @@ export class App {
               }
             });
           }
+
+          this.contextMenu.show(screenPos.x, screenPos.y, items);
+          return;
+        }
+      }
+
+      // 3.1. Vertical Cable Manager Right-Click Context Menu
+      const vcmEl = targetEl ? targetEl.closest?.('.cable-manager-vertical') as SVGElement : null;
+      if (vcmEl) {
+        const rackId = vcmEl.getAttribute('data-vertical-mgr-id')!;
+        const side = vcmEl.getAttribute('data-side') as 'left' | 'right';
+        const rack = stateManager.getRack(rackId);
+        if (rack) {
+          const width = side === 'left' ? rack.leftCableManagerWidth : rack.rightCableManagerWidth;
+          const otherSide = side === 'left' ? 'right' : 'left';
+          const sel: SelectableItem = { type: 'vertical-mgr', id: rackId, side } as any;
+          stateManager.setState({ selection: [sel] });
+          eventBus.emit('selection:changed', [sel]);
+          this.highlightElement(vcmEl);
+
+          const items: MenuItem[] = [
+            { label: `📁 ${side === 'left' ? 'Left' : 'Right'} Cable Manager (${width || '4-inch'})`, disabled: true },
+            { separator: true, label: '' },
+            {
+              label: `🔄 Move to ${otherSide === 'left' ? 'Left' : 'Right'} Side`,
+              action: () => {
+                const fromProp = side === 'left' ? 'leftCableManagerWidth' : 'rightCableManagerWidth';
+                const toProp = side === 'left' ? 'rightCableManagerWidth' : 'leftCableManagerWidth';
+                const fromColorProp = side === 'left' ? 'leftCableManagerColor' : 'rightCableManagerColor';
+                const toColorProp = side === 'left' ? 'rightCableManagerColor' : 'leftCableManagerColor';
+                eventBus.emit('rack:update', {
+                  id: rackId,
+                  data: {
+                    [toProp]: width || '4-inch',
+                    [fromProp]: 'none',
+                    [toColorProp]: rack[fromColorProp],
+                    [fromColorProp]: undefined,
+                  }
+                });
+              }
+            },
+            {
+              label: 'Size: 2" Slim Organizer',
+              action: () => {
+                const prop = side === 'left' ? 'leftCableManagerWidth' : 'rightCableManagerWidth';
+                eventBus.emit('rack:update', { id: rackId, data: { [prop]: '2-inch' } });
+              }
+            },
+            {
+              label: 'Size: 4" Standard Gutter',
+              action: () => {
+                const prop = side === 'left' ? 'leftCableManagerWidth' : 'rightCableManagerWidth';
+                eventBus.emit('rack:update', { id: rackId, data: { [prop]: '4-inch' } });
+              }
+            },
+            {
+              label: 'Size: 6" High-Density VCM',
+              action: () => {
+                const prop = side === 'left' ? 'leftCableManagerWidth' : 'rightCableManagerWidth';
+                eventBus.emit('rack:update', { id: rackId, data: { [prop]: '6-inch' } });
+              }
+            },
+            {
+              label: 'Size: 8" Backbone Trunk',
+              action: () => {
+                const prop = side === 'left' ? 'leftCableManagerWidth' : 'rightCableManagerWidth';
+                eventBus.emit('rack:update', { id: rackId, data: { [prop]: '8-inch' } });
+              }
+            },
+            { separator: true, label: '' },
+            {
+              label: '🗑 Delete Cable Manager',
+              icon: '🗑',
+              shortcut: 'Del',
+              action: () => this.deleteSelection()
+            }
+          ];
+
+          this.contextMenu.show(screenPos.x, screenPos.y, items);
+          return;
+        }
+      }
+
+      // 3.2. Side-Mount PDU Right-Click Context Menu
+      const pduSideEl = targetEl ? targetEl.closest?.('[data-pdu-side]') as SVGElement : null;
+      if (pduSideEl) {
+        const deviceId = pduSideEl.getAttribute('data-pdu-device-id')!;
+        const rackId = pduSideEl.getAttribute('data-rack-id')!;
+        const side = pduSideEl.getAttribute('data-pdu-side') as 'left' | 'right';
+        const device = stateManager.getDevice(deviceId);
+        const rack = stateManager.getRack(rackId);
+        if (device && rack) {
+          const sel: SelectableItem[] = [{ type: 'device', id: deviceId }];
+          stateManager.setState({ selection: sel });
+          eventBus.emit('selection:changed', sel);
+          this.properties.update(sel);
+
+          const otherSide = side === 'left' ? 'right' : 'left';
+          const otherPduId = otherSide === 'left' ? rack.leftPduId : rack.rightPduId;
+
+          const items: MenuItem[] = [
+            { label: `⚡ ${side === 'left' ? 'Left' : 'Right'} Wall PDU — ${device.name}`, disabled: true },
+            { separator: true, label: '' },
+            {
+              label: `🔄 Move to ${otherSide === 'left' ? 'Left' : 'Right'} Wall`,
+              action: () => {
+                const updatedRacks = stateManager.getState().racks.map(r => {
+                  if (r.id === rack.id) {
+                    if (side === 'left') {
+                      return { ...r, leftPduId: otherPduId ? otherPduId : undefined, rightPduId: device.id };
+                    } else {
+                      return { ...r, rightPduId: otherPduId ? otherPduId : undefined, leftPduId: device.id };
+                    }
+                  }
+                  return r;
+                });
+                if (otherPduId) {
+                  eventBus.emit('device:update', { id: otherPduId, data: { sideMountPosition: side } });
+                }
+                eventBus.emit('device:update', { id: device.id, data: { sideMountPosition: otherSide } });
+                stateManager.setState({ racks: updatedRacks });
+              }
+            },
+            { separator: true, label: '' },
+            {
+              label: '🗑 Remove PDU from Rack',
+              icon: '🗑',
+              shortcut: 'Del',
+              action: () => this.deleteSelection()
+            }
+          ];
 
           this.contextMenu.show(screenPos.x, screenPos.y, items);
           return;
@@ -5061,6 +5415,12 @@ export class App {
         btn.style.borderWidth = '2px';
         activeSwatchBtn = btn;
         this.threeViewport!.setRackColor(key);
+
+        // Sync with app state for all racks
+        const currentRacks = stateManager.getState().racks;
+        for (const r of currentRacks) {
+          eventBus.emit('rack:update', { id: r.id, data: { rackColor: swatch } });
+        }
       });
       colorRow.appendChild(btn);
       if (key === 'black') activeSwatchBtn = btn;
@@ -5171,11 +5531,6 @@ export class App {
 
     container.appendChild(panel);
   }
-
-  // ============================================================================================
-  // Cloud Architecture canvas — standalone diagram mode, independent of the rack canvas above.
-  // ============================================================================================
-
   /** Shows/hides the Three.js 3D panel (#canvas-3d + its splitter) next to the rack 2D elevation
    *  — rack view only, toggled from the floating toolbar's 3D switch (see floating-toolbar.ts).
    *  Pauses/resumes the render loop with it (see ThreeViewport.pause/resume) rather than
@@ -5190,10 +5545,12 @@ export class App {
 
     const canvas3d = document.getElementById('canvas-3d');
     const splitter = document.getElementById('splitter-3d');
+    const minimap = document.getElementById('minimap');
     // A WebGL-init failure in init() permanently hides both via inline style — never override
     // that (see init()'s try/catch and setActiveView's same guard on the splitter).
     if (canvas3d && canvas3d.style.display !== 'none') canvas3d.classList.toggle('hidden', !show || isHybrid);
     if (splitter && splitter.style.display !== 'none') splitter.classList.toggle('hidden', !show || isHybrid);
+    if (minimap) minimap.classList.toggle('hidden', show || isHybrid);
 
     if (show && !isHybrid) this.threeViewport?.resume();
     else this.threeViewport?.pause();
@@ -5335,7 +5692,7 @@ export class App {
     rulerCorner?.classList.toggle('hidden', isCloud && !isHybrid);
     rulerH?.classList.toggle('hidden', isCloud && !isHybrid);
     rulerV?.classList.toggle('hidden', isCloud && !isHybrid);
-    minimap?.classList.toggle('hidden', isCloud && !isHybrid);
+    minimap?.classList.toggle('hidden', (isCloud && !isHybrid) || (stateManager.getState().show3DPanel && !isHybrid));
     if (splitter) {
       if (isCloud || isHybrid) {
         splitter.classList.add('hidden');

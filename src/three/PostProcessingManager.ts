@@ -16,8 +16,7 @@ export class PostProcessingManager {
     height: number
   ) {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    // ACES filmic compresses specular highlights — exposure 1.1 gives bright, realistic natural brightness
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.0;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.composer = new EffectComposer(renderer);
@@ -25,9 +24,8 @@ export class PostProcessingManager {
     // Pass 1: base scene render
     this.composer.addPass(new RenderPass(scene, camera));
 
-    // Pass 2: Bloom — strength↑ so red accent strips and LED glow pop in the dark scene
-    //   strength=0.55, radius=0.6, threshold=0.75 → only very bright emissives bloom
-    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.55, 0.6, 0.75);
+    // Pass 2: Bloom — threshold 1.3 ensures only emissive LEDs/displays bloom, never diffuse white/ivory racks
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.15, 0.3, 1.3);
     this.composer.addPass(this.bloomPass);
 
     // Pass 3: OutputPass — ACES tone mapping output + gamma

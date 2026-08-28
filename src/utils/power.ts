@@ -3,6 +3,7 @@
 // `powerWatts` field) across validation.ts, report-builder.ts, and state-serializer.ts.
 import { RackData, DeviceData, CableData } from '../core/types';
 import { getTemplate } from '../library/device-catalog';
+import { stateManager } from '../core/state';
 
 /** Nameplate capacity of one rack-mount PDU circuit (matches the existing 7200W assumption
  *  used across validation/report/AI-serializer before this was consolidated). */
@@ -24,6 +25,7 @@ export function getRackPowerCapacityWatts(rack: RackData, devices: DeviceData[])
  *  regex-scraped-from-description approach used elsewhere in the app. */
 export function getDevicePowerWatts(device: DeviceData): number {
   if (typeof device.powerWatts === 'number') return device.powerWatts;
+  if (typeof (device.deviceConfig as any)?.powerWatts === 'number') return (device.deviceConfig as any).powerWatts;
   const template = getTemplate(device.templateId);
   return template?.powerWatts ?? 0;
 }
@@ -38,19 +40,30 @@ export function getPduConnectedLoadWatts(
 ): { watts: number; connectedOutlets: Set<number> } {
   const connectedOutlets = new Set<number>();
   let watts = 0;
+  const pduDevice = devices.find(d => d.id === pduDeviceId);
+  const pduPortIds = new Set(pduDevice ? pduDevice.ports.map(p => p.id) : []);
   const prefix = `outlet-${pduDeviceId}-`;
+
   for (const cable of cables) {
     const ends = [cable.sourcePortId, cable.destPortId];
-    const outletEnd = ends.find(p => p && p.startsWith(prefix));
+    const outletEnd = ends.find(p => p && (p.startsWith(prefix) || pduPortIds.has(p)));
     if (!outletEnd) continue;
-    const idx = parseInt(outletEnd.slice(prefix.length), 10);
-    if (!Number.isNaN(idx)) connectedOutlets.add(idx);
+
+    if (outletEnd.startsWith(prefix)) {
+      const idx = parseInt(outletEnd.slice(prefix.length), 10);
+      if (!Number.isNaN(idx)) connectedOutlets.add(idx);
+    } else {
+      const portIdx = pduDevice?.ports.findIndex(p => p.id === outletEnd);
+      if (portIdx !== undefined && portIdx >= 0) connectedOutlets.add(portIdx);
+    }
+
     const otherEnd = outletEnd === cable.sourcePortId ? cable.destPortId : cable.sourcePortId;
     if (otherEnd && !otherEnd.startsWith('outlet-')) {
-      const dev = devices.find(d => d.ports.some(p => p.id === otherEnd));
+      const dev = devices.find(d => d.id !== pduDeviceId && (d.ports.some(p => p.id === otherEnd) || otherEnd.startsWith(d.id + '-')));
       if (dev) watts += getDevicePowerWatts(dev);
     }
   }
+
   return { watts, connectedOutlets };
 }
 

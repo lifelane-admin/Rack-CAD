@@ -1,7 +1,7 @@
 import EventBus from '../core/event-bus';
 import State from '../core/state';
 import { ToolMode, SelectableItem, CableData, Point } from '../core/types';
-import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
+import { computeSmartRouting, get3DefaultAnchors, getPortOrientation } from '../utils/routing';
 
 const ORIENTATION_CYCLE: Array<'up' | 'right' | 'down' | 'left'> = ['up', 'right', 'down', 'left'];
 
@@ -238,14 +238,11 @@ export class FloatingToolbar {
       <div class="ft-row" id="ft-row-2">
         <div class="ft-drag-handle" style="visibility: hidden;">⋮⋮</div> <!-- Invisible spacing alignment -->
 
-        <!-- Cable End Direction (choose end, then rotate Up->Right->Down->Left) + Cable/Power Drawing Modes -->
+        <!-- Rotate Port Direction Button with label below -->
         <div class="ft-section" id="ft-cable-orient">
-          <div class="ft-end-toggle" title="Choose which cable end to rotate">
-            <button class="ft-end-btn ${this.activeCableEnd === 'source' ? 'active' : ''}" id="ft-end-source" ${!cable ? 'disabled' : ''} title="Target the Source end">S</button>
-            <button class="ft-end-btn ${this.activeCableEnd === 'dest' ? 'active' : ''}" id="ft-end-dest" ${!cable ? 'disabled' : ''} title="Target the Destination end">D</button>
-          </div>
-          <button class="ft-btn" id="ft-cab-rotate-end" ${!cable ? 'disabled' : ''} title="Rotate ${this.activeCableEnd === 'source' ? 'Source' : 'Destination'} End Direction (Up → Right → Down → Left)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 11-.57-8.38l6.13-5.19"/></svg>
+          <button class="ft-btn ft-btn--rotate" id="ft-cab-rotate-end" ${!cable ? 'disabled' : ''} title="Rotate Selected Port Direction (Clockwise ↻) — Click endpoint 1 or 2 on canvas to select port" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 8px; min-width: 44px; height: 36px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 11-.57-8.38l6.13-5.19"/></svg>
+            <span style="font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2px; line-height: 1; opacity: 0.9;">Rotate</span>
           </button>
         </div>
 
@@ -347,17 +344,32 @@ export class FloatingToolbar {
         this.element.querySelector('#ft-cab-add-anchor')?.addEventListener('click', () => {
           const sourcePos = cable.floatingSource || State.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
           const destPos = (cable.destPortId ? State.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
-          const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos)))];
+          const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : computeSmartRouting(cable, sourcePos, destPos))];
           
-          const lastPt = currentPts[currentPts.length - 1] || sourcePos;
-          currentPts.push({ x: Math.round(lastPt.x + 25), y: Math.round(lastPt.y + 25) });
+          const fullSeq = [sourcePos, ...currentPts, destPos];
+          let maxDist = -1;
+          let maxIdx = 0;
+          for (let i = 0; i < fullSeq.length - 1; i++) {
+            const dist = Math.hypot(fullSeq[i + 1].x - fullSeq[i].x, fullSeq[i + 1].y - fullSeq[i].y);
+            if (dist > maxDist) {
+              maxDist = dist;
+              maxIdx = i;
+            }
+          }
+          const pA = fullSeq[maxIdx];
+          const pB = fullSeq[maxIdx + 1];
+          const newPt: Point = {
+            x: Math.round((pA.x + pB.x) / 2),
+            y: Math.round((pA.y + pB.y) / 2)
+          };
+          currentPts.splice(maxIdx, 0, newPt);
           EventBus.emit('cable:update', { id: cableId, data: { anchorPoints: currentPts, anchorsLocked: true } });
         });
 
         this.element.querySelector('#ft-cab-rem-anchor')?.addEventListener('click', () => {
           const sourcePos = cable.floatingSource || State.getPortWorldPosition(cable.sourcePortId) || { x: 0, y: 0 };
           const destPos = (cable.destPortId ? State.getPortWorldPosition(cable.destPortId) : cable.floatingDest) || { x: 0, y: 0 };
-          const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : get3DefaultAnchors(computeSmartRouting(cable, sourcePos, destPos)))];
+          const currentPts = [...(cable.anchorPoints && cable.anchorPoints.length > 0 ? cable.anchorPoints : computeSmartRouting(cable, sourcePos, destPos))];
 
           if (currentPts.length > 0) {
             currentPts.pop();
@@ -366,9 +378,11 @@ export class FloatingToolbar {
         });
 
         this.element.querySelector('#ft-cab-rotate-end')?.addEventListener('click', () => {
-          const field = this.activeCableEnd === 'source' ? 'sourceOrientation' : 'destOrientation';
-          const current = cable[field];
-          const idx = ORIENTATION_CYCLE.indexOf(current as any);
+          const end = State.getState().activeCableEnd || this.activeCableEnd || 'dest';
+          const field = end === 'source' ? 'sourceOrientation' : 'destOrientation';
+          const current = cable[field] || getPortOrientation(cable, end);
+          let idx = ORIENTATION_CYCLE.indexOf(current as any);
+          if (idx < 0) idx = 0;
           const next = ORIENTATION_CYCLE[(idx + 1) % ORIENTATION_CYCLE.length];
           EventBus.emit('cable:update', { id: cableId, data: { [field]: next, anchorPoints: [], anchorsLocked: false } });
         });
@@ -399,14 +413,6 @@ export class FloatingToolbar {
       }
     }
 
-    this.element.querySelector('#ft-end-source')?.addEventListener('click', () => {
-      this.activeCableEnd = 'source';
-      this.render();
-    });
-    this.element.querySelector('#ft-end-dest')?.addEventListener('click', () => {
-      this.activeCableEnd = 'dest';
-      this.render();
-    });
 
     this.element.querySelectorAll('.ft-swatch').forEach(swatch => {
       swatch.addEventListener('click', (e: any) => {
