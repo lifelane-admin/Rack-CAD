@@ -4,7 +4,7 @@ import { RACK_CONSTANTS } from '../core/types';
 import { stateManager } from '../core/state';
 import { getTemplate } from '../library/device-catalog';
 import type { MaterialManager } from './MaterialManager';
-import { buildRackGroup, buildShellMaterials, type RackColorKey, RACK_DEPTH } from './rack-builder';
+import { buildRackGroup, buildShellMaterials, type RackColorKey, RACK_DEPTH, DEVICE_FACE_Z } from './rack-builder';
 import { buildDeviceMesh } from './device-builder';
 import { buildCableMesh } from './cable-builder';
 import { renderFrontPanel } from '../renderers/panel-renderer';
@@ -14,6 +14,7 @@ import { getDeviceFrontMaterial, disposeSVGTextures } from './svg-texture';
 const { RACK_OUTER_WIDTH, RACK_PADDING_TOP, RACK_PADDING_BOTTOM, RU_HEIGHT } = RACK_CONSTANTS;
 
 interface DeviceEntry {
+  group: THREE.Group;
   mesh: THREE.Mesh;
   earMeshes: THREE.Mesh[];
   ledMeshes: THREE.Mesh[];
@@ -207,20 +208,8 @@ export class SceneManager {
     const entry = this.deviceEntries.get(id);
     if (!entry) return;
     const group = this.rackGroups.get(entry.rackId);
-    group?.remove(entry.mesh);
-    entry.mesh.geometry.dispose();
-    for (const ear of entry.earMeshes) {
-      group?.remove(ear);
-      ear.geometry.dispose();
-    }
-    for (const led of entry.ledMeshes) {
-      group?.remove(led);
-      led.geometry.dispose();
-    }
-    for (const port of entry.portMeshes) {
-      group?.remove(port);
-      port.geometry.dispose();
-    }
+    group?.remove(entry.group);
+    disposeObject3D(entry.group);
     this.deviceEntries.delete(id);
   }
 
@@ -249,13 +238,10 @@ export class SceneManager {
       const existing = this.deviceEntries.get(device.id);
 
       if (existing && existing.geometryHash === newHash) {
-        // Only position changed — update Y on mesh and ears
+        // Only position changed — update position on the entire unified device group
         const depth = device.device3D?.depth ?? template.default3D?.depth ?? 500;
-        const zOffset = RACK_DEPTH / 2 - depth / 2 + 0.4;
-        existing.mesh.position.set(0, deviceY, zOffset);
-        for (const ear of existing.earMeshes) {
-          ear.position.setY(deviceY);
-        }
+        const zOffset = DEVICE_FACE_Z - depth / 2;
+        existing.group.position.set(0, deviceY, zOffset);
         // Refresh SVG texture if port connectivity changed (no geometry rebuild needed)
         if (!device.frontPanelImage && !template.frontPanelImage) {
           getDeviceFrontMaterial(device, template);
@@ -263,12 +249,9 @@ export class SceneManager {
       } else {
         // Geometry or texture changed (or new device) — rebuild mesh
         if (existing) this.removeDeviceEntry(device.id);
-        const { mesh, earMeshes, ledMeshes, portMeshes } = buildDeviceMesh(device, template, rack, this.materials);
-        rackGroup.add(mesh);
-        for (const ear of earMeshes) rackGroup.add(ear);
-        for (const led of ledMeshes) rackGroup.add(led);
-        for (const port of portMeshes) rackGroup.add(port);
-        this.deviceEntries.set(device.id, { mesh, earMeshes, ledMeshes, portMeshes, rackId: device.rackId, geometryHash: newHash });
+        const { group, mesh, earMeshes, ledMeshes, portMeshes } = buildDeviceMesh(device, template, rack, this.materials);
+        rackGroup.add(group);
+        this.deviceEntries.set(device.id, { group, mesh, earMeshes, ledMeshes, portMeshes, rackId: device.rackId, geometryHash: newHash });
       }
     }
   }
@@ -416,7 +399,7 @@ export class SceneManager {
 
     if (primary.type === 'device') {
       const entry = this.deviceEntries.get(primary.id);
-      if (entry) targetObject = entry.mesh;
+      if (entry) targetObject = entry.group;
     } else if (primary.type === 'rack') {
       const group = this.rackGroups.get(primary.id);
       if (group) targetObject = group;
@@ -467,12 +450,13 @@ export class SceneManager {
 }
 
 function disposeObject3D(obj: THREE.Object3D): void {
+  if (!obj || typeof obj.traverse !== 'function') return;
   obj.traverse((child) => {
     const mesh = child as THREE.Mesh;
-    if (mesh.isMesh) {
+    if (mesh && mesh.isMesh) {
       mesh.geometry?.dispose();
       if (Array.isArray(mesh.material)) {
-        mesh.material.forEach(m => m.dispose());
+        mesh.material.forEach(m => m?.dispose());
       } else {
         mesh.material?.dispose();
       }

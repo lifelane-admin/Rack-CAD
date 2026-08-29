@@ -240,6 +240,7 @@ function makeEarSideMat(category: string): THREE.MeshStandardMaterial {
 }
 
 export interface DeviceMeshResult {
+  group: THREE.Group;
   mesh: THREE.Mesh;
   earMeshes: THREE.Mesh[];
   ledMeshes: THREE.Mesh[];
@@ -261,8 +262,12 @@ export function buildDeviceMesh(
   materials: MaterialManager
 ): DeviceMeshResult {
   const totalH = RACK_PADDING_TOP + rack.units * RU_HEIGHT + RACK_PADDING_BOTTOM;
-  const deviceH = template.heightUnits * RU_HEIGHT - 1;
+  const deviceH = template.heightUnits * RU_HEIGHT;
   const cfg = resolve3D(device, template);
+
+  const group = new THREE.Group();
+  group.name = `device-group-${device.id}`;
+  group.userData = { type: 'device', id: device.id };
 
   const geo = new THREE.BoxGeometry(cfg.width, deviceH, cfg.depth);
   const sideMat = makeDeviceBodyMat(template.color, template.category);
@@ -276,21 +281,21 @@ export function buildDeviceMesh(
 
   const mesh = new THREE.Mesh(geo, deviceMat);
   mesh.name = `device-${device.id}`;
+  mesh.position.set(0, 0, 0);
+  mesh.userData = { type: 'device', id: device.id };
+  group.add(mesh);
 
   const deviceYFromBottom = RACK_PADDING_BOTTOM + (device.startUnit - 1 + template.heightUnits / 2) * RU_HEIGHT;
   const zOffset = DEVICE_FACE_Z - cfg.depth / 2;
-  mesh.position.set(0, -totalH / 2 + deviceYFromBottom, zOffset);
-
   const deviceY = -totalH / 2 + deviceYFromBottom;
+  group.position.set(0, deviceY, zOffset);
 
-  // Mounting ear blades — always present; width is the bracket flange covering the gap to the rail
+  // Mounting ear blades — realistic 2.5mm sheet metal bracket flange flush against the vertical rail face
   const earMeshes: THREE.Mesh[] = [];
   const earW = (RACK_INNER_WIDTH - cfg.width) / 2;
   if (earW > 0) {
-    // Ears align flush with device front face, extend back ~20% of device depth
-    const earDepth = Math.min(cfg.depth * 0.20, 80);
-    // Z offset sits flush inline with rail post face (+0.05mm for z-buffer precision)
-    const earZ = (cfg.depth - earDepth) / 2 + 0.05;
+    const earDepth = 2.5;
+    const earZ = cfg.depth / 2 + earDepth / 2;
 
     const earSideMat  = makeEarSideMat(template.category);
     const leftEarFrontMat = makeBracketFaceMat(earW, deviceH, template.category, device.ports || [], true, template.heightUnits);
@@ -302,26 +307,27 @@ export function buildDeviceMesh(
 
     const leftEar = new THREE.Mesh(new THREE.BoxGeometry(earW, deviceH, earDepth), leftEarMats);
     leftEar.name = `ear-left-${device.id}`;
-    leftEar.position.set(-(cfg.width / 2 + earW / 2), deviceY, zOffset + earZ);
+    leftEar.position.set(-(cfg.width / 2 + earW / 2), 0, earZ);
+    leftEar.userData = { type: 'device', id: device.id };
+    group.add(leftEar);
     earMeshes.push(leftEar);
 
     const rightEar = new THREE.Mesh(new THREE.BoxGeometry(earW, deviceH, earDepth), rightEarMats);
     rightEar.name = `ear-right-${device.id}`;
-    rightEar.position.set(cfg.width / 2 + earW / 2, deviceY, zOffset + earZ);
+    rightEar.position.set(cfg.width / 2 + earW / 2, 0, earZ);
+    rightEar.userData = { type: 'device', id: device.id };
+    group.add(rightEar);
     earMeshes.push(rightEar);
   }
 
-  // Build generic LEDs and server accessories only when there is NO custom front panel image
-  const ledMeshes = cfg.frontPanelImage ? [] : buildLedMeshes(template, cfg, deviceH, deviceY);
-  const portMeshes = buildPortBezels(device.ports || [], cfg, deviceH, deviceY, template.heightUnits);
-
-  if (!cfg.frontPanelImage) {
-    const logoPlaque = buildLogoPlaque(template, cfg, deviceH, deviceY);
-    if (logoPlaque) portMeshes.push(logoPlaque);
-
-    const serverAccs = buildServerAccessories(template, cfg, deviceH, deviceY);
-    portMeshes.push(...serverAccs);
+  // Build generic interactive indicator LEDs only when there is NO custom front panel image
+  const ledMeshes = cfg.frontPanelImage ? [] : buildLedMeshes(template, cfg, deviceH);
+  for (const led of ledMeshes) {
+    led.userData = { ...led.userData, type: 'device', id: device.id };
+    group.add(led);
   }
 
-  return { mesh, earMeshes, ledMeshes, portMeshes };
+  const portMeshes: THREE.Mesh[] = [];
+
+  return { group, mesh, earMeshes, ledMeshes, portMeshes };
 }

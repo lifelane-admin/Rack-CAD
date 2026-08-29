@@ -401,3 +401,81 @@
   font-size: 9px;
   color: #2d3748;
 }
+
+/* ── Cable Catalog Card Design ── */
+.cat-item.cat-cable-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px 6px 14px;
+  gap: 10px;
+  cursor: pointer;
+  background: rgba(18, 24, 38, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  margin: 3px 8px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: visible;
+}
+
+.cat-item.cat-cable-item:hover {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(56, 189, 248, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45), 0 0 10px rgba(56, 189, 248, 0.1);
+  transform: translateY(-1px);
+}
+
+.cat-item.cat-cable-item:active {
+  transform: translateY(0);
+  background: rgba(15, 23, 42, 0.95);
+}
+
+.cat-cable-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 3px 6px 3px 4px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.cat-cable-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cat-cable-graphic {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.cat-cable-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.cat-cable-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+.cat-cable-meta {
+  font-size: 9.5px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+

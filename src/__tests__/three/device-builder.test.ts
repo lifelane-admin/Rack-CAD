@@ -1,11 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('three', () => {
+  function Group(this: any) {
+    this.name = '';
+    this.children = [] as any[];
+    this.position = { set: vi.fn() };
+    this.add = vi.fn().mockImplementation(function(this: any, c: any) { this.children.push(c); });
+    this.remove = vi.fn();
+    this.userData = {};
+  }
   const Mesh = vi.fn().mockImplementation(function(this: any, geo: any, mat: any) {
     this.geometry = geo;
     this.material = mat;
     this.name = '';
     this.position = { set: vi.fn() };
+    this.userData = {};
   });
   const BoxGeometry = vi.fn().mockImplementation(function(this: any, w: number, h: number, d: number) {
     this.parameters = { width: w, height: h, depth: d };
@@ -16,7 +25,7 @@ vi.mock('three', () => {
     this.dispose = vi.fn();
     this.isMaterial = true;
   });
-  return { Mesh, BoxGeometry, MeshStandardMaterial };
+  return { Group, Mesh, BoxGeometry, MeshStandardMaterial };
 });
 
 vi.mock('../../three/MaterialManager', () => ({
@@ -94,16 +103,16 @@ describe('buildDeviceMesh', () => {
     expect(d).toBe(650);
   });
 
-  it('geometry height = heightUnits * RU_HEIGHT minus 1px gap', async () => {
+  it('geometry height = heightUnits * RU_HEIGHT', async () => {
     const { BoxGeometry } = await import('three');
     buildDeviceMesh(device, template, rack, materials);
     const [[, h]] = vi.mocked(BoxGeometry).mock.calls;
-    expect(h).toBe(template.heightUnits * RU_HEIGHT - 1);
+    expect(h).toBe(template.heightUnits * RU_HEIGHT);
   });
 
   it('sets vertical position for startUnit=1', () => {
-    const { mesh } = buildDeviceMesh(device, template, rack, materials);
-    const [, yArg] = (mesh.position.set as ReturnType<typeof vi.fn>).mock.calls[0];
+    const { group } = buildDeviceMesh(device, template, rack, materials);
+    const [, yArg] = (group.position.set as ReturnType<typeof vi.fn>).mock.calls[0];
     const totalH = RACK_PADDING_TOP + 42 * RU_HEIGHT + RACK_PADDING_BOTTOM;
     const deviceYFromBottom = RACK_PADDING_BOTTOM + (0 + template.heightUnits / 2) * RU_HEIGHT;
     expect(yArg).toBeCloseTo(-totalH / 2 + deviceYFromBottom);

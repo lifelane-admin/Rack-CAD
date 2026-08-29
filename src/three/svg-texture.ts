@@ -7,7 +7,7 @@ import { renderSidePdu, computePduLoad } from '../renderers/pdu-renderer';
 const { RACK_INNER_WIDTH, RAIL_WIDTH, RU_HEIGHT } = RACK_CONSTANTS;
 const DEVICE_W = RACK_INNER_WIDTH - 2 * RAIL_WIDTH; // 350
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const SCALE = 8; // 8× pixel density for crisp, high-resolution rendering in 3D
+const SCALE = 10; // 10× pixel density for ultra-crisp, high-definition 2D quality in 3D
 
 interface Entry {
   mat: THREE.MeshStandardMaterial;
@@ -67,10 +67,8 @@ export function getDeviceFrontMaterial(
 
   const mat = new THREE.MeshStandardMaterial({
     map: texture,
-    metalness: 0.35,
-    roughness: 0.40,
-    transparent: true,
-    alphaTest: 0.15
+    metalness: 0.20,
+    roughness: 0.45,
   });
 
   cache.set(device.id, { mat, canvas, templateId: template.id, connHash: hash });
@@ -78,34 +76,7 @@ export function getDeviceFrontMaterial(
   renderSVGToCanvas(device, template, canvas).then(ok => {
     if (ok) {
       texture.needsUpdate = true;
-      try {
-        const bumpCanvas = document.createElement('canvas');
-        bumpCanvas.width = canvas.width;
-        bumpCanvas.height = canvas.height;
-        const bCtx = bumpCanvas.getContext('2d');
-        if (bCtx) {
-          bCtx.drawImage(canvas, 0, 0);
-          const imgData = bCtx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imgData.data;
-          for (let i = 0; i < data.length; i += 4) {
-            const lum = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-            const bumpVal = Math.min(255, Math.max(0, 255 - lum * 0.85));
-            data[i] = bumpVal;
-            data[i + 1] = bumpVal;
-            data[i + 2] = bumpVal;
-          }
-          bCtx.putImageData(imgData, 0, 0);
-          const bumpTex = new THREE.CanvasTexture(bumpCanvas);
-          bumpTex.anisotropy = 16;
-          bumpTex.generateMipmaps = true;
-          bumpTex.minFilter = THREE.LinearMipmapLinearFilter;
-          mat.bumpMap = bumpTex;
-          mat.bumpScale = 0.8;
-          mat.needsUpdate = true;
-        }
-      } catch {
-        // Fallback
-      }
+      mat.needsUpdate = true;
     }
   });
 
@@ -152,33 +123,6 @@ async function renderSVGToCanvas(
         const ctx = canvas.getContext('2d')!;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-        // Punch transparent holes in the front panel texture at port positions
-        if (device.ports && device.ports.length > 0) {
-          const localPortSizes: Record<string, [number, number]> = {
-            'rj45':      [10, 7],
-            'sfp':       [11, 8],
-            'sfp-plus':  [11, 8],
-            'qsfp28':    [14, 10],
-            'power':     [12, 10],
-            'c13-power': [14, 10],
-            'c19-power': [16, 12],
-            'usb':       [8, 4],
-            'console':   [9, 6],
-            'vga':       [14, 8],
-          };
-          for (const port of device.ports) {
-            if (port.id.includes('-ear-')) continue;
-            const cx = (port.relativeX / W) * canvas.width;
-            const cy = (port.relativeY / H) * canvas.height;
-            const pSize = localPortSizes[port.type] || [8, 6];
-            // Clear a slightly smaller rectangle (0.4 margin) so the jack bezel is tucked nicely behind the cutout
-            const pw = ((port.portW ?? pSize[0]) - 0.4) * SCALE;
-            const ph = ((port.portH ?? pSize[1]) - 0.4) * SCALE;
-            ctx.clearRect(cx - pw / 2, cy - ph / 2, pw, ph);
-          }
-        }
-
         URL.revokeObjectURL(url);
         resolve();
       };

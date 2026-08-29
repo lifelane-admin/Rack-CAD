@@ -485,14 +485,14 @@ export function renderCableInProgress(sourcePos: Point, currentPos: Point, cable
 /**
  * Fiber Duplex LC/SC Connector
  */
-function createFiberConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right'): SVGGElement {
+function createFiberConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right' | string): SVGGElement {
   const g = createGroup();
   let rot = 0;
-  if (orientation === 'up') rot = 0;
-  else if (orientation === 'down') rot = 180;
-  else if (orientation === 'right') rot = -90;
-  else if (orientation === 'left') rot = 90;
-  setAttributes(g, { transform: `translate(${pos.x}, ${pos.y}) rotate(${rot}) scale(0.38) translate(-15, -4)` });
+  if (orientation === 'down' || orientation === 'inward-down') rot = 0;
+  else if (orientation === 'up' || orientation === 'inward-up') rot = 180;
+  else if (orientation === 'right' || orientation === 'inward-right') rot = -90;
+  else if (orientation === 'left' || orientation === 'inward-left') rot = 90;
+  setAttributes(g, { transform: `translate(${pos.x}, ${pos.y}) rotate(${rot}) scale(0.38) translate(-15, -14)` });
 
   // Duplex Ceramic Ferrules
   const ferrule1 = createRect(10, 4, 4, 10, { fill: '#ffffff', stroke: '#90caf9', 'stroke-width': 0.8, rx: 1 });
@@ -514,14 +514,14 @@ function createFiberConnector(pos: Point, color: string, orientation: 'up' | 'do
 /**
  * SFP+ / QSFP28 Metallic Transceiver Cage Connector
  */
-function createSFPConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right'): SVGGElement {
+function createSFPConnector(pos: Point, color: string, orientation: 'up' | 'down' | 'left' | 'right' | string): SVGGElement {
   const g = createGroup();
   let rot = 0;
-  if (orientation === 'up') rot = 0;
-  else if (orientation === 'down') rot = 180;
-  else if (orientation === 'right') rot = -90;
-  else if (orientation === 'left') rot = 90;
-  setAttributes(g, { transform: `translate(${pos.x}, ${pos.y}) rotate(${rot}) scale(0.36) translate(-20, -4)` });
+  if (orientation === 'down' || orientation === 'inward-down') rot = 0;
+  else if (orientation === 'up' || orientation === 'inward-up') rot = 180;
+  else if (orientation === 'right' || orientation === 'inward-right') rot = -90;
+  else if (orientation === 'left' || orientation === 'inward-left') rot = 90;
+  setAttributes(g, { transform: `translate(${pos.x}, ${pos.y}) rotate(${rot}) scale(0.36) translate(-20, -14)` });
 
   // Metallic Zinc Alloy Transceiver Casing
   const body = createRect(11, 10, 18, 26, {

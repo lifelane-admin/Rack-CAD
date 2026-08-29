@@ -134,10 +134,19 @@ function portWorldPos2D(portId: string | null, state: AppState): Point | null {
 
 
 
-export function buildOrthogonal3DCurve(points2D: Point[], bendRadius: number, rack: RackData, laneZ: number): THREE.CurvePath<THREE.Vector3> {
+export function buildOrthogonal3DCurve(
+  points2D: Point[],
+  bendRadius: number,
+  srcRack: RackData,
+  destRack: RackData,
+  laneZ: number
+): THREE.CurvePath<THREE.Vector3> {
   const path = new THREE.CurvePath<THREE.Vector3>();
-  const totalH = RACK_PADDING_TOP + rack.units * RU_HEIGHT + RACK_PADDING_BOTTOM;
-  const to3D = (p: Point, z: number) => new THREE.Vector3(p.x, (rack.y + totalH) - p.y, z);
+  const srcTotalH = RACK_PADDING_TOP + srcRack.units * RU_HEIGHT + RACK_PADDING_BOTTOM;
+  const destTotalH = RACK_PADDING_TOP + destRack.units * RU_HEIGHT + RACK_PADDING_BOTTOM;
+
+  const srcTo3D = (p: Point, z: number) => new THREE.Vector3(p.x, (srcRack.y + srcTotalH) - p.y, z);
+  const destTo3D = (p: Point, z: number) => new THREE.Vector3(p.x, (destRack.y + destTotalH) - p.y, z);
 
   const fz = DEVICE_FACE_Z + 0.4;
   const portZ = fz - 1.0;
@@ -147,20 +156,28 @@ export function buildOrthogonal3DCurve(points2D: Point[], bendRadius: number, ra
   const dest2D = points2D[points2D.length - 1];
 
   // 1. Prepare the full 3D points sequence including straight leaders
-  const pStart = to3D(src2D, portZ);
-  const pExit = to3D(src2D, bootZ);
+  const pStart = srcTo3D(src2D, portZ);
+  const pExit = srcTo3D(src2D, bootZ);
 
   const pts3D: THREE.Vector3[] = [pStart, pExit];
+  const numIntermediates = points2D.length - 2;
+
   for (let i = 1; i < points2D.length - 1; i++) {
-    pts3D.push(to3D(points2D[i], laneZ));
+    const pt = points2D[i];
+    // Linearly blend or select the corresponding rack coordinate transformation for inter-rack anchors
+    const alpha = numIntermediates > 0 ? (i - 1) / Math.max(1, numIntermediates) : 0;
+    const rackY = srcRack.y * (1 - alpha) + destRack.y * alpha;
+    const totalH = srcTotalH * (1 - alpha) + destTotalH * alpha;
+    const y3D = (rackY + totalH) - pt.y;
+    pts3D.push(new THREE.Vector3(pt.x, y3D, laneZ));
   }
 
   const hasDest = (points2D.length > 2 && dest2D.x !== undefined);
-  const pDestExit = hasDest ? to3D(dest2D, bootZ) : to3D(dest2D, laneZ);
+  const pDestExit = hasDest ? destTo3D(dest2D, bootZ) : destTo3D(dest2D, laneZ);
   pts3D.push(pDestExit);
 
   if (hasDest) {
-    const pEnd = to3D(dest2D, portZ);
+    const pEnd = destTo3D(dest2D, portZ);
     pts3D.push(pEnd);
   }
 
@@ -226,131 +243,542 @@ export function buildOrthogonal3DCurve(points2D: Point[], bendRadius: number, ra
   return path;
 }
 
-function buildPlugGroup(
-  pos2D: Point,
-  rack: RackData,
-  totalH: number,
-  color: string,
-  orientation: 'up' | 'down' = 'down'
-): THREE.Group {
+export type Connector3DKind = 'rj45' | 'sfp' | 'fiber' | 'mpo' | 'power' | 'ground' | 'dsub' | 'video' | 'usb';
+
+export function getConnectorKind(
+  cable: CableData,
+  portId: string | null,
+  state: AppState
+): Connector3DKind {
+  const cType = (cable.type || '').toLowerCase();
+  const found = portId ? findPort(portId, state.devices) : null;
+  const pType = (found?.port?.type || '').toLowerCase();
+
+  if (cType === 'ground') return 'ground';
+  if (
+    cType.includes('power') || cType.includes('c13') || cType.includes('c19') ||
+    pType.includes('power') || pType.includes('c13') || pType.includes('c19') || pType.includes('outlet') ||
+    cable.powerCableType === 'power'
+  ) {
+    return 'power';
+  }
+  if (cType.includes('mpo') || cType.includes('mtp')) return 'mpo';
+  if (
+    cType.includes('dac') || cType.includes('sfp') || cType.includes('qsfp') ||
+    cType.includes('sas') || cType.includes('mcio') ||
+    pType.includes('sfp') || pType.includes('qsfp')
+  ) {
+    return 'sfp';
+  }
+  if (
+    cType.includes('fiber') || cType.includes('om3') || cType.includes('om4') || cType.includes('om5') ||
+    cType.includes('lc') || cType.includes('sc') || cType.includes('st') ||
+    pType.includes('fiber') || pType.includes('lc') || pType.includes('sc')
+  ) {
+    return 'fiber';
+  }
+  if (cType.includes('vga') || cType.includes('serial-rs232') || cType.includes('db9') || pType.includes('serial') || pType.includes('console')) {
+    return 'dsub';
+  }
+  if (cType.includes('hdmi') || cType.includes('displayport') || pType.includes('hdmi') || pType.includes('displayport') || pType.includes('dp')) {
+    return 'video';
+  }
+  if (cType.includes('usb') || pType.includes('usb')) return 'usb';
+
+  return 'rj45';
+}
+
+/**
+ * 1. 3D Enterprise RJ45 Modular Connector
+ */
+function buildRJ45Plug(x: number, y: number, fz: number, color: THREE.Color, flipY: number): THREE.Group {
   const group = new THREE.Group();
 
-  const x = pos2D.x;
-  const y = (rack.y + totalH) - pos2D.y;
-  const fz = DEVICE_FACE_Z + 0.4;
-
-  const cableColor = new THREE.Color(color);
-
-  // 1. Crystal Polycarbonate Material (translucent tinted, matches 2D head)
   const crystalMat = new THREE.MeshStandardMaterial({
-    color: cableColor,
+    color,
     transparent: true,
     opacity: 0.52,
     roughness: 0.1,
     metalness: 0.12,
   });
-
-  // 2. Solid Rubber Boot Material (matches 2D boot)
   const bootMat = new THREE.MeshStandardMaterial({
-    color: cableColor,
+    color,
     roughness: 0.35,
     metalness: 0.08,
   });
-
-  // 3. Dark Recess / Groove Material
   const grooveMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(0x181a20),
     roughness: 0.6,
     metalness: 0.1,
   });
-
-  // 4. Glare / Highlight line material (top reflection)
-  const glareMat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.75,
-    roughness: 0.05,
-    metalness: 0.3,
-  });
-
-  const isUp = orientation === 'up';
-  const flipY = isUp ? -1 : 1;
-
-  // 5. 50µ Gold Contact Pins Material (metallic gold gleam)
   const goldMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(0xf59e0b),
     roughness: 0.15,
     metalness: 0.85,
   });
 
-  // ── 1. Translucent Tinted Crystal Head (Inside Socket Cavity) ───────────────
-  const crystalGeo = new THREE.BoxGeometry(6.8, 4.4, 4.5);
-  const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+  // Translucent crystal plug head
+  const crystal = new THREE.Mesh(new THREE.BoxGeometry(6.8, 4.4, 4.5), crystalMat);
   crystal.position.set(x, y, fz - 0.25);
   group.add(crystal);
 
-  // 8 Gold Contact Pins inside crystal head
+  // 8 Gold Contact Pins
   for (let i = 0; i < 8; i++) {
     const px = -2.6 + i * 0.74;
-    const pinGeo = new THREE.BoxGeometry(0.45, 1.8, 0.4);
-    const pin = new THREE.Mesh(pinGeo, goldMat);
+    const pin = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.8, 0.4), goldMat);
     pin.position.set(x + px, y + 1.0 * flipY, fz - 0.2);
     group.add(pin);
   }
 
-  // Inner latch clip tab inside crystal
-  const innerLatchGeo = new THREE.BoxGeometry(3.0, 1.2, 3.5);
-  const innerLatch = new THREE.Mesh(innerLatchGeo, crystalMat);
-  innerLatch.position.set(x, y - 1.2 * flipY, fz - 0.2);
-  group.add(innerLatch);
-
-  // ── 2. Solid Rubber Strain-Relief Boot (Collar Block) ────────────────────────
-  const bootGeo = new THREE.BoxGeometry(5.8, 4.2, 3.2);
-  const boot = new THREE.Mesh(bootGeo, bootMat);
+  // Snagless latch ramp & boot collar
+  const boot = new THREE.Mesh(new THREE.BoxGeometry(5.8, 4.2, 3.2), bootMat);
   boot.position.set(x, y, fz + 3.4);
   group.add(boot);
 
-  // Molded Snagless Latch Arch Cover (center bump)
-  const archGeo = new THREE.BoxGeometry(2.4, 1.6, 2.8);
-  const arch = new THREE.Mesh(archGeo, bootMat);
+  const arch = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.6, 2.8), bootMat);
   arch.position.set(x, y - 2.0 * flipY, fz + 2.8);
   group.add(arch);
 
-  // Snagless ramp
-  const rampGeo = new THREE.BoxGeometry(2.4, 0.8, 2.0);
-  rampGeo.rotateX(flipY * 0.3);
-  const ramp = new THREE.Mesh(rampGeo, bootMat);
-  ramp.position.set(x, y - 2.4 * flipY, fz + 1.2);
-  group.add(ramp);
-
-  // ── 3. Three Detailed Flex Collar Ridges (Ribs) ──────────────────────────────
-  // Groove core
-  const coreGeo = new THREE.BoxGeometry(3.2, 2.2, 4.0);
-  const core = new THREE.Mesh(coreGeo, grooveMat);
+  // Ribs
+  const core = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.2, 4.0), grooveMat);
   core.position.set(x, y, fz + 7.0);
   group.add(core);
 
-  // Ridge 1
   const rib1 = new THREE.Mesh(new THREE.BoxGeometry(5.0, 3.6, 0.9), bootMat);
   rib1.position.set(x, y, fz + 5.5);
   group.add(rib1);
 
-  // Ridge 2
   const rib2 = new THREE.Mesh(new THREE.BoxGeometry(4.4, 3.0, 0.9), bootMat);
   rib2.position.set(x, y, fz + 6.8);
   group.add(rib2);
 
-  // Ridge 3
   const rib3 = new THREE.Mesh(new THREE.BoxGeometry(3.8, 2.5, 0.9), bootMat);
   rib3.position.set(x, y, fz + 8.1);
   group.add(rib3);
 
-  // ── 4. Cable Exit Sleeve ─────────────────────────────────────────────────────
   const exitSleeve = new THREE.Mesh(new THREE.BoxGeometry(3.0, 2.0, 1.6), bootMat);
   exitSleeve.position.set(x, y, fz + 9.3);
   group.add(exitSleeve);
 
   return group;
+}
+
+/**
+ * 2. 3D SFP+ / QSFP28 / DAC Transceiver Cage Module
+ */
+function buildSFPTransceiverPlug(x: number, y: number, fz: number, color: THREE.Color, flipY: number): THREE.Group {
+  const group = new THREE.Group();
+
+  const metalMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0xd1d5db),
+    metalness: 0.88,
+    roughness: 0.22,
+  });
+  const darkMetalMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x374151),
+    metalness: 0.8,
+    roughness: 0.35,
+  });
+  const latchMat = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.3,
+    metalness: 0.2,
+  });
+  const bootMat = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.4,
+    metalness: 0.1,
+  });
+
+  // Die-cast zinc alloy transceiver casing inserted into cage
+  const cage = new THREE.Mesh(new THREE.BoxGeometry(7.8, 5.2, 6.0), metalMat);
+  cage.position.set(x, y, fz + 0.5);
+  group.add(cage);
+
+  // Metallic front collar ring
+  const collar = new THREE.Mesh(new THREE.BoxGeometry(8.2, 5.6, 1.2), darkMetalMat);
+  collar.position.set(x, y, fz + 3.8);
+  group.add(collar);
+
+  // Bail latch release pull-tab (color-coded)
+  const pullTab = new THREE.Mesh(new THREE.BoxGeometry(5.2, 1.6, 2.4), latchMat);
+  pullTab.position.set(x, y - 2.4 * flipY, fz + 3.0);
+  group.add(pullTab);
+
+  // Metal crimp sleeve
+  const crimp = new THREE.Mesh(new THREE.BoxGeometry(4.4, 3.4, 2.8), metalMat);
+  crimp.position.set(x, y, fz + 5.5);
+  group.add(crimp);
+
+  // Flexible twinax / optical exit boot
+  const boot = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.8, 3.5), bootMat);
+  boot.position.set(x, y, fz + 8.2);
+  group.add(boot);
+
+  return group;
+}
+
+/**
+ * 3. 3D Fiber Duplex LC Connector
+ */
+function buildFiberLCPlug(x: number, y: number, fz: number, color: THREE.Color, flipY: number): THREE.Group {
+  const group = new THREE.Group();
+
+  const ferruleMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0xf8fafc),
+    roughness: 0.15,
+    metalness: 0.1,
+  });
+  const coreMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x0284c7),
+    roughness: 0.1,
+    metalness: 0.3,
+  });
+  const housingMat = new THREE.MeshStandardMaterial({
+    color: color.getHex() === 0x2563eb ? new THREE.Color(0x06b6d4) : color,
+    roughness: 0.35,
+    metalness: 0.15,
+  });
+  const clipMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0xe2e8f0),
+    roughness: 0.3,
+    metalness: 0.2,
+  });
+
+  // Dual Ceramic Optical Ferrules
+  const ferrule1 = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 3.2, 12), ferruleMat);
+  ferrule1.rotation.x = Math.PI / 2;
+  ferrule1.position.set(x - 1.5, y, fz - 0.8);
+  group.add(ferrule1);
+
+  const core1 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.4, 8), coreMat);
+  core1.rotation.x = Math.PI / 2;
+  core1.position.set(x - 1.5, y, fz - 2.2);
+  group.add(core1);
+
+  const ferrule2 = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 3.2, 12), ferruleMat);
+  ferrule2.rotation.x = Math.PI / 2;
+  ferrule2.position.set(x + 1.5, y, fz - 0.8);
+  group.add(ferrule2);
+
+  const core2 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.4, 8), coreMat);
+  core2.rotation.x = Math.PI / 2;
+  core2.position.set(x + 1.5, y, fz - 2.2);
+  group.add(core2);
+
+  // Duplex Housing Body
+  const body = new THREE.Mesh(new THREE.BoxGeometry(6.4, 4.4, 4.2), housingMat);
+  body.position.set(x, y, fz + 2.0);
+  group.add(body);
+
+  // Duplex Snagless Clip
+  const clip = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.4, 3.0), clipMat);
+  clip.position.set(x, y - 2.2 * flipY, fz + 2.2);
+  group.add(clip);
+
+  // Dual Optical Rubber Boots
+  const boot1 = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 0.8, 4.2, 12), housingMat);
+  boot1.rotation.x = Math.PI / 2;
+  boot1.position.set(x - 1.5, y, fz + 5.8);
+  group.add(boot1);
+
+  const boot2 = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 0.8, 4.2, 12), housingMat);
+  boot2.rotation.x = Math.PI / 2;
+  boot2.position.set(x + 1.5, y, fz + 5.8);
+  group.add(boot2);
+
+  return group;
+}
+
+/**
+ * 4. 3D MPO / MTP-12 High Density Multi-Fiber Trunk Connector
+ */
+function buildMPOPlug(x: number, y: number, fz: number, color: THREE.Color, flipY: number): THREE.Group {
+  const group = new THREE.Group();
+
+  const ferruleMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0xf1f5f9),
+    roughness: 0.2,
+    metalness: 0.2,
+  });
+  const housingMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x0d9488),
+    roughness: 0.35,
+    metalness: 0.15,
+  });
+  const sleeveMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0xdb2777),
+    roughness: 0.3,
+    metalness: 0.1,
+  });
+
+  // Wide rectangular ferrule with 12 micro fiber holes
+  const ferrule = new THREE.Mesh(new THREE.BoxGeometry(7.2, 3.2, 3.0), ferruleMat);
+  ferrule.position.set(x, y, fz - 0.5);
+  group.add(ferrule);
+
+  // Release slider housing
+  const housing = new THREE.Mesh(new THREE.BoxGeometry(8.2, 4.8, 4.5), housingMat);
+  housing.position.set(x, y, fz + 2.5);
+  group.add(housing);
+
+  // Outer magenta pull sleeve
+  const sleeve = new THREE.Mesh(new THREE.BoxGeometry(8.6, 5.2, 2.4), sleeveMat);
+  sleeve.position.set(x, y, fz + 4.8);
+  group.add(sleeve);
+
+  // Heavy-duty trunk boot
+  const boot = new THREE.Mesh(new THREE.BoxGeometry(5.4, 3.6, 3.8), housingMat);
+  boot.position.set(x, y, fz + 7.6);
+  group.add(boot);
+
+  return group;
+}
+
+/**
+ * 5. 3D IEC Power Plug (C13 / C14 / C19)
+ */
+function buildPowerIECPlug(x: number, y: number, fz: number, color: THREE.Color, flipY: number): THREE.Group {
+  const group = new THREE.Group();
+
+  const shroudMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x181c22),
+    roughness: 0.45,
+    metalness: 0.1,
+  });
+  const bootMat = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.4,
+    metalness: 0.12,
+  });
+  const pinSlotMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x0a0c10),
+    roughness: 0.8,
+  });
+
+  // Molded IEC shroud head inserted flush
+  const shroud = new THREE.Mesh(new THREE.BoxGeometry(7.6, 6.2, 4.5), shroudMat);
+  shroud.position.set(x, y, fz + 0.5);
+  group.add(shroud);
+
+  // 3 Contact Slots / Prongs face
+  const slot = new THREE.Mesh(new THREE.BoxGeometry(5.2, 3.8, 0.4), pinSlotMat);
+  slot.position.set(x, y, fz - 1.6);
+  group.add(slot);
+
+  // Finger grip indent collar
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(8.2, 6.8, 2.2), shroudMat);
+  grip.position.set(x, y, fz + 3.4);
+  group.add(grip);
+
+  // High-amp molded strain relief boot
+  const boot = new THREE.Mesh(new THREE.BoxGeometry(5.8, 5.0, 4.2), bootMat);
+  boot.position.set(x, y, fz + 6.2);
+  group.add(boot);
+
+  // Exit sleeve
+  const exit = new THREE.Mesh(new THREE.BoxGeometry(4.2, 3.8, 2.0), bootMat);
+  exit.position.set(x, y, fz + 8.8);
+  group.add(exit);
+
+  return group;
+}
+
+/**
+ * 6. 3D Rack Chassis Grounding Terminal Lug
+ */
+function buildGroundLugPlug(x: number, y: number, fz: number, color: THREE.Color, flipY: number): THREE.Group {
+  const group = new THREE.Group();
+
+  const goldMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0xd97706),
+    metalness: 0.9,
+    roughness: 0.2,
+  });
+  const earthMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x16a34a),
+    roughness: 0.4,
+    metalness: 0.1,
+  });
+
+  // Dual-hole copper terminal ring
+  const lug = new THREE.Mesh(new THREE.BoxGeometry(6.4, 4.2, 0.8), goldMat);
+  lug.position.set(x, y, fz - 0.2);
+  group.add(lug);
+
+  // Terminal crimp barrel
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 4.0, 12), goldMat);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(x, y, fz + 2.0);
+  group.add(barrel);
+
+  // Earth green-yellow heat shrink sleeve
+  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 4.5, 12), earthMat);
+  sleeve.rotation.x = Math.PI / 2;
+  sleeve.position.set(x, y, fz + 5.8);
+  group.add(sleeve);
+
+  return group;
+}
+
+/**
+ * 7. 3D Serial DB9 / VGA D-Sub Connector
+ */
+function buildDSubPlug(x: number, y: number, fz: number, color: THREE.Color, flipY: number): THREE.Group {
+  const group = new THREE.Group();
+
+  const metalMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x94a3b8),
+    metalness: 0.85,
+    roughness: 0.25,
+  });
+  const hoodMat = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.4,
+    metalness: 0.1,
+  });
+  const screwMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x475569),
+    metalness: 0.9,
+    roughness: 0.2,
+  });
+
+  // D-Sub metal shield
+  const shield = new THREE.Mesh(new THREE.BoxGeometry(8.4, 5.0, 2.5), metalMat);
+  shield.position.set(x, y, fz - 0.2);
+  group.add(shield);
+
+  // Molded connector hood
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(9.6, 6.2, 5.0), hoodMat);
+  hood.position.set(x, y, fz + 3.2);
+  group.add(hood);
+
+  // Dual knurled thumbscrews
+  const screwL = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 3.5, 10), screwMat);
+  screwL.rotation.x = Math.PI / 2;
+  screwL.position.set(x - 5.4, y, fz + 3.0);
+  group.add(screwL);
+
+  const screwR = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 3.5, 10), screwMat);
+  screwR.rotation.x = Math.PI / 2;
+  screwR.position.set(x + 5.4, y, fz + 3.0);
+  group.add(screwR);
+
+  // Cable exit grommet
+  const grommet = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.5, 3.0, 12), hoodMat);
+  grommet.rotation.x = Math.PI / 2;
+  grommet.position.set(x, y, fz + 6.8);
+  group.add(grommet);
+
+  return group;
+}
+
+/**
+ * 8. 3D HDMI / DisplayPort Digital Video Plug
+ */
+function buildVideoDigitalPlug(x: number, y: number, fz: number, color: THREE.Color, flipY: number): THREE.Group {
+  const group = new THREE.Group();
+
+  const shieldMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0xf59e0b),
+    metalness: 0.85,
+    roughness: 0.2,
+  });
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x1e293b),
+    roughness: 0.35,
+    metalness: 0.15,
+  });
+
+  // Gold-plated video shield
+  const shield = new THREE.Mesh(new THREE.BoxGeometry(6.4, 2.8, 3.2), shieldMat);
+  shield.position.set(x, y, fz - 0.4);
+  group.add(shield);
+
+  // Low-profile molded body
+  const body = new THREE.Mesh(new THREE.BoxGeometry(7.6, 4.4, 5.0), bodyMat);
+  body.position.set(x, y, fz + 3.2);
+  group.add(body);
+
+  // Exit boot
+  const boot = new THREE.Mesh(new THREE.BoxGeometry(4.0, 3.0, 2.6), bodyMat);
+  boot.position.set(x, y, fz + 6.8);
+  group.add(boot);
+
+  return group;
+}
+
+/**
+ * 9. 3D USB Type-A / Type-C Universal Plug
+ */
+function buildUSBPlug(x: number, y: number, fz: number, color: THREE.Color, flipY: number): THREE.Group {
+  const group = new THREE.Group();
+
+  const metalMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0xd1d5db),
+    metalness: 0.9,
+    roughness: 0.2,
+  });
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x1e2024),
+    roughness: 0.4,
+    metalness: 0.1,
+  });
+
+  // Reversible metal plug tongue
+  const tongue = new THREE.Mesh(new THREE.BoxGeometry(4.6, 2.2, 3.0), metalMat);
+  tongue.position.set(x, y, fz - 0.4);
+  group.add(tongue);
+
+  // Molded handle
+  const body = new THREE.Mesh(new THREE.BoxGeometry(5.8, 3.4, 4.5), bodyMat);
+  body.position.set(x, y, fz + 3.0);
+  group.add(body);
+
+  // Exit sleeve
+  const sleeve = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.4, 2.2), bodyMat);
+  sleeve.position.set(x, y, fz + 6.0);
+  group.add(sleeve);
+
+  return group;
+}
+
+function buildPlugGroup(
+  pos2D: Point,
+  rack: RackData,
+  totalH: number,
+  color: string,
+  orientation: 'up' | 'down' = 'down',
+  kind: Connector3DKind = 'rj45'
+): THREE.Group {
+  const x = pos2D.x;
+  const y = (rack.y + totalH) - pos2D.y;
+  const fz = DEVICE_FACE_Z + 0.4;
+  const cableColor = new THREE.Color(color);
+  const isUp = orientation === 'up';
+  const flipY = isUp ? -1 : 1;
+
+  switch (kind) {
+    case 'sfp':
+      return buildSFPTransceiverPlug(x, y, fz, cableColor, flipY);
+    case 'fiber':
+      return buildFiberLCPlug(x, y, fz, cableColor, flipY);
+    case 'mpo':
+      return buildMPOPlug(x, y, fz, cableColor, flipY);
+    case 'power':
+      return buildPowerIECPlug(x, y, fz, cableColor, flipY);
+    case 'ground':
+      return buildGroundLugPlug(x, y, fz, cableColor, flipY);
+    case 'dsub':
+      return buildDSubPlug(x, y, fz, cableColor, flipY);
+    case 'video':
+      return buildVideoDigitalPlug(x, y, fz, cableColor, flipY);
+    case 'usb':
+      return buildUSBPlug(x, y, fz, cableColor, flipY);
+    case 'rj45':
+    default:
+      return buildRJ45Plug(x, y, fz, cableColor, flipY);
+  }
 }
 
 export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | THREE.Line | THREE.Group | null {
@@ -363,10 +791,12 @@ export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | 
   const srcFound = cable.sourcePortId ? findPort(cable.sourcePortId, state.devices) : null;
   const destFound = cable.destPortId ? findPort(cable.destPortId, state.devices) : null;
 
-  const device = srcFound?.device ?? destFound?.device;
-  const rackId = device?.rackId ?? state.racks[0]?.id;
-  const rack = state.racks.find(r => r.id === rackId);
-  if (!rack) return null;
+  const srcRackId = srcFound?.device?.rackId ?? state.racks[0]?.id;
+  const destRackId = destFound?.device?.rackId ?? srcRackId ?? state.racks[0]?.id;
+
+  const srcRack = state.racks.find(r => r.id === srcRackId) || state.racks[0];
+  const destRack = state.racks.find(r => r.id === destRackId) || srcRack;
+  if (!srcRack) return null;
 
   const srcPortX = srcFound?.port.relativeX ?? destFound?.port.relativeX ?? 175;
   const useRight = POWER_TYPES.has(cable.type)
@@ -374,7 +804,7 @@ export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | 
     || srcPortX >= DEFAULT_DEVICE_WIDTH / 2;
 
   const side: 'left' | 'right' = useRight ? 'right' : 'left';
-  const lane = rackId ? laneIndexFor(cable, rackId, side, state) % MAX_STAGGERED_LANES : 0;
+  const lane = srcRackId ? laneIndexFor(cable, srcRackId, side, state) % MAX_STAGGERED_LANES : 0;
   const laneZ = FRONT_Z + lane * LANE_Z_SPACING;
 
   const anchors = (cable.anchorsLocked && cable.anchorPoints && cable.anchorPoints.length > 0)
@@ -385,7 +815,7 @@ export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | 
   // Increase bend radius in 3D (to 22) for a smoother, realistic cable turn loop, capped dynamically by segment length
   const bendR = Math.max(22, cable.bendRadius ?? RACK_CONSTANTS.CABLE_BEND_RADIUS);
 
-  const curve = buildOrthogonal3DCurve(allPoints2D, bendR, rack, laneZ);
+  const curve = buildOrthogonal3DCurve(allPoints2D, bendR, srcRack, destRack, laneZ);
   // Increase tubular segments to 256 and radial segments to 12 for perfectly smooth, round-edged turns
   const geo = new THREE.TubeGeometry(curve, 256, 2, 12, false);
 
@@ -399,7 +829,9 @@ export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | 
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = `cable-tube-${cable.id}`;
 
-  const totalH = RACK_PADDING_TOP + rack.units * RU_HEIGHT + RACK_PADDING_BOTTOM;
+  const srcTotalH = RACK_PADDING_TOP + srcRack.units * RU_HEIGHT + RACK_PADDING_BOTTOM;
+  const destTotalH = RACK_PADDING_TOP + destRack.units * RU_HEIGHT + RACK_PADDING_BOTTOM;
+
   const group = new THREE.Group();
   group.name = `cable-${cable.id}`;
   group.add(mesh);
@@ -408,7 +840,8 @@ export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | 
   if (cable.sourcePortId && !cable.sourcePortId.includes('-ear-')) {
     const rawOrient = getPortOrientation(cable, 'source');
     const srcOrient = (rawOrient === 'up' || rawOrient === 'down') ? rawOrient : ((anchors[0] && anchors[0].y < src2D.y) ? 'up' : 'down');
-    const srcPlug = buildPlugGroup(src2D, rack, totalH, cable.color, srcOrient);
+    const srcKind = getConnectorKind(cable, cable.sourcePortId, state);
+    const srcPlug = buildPlugGroup(src2D, srcRack, srcTotalH, cable.color, srcOrient, srcKind);
     group.add(srcPlug);
   }
 
@@ -417,7 +850,8 @@ export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | 
     const rawOrient = getPortOrientation(cable, 'dest');
     const lastAnchor = anchors.length > 0 ? anchors[anchors.length - 1] : src2D;
     const destOrient = (rawOrient === 'up' || rawOrient === 'down') ? rawOrient : ((lastAnchor && lastAnchor.y < dest2D.y) ? 'up' : 'down');
-    const destPlug = buildPlugGroup(dest2D, rack, totalH, cable.color, destOrient);
+    const destKind = getConnectorKind(cable, cable.destPortId, state);
+    const destPlug = buildPlugGroup(dest2D, destRack, destTotalH, cable.color, destOrient, destKind);
     group.add(destPlug);
   }
 

@@ -8,6 +8,7 @@ import { RACK_TEMPLATES, VCM_TEMPLATES, createRackFromTemplate } from '../librar
 import { customRackModal } from './custom-rack-modal';
 import { cloudIconManifest, CloudIconEntry, getCloudIcon, isBoundaryIcon, BOUNDARY_MENU_KINDS, getBoundaryIconsByKind } from '../library/cloud-icon-catalog';
 import { recordIconUse, recordBoundaryUse, getRecentUsage } from '../library/recent-usage';
+import { getPortBadgeSvg, getCableGraphicSvg, ALL_CABLE_ITEMS } from './cable-graphics';
 
 const CLOUD_SEARCH_RESULT_CAP = 150;
 let cloudSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -30,14 +31,6 @@ const RACK_CATEGORIES: Array<{ id: DeviceCategory; label: string; accent: string
   { id: 'ups',           label: 'UPS',           accent: '#fdd835', svg: icon('<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/>') },
   { id: 'cooling',       label: 'Cooling',       accent: '#38bdf8', svg: icon('<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/><circle cx="12" cy="12" r="3"/>') },
   { id: 'blank-panel',   label: 'Blanks',        accent: '#2d3748', svg: icon('<rect x="2" y="9" width="20" height="6" rx="1"/>') },
-];
-
-const CABLE_TEMPLATES = [
-  { id: 'cable-eth',     name: 'Cat6 Ethernet Cable',   type: 'vm-network',   color: '#fb8c00', termination: 'RJ45 Ethernet', description: 'Orange VM/Data' },
-  { id: 'cable-mgmt',    name: 'iDRAC / Mgmt Cable',    type: 'idrac',        color: '#e53935', termination: 'RJ45 Ethernet', description: 'Red Out-of-band' },
-  { id: 'cable-fiber',   name: 'Fiber Patch Cable',      type: 'ceph-primary', color: '#43a047', termination: 'LC-Fiber',      description: 'Green High-speed' },
-  { id: 'cable-power',   name: 'C13/C14 Power Cord',     type: 'power',        color: '#212529', termination: 'C13/C14 Power', description: 'Black AC Power' },
-  { id: 'cable-console', name: 'Console Serial Cable',   type: 'general',      color: '#78909c', termination: 'Console DB9',   description: 'Grey Console' },
 ];
 
 export class Sidebar {
@@ -824,29 +817,42 @@ export class Sidebar {
       cmElements
     );
 
-    const filteredCables = CABLE_TEMPLATES.filter(c =>
+    const filteredCables = ALL_CABLE_ITEMS.filter(c =>
       c.name.toLowerCase().includes(this.searchTerm) ||
-      c.description.toLowerCase().includes(this.searchTerm),
+      c.label.toLowerCase().includes(this.searchTerm) ||
+      c.description.toLowerCase().includes(this.searchTerm) ||
+      c.category.toLowerCase().includes(this.searchTerm),
     );
 
     const cableItemEls = filteredCables.map(item => {
       const el = document.createElement('div');
-      el.className = 'cat-item';
+      el.className = 'cat-item cat-cable-item';
+      el.title = `${item.label} (${item.description}) — Click to start cabling`;
       el.innerHTML = `
-        <div class="cat-item-dot" style="background:${item.color}"></div>
-        ${item.name}
-        <span class="cat-item-meta">${item.description}</span>
+        <div class="cat-cable-left">
+          <div class="cat-cable-badge">
+            ${getPortBadgeSvg(item.portBadgeType)}
+          </div>
+          <div class="cat-cable-graphic">
+            ${getCableGraphicSvg(item.type, 75, 18)}
+          </div>
+        </div>
+        <div class="cat-cable-info">
+          <div class="cat-cable-name">${item.name}</div>
+          <div class="cat-cable-meta">${item.description}</div>
+        </div>
       `;
       el.addEventListener('click', () => {
-        EventBus.emit('tool:changed', 'cable');
+        EventBus.emit('tool:changed', item.isPower ? 'power' : 'cable');
         State.setState({
           selectedCableType: item.type as any,
-          selectedCableColor: item.color,
+          selectedCableColor: item.defaultColor,
           selectedCableTermination: item.termination,
           selectedCableBend: 15,
         });
+        EventBus.emit('state:changed', State.getState());
         EventBus.emit('notification', {
-          message: `Selected ${item.name}. Click any port to start routing!`,
+          message: `Selected ${item.label}. Click any port to start routing!`,
           type: 'info',
         });
       });

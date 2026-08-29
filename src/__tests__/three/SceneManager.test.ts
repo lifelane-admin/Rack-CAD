@@ -66,14 +66,18 @@ vi.mock('../../three/rack-builder', () => ({
     return g;
   }),
   RACK_DEPTH: 600,
+  DEVICE_FACE_Z: 272,
 }));
 
 vi.mock('../../three/device-builder', () => ({
   buildDeviceMesh: vi.fn().mockImplementation(function(device: any) {
-    const { Mesh, BoxGeometry, MeshStandardMaterial } = require('three');
+    const { Group, Mesh, BoxGeometry, MeshStandardMaterial } = require('three');
+    const g = new Group();
     const m = new Mesh(new BoxGeometry(350, 59, 500), new MeshStandardMaterial());
     m.name = `device-${device.id}`;
-    return { mesh: m, earMeshes: [], ledMeshes: [], portMeshes: [] };
+    g.name = `device-group-${device.id}`;
+    g.add(m);
+    return { group: g, mesh: m, earMeshes: [], ledMeshes: [], portMeshes: [] };
   }),
 }));
 
