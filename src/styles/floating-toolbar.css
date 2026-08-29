@@ -359,6 +359,7 @@ body.hybrid-merged #cloud-floating-toolbar {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  overflow: visible;
 }
 
 .ft-cable-menu-label {

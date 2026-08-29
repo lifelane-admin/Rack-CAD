@@ -2,6 +2,7 @@
 
 export type PortBadgeType = 'rj45' | 'power' | 'fiber' | 'sfp' | 'serial' | 'sas' | 'video' | 'usb';
 
+
 export const SVG_DEFS_RAW = `
   <defs>
     <linearGradient id="metal-finish" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -79,7 +80,38 @@ export const SVG_DEFS_RAW = `
   </defs>
 `;
 
+/**
+ * Injects a hidden global SVG defs container into <body> so that all
+ * url(#gradient-id) references in any inline SVG on the page can resolve
+ * correctly — including the floating toolbar cable-type dropdown.
+ *
+ * Call once at app startup (App.init()) to guarantee the toolbar dropdown
+ * renders correctly without requiring a prior sidebar cable selection.
+ */
+export function ensureSvgDefs(): void {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('ft-svg-defs-container')) return;
+
+  const wrap = document.createElement('div');
+  wrap.id = 'ft-svg-defs-container';
+  wrap.setAttribute('aria-hidden', 'true');
+  wrap.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;';
+  wrap.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0">${SVG_DEFS_RAW}</svg>`;
+  document.body.appendChild(wrap);
+}
+
+// Auto-inject as soon as the DOM is ready so the toolbar dropdown always
+// works, even before the user has clicked anything in the sidebar.
+if (typeof window !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', ensureSvgDefs, { once: true });
+  } else {
+    ensureSvgDefs();
+  }
+}
+
 export function getPortBadgeSvg(badgeType: PortBadgeType): string {
+
   switch (badgeType) {
     case 'power':
       return `<svg viewBox="0 0 20 20" width="16" height="16" fill="none">

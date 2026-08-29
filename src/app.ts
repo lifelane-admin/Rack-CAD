@@ -22,6 +22,7 @@ import { FloatingToolbar } from './components/floating-toolbar';
 import { ReportsFloat } from './components/reports-float';
 import { CloudFloatingToolbar } from './components/cloud-floating-toolbar';
 import { NotificationCenter } from './components/notifications';
+import { ensureSvgDefs } from './components/cable-graphics';
 import { TextToolPanel } from './components/text-tool-panel';
 import { ImageToolPanel } from './components/image-tool-panel';
 import './styles/text-tool-panel.css';
@@ -379,6 +380,10 @@ export class App {
       console.error('[CloudCanvas] init failed, Cloud Architecture view will be unavailable:', err);
     }
     // mountHybridSplitter() removed — hybrid mode always uses merged canvas, no splitter needed
+
+    // Inject global SVG defs so cable graphics render correctly in the floating
+    // toolbar cable-type dropdown without requiring a prior sidebar interaction.
+    ensureSvgDefs();
 
     // Initialize UI components
     const toolbarEl = document.getElementById('toolbar')!;
