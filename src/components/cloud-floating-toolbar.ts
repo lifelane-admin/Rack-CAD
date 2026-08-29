@@ -72,19 +72,33 @@ export class CloudFloatingToolbar {
 
       e.preventDefault();
       this.isRepositioning = true;
+
+      // Account for CSS zoom scaling on the floating toolbar
+      const computedStyle = window.getComputedStyle(this.element);
+      const zoomVal = parseFloat((computedStyle as any).zoom) || 1.0;
+
+      const viewport = document.getElementById('cloud-viewport') || document.body;
+      const viewportRect = viewport.getBoundingClientRect();
       const rect = this.element.getBoundingClientRect();
-      this.dragOffsetX = e.clientX - rect.left;
-      this.dragOffsetY = e.clientY - rect.top;
+
+      this.dragOffsetX = (e.clientX - rect.left) / zoomVal;
+      this.dragOffsetY = (e.clientY - rect.top) / zoomVal;
 
       const handleMousemove = (moveEvent: MouseEvent) => {
         if (!this.isRepositioning || !this.element) return;
-        const viewport = document.getElementById('cloud-viewport');
-        if (!viewport) return;
-        const viewportRect = viewport.getBoundingClientRect();
-        let left = moveEvent.clientX - viewportRect.left - this.dragOffsetX;
-        let top = moveEvent.clientY - viewportRect.top - this.dragOffsetY;
-        left = Math.max(0, Math.min(left, viewportRect.width - rect.width));
-        top = Math.max(0, Math.min(top, viewportRect.height - rect.height));
+
+        const currentVpRect = viewport.getBoundingClientRect();
+        let left = (moveEvent.clientX - currentVpRect.left) / zoomVal - this.dragOffsetX;
+        let top = (moveEvent.clientY - currentVpRect.top) / zoomVal - this.dragOffsetY;
+
+        const unzoomedW = rect.width / zoomVal;
+        const unzoomedH = rect.height / zoomVal;
+        const vpW = currentVpRect.width / zoomVal;
+        const vpH = currentVpRect.height / zoomVal;
+
+        left = Math.max(0, Math.min(left, vpW - unzoomedW));
+        top = Math.max(0, Math.min(top, vpH - unzoomedH));
+
         this.toolbarX = left;
         this.toolbarY = top;
         this.applyPosition();
