@@ -534,3 +534,126 @@ body.hybrid-merged #cloud-floating-toolbar {
   opacity: 1;
   transform: translateY(0);
 }
+
+/* ══ Cloud Floating Toolbar — 2-row specific styles ═══════════════════════ */
+
+/* Row 1 tight gap for shape section */
+.cft-row1 {
+  gap: 5px;
+}
+
+/* Row 2 slightly smaller, info-bar feel */
+.cft-row2 {
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Shape item: icon button + tiny label stacked */
+.cft-shapes-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.cft-shape-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.cft-shape-btn {
+  width: 30px;
+  height: 30px;
+  padding: 5px;
+}
+
+.cft-shape-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+  max-width: 52px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  line-height: 1;
+}
+
+.cft-shape-btn:hover ~ .cft-shape-label,
+.cft-shape-item:hover .cft-shape-label {
+  color: #38bdf8;
+}
+
+/* Provider label */
+.cft-provider-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #475569;
+  white-space: nowrap;
+  padding-right: 2px;
+}
+
+/* Provider pill buttons */
+.cft-provider-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  opacity: 0.55;
+}
+
+.cft-provider-pill:hover {
+  opacity: 0.85;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--pill-accent, #38bdf8);
+}
+
+.cft-provider-pill.active {
+  opacity: 1;
+  background: color-mix(in srgb, var(--pill-accent, #38bdf8) 18%, transparent);
+  border-color: var(--pill-accent, #38bdf8);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--pill-accent, #38bdf8) 40%, transparent);
+}
+
+/* Labeled export buttons */
+.cft-labeled-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.cft-btn-label {
+  font-size: 8.5px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.cft-labeled-btn:hover .cft-btn-label {
+  color: #94a3b8;
+}
+
+/* Customize button — subtle accent glow */
+.cft-customize-btn {
+  opacity: 0.5;
+}
+
+.cft-customize-btn:hover {
+  opacity: 1;
+  color: #a78bfa !important;
+  box-shadow: 0 0 12px rgba(167, 139, 250, 0.3) !important;
+}
