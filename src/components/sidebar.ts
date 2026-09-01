@@ -67,9 +67,9 @@ export class Sidebar {
     // Header
     const header = document.createElement('div');
     header.className = 'sidebar-header';
-    header.innerHTML = `<h3>Rack Slicer</h3><button class="collapse-btn" title="Collapse">«</button>`;
+    header.innerHTML = `<h3>Rack Slicer</h3><button class="collapse-btn" title="Collapse Left Sidebar (Hide completely)">«</button>`;
     header.querySelector('.collapse-btn')!.addEventListener('click', () => {
-      this.container.classList.toggle('collapsed');
+      this.toggleCollapse();
     });
 
     // Workspace tab bar (replaces nav tree)
@@ -883,5 +883,29 @@ export class Sidebar {
       icon('<path d="M5 12.55a11 11 0 0114.08 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="20" r="1"/>'),
       cableItemEls,
     );
+  }
+
+  toggleCollapse(forceState?: boolean): void {
+    const isCollapsed = forceState !== undefined ? forceState : !this.container.classList.contains('collapsed');
+    this.container.classList.toggle('collapsed', isCollapsed);
+    document.body.classList.toggle('sidebar-collapsed', isCollapsed);
+
+    let floatBtn = document.getElementById('floating-sidebar-expand');
+    if (!floatBtn) {
+      floatBtn = document.createElement('button');
+      floatBtn.id = 'floating-sidebar-expand';
+      floatBtn.className = 'floating-sidebar-expand hidden';
+      floatBtn.title = 'Expand Left Sidebar';
+      floatBtn.innerHTML = '»';
+      floatBtn.addEventListener('click', () => this.toggleCollapse(false));
+      const workspace = document.getElementById('workspace');
+      if (workspace) workspace.appendChild(floatBtn);
+    }
+    floatBtn.classList.toggle('hidden', !isCollapsed);
+
+    EventBus.emit('sidebar:toggle' as any, isCollapsed);
+    setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 220);
   }
 }

@@ -11,18 +11,45 @@
 }
 
 #sidebar.collapsed {
-  width: 48px;
+  width: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border-right: none !important;
+  overflow: hidden !important;
 }
 
 #sidebar.collapsed .sidebar-header h3,
 #sidebar.collapsed .sb-tabs,
 #sidebar.collapsed .sidebar-search,
 #sidebar.collapsed .sidebar-catalog {
-  display: none;
+  display: none !important;
 }
 
-#sidebar.collapsed .collapse-btn {
-  transform: rotate(180deg);
+.floating-sidebar-expand {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.floating-sidebar-expand:hover {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
 }
 
 .sidebar-header {
