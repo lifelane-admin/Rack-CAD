@@ -23,9 +23,12 @@ export interface DcRack {
   color?: string;
 }
 
+export type DcUnit = 'm' | 'mm' | 'ft' | 'in';
+
 export interface DcFloor {
   id: string;
   name: string;
+  unit: DcUnit;        // Preferred unit: 'm' | 'mm' | 'ft' | 'in'
   lengthM: number;   // floor length in meters
   widthM: number;    // floor width in meters
   tileSizeMm: number; // square tile size in mm (e.g. 600)

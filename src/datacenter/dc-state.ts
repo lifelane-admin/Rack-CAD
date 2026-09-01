@@ -1,4 +1,4 @@
-import { DcState, DcFloor, DcRack, DcFloorTile } from './types';
+import { DcState, DcFloor, DcRack, DcFloorTile, DcUnit } from './types';
 
 const STORAGE_KEY = 'dc_state_v1';
 
@@ -94,10 +94,11 @@ class DcStateManager {
   }
 
   // Floor operations
-  createFloor(name: string, lengthM: number, widthM: number, tileSizeMm: number): DcFloor {
+  createFloor(name: string, lengthM: number, widthM: number, tileSizeMm: number, unit: DcUnit = 'm'): DcFloor {
     const floor: DcFloor = {
       id: generateId(),
       name,
+      unit,
       lengthM,
       widthM,
       tileSizeMm,

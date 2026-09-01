@@ -1,5 +1,5 @@
 import { dcState } from './dc-state';
-import { DcFloor, DcRack } from './types';
+import { DcFloor, DcRack, DcUnit } from './types';
 import {
   formatSingleDistance,
   formatDimensionsMeters,
@@ -8,6 +8,12 @@ import {
   formatArea,
   metersToAll,
   mmToAll,
+  unitToMeters,
+  metersToUnit,
+  unitToMm,
+  mmToUnit,
+  getUnitName,
+  getUnitSymbol,
 } from './units';
 
 const RACK_COLORS = ['#1e3a5f', '#1a4731', '#3d1a1a', '#2d1f4e', '#1a3535'];
@@ -105,6 +111,14 @@ export class BuildFloorView {
             <button class="dc-btn dc-btn-icon" id="dc-btn-zoomout" title="Zoom Out (-)">－</button>
           </div>
           <div class="dc-topbar-right">
+            <label class="dc-unit-selector-label" title="Active measurement unit">Unit:
+              <select id="dc-topbar-unit" class="dc-select-sm">
+                <option value="m">Meters (m)</option>
+                <option value="mm">Millimeters (mm)</option>
+                <option value="ft">Feet (ft)</option>
+                <option value="in">Inches (in)</option>
+              </select>
+            </label>
             <span class="dc-save-indicator" id="dc-save-indicator">● Saved</span>
           </div>
         </div>
@@ -203,6 +217,15 @@ export class BuildFloorView {
     on('dc-btn-snap', () => { dcState.setState({ snapEnabled: !dcState.getState().snapEnabled }); });
     on('dc-btn-labels', () => { dcState.setState({ labelsVisible: !dcState.getState().labelsVisible }); });
     
+    this.container.querySelector('#dc-topbar-unit')?.addEventListener('change', (e) => {
+      const selectedUnit = (e.target as HTMLSelectElement).value as DcUnit;
+      const floor = dcState.getActiveFloor();
+      if (floor) {
+        dcState.updateFloor(floor.id, { unit: selectedUnit });
+        this.refresh();
+      }
+    });
+
     // Pan navigation buttons
     on('dc-nav-left', () => { this.panX += 80; this.draw(); });
     on('dc-nav-right', () => { this.panX -= 80; this.draw(); });
@@ -376,10 +399,10 @@ export class BuildFloorView {
         const { xM, yM } = this.screenToWorld(canvasSx, canvasSy);
 
         const statusbar = this.container.querySelector('#dc-statusbar');
+        const floor = dcState.getActiveFloor();
+        const primaryUnit = floor?.unit ?? 'm';
         if (statusbar && xM >= 0 && yM >= 0) {
-          const xAll = metersToAll(xM);
-          const yAll = metersToAll(yM);
-          statusbar.textContent = `Cursor: X: ${xM.toFixed(2)}m (${xAll.mm.toLocaleString()}mm | ${xAll.feet.toFixed(2)}ft | ${xAll.inches.toFixed(1)}in), Y: ${yM.toFixed(2)}m (${yAll.mm.toLocaleString()}mm | ${yAll.feet.toFixed(2)}ft | ${yAll.inches.toFixed(1)}in) | Hotkeys: [S] Select | [M] Move | [Z] Fit | [R] Rotate`;
+          statusbar.textContent = `Cursor: X: ${formatSingleDistance(xM, primaryUnit)} | Y: ${formatSingleDistance(yM, primaryUnit)} | Hotkeys: [S] Select | [M] Move | [Z] Fit | [R] Rotate`;
         }
       }
 
@@ -669,13 +692,15 @@ export class BuildFloorView {
   private updateInfoPanel(floor: DcFloor) {
     const el = this.container.querySelector('#dc-info-content');
     if (!el) return;
+    const unit = floor.unit ?? 'm';
     const colCount = Math.ceil(floor.lengthM / (floor.tileSizeMm / 1000));
     const rowCount = Math.ceil(floor.widthM / (floor.tileSizeMm / 1000));
     el.innerHTML = `
       <div class="dc-info-row"><span class="dc-info-label">Floor</span><span class="dc-info-val">${floor.name}</span></div>
-      <div class="dc-info-row"><span class="dc-info-label">Dimensions</span><span class="dc-info-val">${formatDimensionsMeters(floor.lengthM, floor.widthM)}</span></div>
+      <div class="dc-info-row"><span class="dc-info-label">Unit System</span><span class="dc-info-val"><b>${getUnitName(unit)}</b></span></div>
+      <div class="dc-info-row"><span class="dc-info-label">Dimensions</span><span class="dc-info-val">${formatDimensionsMeters(floor.lengthM, floor.widthM, unit)}</span></div>
       <div class="dc-info-row"><span class="dc-info-label">Floor Area</span><span class="dc-info-val">${formatArea(floor.lengthM, floor.widthM)}</span></div>
-      <div class="dc-info-row"><span class="dc-info-label">ESD Tile</span><span class="dc-info-val">${formatDimensionsMm(floor.tileSizeMm, floor.tileSizeMm)}</span></div>
+      <div class="dc-info-row"><span class="dc-info-label">ESD Tile</span><span class="dc-info-val">${formatDimensionsMm(floor.tileSizeMm, floor.tileSizeMm, unit === 'm' ? 'mm' : unit)}</span></div>
       <div class="dc-info-row"><span class="dc-info-label">Grid</span><span class="dc-info-val">${colCount} × ${rowCount}</span></div>
       <div class="dc-info-row"><span class="dc-info-label">Tiles</span><span class="dc-info-val">${floor.tiles.length.toLocaleString()}</span></div>
       <div class="dc-info-row"><span class="dc-info-label">Racks</span><span class="dc-info-val">${floor.racks.length}</span></div>
@@ -695,6 +720,7 @@ export class BuildFloorView {
 
   private updateButtonStates() {
     const s = dcState.getState();
+    const floor = dcState.getActiveFloor();
     const setActive = (id: string, active: boolean) => {
       const el = this.container.querySelector(`#${id}`) as HTMLElement;
       if (el) el.classList.toggle('active', active);
@@ -704,6 +730,13 @@ export class BuildFloorView {
     setActive('dc-btn-grid', s.gridVisible);
     setActive('dc-btn-snap', s.snapEnabled);
     setActive('dc-btn-labels', s.labelsVisible);
+
+    if (floor) {
+      const topbarUnitSel = this.container.querySelector('#dc-topbar-unit') as HTMLSelectElement;
+      if (topbarUnitSel && topbarUnitSel.value !== (floor.unit ?? 'm')) {
+        topbarUnitSel.value = floor.unit ?? 'm';
+      }
+    }
   }
 
   private refresh() {
@@ -724,18 +757,19 @@ export class BuildFloorView {
     const el = this.container.querySelector('#dc-props-content');
     if (!el) return;
     const floor = dcState.getActiveFloor();
+    const unit = floor?.unit ?? 'm';
 
     if (s.selectedRackId && floor) {
       const rack = floor.racks.find(r => r.id === s.selectedRackId);
       if (rack) {
-        const posX = formatSingleDistance(rack.position.x);
-        const posY = formatSingleDistance(rack.position.y);
+        const posX = formatSingleDistance(rack.position.x, unit);
+        const posY = formatSingleDistance(rack.position.y, unit);
         el.innerHTML = `
           <div class="dc-props-section">
             <div class="dc-props-title">Rack Properties</div>
             <div class="dc-info-row"><span class="dc-info-label">ID</span><span class="dc-info-val">${rack.id}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Name</span><span class="dc-info-val">${rack.name}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(rack.widthMm, rack.depthMm)}</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(rack.widthMm, rack.depthMm, unit === 'm' ? 'mm' : unit)}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Height</span><span class="dc-info-val">${formatRackHeight(rack.heightU)}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Pos X</span><span class="dc-info-val">${posX}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Pos Y</span><span class="dc-info-val">${posY}</span></div>
@@ -773,9 +807,9 @@ export class BuildFloorView {
             <div class="dc-props-title">ESD Tile Properties</div>
             <div class="dc-info-row"><span class="dc-info-label">ID</span><span class="dc-info-val">${tile.id}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Grid Pos</span><span class="dc-info-val">Row ${tile.row}, Col ${tile.col}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">X</span><span class="dc-info-val">${formatSingleDistance(tile.x)}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Y</span><span class="dc-info-val">${formatSingleDistance(tile.y)}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(tile.widthMm, tile.depthMm)}</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">X</span><span class="dc-info-val">${formatSingleDistance(tile.x, unit)}</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">Y</span><span class="dc-info-val">${formatSingleDistance(tile.y, unit)}</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(tile.widthMm, tile.depthMm, unit === 'm' ? 'mm' : unit)}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Type</span><span class="dc-info-val">${tile.type}</span></div>
           </div>
         `;
@@ -790,38 +824,98 @@ export class BuildFloorView {
     this.showModal('Create Datacenter Floor', `
       <div class="dc-form">
         <label>Floor Name<input id="df-name" type="text" value="Main Data Hall" class="dc-input"/></label>
-        <label>Length (meters)<input id="df-length" type="number" value="12" min="1" max="500" step="1" class="dc-input"/></label>
-        <label>Width (meters)<input id="df-width" type="number" value="8" min="1" max="500" step="1" class="dc-input"/></label>
-        <label>ESD Tile Size (mm)<input id="df-tile" type="number" value="600" min="300" max="1200" step="50" class="dc-input"/></label>
+        <label>Measurement Unit System
+          <select id="df-unit" class="dc-input">
+            <option value="m" selected>Meters (m)</option>
+            <option value="mm">Millimeters (mm)</option>
+            <option value="ft">Feet (ft)</option>
+            <option value="in">Inches (in)</option>
+          </select>
+        </label>
+        <label id="lbl-df-length">Length (meters)<input id="df-length" type="number" value="12" min="0.1" step="0.5" class="dc-input"/></label>
+        <label id="lbl-df-width">Width (meters)<input id="df-width" type="number" value="8" min="0.1" step="0.5" class="dc-input"/></label>
+        <label id="lbl-df-tile">ESD Tile Size (mm)<input id="df-tile" type="number" value="600" min="10" step="50" class="dc-input"/></label>
         <div class="dc-form-preview" id="df-preview"></div>
       </div>
     `, 'Create Floor', () => {
       const name = (document.getElementById('df-name') as HTMLInputElement).value.trim() || 'Main Data Hall';
-      const len = parseFloat((document.getElementById('df-length') as HTMLInputElement).value) || 12;
-      const wid = parseFloat((document.getElementById('df-width') as HTMLInputElement).value) || 8;
-      const tile = parseFloat((document.getElementById('df-tile') as HTMLInputElement).value) || 600;
-      if (len <= 0 || wid <= 0 || tile <= 0) { alert('Invalid dimensions.'); return false; }
-      dcState.createFloor(name, len, wid, tile);
+      const unit = (document.getElementById('df-unit') as HTMLSelectElement).value as DcUnit;
+      const rawLen = parseFloat((document.getElementById('df-length') as HTMLInputElement).value) || 12;
+      const rawWid = parseFloat((document.getElementById('df-width') as HTMLInputElement).value) || 8;
+      const rawTile = parseFloat((document.getElementById('df-tile') as HTMLInputElement).value) || (unit === 'mm' ? 600 : 0.6);
+
+      const lenM = unitToMeters(rawLen, unit);
+      const widM = unitToMeters(rawWid, unit);
+      const tileMm = unitToMm(rawTile, unit);
+
+      if (lenM <= 0 || widM <= 0 || tileMm <= 0) { alert('Invalid dimensions.'); return false; }
+      dcState.createFloor(name, lenM, widM, tileMm, unit);
       setTimeout(() => this.fitToFloor(), 50);
       return true;
     });
 
+    let activeUnit: DcUnit = 'm';
+
     const updatePreview = () => {
-      const len = parseFloat((document.getElementById('df-length') as HTMLInputElement)?.value) || 12;
-      const wid = parseFloat((document.getElementById('df-width') as HTMLInputElement)?.value) || 8;
-      const tile = parseFloat((document.getElementById('df-tile') as HTMLInputElement)?.value) || 600;
-      const cols = Math.ceil(len / (tile / 1000));
-      const rows = Math.ceil(wid / (tile / 1000));
+      const unit = ((document.getElementById('df-unit') as HTMLSelectElement)?.value as DcUnit) || 'm';
+      const rawLen = parseFloat((document.getElementById('df-length') as HTMLInputElement)?.value) || 12;
+      const rawWid = parseFloat((document.getElementById('df-width') as HTMLInputElement)?.value) || 8;
+      const rawTile = parseFloat((document.getElementById('df-tile') as HTMLInputElement)?.value) || (unit === 'mm' ? 600 : 0.6);
+
+      const lenM = unitToMeters(rawLen, unit);
+      const widM = unitToMeters(rawWid, unit);
+      const tileMm = unitToMm(rawTile, unit);
+
+      const cols = Math.ceil(lenM / (tileMm / 1000));
+      const rows = Math.ceil(widM / (tileMm / 1000));
       const prev = document.getElementById('df-preview');
       if (prev) {
         prev.innerHTML = `
-          <div class="dc-preview-line"><b>Grid:</b> ${cols} cols × ${rows} rows (${cols * rows} tiles)</div>
-          <div class="dc-preview-line"><b>Dimensions:</b> ${formatDimensionsMeters(len, wid)}</div>
-          <div class="dc-preview-line"><b>Area:</b> ${formatArea(len, wid)}</div>
+          <div class="dc-preview-line"><b>Measurement Unit:</b> ${getUnitName(unit)}</div>
+          <div class="dc-preview-line"><b>Grid Layout:</b> ${cols} cols × ${rows} rows (${cols * rows} tiles)</div>
+          <div class="dc-preview-line"><b>Dimensions:</b> ${formatDimensionsMeters(lenM, widM, unit)}</div>
+          <div class="dc-preview-line"><b>Floor Area:</b> ${formatArea(lenM, widM)}</div>
         `;
       }
     };
+
     setTimeout(() => {
+      const unitSel = document.getElementById('df-unit') as HTMLSelectElement;
+      unitSel?.addEventListener('change', () => {
+        const newUnit = unitSel.value as DcUnit;
+        const oldUnit = activeUnit;
+        if (oldUnit === newUnit) return;
+
+        const lenEl = document.getElementById('df-length') as HTMLInputElement;
+        const widEl = document.getElementById('df-width') as HTMLInputElement;
+        const tileEl = document.getElementById('df-tile') as HTMLInputElement;
+
+        const lenM = unitToMeters(parseFloat(lenEl?.value) || 0, oldUnit);
+        const widM = unitToMeters(parseFloat(widEl?.value) || 0, oldUnit);
+        const tileM = unitToMeters(parseFloat(tileEl?.value) || 0, oldUnit);
+
+        activeUnit = newUnit;
+
+        const newLenVal = parseFloat(metersToUnit(lenM, newUnit).toFixed(2));
+        const newWidVal = parseFloat(metersToUnit(widM, newUnit).toFixed(2));
+        const newTileVal = parseFloat(metersToUnit(tileM, newUnit).toFixed(2));
+
+        const lblLen = document.getElementById('lbl-df-length');
+        const lblWid = document.getElementById('lbl-df-width');
+        const lblTile = document.getElementById('lbl-df-tile');
+        const unitName = getUnitName(newUnit);
+
+        if (lblLen) lblLen.innerHTML = `Length (${unitName})<input id="df-length" type="number" value="${newLenVal}" min="0.1" step="0.5" class="dc-input"/>`;
+        if (lblWid) lblWid.innerHTML = `Width (${unitName})<input id="df-width" type="number" value="${newWidVal}" min="0.1" step="0.5" class="dc-input"/>`;
+        if (lblTile) lblTile.innerHTML = `ESD Tile Size (${unitName})<input id="df-tile" type="number" value="${newTileVal}" min="0.1" step="0.5" class="dc-input"/>`;
+
+        document.getElementById('df-length')?.addEventListener('input', updatePreview);
+        document.getElementById('df-width')?.addEventListener('input', updatePreview);
+        document.getElementById('df-tile')?.addEventListener('input', updatePreview);
+
+        updatePreview();
+      });
+
       document.getElementById('df-length')?.addEventListener('input', updatePreview);
       document.getElementById('df-width')?.addEventListener('input', updatePreview);
       document.getElementById('df-tile')?.addEventListener('input', updatePreview);
@@ -830,26 +924,46 @@ export class BuildFloorView {
   }
 
   private showEditFloorDialog(floor: DcFloor) {
+    const initUnit = floor.unit ?? 'm';
+    const initLen = parseFloat(metersToUnit(floor.lengthM, initUnit).toFixed(2));
+    const initWid = parseFloat(metersToUnit(floor.widthM, initUnit).toFixed(2));
+    const initTile = parseFloat(mmToUnit(floor.tileSizeMm, initUnit).toFixed(2));
+
     this.showModal('Edit Floor', `
       <div class="dc-form">
         <label>Floor Name<input id="df-name" type="text" value="${floor.name}" class="dc-input"/></label>
-        <label>Length (meters)<input id="df-length" type="number" value="${floor.lengthM}" min="1" step="1" class="dc-input"/></label>
-        <label>Width (meters)<input id="df-width" type="number" value="${floor.widthM}" min="1" step="1" class="dc-input"/></label>
-        <label>ESD Tile Size (mm)<input id="df-tile" type="number" value="${floor.tileSizeMm}" min="300" max="1200" step="50" class="dc-input"/></label>
+        <label>Measurement Unit System
+          <select id="df-unit" class="dc-input">
+            <option value="m"${initUnit === 'm' ? ' selected' : ''}>Meters (m)</option>
+            <option value="mm"${initUnit === 'mm' ? ' selected' : ''}>Millimeters (mm)</option>
+            <option value="ft"${initUnit === 'ft' ? ' selected' : ''}>Feet (ft)</option>
+            <option value="in"${initUnit === 'in' ? ' selected' : ''}>Inches (in)</option>
+          </select>
+        </label>
+        <label id="lbl-df-length">Length (${getUnitName(initUnit)})<input id="df-length" type="number" value="${initLen}" min="0.1" step="0.5" class="dc-input"/></label>
+        <label id="lbl-df-width">Width (${getUnitName(initUnit)})<input id="df-width" type="number" value="${initWid}" min="0.1" step="0.5" class="dc-input"/></label>
+        <label id="lbl-df-tile">ESD Tile Size (${getUnitName(initUnit)})<input id="df-tile" type="number" value="${initTile}" min="0.1" step="0.5" class="dc-input"/></label>
         <p class="dc-warning">⚠ Changing dimensions will rebuild the tile grid. Racks outside new boundaries will be removed.</p>
       </div>
     `, 'Save Changes', () => {
       const name = (document.getElementById('df-name') as HTMLInputElement).value.trim() || floor.name;
-      const len = parseFloat((document.getElementById('df-length') as HTMLInputElement).value) || floor.lengthM;
-      const wid = parseFloat((document.getElementById('df-width') as HTMLInputElement).value) || floor.widthM;
-      const tile = parseFloat((document.getElementById('df-tile') as HTMLInputElement).value) || floor.tileSizeMm;
+      const unit = (document.getElementById('df-unit') as HTMLSelectElement).value as DcUnit;
+      const rawLen = parseFloat((document.getElementById('df-length') as HTMLInputElement).value) || initLen;
+      const rawWid = parseFloat((document.getElementById('df-width') as HTMLInputElement).value) || initWid;
+      const rawTile = parseFloat((document.getElementById('df-tile') as HTMLInputElement).value) || initTile;
+
+      const lenM = unitToMeters(rawLen, unit);
+      const widM = unitToMeters(rawWid, unit);
+      const tileMm = unitToMm(rawTile, unit);
+
       const filteredRacks = floor.racks.filter(r => {
-        const rW = r.widthMm/1000, rD = r.depthMm/1000;
+        const rW = r.widthMm / 1000, rD = r.depthMm / 1000;
         const eW = r.rotation % 180 === 0 ? rW : rD;
         const eD = r.rotation % 180 === 0 ? rD : rW;
-        return r.position.x + eW <= len && r.position.y + eD <= wid;
+        return r.position.x + eW <= lenM && r.position.y + eD <= widM;
       });
-      dcState.updateFloor(floor.id, { name, lengthM: len, widthM: wid, tileSizeMm: tile, racks: filteredRacks });
+
+      dcState.updateFloor(floor.id, { name, unit, lengthM: lenM, widthM: widM, tileSizeMm: tileMm, racks: filteredRacks });
       dcState.rebuildTiles();
       setTimeout(() => this.fitToFloor(), 50);
       return true;
@@ -1064,7 +1178,7 @@ export class BuildFloorView {
     return `<div class="dc3d-scene" style="width:${floor.lengthM * scale * 10}px;height:${floor.widthM * scale * 10}px;transform: scale(${this.scale3D}) perspective(900px) rotateX(${this.rotX}deg) rotateZ(${this.rotZ}deg);">
       <div class="dc3d-floor" style="width:100%;height:100%;"></div>
       ${rackHtml}
-      <div class="dc3d-label">3D Isometric Plot — ${floor.name} (${formatDimensionsMeters(floor.lengthM, floor.widthM)})</div>
+      <div class="dc3d-label">3D Isometric Plot — ${floor.name} (${formatDimensionsMeters(floor.lengthM, floor.widthM, floor.unit ?? 'm')})</div>
     </div>`;
   }
 }
