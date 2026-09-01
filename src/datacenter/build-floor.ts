@@ -329,14 +329,20 @@ export class BuildFloorView {
   }
 
   private bindCanvasEvents() {
-    // 2D Point to Zoom & Scroll to Zoom
+    // 2D Point-to-Zoom & Scroll-to-Zoom with DPI scale awareness
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const delta = -e.deltaY;
-      const factor = Math.pow(1.0018, delta);
+      let delta = -e.deltaY;
+      if (e.deltaMode === 1) delta *= 30;
+      else if (e.deltaMode === 2) delta *= 300;
+      delta = Math.max(-120, Math.min(120, delta));
+
+      const factor = Math.pow(1.002, delta);
       const rect = this.canvas.getBoundingClientRect();
-      const mouseSx = e.clientX - rect.left;
-      const mouseSy = e.clientY - rect.top;
+      const scaleX = this.canvas.width / (rect.width || 1);
+      const scaleY = this.canvas.height / (rect.height || 1);
+      const mouseSx = (e.clientX - rect.left) * scaleX;
+      const mouseSy = (e.clientY - rect.top) * scaleY;
 
       this.zoomAtPoint(mouseSx, mouseSy, factor);
     }, { passive: false });
@@ -353,8 +359,19 @@ export class BuildFloorView {
 
     window.addEventListener('mousemove', (e) => {
       if (this.isPanning) {
-        this.panX = this.panStart.px + (e.clientX - this.panStart.x);
-        this.panY = this.panStart.py + (e.clientY - this.panStart.y);
+        const dx = e.clientX - this.panStart.x;
+        const dy = e.clientY - this.panStart.y;
+        let unrotDx = dx;
+        let unrotDy = dy;
+        if (this.canvasRotationDeg !== 0) {
+          const rad = (-this.canvasRotationDeg * Math.PI) / 180;
+          const cos = Math.cos(rad);
+          const sin = Math.sin(rad);
+          unrotDx = dx * cos - dy * sin;
+          unrotDy = dx * sin + dy * cos;
+        }
+        this.panX = this.panStart.px + unrotDx;
+        this.panY = this.panStart.py + unrotDy;
         this.draw();
         return;
       }
@@ -395,7 +412,12 @@ export class BuildFloorView {
 
   private handleMouseDown(e: MouseEvent) {
     const rect = this.canvas.getBoundingClientRect();
-    const { xM, yM } = this.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+    const scaleX = this.canvas.width / (rect.width || 1);
+    const scaleY = this.canvas.height / (rect.height || 1);
+    const canvasSx = (e.clientX - rect.left) * scaleX;
+    const canvasSy = (e.clientY - rect.top) * scaleY;
+
+    const { xM, yM } = this.screenToWorld(canvasSx, canvasSy);
     const floor = dcState.getActiveFloor();
     if (!floor) return;
 
@@ -435,7 +457,12 @@ export class BuildFloorView {
     const floor = dcState.getActiveFloor();
     if (!floor) return;
     const rect = this.canvas.getBoundingClientRect();
-    const { xM, yM } = this.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+    const scaleX = this.canvas.width / (rect.width || 1);
+    const scaleY = this.canvas.height / (rect.height || 1);
+    const canvasSx = (e.clientX - rect.left) * scaleX;
+    const canvasSy = (e.clientY - rect.top) * scaleY;
+
+    const { xM, yM } = this.screenToWorld(canvasSx, canvasSy);
     let nx = xM - this.dragOffset.x;
     let ny = yM - this.dragOffset.y;
     if (dcState.getState().snapEnabled) {
@@ -904,18 +931,21 @@ export class BuildFloorView {
     // 3D Scroll to Zoom
     wrap3d.onwheel = (e) => {
       e.preventDefault();
-      const delta = -e.deltaY;
-      const factor = Math.pow(1.0018, delta);
+      let delta = -e.deltaY;
+      if (e.deltaMode === 1) delta *= 30;
+      else if (e.deltaMode === 2) delta *= 300;
+      delta = Math.max(-120, Math.min(120, delta));
+
+      const factor = Math.pow(1.002, delta);
       this.scale3D = Math.min(Math.max(this.scale3D * factor, 0.3), 4.0);
       this.apply3DTransform();
     };
 
-    // 3D Mouse Orbiting
+    // 3D Mouse Orbiting & Object Selection
     wrap3d.onmousedown = (e) => {
       const target = e.target as HTMLElement;
       if (target.closest('.dc3d-controls')) return;
 
-      // Handle 3D rack click selection
       const rackEl = target.closest('.dc3d-rack') as HTMLElement;
       if (rackEl) {
         const rackId = rackEl.dataset.rackId;
