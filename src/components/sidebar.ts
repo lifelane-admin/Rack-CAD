@@ -59,6 +59,7 @@ export class Sidebar {
     const activeView = State.getState().activeView;
     const isCloud = activeView === 'cloud';
     const isHybrid = activeView === 'hybrid';
+    const isDc = activeView === 'datacenter';
 
     this.container.innerHTML = '';
     this.container.className = 'sidebar';
@@ -75,6 +76,24 @@ export class Sidebar {
     const tabBar = document.createElement('div');
     tabBar.className = 'sb-tabs';
     this.renderTabBar(tabBar, activeView);
+
+    this.container.appendChild(header);
+    this.container.appendChild(tabBar);
+
+    if (isDc) {
+      const dcMsg = document.createElement('div');
+      dcMsg.className = 'sidebar-catalog';
+      dcMsg.style.padding = '16px 12px';
+      dcMsg.style.color = '#64748b';
+      dcMsg.style.fontSize = '12px';
+      dcMsg.style.lineHeight = '1.6';
+      dcMsg.innerHTML = `
+        <div style="font-weight: 700; color: #38bdf8; margin-bottom: 8px;">Datacenter Mode</div>
+        Visual floor planner active.<br>Use top controls to manage floor tiles & racks.
+      `;
+      this.container.appendChild(dcMsg);
+      return;
+    }
 
     // Search
     const searchContainer = document.createElement('div');
@@ -111,8 +130,6 @@ export class Sidebar {
       }
     };
 
-    this.container.appendChild(header);
-    this.container.appendChild(tabBar);
     this.container.appendChild(searchContainer);
     this.container.appendChild(catalogContainer);
     if (isHybrid) this.container.appendChild(cloudCatalogContainer);
@@ -128,10 +145,11 @@ export class Sidebar {
   }
 
   private renderTabBar(container: HTMLElement, activeView: string): void {
-    const tabs: Array<{ label: string; view: 'rack' | 'cloud' | 'hybrid' }> = [
+    const tabs: Array<{ label: string; view: 'rack' | 'cloud' | 'hybrid' | 'datacenter' }> = [
       { label: 'Rack', view: 'rack' },
       { label: 'Cloud', view: 'cloud' },
       { label: 'Hybrid', view: 'hybrid' },
+      { label: 'Datacenter', view: 'datacenter' },
     ];
 
     for (const tab of tabs) {
@@ -147,7 +165,7 @@ export class Sidebar {
         this.searchTerm = '';
         const currentView = State.getState().activeView;
         const target = tab.view === 'cloud' && currentView !== 'cloud' ? 'hybrid' : tab.view;
-        EventBus.emit('view:switch', target);
+        EventBus.emit('view:switch', target as any);
       });
 
       container.appendChild(el);

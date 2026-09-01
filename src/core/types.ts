@@ -769,7 +769,7 @@ export interface AppState {
    *  the standalone Cloud Architecture diagram canvas, 'hybrid' shows both canvases together (2D
    *  only — never shows the 3D panel), laid out per hybridLayoutMode. See app.ts's
    *  setActiveView() for how the layering/pass-through works. */
-  activeView: 'rack' | 'cloud' | 'hybrid';
+  activeView: 'rack' | 'cloud' | 'hybrid' | 'datacenter';
   /** Hybrid-only sub-mode, toggled from the toolbar's Hybrid Layout group (see toolbar.ts) —
    *  'split' (default) shows the rack and cloud canvases as separate side-by-side panes, each
    *  with its own independent pan/zoom/scale (see mountHybridSplitter in app.ts), good for a rack
@@ -865,12 +865,12 @@ export interface AppEvents {
   'textlabel:update': { id: string; data: Partial<TextLabel> };
   'image:insert': void;
   'imageasset:update': { id: string; data: Partial<ImageAsset> };
-  'view:switch': 'rack' | 'cloud' | 'hybrid';
+  'view:switch': 'rack' | 'cloud' | 'hybrid' | 'datacenter';
   /** Primes the cloud-container draw tool with a specific boundary kind (Region/AZ/VPC/Subnet/
    *  Resource Group/Account) — the dedicated toolbar shape buttons, as opposed to dropping a
    *  boundary-type palette icon (which also primes the same tool, see isBoundaryIcon()). */
   'cloud-shape:prime': CloudContainer['kind'];
-  'view:changed': 'rack' | 'cloud' | 'hybrid';
+  'view:changed': 'rack' | 'cloud' | 'hybrid' | 'datacenter';
   'cloudnode:added': CloudNode;
   'cloudnode:update': { id: string; data: Partial<CloudNode> };
   'cloudcontainer:added': CloudContainer;

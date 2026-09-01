@@ -25,6 +25,7 @@ import { NotificationCenter } from './components/notifications';
 import { ensureSvgDefs } from './components/cable-graphics';
 import { TextToolPanel } from './components/text-tool-panel';
 import { ImageToolPanel } from './components/image-tool-panel';
+import { BuildFloorView } from './datacenter';
 import './styles/text-tool-panel.css';
 import './styles/reports-float.css';
 import { AIPanel } from './components/ai-panel';
@@ -248,6 +249,7 @@ export class App {
   // throws if those elements are missing. renderCloudAll() no-ops when this is null; everything
   // else that touches it only runs from inside the same successful-mount branch.
   private cloudCanvas: CloudCanvasManager | null = null;
+  private buildFloorView?: BuildFloorView;
 
   // Cloud node/container drag+resize state (shared drag-start fields, discriminated by which
   // of draggedCloudNodeId/draggedCloudContainerId is set, mirrors ImageAsset's single-flow
@@ -409,6 +411,12 @@ export class App {
     // Its Cloud Architecture counterpart — mounted inside #cloud-viewport, so it's naturally
     // hidden/shown alongside the rest of that view (see setActiveView()'s .hidden toggling).
     this.cloudFloatingToolbar = new CloudFloatingToolbar();
+
+    // Initialize Datacenter Build Floor view
+    const dcViewportEl = document.getElementById('dc-viewport');
+    if (dcViewportEl) {
+      this.buildFloorView = new BuildFloorView(dcViewportEl);
+    }
 
     // Initialize the draggable Reports float panel (Cable Types + Rack Load Summary).
     // Mounted inside #canvas-viewport so it sits over the rack canvas only.
@@ -912,7 +920,7 @@ export class App {
       this.renderAll();
     });
 
-    (eventBus as any).on('view:switch', (view: 'rack' | 'cloud' | 'hybrid') => {
+    (eventBus as any).on('view:switch', (view: 'rack' | 'cloud' | 'hybrid' | 'datacenter') => {
       this.setActiveView(view);
     });
 
@@ -5671,11 +5679,12 @@ export class App {
    *  written so every existing 'rack'/'cloud' toggle expression reduces to exactly its old value
    *  when isHybrid is false — hybrid support is additive, not a restructure of the pure rack/cloud
    *  behavior. */
-  setActiveView(view: 'rack' | 'cloud' | 'hybrid'): void {
+  setActiveView(view: 'rack' | 'cloud' | 'hybrid' | 'datacenter'): void {
     stateManager.setState({ activeView: view });
 
     const rackViewport = document.getElementById('canvas-viewport');
     const cloudViewport = document.getElementById('cloud-viewport');
+    const dcViewport = document.getElementById('dc-viewport');
     const hybridSplitter = document.getElementById('splitter-hybrid');
     const splitter = document.getElementById('splitter-3d');
     const rulerCorner = document.getElementById('ruler-corner');
@@ -5684,28 +5693,26 @@ export class App {
     const minimap = document.getElementById('minimap');
     const isCloud = view === 'cloud';
     const isHybrid = view === 'hybrid';
+    const isDc = view === 'datacenter';
     // Hybrid always uses merged mode — split sub-mode has been removed.
     const isMerged = isHybrid;
 
-    rackViewport?.classList.toggle('hidden', isCloud && !isHybrid);
-    cloudViewport?.classList.toggle('hidden', !isCloud && !isHybrid);
+    rackViewport?.classList.toggle('hidden', (isCloud && !isHybrid) || isDc);
+    cloudViewport?.classList.toggle('hidden', (!isCloud && !isHybrid) || isDc);
+    dcViewport?.classList.toggle('hidden', !isDc);
     // hybridSplitter is always kept hidden — merged mode needs no draggable divider.
     hybridSplitter?.classList.add('hidden');
     // Clear any stale flex-basis so each pane fills the available width correctly.
     if (rackViewport) rackViewport.style.flex = '';
     if (cloudViewport) cloudViewport.style.flex = '';
-    rulerCorner?.classList.toggle('hidden', isCloud && !isHybrid);
-    rulerH?.classList.toggle('hidden', isCloud && !isHybrid);
-    rulerV?.classList.toggle('hidden', isCloud && !isHybrid);
-    minimap?.classList.toggle('hidden', (isCloud && !isHybrid) || (stateManager.getState().show3DPanel && !isHybrid));
+    rulerCorner?.classList.toggle('hidden', (isCloud && !isHybrid) || isDc);
+    rulerH?.classList.toggle('hidden', (isCloud && !isHybrid) || isDc);
+    rulerV?.classList.toggle('hidden', (isCloud && !isHybrid) || isDc);
+    minimap?.classList.toggle('hidden', (isCloud && !isHybrid) || isDc || (stateManager.getState().show3DPanel && !isHybrid));
     if (splitter) {
-      if (isCloud || isHybrid) {
+      if (isCloud || isHybrid || isDc) {
         splitter.classList.add('hidden');
       } else if (splitter.style.display !== 'none') {
-        // Only re-show if it wasn't permanently hidden by the WebGL-init-failure fallback in
-        // init() (that sets inline style, not the .hidden class — see init()'s try/catch), AND
-        // the user hadn't turned the 3D panel off before switching to Cloud view (see
-        // setShow3DPanel — its own 'hidden' toggle would otherwise be clobbered here).
         splitter.classList.toggle('hidden', !stateManager.getState().show3DPanel);
       }
     }
