@@ -37,6 +37,7 @@ export class BuildFloorView {
   private unsub: (() => void) | null = null;
   private hasFittedInitialFloor = false;
   private resizeObserver: ResizeObserver | null = null;
+  private isLeftPanelCollapsed = false;
 
   // 2D Canvas View Rotation: 0, 90, 180, 270 degrees
   private canvasRotationDeg: 0 | 90 | 180 | 270 = 0;
@@ -124,10 +125,14 @@ export class BuildFloorView {
         </div>
         <div class="dc-body">
           <div class="dc-info-panel" id="dc-info-panel">
-            <div class="dc-panel-title">DATACENTER FLOOR</div>
+            <div class="dc-panel-header">
+              <div class="dc-panel-title">DATACENTER FLOOR</div>
+              <button class="dc-btn-toggle-panel" id="dc-toggle-left-panel" title="Collapse Left Panel (more room space)">◀</button>
+            </div>
             <div id="dc-info-content"><div class="dc-no-floor">No floor loaded.<br>Click <b>+ New Floor</b> to start.</div></div>
           </div>
           <div class="dc-canvas-wrap" id="dc-canvas-wrap">
+            <button class="dc-expand-panel-btn hidden" id="dc-expand-left-panel" title="Expand Floor Info Panel">▶ Floor Info</button>
             <canvas id="dc-canvas"></canvas>
             <div class="dc-3d-container hidden" id="dc-3d-container"></div>
           </div>
@@ -205,6 +210,18 @@ export class BuildFloorView {
     this.draw();
   }
 
+  private toggleLeftPanel(collapse?: boolean) {
+    this.isLeftPanelCollapsed = collapse !== undefined ? collapse : !this.isLeftPanelCollapsed;
+    const panel = this.container.querySelector('#dc-info-panel');
+    const expandBtn = this.container.querySelector('#dc-expand-left-panel');
+    if (panel) panel.classList.toggle('collapsed', this.isLeftPanelCollapsed);
+    if (expandBtn) expandBtn.classList.toggle('hidden', !this.isLeftPanelCollapsed);
+    setTimeout(() => {
+      this.resize();
+      if (dcState.getState().viewMode === '3d') this.render3D(); else this.draw();
+    }, 220);
+  }
+
   private bindButtons() {
     const on = (id: string, fn: () => void) => this.container.querySelector(`#${id}`)?.addEventListener('click', fn);
     on('dc-btn-newfloor', () => this.showCreateFloorDialog());
@@ -216,6 +233,8 @@ export class BuildFloorView {
     on('dc-btn-grid', () => { dcState.setState({ gridVisible: !dcState.getState().gridVisible }); });
     on('dc-btn-snap', () => { dcState.setState({ snapEnabled: !dcState.getState().snapEnabled }); });
     on('dc-btn-labels', () => { dcState.setState({ labelsVisible: !dcState.getState().labelsVisible }); });
+    on('dc-toggle-left-panel', () => this.toggleLeftPanel(true));
+    on('dc-expand-left-panel', () => this.toggleLeftPanel(false));
     
     this.container.querySelector('#dc-topbar-unit')?.addEventListener('change', (e) => {
       const selectedUnit = (e.target as HTMLSelectElement).value as DcUnit;
@@ -1039,7 +1058,6 @@ export class BuildFloorView {
     overlay.querySelector('#dc-modal-confirm')?.addEventListener('click', () => {
       if (onConfirm()) close();
     });
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   }
 
   private apply3DTransform() {
