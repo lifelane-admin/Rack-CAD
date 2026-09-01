@@ -1,5 +1,14 @@
 import { dcState } from './dc-state';
 import { DcFloor, DcRack } from './types';
+import {
+  formatSingleDistance,
+  formatDimensionsMeters,
+  formatDimensionsMm,
+  formatRackHeight,
+  formatArea,
+  metersToAll,
+  mmToAll,
+} from './units';
 
 const RACK_COLORS = ['#1e3a5f', '#1a4731', '#3d1a1a', '#2d1f4e', '#1a3535'];
 let rackColorIdx = 0;
@@ -358,6 +367,22 @@ export class BuildFloorView {
     });
 
     window.addEventListener('mousemove', (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const canvasSx = (e.clientX - rect.left) * scaleX;
+        const canvasSy = (e.clientY - rect.top) * scaleY;
+        const { xM, yM } = this.screenToWorld(canvasSx, canvasSy);
+
+        const statusbar = this.container.querySelector('#dc-statusbar');
+        if (statusbar && xM >= 0 && yM >= 0) {
+          const xAll = metersToAll(xM);
+          const yAll = metersToAll(yM);
+          statusbar.textContent = `Cursor: X: ${xM.toFixed(2)}m (${xAll.mm.toLocaleString()}mm | ${xAll.feet.toFixed(2)}ft | ${xAll.inches.toFixed(1)}in), Y: ${yM.toFixed(2)}m (${yAll.mm.toLocaleString()}mm | ${yAll.feet.toFixed(2)}ft | ${yAll.inches.toFixed(1)}in) | Hotkeys: [S] Select | [M] Move | [Z] Fit | [R] Rotate`;
+        }
+      }
+
       if (this.isPanning) {
         const dx = e.clientX - this.panStart.x;
         const dy = e.clientY - this.panStart.y;
@@ -648,8 +673,9 @@ export class BuildFloorView {
     const rowCount = Math.ceil(floor.widthM / (floor.tileSizeMm / 1000));
     el.innerHTML = `
       <div class="dc-info-row"><span class="dc-info-label">Floor</span><span class="dc-info-val">${floor.name}</span></div>
-      <div class="dc-info-row"><span class="dc-info-label">Dimensions</span><span class="dc-info-val">${floor.lengthM}m × ${floor.widthM}m</span></div>
-      <div class="dc-info-row"><span class="dc-info-label">ESD Tile</span><span class="dc-info-val">${floor.tileSizeMm} × ${floor.tileSizeMm}mm</span></div>
+      <div class="dc-info-row"><span class="dc-info-label">Dimensions</span><span class="dc-info-val">${formatDimensionsMeters(floor.lengthM, floor.widthM)}</span></div>
+      <div class="dc-info-row"><span class="dc-info-label">Floor Area</span><span class="dc-info-val">${formatArea(floor.lengthM, floor.widthM)}</span></div>
+      <div class="dc-info-row"><span class="dc-info-label">ESD Tile</span><span class="dc-info-val">${formatDimensionsMm(floor.tileSizeMm, floor.tileSizeMm)}</span></div>
       <div class="dc-info-row"><span class="dc-info-label">Grid</span><span class="dc-info-val">${colCount} × ${rowCount}</span></div>
       <div class="dc-info-row"><span class="dc-info-label">Tiles</span><span class="dc-info-val">${floor.tiles.length.toLocaleString()}</span></div>
       <div class="dc-info-row"><span class="dc-info-label">Racks</span><span class="dc-info-val">${floor.racks.length}</span></div>
@@ -702,14 +728,17 @@ export class BuildFloorView {
     if (s.selectedRackId && floor) {
       const rack = floor.racks.find(r => r.id === s.selectedRackId);
       if (rack) {
+        const posX = formatSingleDistance(rack.position.x);
+        const posY = formatSingleDistance(rack.position.y);
         el.innerHTML = `
           <div class="dc-props-section">
             <div class="dc-props-title">Rack Properties</div>
             <div class="dc-info-row"><span class="dc-info-label">ID</span><span class="dc-info-val">${rack.id}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Name</span><span class="dc-info-val">${rack.name}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${rack.widthMm} × ${rack.depthMm}mm</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Height</span><span class="dc-info-val">${rack.heightU}U</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Position</span><span class="dc-info-val">X:${rack.position.x.toFixed(2)}m Y:${rack.position.y.toFixed(2)}m</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(rack.widthMm, rack.depthMm)}</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">Height</span><span class="dc-info-val">${formatRackHeight(rack.heightU)}</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">Pos X</span><span class="dc-info-val">${posX}</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">Pos Y</span><span class="dc-info-val">${posY}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Rotation</span><span class="dc-info-val">${rack.rotation}°</span></div>
             ${rack.manufacturer ? `<div class="dc-info-row"><span class="dc-info-label">Mfr</span><span class="dc-info-val">${rack.manufacturer}</span></div>` : ''}
           </div>
@@ -743,12 +772,10 @@ export class BuildFloorView {
           <div class="dc-props-section">
             <div class="dc-props-title">ESD Tile Properties</div>
             <div class="dc-info-row"><span class="dc-info-label">ID</span><span class="dc-info-val">${tile.id}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Row</span><span class="dc-info-val">${tile.row}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Col</span><span class="dc-info-val">${tile.col}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">X</span><span class="dc-info-val">${tile.x.toFixed(3)}m</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Y</span><span class="dc-info-val">${tile.y.toFixed(3)}m</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Z</span><span class="dc-info-val">${tile.z}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${tile.widthMm} × ${tile.depthMm}mm</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">Grid Pos</span><span class="dc-info-val">Row ${tile.row}, Col ${tile.col}</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">X</span><span class="dc-info-val">${formatSingleDistance(tile.x)}</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">Y</span><span class="dc-info-val">${formatSingleDistance(tile.y)}</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(tile.widthMm, tile.depthMm)}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Type</span><span class="dc-info-val">${tile.type}</span></div>
           </div>
         `;
@@ -786,7 +813,13 @@ export class BuildFloorView {
       const cols = Math.ceil(len / (tile / 1000));
       const rows = Math.ceil(wid / (tile / 1000));
       const prev = document.getElementById('df-preview');
-      if (prev) prev.innerHTML = `<div class="dc-preview-line">Grid: <b>${cols} columns × ${rows} rows</b> = <b>${cols * rows}</b> tiles</div>`;
+      if (prev) {
+        prev.innerHTML = `
+          <div class="dc-preview-line"><b>Grid:</b> ${cols} cols × ${rows} rows (${cols * rows} tiles)</div>
+          <div class="dc-preview-line"><b>Dimensions:</b> ${formatDimensionsMeters(len, wid)}</div>
+          <div class="dc-preview-line"><b>Area:</b> ${formatArea(len, wid)}</div>
+        `;
+      }
     };
     setTimeout(() => {
       document.getElementById('df-length')?.addEventListener('input', updatePreview);
@@ -1031,7 +1064,7 @@ export class BuildFloorView {
     return `<div class="dc3d-scene" style="width:${floor.lengthM * scale * 10}px;height:${floor.widthM * scale * 10}px;transform: scale(${this.scale3D}) perspective(900px) rotateX(${this.rotX}deg) rotateZ(${this.rotZ}deg);">
       <div class="dc3d-floor" style="width:100%;height:100%;"></div>
       ${rackHtml}
-      <div class="dc3d-label">3D Isometric Plot — ${floor.name} (${floor.lengthM}m × ${floor.widthM}m)</div>
+      <div class="dc3d-label">3D Isometric Plot — ${floor.name} (${formatDimensionsMeters(floor.lengthM, floor.widthM)})</div>
     </div>`;
   }
 }
