@@ -3,7 +3,7 @@
 // each choice does exactly what its equivalent sidebar nav-tree entry does (see sidebar.ts's
 // NAV_TREE + focusCloudProvider()), it doesn't touch or reset any existing project data.
 
-export type StartupChoice = 'rack' | 'aws' | 'azure' | 'gcp' | 'hybrid';
+export type StartupChoice = 'rack' | 'datacenter' | 'aws' | 'azure' | 'gcp' | 'hybrid';
 
 interface StartupOption {
   choice: StartupChoice;
@@ -20,6 +20,13 @@ const STARTUP_OPTIONS: StartupOption[] = [
     title: 'Rack Design',
     description: 'On-prem server racks, device elevations, cabling, and 3D viewport.',
     accent: '#58a6ff',
+  },
+  {
+    choice: 'datacenter',
+    icon: '🏢',
+    title: 'Datacenter',
+    description: 'ESD raised-floor grid planner, data hall layout, 2D & 3D floor visualization.',
+    accent: '#38bdf8',
   },
   {
     choice: 'aws',
