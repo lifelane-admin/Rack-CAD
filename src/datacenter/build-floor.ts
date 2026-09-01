@@ -375,6 +375,7 @@ export class BuildFloorView {
     const tileM = floor.tileSizeMm / 1000;
     const tilePx = tileM * this.ppm;
 
+    // 1. Draw ESD Tiles
     for (const tile of floor.tiles) {
       const { sx, sy } = this.worldToScreen(tile.x, tile.y);
       const tw = tilePx;
@@ -382,35 +383,39 @@ export class BuildFloorView {
 
       const isPartial = tile.type === 'partial';
       const isSelected = tile.id === s.selectedTileId;
+      const isChecker = (tile.row + tile.col) % 2 === 0;
 
       if (isSelected) {
-        this.ctx.fillStyle = 'rgba(56,189,248,0.3)';
+        this.ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
       } else if (isPartial) {
-        this.ctx.fillStyle = 'rgba(255,255,255,0.02)';
+        this.ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
       } else {
-        this.ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        this.ctx.fillStyle = isChecker ? 'rgba(30, 41, 59, 0.7)' : 'rgba(21, 32, 50, 0.7)';
       }
       this.ctx.fillRect(sx, sy, tw, th);
 
+      // Grid line border for individual tile
       if (s.gridVisible) {
-        this.ctx.strokeStyle = isSelected ? '#38bdf8' : isPartial ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.15)';
-        this.ctx.lineWidth = isSelected ? 1.5 : 0.5;
+        this.ctx.strokeStyle = isSelected ? '#38bdf8' : isPartial ? 'rgba(56, 189, 248, 0.25)' : 'rgba(56, 189, 248, 0.45)';
+        this.ctx.lineWidth = isSelected ? 2 : 1;
         this.ctx.strokeRect(sx, sy, tw, th);
       }
 
-      if (s.labelsVisible && tilePx >= 36) {
-        this.ctx.fillStyle = isSelected ? '#38bdf8' : 'rgba(255,255,255,0.3)';
+      // Tile ID Label
+      if (s.labelsVisible && tilePx >= 32) {
+        this.ctx.fillStyle = isSelected ? '#38bdf8' : 'rgba(255, 255, 255, 0.4)';
         this.ctx.font = `${Math.max(9, Math.min(11, tilePx * 0.18))}px monospace`;
         this.ctx.textAlign = 'center';
         this.ctx.fillText(tile.id, sx + tw / 2, sy + th / 2 + 4);
       }
     }
 
+    // 2. Draw Main Outer Floor Border
     const { sx: fx, sy: fy } = this.worldToScreen(0, 0);
     const fw = floor.lengthM * this.ppm;
     const fh = floor.widthM * this.ppm;
     this.ctx.strokeStyle = '#38bdf8';
-    this.ctx.lineWidth = 2;
+    this.ctx.lineWidth = 2.5;
     this.ctx.strokeRect(fx, fy, fw, fh);
 
     for (const rack of floor.racks) {
