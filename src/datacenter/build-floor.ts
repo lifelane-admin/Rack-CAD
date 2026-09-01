@@ -763,15 +763,15 @@ export class BuildFloorView {
     this.showModal('Create Datacenter Floor', `
       <div class="dc-form">
         <label>Floor Name<input id="df-name" type="text" value="Main Data Hall" class="dc-input"/></label>
-        <label>Length (meters)<input id="df-length" type="number" value="30" min="1" max="500" step="1" class="dc-input"/></label>
-        <label>Width (meters)<input id="df-width" type="number" value="20" min="1" max="500" step="1" class="dc-input"/></label>
+        <label>Length (meters)<input id="df-length" type="number" value="12" min="1" max="500" step="1" class="dc-input"/></label>
+        <label>Width (meters)<input id="df-width" type="number" value="8" min="1" max="500" step="1" class="dc-input"/></label>
         <label>ESD Tile Size (mm)<input id="df-tile" type="number" value="600" min="300" max="1200" step="50" class="dc-input"/></label>
         <div class="dc-form-preview" id="df-preview"></div>
       </div>
     `, 'Create Floor', () => {
       const name = (document.getElementById('df-name') as HTMLInputElement).value.trim() || 'Main Data Hall';
-      const len = parseFloat((document.getElementById('df-length') as HTMLInputElement).value) || 30;
-      const wid = parseFloat((document.getElementById('df-width') as HTMLInputElement).value) || 20;
+      const len = parseFloat((document.getElementById('df-length') as HTMLInputElement).value) || 12;
+      const wid = parseFloat((document.getElementById('df-width') as HTMLInputElement).value) || 8;
       const tile = parseFloat((document.getElementById('df-tile') as HTMLInputElement).value) || 600;
       if (len <= 0 || wid <= 0 || tile <= 0) { alert('Invalid dimensions.'); return false; }
       dcState.createFloor(name, len, wid, tile);
@@ -780,8 +780,8 @@ export class BuildFloorView {
     });
 
     const updatePreview = () => {
-      const len = parseFloat((document.getElementById('df-length') as HTMLInputElement)?.value) || 30;
-      const wid = parseFloat((document.getElementById('df-width') as HTMLInputElement)?.value) || 20;
+      const len = parseFloat((document.getElementById('df-length') as HTMLInputElement)?.value) || 12;
+      const wid = parseFloat((document.getElementById('df-width') as HTMLInputElement)?.value) || 8;
       const tile = parseFloat((document.getElementById('df-tile') as HTMLInputElement)?.value) || 600;
       const cols = Math.ceil(len / (tile / 1000));
       const rows = Math.ceil(wid / (tile / 1000));

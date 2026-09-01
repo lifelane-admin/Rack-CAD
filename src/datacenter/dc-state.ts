@@ -66,18 +66,12 @@ class DcStateManager {
   }
 
   private initDefaultFloor(): void {
-    const floor = this.createFloor('Main Data Hall', 30, 20, 600);
-    // Add default rack rows
-    const tileM = 0.6;
+    const floor = this.createFloor('Main Data Hall', 12, 8, 600);
     const racks: DcRack[] = [
-      { id: 'RACK-001', name: 'RACK-001', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 3.6, y: 3.6, z: 0 }, rotation: 0, color: '#1e3a5f', manufacturer: 'APC', model: 'AR3100' },
-      { id: 'RACK-002', name: 'RACK-002', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 4.2, y: 3.6, z: 0 }, rotation: 0, color: '#1e3a5f', manufacturer: 'APC', model: 'AR3100' },
-      { id: 'RACK-003', name: 'RACK-003', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 4.8, y: 3.6, z: 0 }, rotation: 0, color: '#1e3a5f', manufacturer: 'APC', model: 'AR3100' },
-      { id: 'RACK-004', name: 'RACK-004', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 5.4, y: 3.6, z: 0 }, rotation: 0, color: '#1e3a5f', manufacturer: 'APC', model: 'AR3100' },
-      { id: 'RACK-005', name: 'RACK-005', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 3.6, y: 7.2, z: 0 }, rotation: 0, color: '#1a4731', manufacturer: 'Vertiv', model: 'VR3100' },
-      { id: 'RACK-006', name: 'RACK-006', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 4.2, y: 7.2, z: 0 }, rotation: 0, color: '#1a4731', manufacturer: 'Vertiv', model: 'VR3100' },
-      { id: 'RACK-007', name: 'RACK-007', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 4.8, y: 7.2, z: 0 }, rotation: 0, color: '#1a4731', manufacturer: 'Vertiv', model: 'VR3100' },
-      { id: 'RACK-008', name: 'RACK-008', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 5.4, y: 7.2, z: 0 }, rotation: 0, color: '#1a4731', manufacturer: 'Vertiv', model: 'VR3100' },
+      { id: 'RACK-001', name: 'RACK-001', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 2.4, y: 2.4, z: 0 }, rotation: 0, color: '#1e3a5f', manufacturer: 'APC', model: 'AR3100' },
+      { id: 'RACK-002', name: 'RACK-002', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 3.0, y: 2.4, z: 0 }, rotation: 0, color: '#1e3a5f', manufacturer: 'APC', model: 'AR3100' },
+      { id: 'RACK-003', name: 'RACK-003', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 3.6, y: 2.4, z: 0 }, rotation: 0, color: '#1e3a5f', manufacturer: 'APC', model: 'AR3100' },
+      { id: 'RACK-004', name: 'RACK-004', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 4.2, y: 2.4, z: 0 }, rotation: 0, color: '#1e3a5f', manufacturer: 'APC', model: 'AR3100' },
     ];
     this.updateFloor(floor.id, { racks });
   }
