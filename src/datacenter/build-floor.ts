@@ -21,9 +21,12 @@ export class BuildFloorView {
   private dragPos: { x: number; y: number } | null = null;
   private unsub: (() => void) | null = null;
 
-  // 3D Orbit parameters
-  private rotX = 45; // degrees
-  private rotZ = -30; // degrees
+  // 2D Canvas View Rotation: 0, 90, 180, 270 degrees
+  private canvasRotationDeg: 0 | 90 | 180 | 270 = 0;
+
+  // 3D Isometric View Parameters
+  private rotX = 55; // degrees (Default isometric pitch)
+  private rotZ = -45; // degrees (Default isometric yaw)
   private isOrbiting3D = false;
   private orbitStart = { x: 0, y: 0, rx: 0, rz: 0 };
 
@@ -49,24 +52,25 @@ export class BuildFloorView {
             <button class="dc-btn" id="dc-btn-newfloor" title="Create new floor">＋ New Floor</button>
             <div class="dc-divider"></div>
             <!-- Mode switch -->
-            <button class="dc-btn dc-btn-icon active" id="dc-btn-tool-select" title="Select Tool (V)">↖ Select</button>
-            <button class="dc-btn dc-btn-icon" id="dc-btn-tool-pan" title="Pan Landscape Tool (H)">✋ Pan</button>
+            <button class="dc-btn dc-btn-icon active" id="dc-btn-tool-select" title="Select Tool (Hotkeys: S)">↖ Select (S)</button>
+            <button class="dc-btn dc-btn-icon" id="dc-btn-tool-pan" title="Move/Pan Tool (Hotkeys: M)">✋ Move (M)</button>
             <div class="dc-divider"></div>
             <!-- View switch -->
-            <button class="dc-btn dc-btn-icon" id="dc-btn-2d" title="2D Floor Plan">2D</button>
-            <button class="dc-btn dc-btn-icon" id="dc-btn-3d" title="3D View">3D</button>
+            <button class="dc-btn dc-btn-icon active" id="dc-btn-2d" title="2D Top View">2D (Top View)</button>
+            <button class="dc-btn dc-btn-icon" id="dc-btn-3d" title="3D Isometric View">3D (Isometric)</button>
+            <button class="dc-btn dc-btn-icon" id="dc-btn-rotate-2d" title="Rotate 2D View 90° (Hotkey: R)">↻ Rotate View (<span id="dc-rot-label">0°</span>)</button>
             <div class="dc-divider"></div>
             <!-- Grid & Labels -->
             <button class="dc-btn dc-btn-icon" id="dc-btn-grid" title="Toggle Grid">⊞ Grid</button>
             <button class="dc-btn dc-btn-icon" id="dc-btn-snap" title="Toggle Snap">⌂ Snap</button>
             <button class="dc-btn dc-btn-icon" id="dc-btn-labels" title="Toggle Labels">🏷 Labels</button>
             <div class="dc-divider"></div>
-            <!-- Navigation controls -->
-            <button class="dc-btn dc-btn-icon" id="dc-nav-left" title="Pan Left">←</button>
-            <button class="dc-btn dc-btn-icon" id="dc-nav-up" title="Pan Up">↑</button>
-            <button class="dc-btn dc-btn-icon" id="dc-nav-down" title="Pan Down">↓</button>
-            <button class="dc-btn dc-btn-icon" id="dc-nav-right" title="Pan Right">→</button>
-            <button class="dc-btn dc-btn-icon" id="dc-btn-fit" title="Center & Fit Landscape">⤢ Fit</button>
+            <!-- Navigation & Zoom controls -->
+            <button class="dc-btn dc-btn-icon" id="dc-nav-left" title="Pan Left (← / A)">←</button>
+            <button class="dc-btn dc-btn-icon" id="dc-nav-up" title="Pan Up (↑ / W)">↑</button>
+            <button class="dc-btn dc-btn-icon" id="dc-nav-down" title="Pan Down (↓ / S)">↓</button>
+            <button class="dc-btn dc-btn-icon" id="dc-nav-right" title="Pan Right (→ / D)">→</button>
+            <button class="dc-btn dc-btn-icon" id="dc-btn-fit" title="Zoom Fit / Center (Hotkey: Z)">⤢ Fit (Z)</button>
             <div class="dc-divider"></div>
             <button class="dc-btn dc-btn-icon" id="dc-btn-zoomin" title="Zoom In (+)">＋</button>
             <button class="dc-btn dc-btn-icon" id="dc-btn-zoomout" title="Zoom Out (-)">－</button>
@@ -89,7 +93,7 @@ export class BuildFloorView {
             <div id="dc-props-content"><p class="dc-muted">Select a tile or rack.</p></div>
           </div>
         </div>
-        <div class="dc-statusbar" id="dc-statusbar">Mode: Select | Pan: Mouse Drag / Arrow Keys / Space+Drag | Zoom: Wheel</div>
+        <div class="dc-statusbar" id="dc-statusbar">Hotkeys: [S] Select | [M] Move/Pan | [Z] Zoom Fit | [R] Rotate | [WASD / Arrows] Navigate</div>
       </div>
     `;
 
@@ -111,12 +115,35 @@ export class BuildFloorView {
     btnSelect?.classList.toggle('active', mode === 'select');
     btnPan?.classList.toggle('active', mode === 'pan');
     this.canvas.style.cursor = mode === 'pan' ? 'grab' : 'crosshair';
-    const status = this.container.querySelector('#dc-statusbar');
-    if (status) {
-      status.textContent = mode === 'pan' 
-        ? 'Mode: Pan | Drag anywhere to move floor landscape' 
-        : 'Mode: Select | Click tile/rack to inspect | Drag empty floor or Alt+Drag to pan';
+  }
+
+  private setViewMode(mode: '2d' | '3d') {
+    dcState.setState({ viewMode: mode });
+    const wrap3d = this.container.querySelector('#dc-3d-container') as HTMLElement;
+    const btn2d = this.container.querySelector('#dc-btn-2d');
+    const btn3d = this.container.querySelector('#dc-btn-3d');
+    const btnRot = this.container.querySelector('#dc-btn-rotate-2d') as HTMLElement;
+
+    btn2d?.classList.toggle('active', mode === '2d');
+    btn3d?.classList.toggle('active', mode === '3d');
+    if (btnRot) btnRot.style.display = mode === '2d' ? 'inline-flex' : 'none';
+
+    if (mode === '2d') {
+      wrap3d?.classList.add('hidden');
+      this.canvas.classList.remove('hidden');
+      this.draw();
+    } else {
+      this.canvas.classList.add('hidden');
+      wrap3d?.classList.remove('hidden');
+      this.render3D();
     }
+  }
+
+  private rotate2DView() {
+    this.canvasRotationDeg = ((this.canvasRotationDeg + 90) % 360) as 0 | 90 | 180 | 270;
+    const label = this.container.querySelector('#dc-rot-label');
+    if (label) label.textContent = `${this.canvasRotationDeg}°`;
+    this.draw();
   }
 
   private bindButtons() {
@@ -124,8 +151,9 @@ export class BuildFloorView {
     on('dc-btn-newfloor', () => this.showCreateFloorDialog());
     on('dc-btn-tool-select', () => this.setToolMode('select'));
     on('dc-btn-tool-pan', () => this.setToolMode('pan'));
-    on('dc-btn-2d', () => { dcState.setState({ viewMode: '2d' }); this.refresh(); });
-    on('dc-btn-3d', () => { dcState.setState({ viewMode: '3d' }); this.render3D(); });
+    on('dc-btn-2d', () => this.setViewMode('2d'));
+    on('dc-btn-3d', () => this.setViewMode('3d'));
+    on('dc-btn-rotate-2d', () => this.rotate2DView());
     on('dc-btn-grid', () => { dcState.setState({ gridVisible: !dcState.getState().gridVisible }); });
     on('dc-btn-snap', () => { dcState.setState({ snapEnabled: !dcState.getState().snapEnabled }); });
     on('dc-btn-labels', () => { dcState.setState({ labelsVisible: !dcState.getState().labelsVisible }); });
@@ -151,18 +179,34 @@ export class BuildFloorView {
 
   private bindKeyboardEvents() {
     window.addEventListener('keydown', (e) => {
-      // Ignore if user is typing in an input
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
 
-      if (e.key === 'v' || e.key === 'V') this.setToolMode('select');
-      if (e.key === 'h' || e.key === 'H') this.setToolMode('pan');
-      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { this.panX += 60; this.draw(); }
-      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { this.panX -= 60; this.draw(); }
-      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { this.panY += 60; this.draw(); }
-      if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { this.panY -= 60; this.draw(); }
+      const key = e.key.toUpperCase();
+      if (key === 'S') this.setToolMode('select');
+      if (key === 'M') this.setToolMode('pan');
+      if (key === 'Z') this.fitToFloor();
+      if (key === 'R') {
+        const s = dcState.getState();
+        const floor = dcState.getActiveFloor();
+        if (s.selectedRackId && floor) {
+          const rack = floor.racks.find(r => r.id === s.selectedRackId);
+          if (rack) {
+            const rot = ((rack.rotation + 90) % 360) as 0 | 90 | 180 | 270;
+            dcState.updateRack(rack.id, { rotation: rot });
+            this.renderPropsPanel();
+            this.draw();
+            return;
+          }
+        }
+        // If no rack selected, rotate 2D canvas view
+        this.rotate2DView();
+      }
+      if (e.key === 'ArrowLeft' || key === 'A') { this.panX += 60; this.draw(); }
+      if (e.key === 'ArrowRight' || key === 'D') { this.panX -= 60; this.draw(); }
+      if (e.key === 'ArrowUp' || key === 'W') { this.panY += 60; this.draw(); }
+      if (e.key === 'ArrowDown') { this.panY -= 60; this.draw(); }
       if (e.key === '=' || e.key === '+') { this.ppm = Math.min(this.ppm * 1.2, 2000); this.draw(); }
       if (e.key === '-' || e.key === '_') { this.ppm = Math.max(this.ppm * 0.8, 10); this.draw(); }
-      if (e.key === '0') this.fitToFloor();
       if (e.key === 'Escape') {
         dcState.setState({ selectedRackId: null, selectedTileId: null });
         this.renderPropsPanel();
@@ -172,7 +216,6 @@ export class BuildFloorView {
   }
 
   private bindCanvasEvents() {
-    // Wheel Zoom
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const factor = e.deltaY < 0 ? 1.15 : 0.85;
@@ -185,9 +228,7 @@ export class BuildFloorView {
       this.draw();
     }, { passive: false });
 
-    // Mouse Down
     this.canvas.addEventListener('mousedown', (e) => {
-      // Middle click, Alt+click, Space+click, or Pan tool mode -> start pan
       if (e.button === 1 || (e.button === 0 && e.altKey) || this.toolMode === 'pan') {
         this.isPanning = true;
         this.panStart = { x: e.clientX, y: e.clientY, px: this.panX, py: this.panY };
@@ -197,7 +238,6 @@ export class BuildFloorView {
       if (e.button === 0) this.handleMouseDown(e);
     });
 
-    // Mouse Move
     window.addEventListener('mousemove', (e) => {
       if (this.isPanning) {
         this.panX = this.panStart.px + (e.clientX - this.panStart.x);
@@ -208,13 +248,12 @@ export class BuildFloorView {
       if (this.isDraggingRack) this.handleRackDrag(e);
     });
 
-    // Mouse Up
-    window.addEventListener('mouseup', (e) => {
+    window.addEventListener('mouseup', (_e) => {
       if (this.isPanning) {
         this.isPanning = false;
         this.canvas.style.cursor = this.toolMode === 'pan' ? 'grab' : 'default';
       }
-      if (this.isDraggingRack) this.handleRackDrop(e);
+      if (this.isDraggingRack) this.handleRackDrop(_e);
     });
   }
 
@@ -232,7 +271,6 @@ export class BuildFloorView {
     const floor = dcState.getActiveFloor();
     if (!floor) return;
 
-    // Check hit on any rack
     for (const rack of floor.racks) {
       if (this.hitTestRack(rack, xM, yM)) {
         dcState.setState({ selectedRackId: rack.id, selectedTileId: null });
@@ -245,7 +283,6 @@ export class BuildFloorView {
       }
     }
 
-    // Check hit on tile
     const tileM = floor.tileSizeMm / 1000;
     const col = Math.floor(xM / tileM);
     const row = Math.floor(yM / tileM);
@@ -256,7 +293,6 @@ export class BuildFloorView {
       dcState.setState({ selectedTileId: tileId, selectedRackId: null });
       this.renderPropsPanel();
     } else {
-      // Clicked on empty area outside floor -> start panning landscape!
       this.isPanning = true;
       this.panStart = { x: e.clientX, y: e.clientY, px: this.panX, py: this.panY };
       this.canvas.style.cursor = 'grabbing';
@@ -311,6 +347,8 @@ export class BuildFloorView {
     if (s.viewMode === '3d') return;
     const floor = dcState.getActiveFloor();
     const { width: W, height: H } = this.canvas;
+
+    this.ctx.save();
     this.ctx.clearRect(0, 0, W, H);
 
     this.ctx.fillStyle = '#0d1117';
@@ -321,7 +359,17 @@ export class BuildFloorView {
       this.ctx.font = '16px system-ui';
       this.ctx.textAlign = 'center';
       this.ctx.fillText('No floor loaded. Click + New Floor to start.', W / 2, H / 2);
+      this.ctx.restore();
       return;
+    }
+
+    // Apply 2D Canvas Rotation if active
+    if (this.canvasRotationDeg !== 0) {
+      const centerX = W / 2;
+      const centerY = H / 2;
+      this.ctx.translate(centerX, centerY);
+      this.ctx.rotate((this.canvasRotationDeg * Math.PI) / 180);
+      this.ctx.translate(-centerX, -centerY);
     }
 
     const tileM = floor.tileSizeMm / 1000;
@@ -332,13 +380,11 @@ export class BuildFloorView {
       const tw = tilePx;
       const th = tilePx;
 
-      if (sx + tw < 0 || sy + th < 0 || sx > W || sy > H) continue;
-
       const isPartial = tile.type === 'partial';
       const isSelected = tile.id === s.selectedTileId;
 
       if (isSelected) {
-        this.ctx.fillStyle = 'rgba(56,189,248,0.25)';
+        this.ctx.fillStyle = 'rgba(56,189,248,0.3)';
       } else if (isPartial) {
         this.ctx.fillStyle = 'rgba(255,255,255,0.02)';
       } else {
@@ -347,13 +393,13 @@ export class BuildFloorView {
       this.ctx.fillRect(sx, sy, tw, th);
 
       if (s.gridVisible) {
-        this.ctx.strokeStyle = isSelected ? 'rgba(56,189,248,0.7)' : isPartial ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.15)';
-        this.ctx.lineWidth = 0.5;
+        this.ctx.strokeStyle = isSelected ? '#38bdf8' : isPartial ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.15)';
+        this.ctx.lineWidth = isSelected ? 1.5 : 0.5;
         this.ctx.strokeRect(sx, sy, tw, th);
       }
 
-      if (s.labelsVisible && tilePx >= 40) {
-        this.ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      if (s.labelsVisible && tilePx >= 36) {
+        this.ctx.fillStyle = isSelected ? '#38bdf8' : 'rgba(255,255,255,0.3)';
         this.ctx.font = `${Math.max(9, Math.min(11, tilePx * 0.18))}px monospace`;
         this.ctx.textAlign = 'center';
         this.ctx.fillText(tile.id, sx + tw / 2, sy + th / 2 + 4);
@@ -372,6 +418,8 @@ export class BuildFloorView {
       const pos = isDragging && this.dragPos ? this.dragPos : rack.position;
       this.drawRack(rack, pos.x, pos.y, isDragging);
     }
+
+    this.ctx.restore();
 
     this.updateInfoPanel(floor);
     this.updateButtonStates();
@@ -392,14 +440,14 @@ export class BuildFloorView {
     const invalid = dcState.isOutOfBounds(updated) || dcState.isOverlapping(updated, rack.id);
 
     this.ctx.shadowColor = isSelected ? '#38bdf8' : 'rgba(0,0,0,0.5)';
-    this.ctx.shadowBlur = isSelected ? 12 : 6;
+    this.ctx.shadowBlur = isSelected ? 14 : 6;
 
     this.ctx.fillStyle = invalid ? 'rgba(239,68,68,0.5)' : isDragging ? 'rgba(56,189,248,0.3)' : color;
     this.ctx.fillRect(sx, sy, pw, ph);
     this.ctx.shadowBlur = 0;
 
     this.ctx.strokeStyle = invalid ? '#ef4444' : isSelected ? '#38bdf8' : '#4a9eff';
-    this.ctx.lineWidth = isSelected ? 2 : 1;
+    this.ctx.lineWidth = isSelected ? 2.5 : 1;
     this.ctx.strokeRect(sx, sy, pw, ph);
 
     if (s.labelsVisible && pw >= 20) {
@@ -470,13 +518,14 @@ export class BuildFloorView {
   }
 
   private refresh() {
-    this.draw();
     const floor = dcState.getActiveFloor();
     if (!floor) {
       const el = this.container.querySelector('#dc-info-content');
       if (el) el.innerHTML = '<div class="dc-no-floor">No floor loaded.<br>Click <b>+ New Floor</b> to start.</div>';
     } else if (dcState.getState().viewMode === '3d') {
       this.render3D();
+    } else {
+      this.draw();
     }
     this.renderPropsPanel();
   }
@@ -502,7 +551,7 @@ export class BuildFloorView {
             ${rack.manufacturer ? `<div class="dc-info-row"><span class="dc-info-label">Mfr</span><span class="dc-info-val">${rack.manufacturer}</span></div>` : ''}
           </div>
           <div class="dc-props-actions">
-            <button class="dc-btn dc-btn-sm" id="dc-rack-rotate" title="Rotate 90°">↻ Rotate 90°</button>
+            <button class="dc-btn dc-btn-sm" id="dc-rack-rotate" title="Rotate 90° (Hotkey: R)">↻ Rotate 90° (R)</button>
             <button class="dc-btn dc-btn-sm" id="dc-rack-duplicate" title="Duplicate">⊕ Duplicate</button>
             <button class="dc-btn dc-btn-sm dc-btn-danger" id="dc-rack-delete" title="Delete">🗑 Delete</button>
           </div>
@@ -686,16 +735,18 @@ export class BuildFloorView {
   private render3D() {
     const floor = dcState.getActiveFloor();
     const wrap3d = this.container.querySelector('#dc-3d-container') as HTMLElement;
-    const canvasEl = this.container.querySelector('#dc-canvas') as HTMLElement;
     if (!wrap3d) return;
     const is3D = dcState.getState().viewMode === '3d';
     wrap3d.classList.toggle('hidden', !is3D);
-    canvasEl?.classList.toggle('hidden', is3D);
+    this.canvas.classList.toggle('hidden', is3D);
     if (!is3D || !floor) return;
 
     wrap3d.innerHTML = `
       <div class="dc3d-controls">
-        <span class="dc3d-ctrl-label">Orbit Controls: Drag mouse to rotate landscape</span>
+        <span class="dc3d-ctrl-label">Isometric 3D Hall</span>
+        <button class="dc-btn dc-btn-sm" id="dc3d-preset-iso">Isometric</button>
+        <button class="dc-btn dc-btn-sm" id="dc3d-preset-top">Top View</button>
+        <button class="dc-btn dc-btn-sm" id="dc3d-preset-front">Front View</button>
         <button class="dc-btn dc-btn-sm" id="dc3d-reset-cam">Reset View</button>
       </div>
       <div class="dc3d-viewport-inner" id="dc3d-inner">
@@ -708,7 +759,7 @@ export class BuildFloorView {
 
     // Attach 3D interactive drag orbit listeners
     wrap3d.onmousedown = (e) => {
-      if (e.target && (e.target as HTMLElement).closest('#dc3d-reset-cam')) return;
+      if (e.target && (e.target as HTMLElement).closest('.dc3d-controls')) return;
       this.isOrbiting3D = true;
       this.orbitStart = { x: e.clientX, y: e.clientY, rx: this.rotX, rz: this.rotZ };
     };
@@ -727,11 +778,28 @@ export class BuildFloorView {
 
     window.onmouseup = () => { this.isOrbiting3D = false; };
 
-    wrap3d.querySelector('#dc3d-reset-cam')?.addEventListener('click', () => {
-      this.rotX = 45;
-      this.rotZ = -30;
+    wrap3d.querySelector('#dc3d-preset-iso')?.addEventListener('click', () => {
+      this.rotX = 55; this.rotZ = -45;
       const scene = wrap3d.querySelector('.dc3d-scene') as HTMLElement;
-      if (scene) scene.style.transform = `perspective(900px) rotateX(45deg) rotateZ(-30deg)`;
+      if (scene) scene.style.transform = `perspective(900px) rotateX(55deg) rotateZ(-45deg)`;
+    });
+
+    wrap3d.querySelector('#dc3d-preset-top')?.addEventListener('click', () => {
+      this.rotX = 15; this.rotZ = 0;
+      const scene = wrap3d.querySelector('.dc3d-scene') as HTMLElement;
+      if (scene) scene.style.transform = `perspective(900px) rotateX(15deg) rotateZ(0deg)`;
+    });
+
+    wrap3d.querySelector('#dc3d-preset-front')?.addEventListener('click', () => {
+      this.rotX = 80; this.rotZ = 0;
+      const scene = wrap3d.querySelector('.dc3d-scene') as HTMLElement;
+      if (scene) scene.style.transform = `perspective(900px) rotateX(80deg) rotateZ(0deg)`;
+    });
+
+    wrap3d.querySelector('#dc3d-reset-cam')?.addEventListener('click', () => {
+      this.rotX = 55; this.rotZ = -45;
+      const scene = wrap3d.querySelector('.dc3d-scene') as HTMLElement;
+      if (scene) scene.style.transform = `perspective(900px) rotateX(55deg) rotateZ(-45deg)`;
     });
   }
 
@@ -747,16 +815,17 @@ export class BuildFloorView {
       const pw = eW * scale * 10;
       const ph = eD * scale * 10;
       const color = rack.color ?? '#1e3a5f';
+      const heightPx = Math.max(30, rack.heightU * 1.5);
       return `<div class="dc3d-rack" style="left:${x}px;top:${y}px;width:${pw}px;height:${ph}px;background:${color};">
-        <div class="dc3d-rack-top" style="width:${pw}px;height:${pw * 0.3}px;"></div>
-        <span class="dc3d-rack-label">${rack.name}</span>
+        <div class="dc3d-rack-top" style="width:${pw}px;height:${ph}px;transform: translateZ(${heightPx}px);"></div>
+        <span class="dc3d-rack-label" style="transform: translateZ(${heightPx + 4}px);">${rack.name}</span>
       </div>`;
     }).join('');
 
     return `<div class="dc3d-scene" style="width:${floor.lengthM * scale * 10}px;height:${floor.widthM * scale * 10}px;transform: perspective(900px) rotateX(${this.rotX}deg) rotateZ(${this.rotZ}deg);">
       <div class="dc3d-floor" style="width:100%;height:100%;"></div>
       ${rackHtml}
-      <div class="dc3d-label">3D Floor Plan — ${floor.name} (${floor.lengthM}m × ${floor.widthM}m)</div>
+      <div class="dc3d-label">3D Isometric Plot — ${floor.name} (${floor.lengthM}m × ${floor.widthM}m)</div>
     </div>`;
   }
 }
