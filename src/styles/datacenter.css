@@ -466,6 +466,17 @@
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.6);
   border-radius: 2px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.dc3d-rack:hover {
+  border-color: #38bdf8;
+}
+
+.dc3d-rack.selected {
+  border: 2px solid #38bdf8 !important;
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.9), 0 10px 20px rgba(0, 0, 0, 0.7) !important;
 }
 
 .dc3d-rack-top {

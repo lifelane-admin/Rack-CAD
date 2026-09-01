@@ -29,6 +29,7 @@ export class BuildFloorView {
   // 3D Isometric View Parameters
   private rotX = 55; // degrees (Default isometric pitch)
   private rotZ = -45; // degrees (Default isometric yaw)
+  private scale3D = 1.0; // 3D Zoom scale
   private isOrbiting3D = false;
   private orbitStart = { x: 0, y: 0, rx: 0, rz: 0 };
 
@@ -199,9 +200,34 @@ export class BuildFloorView {
     on('dc-nav-up', () => { this.panY += 80; this.draw(); });
     on('dc-nav-down', () => { this.panY -= 80; this.draw(); });
 
-    on('dc-btn-fit', () => this.fitToFloor());
-    on('dc-btn-zoomin', () => this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 1.25));
-    on('dc-btn-zoomout', () => this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 0.8));
+    on('dc-btn-fit', () => {
+      if (dcState.getState().viewMode === '3d') {
+        this.scale3D = 1.0;
+        this.rotX = 55;
+        this.rotZ = -45;
+        this.apply3DTransform();
+      } else {
+        this.fitToFloor();
+      }
+    });
+
+    on('dc-btn-zoomin', () => {
+      if (dcState.getState().viewMode === '3d') {
+        this.scale3D = Math.min(this.scale3D * 1.25, 4.0);
+        this.apply3DTransform();
+      } else {
+        this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 1.25);
+      }
+    });
+
+    on('dc-btn-zoomout', () => {
+      if (dcState.getState().viewMode === '3d') {
+        this.scale3D = Math.max(this.scale3D * 0.8, 0.3);
+        this.apply3DTransform();
+      } else {
+        this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 0.8);
+      }
+    });
   }
 
   private resize() {
@@ -245,10 +271,20 @@ export class BuildFloorView {
     window.addEventListener('keydown', (e) => {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
 
+      const is3D = dcState.getState().viewMode === '3d';
       const key = e.key.toUpperCase();
       if (key === 'S') this.setToolMode('select');
       if (key === 'M') this.setToolMode('pan');
-      if (key === 'Z') this.fitToFloor();
+      if (key === 'Z') {
+        if (is3D) {
+          this.scale3D = 1.0;
+          this.rotX = 55;
+          this.rotZ = -45;
+          this.apply3DTransform();
+        } else {
+          this.fitToFloor();
+        }
+      }
       if (key === 'R') {
         const s = dcState.getState();
         const floor = dcState.getActiveFloor();
@@ -258,7 +294,7 @@ export class BuildFloorView {
             const rot = ((rack.rotation + 90) % 360) as 0 | 90 | 180 | 270;
             dcState.updateRack(rack.id, { rotation: rot });
             this.renderPropsPanel();
-            this.draw();
+            if (is3D) this.render3D(); else this.draw();
             return;
           }
         }
@@ -268,18 +304,32 @@ export class BuildFloorView {
       if (e.key === 'ArrowRight' || key === 'D') { this.panX -= 60; this.draw(); }
       if (e.key === 'ArrowUp' || key === 'W') { this.panY += 60; this.draw(); }
       if (e.key === 'ArrowDown') { this.panY -= 60; this.draw(); }
-      if (e.key === '=' || e.key === '+') { this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 1.2); }
-      if (e.key === '-' || e.key === '_') { this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 0.8); }
+      if (e.key === '=' || e.key === '+') {
+        if (is3D) {
+          this.scale3D = Math.min(this.scale3D * 1.2, 4.0);
+          this.apply3DTransform();
+        } else {
+          this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 1.2);
+        }
+      }
+      if (e.key === '-' || e.key === '_') {
+        if (is3D) {
+          this.scale3D = Math.max(this.scale3D * 0.8, 0.3);
+          this.apply3DTransform();
+        } else {
+          this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 0.8);
+        }
+      }
       if (e.key === 'Escape') {
         dcState.setState({ selectedRackId: null, selectedTileId: null });
         this.renderPropsPanel();
-        this.draw();
+        if (is3D) this.render3D(); else this.draw();
       }
     });
   }
 
   private bindCanvasEvents() {
-    // Point to Zoom & Scroll to Zoom
+    // 2D Point to Zoom & Scroll to Zoom
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const delta = -e.deltaY;
@@ -646,7 +696,7 @@ export class BuildFloorView {
           const rot = ((rack.rotation + 90) % 360) as 0 | 90 | 180 | 270;
           dcState.updateRack(rack.id, { rotation: rot });
           this.renderPropsPanel();
-          this.draw();
+          if (dcState.getState().viewMode === '3d') this.render3D(); else this.draw();
         });
         el.querySelector('#dc-rack-duplicate')?.addEventListener('click', () => {
           const dup = dcState.duplicateRack(rack.id);
@@ -818,6 +868,14 @@ export class BuildFloorView {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   }
 
+  private apply3DTransform() {
+    const wrap3d = this.container.querySelector('#dc-3d-container');
+    const scene = wrap3d?.querySelector('.dc3d-scene') as HTMLElement;
+    if (scene) {
+      scene.style.transform = `scale(${this.scale3D}) perspective(900px) rotateX(${this.rotX}deg) rotateZ(${this.rotZ}deg)`;
+    }
+  }
+
   private render3D() {
     const floor = dcState.getActiveFloor();
     const wrap3d = this.container.querySelector('#dc-3d-container') as HTMLElement;
@@ -833,18 +891,46 @@ export class BuildFloorView {
         <button class="dc-btn dc-btn-sm" id="dc3d-preset-iso">Isometric</button>
         <button class="dc-btn dc-btn-sm" id="dc3d-preset-top">Top View</button>
         <button class="dc-btn dc-btn-sm" id="dc3d-preset-front">Front View</button>
-        <button class="dc-btn dc-btn-sm" id="dc3d-reset-cam">Reset View</button>
+        <div class="dc-divider"></div>
+        <button class="dc-btn dc-btn-sm" id="dc3d-zoomin" title="Zoom In (+)">＋</button>
+        <button class="dc-btn dc-btn-sm" id="dc3d-zoomout" title="Zoom Out (-)">－</button>
+        <button class="dc-btn dc-btn-sm" id="dc3d-reset-cam">Reset 3D (Z)</button>
       </div>
       <div class="dc3d-viewport-inner" id="dc3d-inner">
         ${this.build3DHTML(floor)}
       </div>
     `;
 
-    const inner = wrap3d.querySelector('#dc3d-inner') as HTMLElement;
-    if (!inner) return;
+    // 3D Scroll to Zoom
+    wrap3d.onwheel = (e) => {
+      e.preventDefault();
+      const delta = -e.deltaY;
+      const factor = Math.pow(1.0018, delta);
+      this.scale3D = Math.min(Math.max(this.scale3D * factor, 0.3), 4.0);
+      this.apply3DTransform();
+    };
 
+    // 3D Mouse Orbiting
     wrap3d.onmousedown = (e) => {
-      if (e.target && (e.target as HTMLElement).closest('.dc3d-controls')) return;
+      const target = e.target as HTMLElement;
+      if (target.closest('.dc3d-controls')) return;
+
+      // Handle 3D rack click selection
+      const rackEl = target.closest('.dc3d-rack') as HTMLElement;
+      if (rackEl) {
+        const rackId = rackEl.dataset.rackId;
+        if (rackId) {
+          dcState.setState({ selectedRackId: rackId, selectedTileId: null });
+          this.renderPropsPanel();
+          this.render3D();
+          return;
+        }
+      } else {
+        dcState.setState({ selectedRackId: null, selectedTileId: null });
+        this.renderPropsPanel();
+        this.render3D();
+      }
+
       this.isOrbiting3D = true;
       this.orbitStart = { x: e.clientX, y: e.clientY, rx: this.rotX, rz: this.rotZ };
     };
@@ -855,40 +941,44 @@ export class BuildFloorView {
       const dy = e.clientY - this.orbitStart.y;
       this.rotZ = this.orbitStart.rz + dx * 0.5;
       this.rotX = Math.max(10, Math.min(85, this.orbitStart.rx - dy * 0.5));
-      const scene = wrap3d.querySelector('.dc3d-scene') as HTMLElement;
-      if (scene) {
-        scene.style.transform = `perspective(900px) rotateX(${this.rotX}deg) rotateZ(${this.rotZ}deg)`;
-      }
+      this.apply3DTransform();
     };
 
     window.onmouseup = () => { this.isOrbiting3D = false; };
 
     wrap3d.querySelector('#dc3d-preset-iso')?.addEventListener('click', () => {
-      this.rotX = 55; this.rotZ = -45;
-      const scene = wrap3d.querySelector('.dc3d-scene') as HTMLElement;
-      if (scene) scene.style.transform = `perspective(900px) rotateX(55deg) rotateZ(-45deg)`;
+      this.rotX = 55; this.rotZ = -45; this.scale3D = 1.0;
+      this.apply3DTransform();
     });
 
     wrap3d.querySelector('#dc3d-preset-top')?.addEventListener('click', () => {
-      this.rotX = 15; this.rotZ = 0;
-      const scene = wrap3d.querySelector('.dc3d-scene') as HTMLElement;
-      if (scene) scene.style.transform = `perspective(900px) rotateX(15deg) rotateZ(0deg)`;
+      this.rotX = 15; this.rotZ = 0; this.scale3D = 1.0;
+      this.apply3DTransform();
     });
 
     wrap3d.querySelector('#dc3d-preset-front')?.addEventListener('click', () => {
-      this.rotX = 80; this.rotZ = 0;
-      const scene = wrap3d.querySelector('.dc3d-scene') as HTMLElement;
-      if (scene) scene.style.transform = `perspective(900px) rotateX(80deg) rotateZ(0deg)`;
+      this.rotX = 80; this.rotZ = 0; this.scale3D = 1.0;
+      this.apply3DTransform();
     });
 
     wrap3d.querySelector('#dc3d-reset-cam')?.addEventListener('click', () => {
-      this.rotX = 55; this.rotZ = -45;
-      const scene = wrap3d.querySelector('.dc3d-scene') as HTMLElement;
-      if (scene) scene.style.transform = `perspective(900px) rotateX(55deg) rotateZ(-45deg)`;
+      this.rotX = 55; this.rotZ = -45; this.scale3D = 1.0;
+      this.apply3DTransform();
+    });
+
+    wrap3d.querySelector('#dc3d-zoomin')?.addEventListener('click', () => {
+      this.scale3D = Math.min(this.scale3D * 1.25, 4.0);
+      this.apply3DTransform();
+    });
+
+    wrap3d.querySelector('#dc3d-zoomout')?.addEventListener('click', () => {
+      this.scale3D = Math.max(this.scale3D * 0.8, 0.3);
+      this.apply3DTransform();
     });
   }
 
   private build3DHTML(floor: DcFloor): string {
+    const s = dcState.getState();
     const scale = 12;
     const rackHtml = floor.racks.map(rack => {
       const x = rack.position.x * scale * 10;
@@ -901,13 +991,14 @@ export class BuildFloorView {
       const ph = eD * scale * 10;
       const color = rack.color ?? '#1e3a5f';
       const heightPx = Math.max(30, rack.heightU * 1.5);
-      return `<div class="dc3d-rack" style="left:${x}px;top:${y}px;width:${pw}px;height:${ph}px;background:${color};">
+      const isSelected = rack.id === s.selectedRackId;
+      return `<div class="dc3d-rack${isSelected ? ' selected' : ''}" data-rack-id="${rack.id}" style="left:${x}px;top:${y}px;width:${pw}px;height:${ph}px;background:${color};">
         <div class="dc3d-rack-top" style="width:${pw}px;height:${ph}px;transform: translateZ(${heightPx}px);"></div>
         <span class="dc3d-rack-label" style="transform: translateZ(${heightPx + 4}px);">${rack.name}</span>
       </div>`;
     }).join('');
 
-    return `<div class="dc3d-scene" style="width:${floor.lengthM * scale * 10}px;height:${floor.widthM * scale * 10}px;transform: perspective(900px) rotateX(${this.rotX}deg) rotateZ(${this.rotZ}deg);">
+    return `<div class="dc3d-scene" style="width:${floor.lengthM * scale * 10}px;height:${floor.widthM * scale * 10}px;transform: scale(${this.scale3D}) perspective(900px) rotateX(${this.rotX}deg) rotateZ(${this.rotZ}deg);">
       <div class="dc3d-floor" style="width:100%;height:100%;"></div>
       ${rackHtml}
       <div class="dc3d-label">3D Isometric Plot — ${floor.name} (${floor.lengthM}m × ${floor.widthM}m)</div>
