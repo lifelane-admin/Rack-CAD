@@ -20,6 +20,8 @@ export class BuildFloorView {
   private dragOffset = { x: 0, y: 0 };
   private dragPos: { x: number; y: number } | null = null;
   private unsub: (() => void) | null = null;
+  private hasFittedInitialFloor = false;
+  private resizeObserver: ResizeObserver | null = null;
 
   // 2D Canvas View Rotation: 0, 90, 180, 270 degrees
   private canvasRotationDeg: 0 | 90 | 180 | 270 = 0;
@@ -38,7 +40,24 @@ export class BuildFloorView {
 
   destroy() {
     this.unsub?.();
+    this.resizeObserver?.disconnect();
     cancelAnimationFrame(this.animFrame);
+  }
+
+  public show() {
+    setTimeout(() => {
+      this.resize();
+      if (!this.hasFittedInitialFloor) {
+        this.fitToFloor();
+        this.hasFittedInitialFloor = true;
+      }
+      const s = dcState.getState();
+      if (s.viewMode === '3d') {
+        this.render3D();
+      } else {
+        this.draw();
+      }
+    }, 20);
   }
 
   private build() {
@@ -52,8 +71,8 @@ export class BuildFloorView {
             <button class="dc-btn" id="dc-btn-newfloor" title="Create new floor">＋ New Floor</button>
             <div class="dc-divider"></div>
             <!-- Mode switch -->
-            <button class="dc-btn dc-btn-icon active" id="dc-btn-tool-select" title="Select Tool (Hotkeys: S)">↖ Select (S)</button>
-            <button class="dc-btn dc-btn-icon" id="dc-btn-tool-pan" title="Move/Pan Tool (Hotkeys: M)">✋ Move (M)</button>
+            <button class="dc-btn dc-btn-icon active" id="dc-btn-tool-select" title="Select Tool (Hotkey: S)">↖ Select (S)</button>
+            <button class="dc-btn dc-btn-icon" id="dc-btn-tool-pan" title="Move/Pan Tool (Hotkey: M)">✋ Move (M)</button>
             <div class="dc-divider"></div>
             <!-- View switch -->
             <button class="dc-btn dc-btn-icon active" id="dc-btn-2d" title="2D Top View">2D (Top View)</button>
@@ -93,12 +112,27 @@ export class BuildFloorView {
             <div id="dc-props-content"><p class="dc-muted">Select a tile or rack.</p></div>
           </div>
         </div>
-        <div class="dc-statusbar" id="dc-statusbar">Hotkeys: [S] Select | [M] Move/Pan | [Z] Zoom Fit | [R] Rotate | [WASD / Arrows] Navigate</div>
+        <div class="dc-statusbar" id="dc-statusbar">Point-to-Zoom: Wheel / Pinch | Hotkeys: [S] Select | [M] Move/Pan | [Z] Zoom Fit | [R] Rotate</div>
       </div>
     `;
 
     this.canvas = this.container.querySelector('#dc-canvas')!;
     this.ctx = this.canvas.getContext('2d')!;
+
+    // Setup ResizeObserver to handle dynamic viewport sizing
+    const wrap = this.container.querySelector('#dc-canvas-wrap') as HTMLElement;
+    if (wrap && typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => {
+        if (wrap.clientWidth > 0 && wrap.clientHeight > 0) {
+          this.resize();
+          if (!this.hasFittedInitialFloor) {
+            this.fitToFloor();
+            this.hasFittedInitialFloor = true;
+          }
+        }
+      });
+      this.resizeObserver.observe(wrap);
+    }
 
     this.bindButtons();
     this.bindCanvasEvents();
@@ -131,6 +165,7 @@ export class BuildFloorView {
     if (mode === '2d') {
       wrap3d?.classList.add('hidden');
       this.canvas.classList.remove('hidden');
+      this.resize();
       this.draw();
     } else {
       this.canvas.classList.add('hidden');
@@ -165,15 +200,44 @@ export class BuildFloorView {
     on('dc-nav-down', () => { this.panY -= 80; this.draw(); });
 
     on('dc-btn-fit', () => this.fitToFloor());
-    on('dc-btn-zoomin', () => { this.ppm = Math.min(this.ppm * 1.25, 2000); this.draw(); });
-    on('dc-btn-zoomout', () => { this.ppm = Math.max(this.ppm * 0.8, 10); this.draw(); });
+    on('dc-btn-zoomin', () => this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 1.25));
+    on('dc-btn-zoomout', () => this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 0.8));
   }
 
   private resize() {
     const wrap = this.container.querySelector('#dc-canvas-wrap') as HTMLElement;
     if (!wrap || !this.canvas) return;
-    this.canvas.width = wrap.clientWidth;
-    this.canvas.height = wrap.clientHeight;
+    if (wrap.clientWidth > 0 && wrap.clientHeight > 0) {
+      this.canvas.width = wrap.clientWidth;
+      this.canvas.height = wrap.clientHeight;
+    }
+  }
+
+  private zoomAtPoint(sx: number, sy: number, factor: number) {
+    const oldPpm = this.ppm;
+    const newPpm = Math.min(Math.max(oldPpm * factor, 15), 2000);
+    if (newPpm === oldPpm) return;
+    const actualFactor = newPpm / oldPpm;
+
+    let px = sx;
+    let py = sy;
+    if (this.canvasRotationDeg !== 0) {
+      const W = this.canvas.width || 800;
+      const H = this.canvas.height || 600;
+      const cx = W / 2;
+      const cy = H / 2;
+      const rad = (-this.canvasRotationDeg * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const dx = sx - cx;
+      const dy = sy - cy;
+      px = cx + (dx * cos - dy * sin);
+      py = cy + (dx * sin + dy * cos);
+    }
+
+    this.panX = px - (px - this.panX) * actualFactor;
+    this.panY = py - (py - this.panY) * actualFactor;
+    this.ppm = newPpm;
     this.draw();
   }
 
@@ -198,15 +262,14 @@ export class BuildFloorView {
             return;
           }
         }
-        // If no rack selected, rotate 2D canvas view
         this.rotate2DView();
       }
       if (e.key === 'ArrowLeft' || key === 'A') { this.panX += 60; this.draw(); }
       if (e.key === 'ArrowRight' || key === 'D') { this.panX -= 60; this.draw(); }
       if (e.key === 'ArrowUp' || key === 'W') { this.panY += 60; this.draw(); }
       if (e.key === 'ArrowDown') { this.panY -= 60; this.draw(); }
-      if (e.key === '=' || e.key === '+') { this.ppm = Math.min(this.ppm * 1.2, 2000); this.draw(); }
-      if (e.key === '-' || e.key === '_') { this.ppm = Math.max(this.ppm * 0.8, 10); this.draw(); }
+      if (e.key === '=' || e.key === '+') { this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 1.2); }
+      if (e.key === '-' || e.key === '_') { this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 0.8); }
       if (e.key === 'Escape') {
         dcState.setState({ selectedRackId: null, selectedTileId: null });
         this.renderPropsPanel();
@@ -216,16 +279,16 @@ export class BuildFloorView {
   }
 
   private bindCanvasEvents() {
+    // Point to Zoom & Scroll to Zoom
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.15 : 0.85;
+      const delta = -e.deltaY;
+      const factor = Math.pow(1.0018, delta);
       const rect = this.canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      this.panX = mx - (mx - this.panX) * factor;
-      this.panY = my - (my - this.panY) * factor;
-      this.ppm = Math.min(Math.max(this.ppm * factor, 10), 2000);
-      this.draw();
+      const mouseSx = e.clientX - rect.left;
+      const mouseSy = e.clientY - rect.top;
+
+      this.zoomAtPoint(mouseSx, mouseSy, factor);
     }, { passive: false });
 
     this.canvas.addEventListener('mousedown', (e) => {
@@ -262,7 +325,22 @@ export class BuildFloorView {
   }
 
   private screenToWorld(sx: number, sy: number): { xM: number; yM: number } {
-    return { xM: (sx - this.panX) / this.ppm, yM: (sy - this.panY) / this.ppm };
+    let px = sx;
+    let py = sy;
+    if (this.canvasRotationDeg !== 0) {
+      const W = this.canvas.width || 800;
+      const H = this.canvas.height || 600;
+      const cx = W / 2;
+      const cy = H / 2;
+      const rad = (-this.canvasRotationDeg * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const dx = sx - cx;
+      const dy = sy - cy;
+      px = cx + (dx * cos - dy * sin);
+      py = cy + (dx * sin + dy * cos);
+    }
+    return { xM: (px - this.panX) / this.ppm, yM: (py - this.panY) / this.ppm };
   }
 
   private handleMouseDown(e: MouseEvent) {
@@ -347,6 +425,8 @@ export class BuildFloorView {
     if (s.viewMode === '3d') return;
     const floor = dcState.getActiveFloor();
     const { width: W, height: H } = this.canvas;
+
+    if (!W || !H) return;
 
     this.ctx.save();
     this.ctx.clearRect(0, 0, W, H);
@@ -472,9 +552,10 @@ export class BuildFloorView {
     const floor = dcState.getActiveFloor();
     const wrap = this.container.querySelector('#dc-canvas-wrap') as HTMLElement;
     if (!floor || !wrap) return;
+    this.resize();
     const padding = 60;
-    const availW = wrap.clientWidth - padding * 2;
-    const availH = wrap.clientHeight - padding * 2;
+    const availW = Math.max(100, (this.canvas.width || wrap.clientWidth) - padding * 2);
+    const availH = Math.max(100, (this.canvas.height || wrap.clientHeight) - padding * 2);
     const ppmW = availW / floor.lengthM;
     const ppmH = availH / floor.widthM;
     this.ppm = Math.min(ppmW, ppmH);
@@ -762,7 +843,6 @@ export class BuildFloorView {
     const inner = wrap3d.querySelector('#dc3d-inner') as HTMLElement;
     if (!inner) return;
 
-    // Attach 3D interactive drag orbit listeners
     wrap3d.onmousedown = (e) => {
       if (e.target && (e.target as HTMLElement).closest('.dc3d-controls')) return;
       this.isOrbiting3D = true;

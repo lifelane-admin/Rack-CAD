@@ -5728,6 +5728,7 @@ export class App {
     this.sidebar.render();
     if (isCloud || isHybrid) this.renderCloudAll();
     if (isHybrid) this.renderAll();
+    if (isDc) this.buildFloorView?.show();
   }
 
   /** Re-renders every CloudContainer/CloudNode/CloudConnector from current state. Mirrors
