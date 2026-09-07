@@ -93,6 +93,7 @@ export class BuildFloorView {
           </div>
           <div class="dc-topbar-center">
             <button class="dc-btn" id="dc-btn-newfloor" title="Create new floor">＋ New Floor</button>
+            <button class="dc-btn dc-btn-primary" id="dc-btn-addrack-topbar" title="Add single rack to floor">＋ Add Rack</button>
             <button class="dc-btn" id="dc-btn-addrow" title="Add Row of Racks (International Standard Spacing)">▤ Add Row (Standards)</button>
             <div class="dc-divider"></div>
             <!-- Mode switch -->
@@ -233,6 +234,7 @@ export class BuildFloorView {
   private bindButtons() {
     const on = (id: string, fn: () => void) => this.container.querySelector(`#${id}`)?.addEventListener('click', fn);
     on('dc-btn-newfloor', () => this.showCreateFloorDialog());
+    on('dc-btn-addrack-topbar', () => this.showAddRackDialog());
     on('dc-btn-addrow', () => this.showAddRowDialog());
     on('dc-btn-tool-select', () => this.setToolMode('select'));
     on('dc-btn-tool-pan', () => this.setToolMode('pan'));
@@ -303,26 +305,17 @@ export class BuildFloorView {
     const oldPpm = this.ppm;
     const newPpm = Math.min(Math.max(oldPpm * factor, 15), 2000);
     if (newPpm === oldPpm) return;
-    const actualFactor = newPpm / oldPpm;
 
-    let px = sx;
-    let py = sy;
-    if (this.canvasRotationDeg !== 0) {
-      const W = this.canvas.width || 800;
-      const H = this.canvas.height || 600;
-      const cx = W / 2;
-      const cy = H / 2;
-      const rad = (-this.canvasRotationDeg * Math.PI) / 180;
-      const cos = Math.cos(rad);
-      const sin = Math.sin(rad);
-      const dx = sx - cx;
-      const dy = sy - cy;
-      px = cx + (dx * cos - dy * sin);
-      py = cy + (dx * sin + dy * cos);
-    }
+    // Get the exact world coordinates (xM, yM) under screen cursor (sx, sy)
+    const { xM, yM } = this.screenToWorld(sx, sy);
 
-    this.panX = px - (px - this.panX) * actualFactor;
-    this.panY = py - (py - this.panY) * actualFactor;
+    // In unrotated space, world coordinate (xM, yM) maps to px = xM * oldPpm + panX
+    const px = xM * oldPpm + this.panX;
+    const py = yM * oldPpm + this.panY;
+
+    // To keep (xM, yM) at the exact same screen position under newPpm:
+    this.panX = px - xM * newPpm;
+    this.panY = py - yM * newPpm;
     this.ppm = newPpm;
     this.draw();
   }
