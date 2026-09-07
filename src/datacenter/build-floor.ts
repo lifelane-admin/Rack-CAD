@@ -1,5 +1,9 @@
 import { dcState } from './dc-state';
-import { DcFloor, DcRack, DcUnit } from './types';
+import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacingStandard } from './types';
+import { RACK_PRESETS, SPACING_STANDARDS, RackPreset, SpacingStandardInfo } from './standards';
+import { stateManager } from '../core/state';
+import { eventBus } from '../core/event-bus';
+import { RackData } from '../core/types';
 import {
   formatSingleDistance,
   formatDimensionsMeters,
@@ -38,6 +42,9 @@ export class BuildFloorView {
   private hasFittedInitialFloor = false;
   private resizeObserver: ResizeObserver | null = null;
   private isLeftPanelCollapsed = false;
+
+  // Snap Gap Indicators during dragging
+  private snapGapInfo: { x1: number; y1: number; x2: number; y2: number; label: string } | null = null;
 
   // 2D Canvas View Rotation: 0, 90, 180, 270 degrees
   private canvasRotationDeg: 0 | 90 | 180 | 270 = 0;
@@ -86,6 +93,7 @@ export class BuildFloorView {
           </div>
           <div class="dc-topbar-center">
             <button class="dc-btn" id="dc-btn-newfloor" title="Create new floor">＋ New Floor</button>
+            <button class="dc-btn" id="dc-btn-addrow" title="Add Row of Racks (International Standard Spacing)">▤ Add Row (Standards)</button>
             <div class="dc-divider"></div>
             <!-- Mode switch -->
             <button class="dc-btn dc-btn-icon active" id="dc-btn-tool-select" title="Select Tool (Hotkey: S)">↖ Select (S)</button>
@@ -141,7 +149,7 @@ export class BuildFloorView {
             <div id="dc-props-content"><p class="dc-muted">Select a tile or rack.</p></div>
           </div>
         </div>
-        <div class="dc-statusbar" id="dc-statusbar">Point-to-Zoom: Wheel / Pinch | Hotkeys: [S] Select | [M] Move/Pan | [Z] Zoom Fit | [R] Rotate</div>
+        <div class="dc-statusbar" id="dc-statusbar">Point-to-Zoom: Wheel | Right-Click Rack: Work on Rack / Elevate | Hotkeys: [S] Select | [M] Move | [Z] Fit | [R] Rotate</div>
       </div>
     `;
 
@@ -225,6 +233,7 @@ export class BuildFloorView {
   private bindButtons() {
     const on = (id: string, fn: () => void) => this.container.querySelector(`#${id}`)?.addEventListener('click', fn);
     on('dc-btn-newfloor', () => this.showCreateFloorDialog());
+    on('dc-btn-addrow', () => this.showAddRowDialog());
     on('dc-btn-tool-select', () => this.setToolMode('select'));
     on('dc-btn-tool-pan', () => this.setToolMode('pan'));
     on('dc-btn-2d', () => this.setViewMode('2d'));
@@ -398,6 +407,29 @@ export class BuildFloorView {
       this.zoomAtPoint(mouseSx, mouseSy, factor);
     }, { passive: false });
 
+    // Right-click context menu on 2D Canvas
+    this.canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const rect = this.canvas.getBoundingClientRect();
+      const scaleX = this.canvas.width / (rect.width || 1);
+      const scaleY = this.canvas.height / (rect.height || 1);
+      const canvasSx = (e.clientX - rect.left) * scaleX;
+      const canvasSy = (e.clientY - rect.top) * scaleY;
+      const { xM, yM } = this.screenToWorld(canvasSx, canvasSy);
+
+      const floor = dcState.getActiveFloor();
+      if (!floor) return;
+
+      for (const rack of floor.racks) {
+        if (this.hitTestRack(rack, xM, yM)) {
+          dcState.setState({ selectedRackId: rack.id, selectedTileId: null });
+          this.renderPropsPanel();
+          this.showContextMenu(e.clientX, e.clientY, rack);
+          return;
+        }
+      }
+    });
+
     this.canvas.addEventListener('mousedown', (e) => {
       if (e.button === 1 || (e.button === 0 && e.altKey) || this.toolMode === 'pan') {
         this.isPanning = true;
@@ -421,7 +453,7 @@ export class BuildFloorView {
         const floor = dcState.getActiveFloor();
         const primaryUnit = floor?.unit ?? 'm';
         if (statusbar && xM >= 0 && yM >= 0) {
-          statusbar.textContent = `Cursor: X: ${formatSingleDistance(xM, primaryUnit)} | Y: ${formatSingleDistance(yM, primaryUnit)} | Hotkeys: [S] Select | [M] Move | [Z] Fit | [R] Rotate`;
+          statusbar.textContent = `Cursor: X: ${formatSingleDistance(xM, primaryUnit)} | Y: ${formatSingleDistance(yM, primaryUnit)} | Right-Click Rack: Work on Rack | [S] Select | [M] Move | [Z] Fit | [R] Rotate`;
         }
       }
 
@@ -532,16 +564,65 @@ export class BuildFloorView {
     const { xM, yM } = this.screenToWorld(canvasSx, canvasSy);
     let nx = xM - this.dragOffset.x;
     let ny = yM - this.dragOffset.y;
+
+    this.snapGapInfo = null;
+
     if (dcState.getState().snapEnabled) {
       const snapped = dcState.snapToGrid(nx, ny, floor.tileSizeMm / 1000);
       nx = snapped.x; ny = snapped.y;
+
+      // Smart Snap to International Standard Gaps (0mm, 0.3m, 0.6m, 0.9m, 1.2m, 1.5m)
+      const currentRack = floor.racks.find(r => r.id === this.draggingRackId);
+      if (currentRack) {
+        const cW = currentRack.widthMm / 1000;
+        const cD = currentRack.depthMm / 1000;
+
+        for (const other of floor.racks) {
+          if (other.id === currentRack.id) continue;
+          const oW = other.widthMm / 1000;
+          const oD = other.depthMm / 1000;
+
+          // Check horizontal gaps
+          for (const std of SPACING_STANDARDS) {
+            const gap = std.gapM;
+            // Snap to right of other rack: nx = other.x + oW + gap
+            const targetXRight = other.position.x + oW + gap;
+            if (Math.abs(nx - targetXRight) < 0.08) {
+              nx = parseFloat(targetXRight.toFixed(3));
+              this.snapGapInfo = {
+                x1: other.position.x + oW,
+                y1: other.position.y + oD / 2,
+                x2: nx,
+                y2: ny + cD / 2,
+                label: std.label,
+              };
+              break;
+            }
+            // Snap to left of other rack: nx + cW = other.x - gap
+            const targetXLeft = other.position.x - gap - cW;
+            if (Math.abs(nx - targetXLeft) < 0.08) {
+              nx = parseFloat(targetXLeft.toFixed(3));
+              this.snapGapInfo = {
+                x1: nx + cW,
+                y1: ny + cD / 2,
+                x2: other.position.x,
+                y2: other.position.y + oD / 2,
+                label: std.label,
+              };
+              break;
+            }
+          }
+        }
+      }
     }
+
     this.dragPos = { x: nx, y: ny };
     this.draw();
   }
 
   private handleRackDrop(_e: MouseEvent) {
     this.isDraggingRack = false;
+    this.snapGapInfo = null;
     if (!this.draggingRackId || !this.dragPos) { this.draggingRackId = null; this.dragPos = null; return; }
     const floor = dcState.getActiveFloor();
     if (!floor) return;
@@ -642,10 +723,35 @@ export class BuildFloorView {
     this.ctx.lineWidth = 2.5;
     this.ctx.strokeRect(fx, fy, fw, fh);
 
+    // 3. Draw Racks
     for (const rack of floor.racks) {
       const isDragging = rack.id === this.draggingRackId;
       const pos = isDragging && this.dragPos ? this.dragPos : rack.position;
       this.drawRack(rack, pos.x, pos.y, isDragging);
+    }
+
+    // 4. Draw Snap Gap Guidelines if dragging
+    if (this.snapGapInfo) {
+      const p1 = this.worldToScreen(this.snapGapInfo.x1, this.snapGapInfo.y1);
+      const p2 = this.worldToScreen(this.snapGapInfo.x2, this.snapGapInfo.y2);
+
+      this.ctx.save();
+      this.ctx.strokeStyle = '#10b981';
+      this.ctx.lineWidth = 2;
+      this.ctx.setLineDash([4, 4]);
+      this.ctx.beginPath();
+      this.ctx.moveTo(p1.sx, p1.sy);
+      this.ctx.lineTo(p2.sx, p2.sy);
+      this.ctx.stroke();
+
+      // Label badge
+      const midX = (p1.sx + p2.sx) / 2;
+      const midY = (p1.sy + p2.sy) / 2;
+      this.ctx.fillStyle = '#10b981';
+      this.ctx.font = 'bold 11px system-ui';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(`SNAP: ${this.snapGapInfo.label}`, midX, midY - 6);
+      this.ctx.restore();
     }
 
     this.ctx.restore();
@@ -675,9 +781,18 @@ export class BuildFloorView {
     this.ctx.fillRect(sx, sy, pw, ph);
     this.ctx.shadowBlur = 0;
 
-    this.ctx.strokeStyle = invalid ? '#ef4444' : isSelected ? '#38bdf8' : '#4a9eff';
-    this.ctx.lineWidth = isSelected ? 2.5 : 1;
+    // Outer Stroke with Rack Type distinction
+    this.ctx.strokeStyle = invalid ? '#ef4444' : isSelected ? '#38bdf8' : rack.type === 'network' ? '#10b981' : rack.type === 'open-frame' ? '#f59e0b' : rack.type === 'wall-mount' ? '#a855f7' : '#4a9eff';
+    this.ctx.lineWidth = isSelected ? 2.5 : 1.5;
     this.ctx.strokeRect(sx, sy, pw, ph);
+
+    // Draw rack doors or open frame indicators
+    if (rack.doorStyle === 'perforated' && pw >= 20) {
+      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      this.ctx.setLineDash([2, 2]);
+      this.ctx.strokeRect(sx + 3, sy + 3, pw - 6, ph - 6);
+      this.ctx.setLineDash([]);
+    }
 
     if (s.labelsVisible && pw >= 20) {
       this.ctx.fillStyle = '#f0f6fc';
@@ -686,8 +801,8 @@ export class BuildFloorView {
       this.ctx.fillText(rack.name, sx + pw / 2, sy + ph / 2 - 4);
       if (ph >= 24) {
         this.ctx.font = `${Math.max(8, Math.min(10, pw * 0.12))}px system-ui`;
-        this.ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        this.ctx.fillText(`${rack.heightU}U`, sx + pw / 2, sy + ph / 2 + 10);
+        this.ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        this.ctx.fillText(`${rack.heightU}U ${rack.type.toUpperCase()}`, sx + pw / 2, sy + ph / 2 + 10);
       }
     }
   }
@@ -722,13 +837,15 @@ export class BuildFloorView {
       <div class="dc-info-row"><span class="dc-info-label">ESD Tile</span><span class="dc-info-val">${formatDimensionsMm(floor.tileSizeMm, floor.tileSizeMm, unit === 'm' ? 'mm' : unit)}</span></div>
       <div class="dc-info-row"><span class="dc-info-label">Grid</span><span class="dc-info-val">${colCount} × ${rowCount}</span></div>
       <div class="dc-info-row"><span class="dc-info-label">Tiles</span><span class="dc-info-val">${floor.tiles.length.toLocaleString()}</span></div>
-      <div class="dc-info-row"><span class="dc-info-label">Racks</span><span class="dc-info-val">${floor.racks.length}</span></div>
+      <div class="dc-info-row"><span class="dc-info-label">Total Racks</span><span class="dc-info-val">${floor.racks.length}</span></div>
       <div class="dc-divider-h"></div>
-      <button class="dc-btn dc-btn-sm dc-btn-full" id="dc-btn-addrack">＋ Add Rack</button>
+      <button class="dc-btn dc-btn-sm dc-btn-full" id="dc-btn-addrack">＋ Add Single Rack</button>
+      <button class="dc-btn dc-btn-sm dc-btn-full" id="dc-btn-addrow-info">▤ Add Row (Standards)</button>
       <button class="dc-btn dc-btn-sm dc-btn-full dc-btn-secondary" id="dc-btn-editfloor">✎ Edit Floor</button>
       <button class="dc-btn dc-btn-sm dc-btn-full dc-btn-danger" id="dc-btn-deletefloor">🗑 Delete Floor</button>
     `;
     el.querySelector('#dc-btn-addrack')?.addEventListener('click', () => this.showAddRackDialog());
+    el.querySelector('#dc-btn-addrow-info')?.addEventListener('click', () => this.showAddRowDialog());
     el.querySelector('#dc-btn-editfloor')?.addEventListener('click', () => this.showEditFloorDialog(floor));
     el.querySelector('#dc-btn-deletefloor')?.addEventListener('click', () => {
       if (confirm(`Delete floor "${floor.name}"? This cannot be undone.`)) {
@@ -783,30 +900,38 @@ export class BuildFloorView {
       if (rack) {
         const posX = formatSingleDistance(rack.position.x, unit);
         const posY = formatSingleDistance(rack.position.y, unit);
+        const typeBadge = `<span class="dc-type-badge ${rack.type}">${rack.type}</span>`;
+
         el.innerHTML = `
           <div class="dc-props-section">
-            <div class="dc-props-title">Rack Properties</div>
+            <div class="dc-props-title">Rack Properties ${typeBadge}</div>
             <div class="dc-info-row"><span class="dc-info-label">ID</span><span class="dc-info-val">${rack.id}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Name</span><span class="dc-info-val">${rack.name}</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">Type</span><span class="dc-info-val"><b>${rack.type.toUpperCase()}</b></span></div>
             <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(rack.widthMm, rack.depthMm, unit === 'm' ? 'mm' : unit)}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Height</span><span class="dc-info-val">${formatRackHeight(rack.heightU)}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Pos X</span><span class="dc-info-val">${posX}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Pos Y</span><span class="dc-info-val">${posY}</span></div>
             <div class="dc-info-row"><span class="dc-info-label">Rotation</span><span class="dc-info-val">${rack.rotation}°</span></div>
-            ${rack.manufacturer ? `<div class="dc-info-row"><span class="dc-info-label">Mfr</span><span class="dc-info-val">${rack.manufacturer}</span></div>` : ''}
+            ${rack.doorStyle ? `<div class="dc-info-row"><span class="dc-info-label">Door</span><span class="dc-info-val">${rack.doorStyle}</span></div>` : ''}
+            ${rack.manufacturer ? `<div class="dc-info-row"><span class="dc-info-label">Mfr</span><span class="dc-info-val">${rack.manufacturer} ${rack.model || ''}</span></div>` : ''}
           </div>
           <div class="dc-props-actions">
+            <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-rack-work" title="Mount devices, servers & switches in this rack">⚙ Work on this Rack (Mount Devices)</button>
             <button class="dc-btn dc-btn-sm" id="dc-rack-rotate" title="Rotate 90° (Hotkey: R)">↻ Rotate 90° (R)</button>
+            <button class="dc-btn dc-btn-sm" id="dc-rack-edit" title="Edit Properties">✎ Edit Rack</button>
             <button class="dc-btn dc-btn-sm" id="dc-rack-duplicate" title="Duplicate">⊕ Duplicate</button>
             <button class="dc-btn dc-btn-sm dc-btn-danger" id="dc-rack-delete" title="Delete">🗑 Delete</button>
           </div>
         `;
+        el.querySelector('#dc-rack-work')?.addEventListener('click', () => this.workOnRack(rack));
         el.querySelector('#dc-rack-rotate')?.addEventListener('click', () => {
           const rot = ((rack.rotation + 90) % 360) as 0 | 90 | 180 | 270;
           dcState.updateRack(rack.id, { rotation: rot });
           this.renderPropsPanel();
           if (dcState.getState().viewMode === '3d') this.render3D(); else this.draw();
         });
+        el.querySelector('#dc-rack-edit')?.addEventListener('click', () => this.showEditRackDialog(rack));
         el.querySelector('#dc-rack-duplicate')?.addEventListener('click', () => {
           const dup = dcState.duplicateRack(rack.id);
           if (dup) dcState.setState({ selectedRackId: dup.id });
@@ -837,6 +962,113 @@ export class BuildFloorView {
     }
 
     el.innerHTML = '<p class="dc-muted">Click any tile or rack to inspect details.</p>';
+  }
+
+  private workOnRack(rack: DcRack) {
+    const racks = stateManager.getState().racks;
+    let existing = racks.find(r => r.id === rack.id);
+    if (!existing) {
+      const newRack: RackData = {
+        id: rack.id,
+        name: rack.name,
+        units: rack.heightU,
+        depthMm: rack.depthMm,
+        rackType: rack.type === 'open-frame' ? 'open-frame' : rack.type === 'network' ? 'network' : rack.type === 'wall-mount' ? 'wall-mount' : 'server',
+        mounting: rack.mounting ?? 'floor',
+        rackColor: rack.color ?? '#1e3a5f',
+        x: 220,
+        y: 60,
+      };
+      stateManager.setState({ racks: [...racks, newRack], selection: [{ type: 'rack', id: rack.id }] });
+    } else {
+      stateManager.setState({ selection: [{ type: 'rack', id: rack.id }] });
+    }
+
+    eventBus.emit('view:switch' as any, 'rack');
+    eventBus.emit('notification', {
+      message: `Opened ${rack.name} in Rack Elevation Editor. Place your servers & active devices!`,
+      type: 'info',
+    });
+
+    this.showWorkingBannerInElevation(rack);
+  }
+
+  private showWorkingBannerInElevation(rack: DcRack) {
+    let banner = document.getElementById('dc-working-banner');
+    if (banner) banner.remove();
+
+    const canvasWrap = document.getElementById('canvas-container');
+    if (!canvasWrap) return;
+
+    banner = document.createElement('div');
+    banner.id = 'dc-working-banner';
+    banner.className = 'dc-working-banner';
+    banner.innerHTML = `
+      <div class="dc-working-banner-title">
+        <span>⚡ Elevation View: <b>${rack.name}</b> (${rack.heightU}U ${rack.type.toUpperCase()}) — Data Hall Floor</span>
+      </div>
+      <button class="dc-btn-return-dc" id="dc-btn-return-dc">← Return to Datacenter Floor Plan</button>
+    `;
+
+    canvasWrap.prepend(banner);
+
+    banner.querySelector('#dc-btn-return-dc')?.addEventListener('click', () => {
+      eventBus.emit('view:switch' as any, 'datacenter');
+      banner?.remove();
+    });
+  }
+
+  private showContextMenu(x: number, y: number, rack: DcRack) {
+    let existing = document.getElementById('dc-context-menu');
+    existing?.remove();
+
+    const menu = document.createElement('div');
+    menu.id = 'dc-context-menu';
+    menu.className = 'dc-context-menu';
+    menu.style.left = `${Math.min(x, window.innerWidth - 220)}px`;
+    menu.style.top = `${Math.min(y, window.innerHeight - 200)}px`;
+
+    menu.innerHTML = `
+      <div class="dc-menu-header">${rack.name} (${rack.heightU}U ${rack.type.toUpperCase()})</div>
+      <div class="dc-menu-item primary" id="cm-work">⚙ Work on this Rack (Mount Devices)</div>
+      <div class="dc-menu-item" id="cm-rotate">↻ Rotate 90° (R)</div>
+      <div class="dc-menu-item" id="cm-duplicate">⊕ Duplicate Rack</div>
+      <div class="dc-menu-item" id="cm-edit">✎ Edit Properties</div>
+      <div class="dc-menu-item danger" id="cm-delete">🗑 Delete Rack</div>
+    `;
+
+    document.body.appendChild(menu);
+
+    const close = () => menu.remove();
+
+    menu.querySelector('#cm-work')?.addEventListener('click', () => { close(); this.workOnRack(rack); });
+    menu.querySelector('#cm-rotate')?.addEventListener('click', () => {
+      close();
+      const rot = ((rack.rotation + 90) % 360) as 0 | 90 | 180 | 270;
+      dcState.updateRack(rack.id, { rotation: rot });
+      this.renderPropsPanel();
+      if (dcState.getState().viewMode === '3d') this.render3D(); else this.draw();
+    });
+    menu.querySelector('#cm-duplicate')?.addEventListener('click', () => {
+      close();
+      const dup = dcState.duplicateRack(rack.id);
+      if (dup) dcState.setState({ selectedRackId: dup.id });
+    });
+    menu.querySelector('#cm-edit')?.addEventListener('click', () => { close(); this.showEditRackDialog(rack); });
+    menu.querySelector('#cm-delete')?.addEventListener('click', () => {
+      close();
+      if (confirm(`Delete rack "${rack.name}"?`)) dcState.deleteRack(rack.id);
+    });
+
+    setTimeout(() => {
+      const dismiss = (ev: MouseEvent) => {
+        if (!menu.contains(ev.target as Node)) {
+          close();
+          window.removeEventListener('click', dismiss);
+        }
+      };
+      window.addEventListener('click', dismiss);
+    }, 20);
   }
 
   private showCreateFloorDialog() {
@@ -993,33 +1225,70 @@ export class BuildFloorView {
     const floor = dcState.getActiveFloor();
     if (!floor) return;
     const defaultId = dcState.generateRackId();
-    this.showModal('Add Rack', `
+    this.showModal('Add Datacenter Rack', `
       <div class="dc-form">
+        <label>Rack Preset Model
+          <select id="dr-preset" class="dc-input">
+            <option value="custom">Custom Configuration...</option>
+            ${RACK_PRESETS.map(p => `<option value="${p.id}">${p.name} (${p.heightU}U, ${p.widthMm}×${p.depthMm}mm)</option>`).join('')}
+          </select>
+        </label>
+        <label>Rack Type
+          <select id="dr-type" class="dc-input">
+            <option value="server" selected>Server Cabinet (Enclosed, Perforated Front/Rear)</option>
+            <option value="network">Network / Telecom Cabinet (High Cable Capacity)</option>
+            <option value="open-frame">Open Frame Relay Rack (2-Post / 4-Post Structural)</option>
+            <option value="wall-mount">Wall-Mount Cabinet Enclosure</option>
+          </select>
+        </label>
         <label>Rack ID<input id="dr-id" type="text" value="${defaultId}" class="dc-input"/></label>
-        <label>Name<input id="dr-name" type="text" value="${defaultId}" class="dc-input"/></label>
-        <label>Width (mm)<input id="dr-width" type="number" value="600" min="300" max="1200" step="50" class="dc-input"/></label>
-        <label>Depth (mm)<input id="dr-depth" type="number" value="1200" min="400" max="2000" step="50" class="dc-input"/></label>
+        <label>Rack Name / Tag<input id="dr-name" type="text" value="${defaultId}" class="dc-input"/></label>
+        <label>Width (mm)<input id="dr-width" type="number" value="600" min="300" max="1500" step="50" class="dc-input"/></label>
+        <label>Depth (mm)<input id="dr-depth" type="number" value="1200" min="300" max="2000" step="50" class="dc-input"/></label>
         <label>Height (U)<input id="dr-height" type="number" value="42" min="2" max="54" step="2" class="dc-input"/></label>
-        <label>Manufacturer (optional)<input id="dr-mfr" type="text" placeholder="e.g. APC, Eaton" class="dc-input"/></label>
-        <label>Model (optional)<input id="dr-model" type="text" placeholder="e.g. AR3150" class="dc-input"/></label>
+        <label>Door Style
+          <select id="dr-door" class="dc-input">
+            <option value="perforated" selected>Perforated High-Airflow Steel</option>
+            <option value="glass">Tempered Glass Window Door</option>
+            <option value="solid">Solid Steel Door</option>
+            <option value="none">No Door (Open Frame)</option>
+          </select>
+        </label>
+        <label>Mounting Style
+          <select id="dr-mounting" class="dc-input">
+            <option value="floor" selected>Floor Mounted (Free-standing / Bayed)</option>
+            <option value="wall-mount">Wall Mounted</option>
+          </select>
+        </label>
+        <label>Manufacturer<input id="dr-mfr" type="text" value="APC Schneider" class="dc-input"/></label>
+        <label>Model Number<input id="dr-model" type="text" value="AR3100" class="dc-input"/></label>
+        <label>Cabinet Color<input id="dr-color" type="color" value="#1e3a5f" class="dc-input" style="height:36px;padding:2px;"/></label>
       </div>
-    `, 'Add Rack', () => {
+    `, 'Add Rack to Floor', () => {
       const id = (document.getElementById('dr-id') as HTMLInputElement).value.trim() || defaultId;
       const name = (document.getElementById('dr-name') as HTMLInputElement).value.trim() || id;
+      const type = (document.getElementById('dr-type') as HTMLSelectElement).value as DcRackType;
       const w = parseFloat((document.getElementById('dr-width') as HTMLInputElement).value) || 600;
       const d = parseFloat((document.getElementById('dr-depth') as HTMLInputElement).value) || 1200;
       const h = parseFloat((document.getElementById('dr-height') as HTMLInputElement).value) || 42;
+      const door = (document.getElementById('dr-door') as HTMLSelectElement).value as DcDoorStyle;
+      const mounting = (document.getElementById('dr-mounting') as HTMLSelectElement).value as DcMounting;
       const mfr = (document.getElementById('dr-mfr') as HTMLInputElement).value.trim();
       const model = (document.getElementById('dr-model') as HTMLInputElement).value.trim();
+      const color = (document.getElementById('dr-color') as HTMLInputElement).value || '#1e3a5f';
+
       if (w <= 0 || d <= 0 || h <= 0) { alert('Invalid dimensions.'); return false; }
-      const color = RACK_COLORS[rackColorIdx++ % RACK_COLORS.length];
+
       const tileM = floor.tileSizeMm / 1000;
       const rack: DcRack = {
         id,
         name,
+        type,
         widthMm: w,
         depthMm: d,
         heightU: h,
+        doorStyle: door,
+        mounting,
         manufacturer: mfr || undefined,
         model: model || undefined,
         position: { x: tileM * 2, y: tileM * 2, z: 0 },
@@ -1030,6 +1299,188 @@ export class BuildFloorView {
       dcState.setState({ selectedRackId: id });
       return true;
     });
+
+    setTimeout(() => {
+      const presetSel = document.getElementById('dr-preset') as HTMLSelectElement;
+      presetSel?.addEventListener('change', () => {
+        const val = presetSel.value;
+        const preset = RACK_PRESETS.find(p => p.id === val);
+        if (preset) {
+          (document.getElementById('dr-type') as HTMLSelectElement).value = preset.type;
+          (document.getElementById('dr-width') as HTMLInputElement).value = String(preset.widthMm);
+          (document.getElementById('dr-depth') as HTMLInputElement).value = String(preset.depthMm);
+          (document.getElementById('dr-height') as HTMLInputElement).value = String(preset.heightU);
+          (document.getElementById('dr-door') as HTMLSelectElement).value = preset.doorStyle;
+          (document.getElementById('dr-mounting') as HTMLSelectElement).value = preset.mounting;
+          (document.getElementById('dr-mfr') as HTMLInputElement).value = preset.manufacturer;
+          (document.getElementById('dr-model') as HTMLInputElement).value = preset.model;
+          (document.getElementById('dr-color') as HTMLInputElement).value = preset.color;
+        }
+      });
+    }, 50);
+  }
+
+  private showEditRackDialog(rack: DcRack) {
+    this.showModal('Edit Rack Properties', `
+      <div class="dc-form">
+        <label>Rack ID<input id="dr-id" type="text" value="${rack.id}" disabled class="dc-input" style="opacity:0.6;"/></label>
+        <label>Rack Name / Tag<input id="dr-name" type="text" value="${rack.name}" class="dc-input"/></label>
+        <label>Rack Type
+          <select id="dr-type" class="dc-input">
+            <option value="server"${rack.type === 'server' ? ' selected' : ''}>Server Cabinet (Enclosed, Perforated Front/Rear)</option>
+            <option value="network"${rack.type === 'network' ? ' selected' : ''}>Network / Telecom Cabinet (High Cable Capacity)</option>
+            <option value="open-frame"${rack.type === 'open-frame' ? ' selected' : ''}>Open Frame Relay Rack (2-Post / 4-Post Structural)</option>
+            <option value="wall-mount"${rack.type === 'wall-mount' ? ' selected' : ''}>Wall-Mount Cabinet Enclosure</option>
+          </select>
+        </label>
+        <label>Width (mm)<input id="dr-width" type="number" value="${rack.widthMm}" min="300" max="1500" step="50" class="dc-input"/></label>
+        <label>Depth (mm)<input id="dr-depth" type="number" value="${rack.depthMm}" min="300" max="2000" step="50" class="dc-input"/></label>
+        <label>Height (U)<input id="dr-height" type="number" value="${rack.heightU}" min="2" max="54" step="2" class="dc-input"/></label>
+        <label>Door Style
+          <select id="dr-door" class="dc-input">
+            <option value="perforated"${rack.doorStyle === 'perforated' ? ' selected' : ''}>Perforated High-Airflow Steel</option>
+            <option value="glass"${rack.doorStyle === 'glass' ? ' selected' : ''}>Tempered Glass Window Door</option>
+            <option value="solid"${rack.doorStyle === 'solid' ? ' selected' : ''}>Solid Steel Door</option>
+            <option value="none"${rack.doorStyle === 'none' ? ' selected' : ''}>No Door (Open Frame)</option>
+          </select>
+        </label>
+        <label>Mounting Style
+          <select id="dr-mounting" class="dc-input">
+            <option value="floor"${(rack.mounting ?? 'floor') === 'floor' ? ' selected' : ''}>Floor Mounted (Free-standing / Bayed)</option>
+            <option value="wall-mount"${rack.mounting === 'wall-mount' ? ' selected' : ''}>Wall Mounted</option>
+          </select>
+        </label>
+        <label>Manufacturer<input id="dr-mfr" type="text" value="${rack.manufacturer || ''}" class="dc-input"/></label>
+        <label>Model Number<input id="dr-model" type="text" value="${rack.model || ''}" class="dc-input"/></label>
+        <label>Cabinet Color<input id="dr-color" type="color" value="${rack.color || '#1e3a5f'}" class="dc-input" style="height:36px;padding:2px;"/></label>
+      </div>
+    `, 'Save Rack Properties', () => {
+      const name = (document.getElementById('dr-name') as HTMLInputElement).value.trim() || rack.name;
+      const type = (document.getElementById('dr-type') as HTMLSelectElement).value as DcRackType;
+      const w = parseFloat((document.getElementById('dr-width') as HTMLInputElement).value) || rack.widthMm;
+      const d = parseFloat((document.getElementById('dr-depth') as HTMLInputElement).value) || rack.depthMm;
+      const h = parseFloat((document.getElementById('dr-height') as HTMLInputElement).value) || rack.heightU;
+      const door = (document.getElementById('dr-door') as HTMLSelectElement).value as DcDoorStyle;
+      const mounting = (document.getElementById('dr-mounting') as HTMLSelectElement).value as DcMounting;
+      const mfr = (document.getElementById('dr-mfr') as HTMLInputElement).value.trim();
+      const model = (document.getElementById('dr-model') as HTMLInputElement).value.trim();
+      const color = (document.getElementById('dr-color') as HTMLInputElement).value || rack.color;
+
+      dcState.updateRack(rack.id, {
+        name,
+        type,
+        widthMm: w,
+        depthMm: d,
+        heightU: h,
+        doorStyle: door,
+        mounting,
+        manufacturer: mfr || undefined,
+        model: model || undefined,
+        color,
+      });
+      return true;
+    });
+  }
+
+  private showAddRowDialog() {
+    const floor = dcState.getActiveFloor();
+    if (!floor) return;
+
+    this.showModal('Add Row of Racks (International Standard Spacing)', `
+      <div class="dc-form">
+        <label>Row Tag / Prefix<input id="row-prefix" type="text" value="ROW-A" class="dc-input"/></label>
+        <label>Rack Preset & Type
+          <select id="row-preset" class="dc-input">
+            ${RACK_PRESETS.map(p => `<option value="${p.id}">${p.name} (${p.heightU}U, ${p.widthMm}×${p.depthMm}mm)</option>`).join('')}
+          </select>
+        </label>
+        <label>Number of Racks in Row<input id="row-count" type="number" value="4" min="1" max="20" class="dc-input"/></label>
+        <label>International Spacing Standard
+          <select id="row-spacing" class="dc-input">
+            ${SPACING_STANDARDS.map(s => `<option value="${s.id}">${s.label}</option>`).join('')}
+          </select>
+        </label>
+        <label>Row Orientation
+          <select id="row-dir" class="dc-input">
+            <option value="h" selected>Horizontal Row (Left-to-Right)</option>
+            <option value="v">Vertical Row (Top-to-Bottom)</option>
+          </select>
+        </label>
+        <div class="dc-form-preview" id="row-preview"></div>
+      </div>
+    `, 'Generate Standard Row', () => {
+      const prefix = (document.getElementById('row-prefix') as HTMLInputElement).value.trim() || 'ROW-A';
+      const presetId = (document.getElementById('row-preset') as HTMLSelectElement).value;
+      const count = parseInt((document.getElementById('row-count') as HTMLInputElement).value) || 4;
+      const spacingId = (document.getElementById('row-spacing') as HTMLSelectElement).value as DcSpacingStandard;
+      const dir = (document.getElementById('row-dir') as HTMLSelectElement).value as 'h' | 'v';
+
+      const preset = RACK_PRESETS.find(p => p.id === presetId) || RACK_PRESETS[0];
+      const standard = SPACING_STANDARDS.find(s => s.id === spacingId) || SPACING_STANDARDS[0];
+
+      const gapM = standard.gapM;
+      const rWM = preset.widthMm / 1000;
+      const rDM = preset.depthMm / 1000;
+
+      const tileM = floor.tileSizeMm / 1000;
+      let startX = tileM * 2;
+      let startY = tileM * 2;
+
+      for (let i = 0; i < count; i++) {
+        const id = `${prefix}-${String(i + 1).padStart(2, '0')}`;
+        const posX = dir === 'h' ? startX + i * (rWM + gapM) : startX;
+        const posY = dir === 'v' ? startY + i * (rDM + gapM) : startY;
+
+        const rack: DcRack = {
+          id,
+          name: id,
+          type: preset.type,
+          widthMm: preset.widthMm,
+          depthMm: preset.depthMm,
+          heightU: preset.heightU,
+          doorStyle: preset.doorStyle,
+          mounting: preset.mounting,
+          manufacturer: preset.manufacturer,
+          model: preset.model,
+          position: { x: parseFloat(posX.toFixed(3)), y: parseFloat(posY.toFixed(3)), z: 0 },
+          rotation: 0,
+          color: preset.color,
+        };
+        dcState.addRack(rack);
+      }
+
+      setTimeout(() => this.fitToFloor(), 50);
+      return true;
+    });
+
+    const updatePreview = () => {
+      const spacingId = ((document.getElementById('row-spacing') as HTMLSelectElement)?.value as DcSpacingStandard) || 'bayed-0mm';
+      const count = parseInt((document.getElementById('row-count') as HTMLInputElement)?.value) || 4;
+      const presetId = ((document.getElementById('row-preset') as HTMLSelectElement)?.value) || RACK_PRESETS[0].id;
+
+      const preset = RACK_PRESETS.find(p => p.id === presetId) || RACK_PRESETS[0];
+      const standard = SPACING_STANDARDS.find(s => s.id === spacingId) || SPACING_STANDARDS[0];
+
+      const rWM = preset.widthMm / 1000;
+      const totalLenM = count * rWM + (count - 1) * standard.gapM;
+
+      const prev = document.getElementById('row-preview');
+      if (prev) {
+        prev.innerHTML = `
+          <div class="dc-preview-line"><b>Standard:</b> ${standard.standardDoc}</div>
+          <div class="dc-preview-line"><b>Inter-Rack Gap:</b> ${formatSingleDistance(standard.gapM, floor.unit ?? 'm')}</div>
+          <div class="dc-preview-line"><b>Row Footprint:</b> ${formatSingleDistance(totalLenM, floor.unit ?? 'm')} (${count} Racks)</div>
+          <div class="dc-preview-line"><i>${standard.description}</i></div>
+        `;
+      }
+    };
+
+    setTimeout(() => {
+      document.getElementById('row-preset')?.addEventListener('change', updatePreview);
+      document.getElementById('row-count')?.addEventListener('input', updatePreview);
+      document.getElementById('row-spacing')?.addEventListener('change', updatePreview);
+      updatePreview();
+    }, 50);
   }
 
   private showModal(title: string, bodyHtml: string, confirmLabel: string, onConfirm: () => boolean) {
@@ -1106,8 +1557,24 @@ export class BuildFloorView {
       this.apply3DTransform();
     };
 
-    // 3D Mouse Orbiting & Object Selection
+    // 3D Right-click context menu & left-click selection / orbiting
+    wrap3d.oncontextmenu = (e) => {
+      e.preventDefault();
+      const target = e.target as HTMLElement;
+      const rackEl = target.closest('.dc3d-rack') as HTMLElement;
+      if (rackEl) {
+        const rackId = rackEl.dataset.rackId;
+        const rack = floor.racks.find(r => r.id === rackId);
+        if (rack) {
+          dcState.setState({ selectedRackId: rack.id, selectedTileId: null });
+          this.renderPropsPanel();
+          this.showContextMenu(e.clientX, e.clientY, rack);
+        }
+      }
+    };
+
     wrap3d.onmousedown = (e) => {
+      if (e.button === 2) return;
       const target = e.target as HTMLElement;
       if (target.closest('.dc3d-controls')) return;
 
@@ -1189,7 +1656,7 @@ export class BuildFloorView {
       const isSelected = rack.id === s.selectedRackId;
       return `<div class="dc3d-rack${isSelected ? ' selected' : ''}" data-rack-id="${rack.id}" style="left:${x}px;top:${y}px;width:${pw}px;height:${ph}px;background:${color};">
         <div class="dc3d-rack-top" style="width:${pw}px;height:${ph}px;transform: translateZ(${heightPx}px);"></div>
-        <span class="dc3d-rack-label" style="transform: translateZ(${heightPx + 4}px);">${rack.name}</span>
+        <span class="dc3d-rack-label" style="transform: translateZ(${heightPx + 4}px);">${rack.name} (${rack.type.toUpperCase()})</span>
       </div>`;
     }).join('');
 

@@ -10,14 +10,29 @@ export interface DcFloorTile {
   type: 'standard' | 'cutout' | 'partial';
 }
 
+export type DcRackType = 'server' | 'network' | 'open-frame' | 'wall-mount';
+export type DcDoorStyle = 'perforated' | 'glass' | 'solid' | 'none';
+export type DcMounting = 'floor' | 'wall-mount';
+export type DcSpacingStandard =
+  | 'bayed-0mm'
+  | 'cold-aisle-1.2m'
+  | 'cold-aisle-1.5m'
+  | 'hot-aisle-0.9m'
+  | 'hot-aisle-1.2m'
+  | 'inrow-300mm'
+  | 'inrow-600mm';
+
 export interface DcRack {
   id: string;       // e.g. "RACK-001"
   name: string;
+  type: DcRackType; // server, network, open-frame, wall-mount
   widthMm: number;
   depthMm: number;
   heightU: number;
   manufacturer?: string;
   model?: string;
+  mounting?: DcMounting;
+  doorStyle?: DcDoorStyle;
   position: { x: number; y: number; z: number }; // real-world meters
   rotation: 0 | 90 | 180 | 270;  // degrees
   color?: string;
