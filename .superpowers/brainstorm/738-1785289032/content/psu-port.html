@@ -1,0 +1,111 @@
+<h2>Power Input via Last Port Slot</h2>
+<p class="subtitle">Confirming interpretation — the last hole on a server's port row doubles as the power inlet. Click to confirm which matches what you mean.</p>
+
+<div class="cards">
+
+  <!-- Option A: Last port in the existing port row = power inlet -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d0e10;padding:16px">
+      <svg viewBox="0 0 340 130" width="100%" style="display:block">
+        <!-- Server chassis -->
+        <rect x="0" y="20" width="340" height="80" rx="3" fill="#1e1e28" stroke="#3a3a50" stroke-width="1.5"/>
+        <text x="12" y="38" fill="#888" font-size="8">1U SERVER</text>
+
+        <!-- Port row: ports 1–4 are network, port 5 = LAST = power -->
+        <!-- Port 1 -->
+        <rect x="10" y="45" width="22" height="22" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+        <rect x="13" y="50" width="16" height="10" rx="1" fill="#0a0a12" stroke="#333" stroke-width="1"/>
+        <text x="21" y="73" fill="#555" font-size="6" text-anchor="middle">1</text>
+
+        <!-- Port 2 -->
+        <rect x="36" y="45" width="22" height="22" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+        <rect x="39" y="50" width="16" height="10" rx="1" fill="#0a0a12" stroke="#333" stroke-width="1"/>
+        <!-- cable connected on port 2 -->
+        <path d="M 48 50 L 48 20" stroke="#39ff8a" stroke-width="2" fill="none"/>
+        <text x="47" y="73" fill="#39ff8a" font-size="6" text-anchor="middle">2 ●</text>
+
+        <!-- Port 3 -->
+        <rect x="62" y="45" width="22" height="22" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+        <rect x="65" y="50" width="16" height="10" rx="1" fill="#0a0a12" stroke="#333" stroke-width="1"/>
+        <text x="73" y="73" fill="#555" font-size="6" text-anchor="middle">3</text>
+
+        <!-- Port 4 -->
+        <rect x="88" y="45" width="22" height="22" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+        <rect x="91" y="50" width="16" height="10" rx="1" fill="#0a0a12" stroke="#333" stroke-width="1"/>
+        <text x="99" y="73" fill="#555" font-size="6" text-anchor="middle">4</text>
+
+        <!-- Gap / separator -->
+        <line x1="118" y1="44" x2="118" y2="88" stroke="#333" stroke-width="1" stroke-dasharray="3,2"/>
+
+        <!-- LAST port = POWER INLET (highlighted) -->
+        <rect x="122" y="42" width="28" height="28" rx="3" fill="#1a1020" stroke="#aa44ff" stroke-width="2"/>
+        <!-- C14 inlet shape (3-hole power connector) -->
+        <ellipse cx="128" cy="56" rx="3" ry="3" fill="none" stroke="#cc66ff" stroke-width="1.5"/>
+        <ellipse cx="136" cy="52" rx="3" ry="3" fill="none" stroke="#cc66ff" stroke-width="1.5"/>
+        <ellipse cx="144" cy="56" rx="3" ry="3" fill="none" stroke="#cc66ff" stroke-width="1.5"/>
+        <text x="136" y="78" fill="#aa44ff" font-size="6" text-anchor="middle">PSU (last)</text>
+
+        <!-- Power cable from last port to left PDU -->
+        <path d="M 122 56 Q 80 56 80 115" stroke="#ff4422" stroke-width="2.5" fill="none" stroke-dasharray="4,2"/>
+        <text x="60" y="115" fill="#ff6644" font-size="7">→ PDU outlet</text>
+
+        <!-- Label explanation -->
+        <text x="10" y="112" fill="#666" font-size="7">Ports 1–4: network data  |  Last port (5): power inlet — connects to PDU</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>A ✓ — Last port in existing row = power inlet</h3>
+      <p>The server already renders N patch ports. The final slot in that row is reserved as the power/PSU inlet. User draws a power cable from this last hole to a PDU outlet. No new visual element needed on the device — just the last existing hole changes function based on cable type.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Separate power port rendered at the far right of the chassis -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d0e10;padding:16px">
+      <svg viewBox="0 0 340 130" width="100%" style="display:block">
+        <!-- Server chassis -->
+        <rect x="0" y="20" width="340" height="80" rx="3" fill="#1e1e28" stroke="#3a3a50" stroke-width="1.5"/>
+        <text x="12" y="38" fill="#888" font-size="8">1U SERVER</text>
+
+        <!-- Port row: ALL network ports -->
+        <rect x="10" y="45" width="22" height="22" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+        <rect x="13" y="50" width="16" height="10" rx="1" fill="#0a0a12" stroke="#333" stroke-width="1"/>
+        <text x="21" y="73" fill="#555" font-size="6" text-anchor="middle">1</text>
+
+        <rect x="36" y="45" width="22" height="22" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+        <rect x="39" y="50" width="16" height="10" rx="1" fill="#0a0a12" stroke="#333" stroke-width="1"/>
+        <text x="47" y="73" fill="#555" font-size="6" text-anchor="middle">2</text>
+
+        <rect x="62" y="45" width="22" height="22" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+        <rect x="65" y="50" width="16" height="10" rx="1" fill="#0a0a12" stroke="#333" stroke-width="1"/>
+        <text x="73" y="73" fill="#555" font-size="6" text-anchor="middle">3</text>
+
+        <rect x="88" y="45" width="22" height="22" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+        <rect x="91" y="50" width="16" height="10" rx="1" fill="#0a0a12" stroke="#333" stroke-width="1"/>
+        <text x="99" y="73" fill="#555" font-size="6" text-anchor="middle">4</text>
+
+        <!-- Dedicated power inlet block on far right of chassis -->
+        <rect x="270" y="38" width="60" height="44" rx="3" fill="#1a1020" stroke="#aa44ff" stroke-width="2"/>
+        <text x="300" y="52" fill="#aa44ff" font-size="7" text-anchor="middle">PSU INLETS</text>
+        <!-- C14 pair -->
+        <rect x="276" y="56" width="22" height="20" rx="2" fill="#120a1e" stroke="#cc66ff" stroke-width="1.5"/>
+        <text x="287" y="70" fill="#cc66ff" font-size="6" text-anchor="middle">PSU1</text>
+        <rect x="302" y="56" width="22" height="20" rx="2" fill="#120a1e" stroke="#4466ff" stroke-width="1.5"/>
+        <text x="313" y="70" fill="#6688ff" font-size="6" text-anchor="middle">PSU2</text>
+
+        <!-- Power cables -->
+        <path d="M 270 66 Q 200 66 200 115" stroke="#ff4422" stroke-width="2.5" fill="none" stroke-dasharray="4,2"/>
+        <path d="M 324 66 Q 330 66 330 115" stroke="#3399ff" stroke-width="2.5" fill="none" stroke-dasharray="4,2"/>
+
+        <text x="10" y="112" fill="#666" font-size="7">Ports 1–4: network data  |  Separate PSU block on far right (new render element)</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>B — Dedicated PSU block rendered separately on chassis</h3>
+      <p>A distinct PSU inlet section is rendered at the far-right of the server chassis (separate from the patch port row), showing 1 or 2 power inlets depending on device spec. More visually distinct but requires new rendering logic per device type.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:20px">Click your answer in the browser, or just tell me in the terminal. "Last hole" = Option A is my read of what you described.</p>

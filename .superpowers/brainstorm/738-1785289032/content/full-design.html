@@ -1,0 +1,390 @@
+<h2>Rack Slicer — Full Design Preview</h2>
+<p class="subtitle">Vertical PDU side-mount + Switch LED fix. Scroll to review all sections.</p>
+
+<!-- ===== SECTION 1: RACK ANATOMY ===== -->
+<div class="section">
+  <h3>1 · Expanded Rack Anatomy (cross-section, top view)</h3>
+  <div class="mockup">
+    <div class="mockup-header">Rack cross-section — left to right</div>
+    <div class="mockup-body" style="overflow-x:auto">
+      <svg viewBox="0 0 700 110" width="700" style="display:block;min-width:700px">
+        <!-- Outer frame -->
+        <rect x="0" y="10" width="700" height="90" rx="6" fill="#1e1e24" stroke="#444" stroke-width="2"/>
+
+        <!-- LEFT side -->
+        <!-- Cable tray -->
+        <rect x="4" y="14" width="28" height="82" rx="2" fill="#141418" stroke="#2a2a30" stroke-width="1"/>
+        <text x="18" y="62" fill="#444" font-size="8" text-anchor="middle" transform="rotate(-90,18,62)">CABLE TRAY</text>
+
+        <!-- PDU zone LEFT (25px, green highlight) -->
+        <rect x="32" y="14" width="50" height="82" rx="2" fill="#0d2b1a" stroke="#1a6a3a" stroke-width="1.5"/>
+        <text x="57" y="48" fill="#2aaa5a" font-size="7" text-anchor="middle">PDU</text>
+        <text x="57" y="59" fill="#2aaa5a" font-size="7" text-anchor="middle">ZONE</text>
+        <text x="57" y="70" fill="#1a6a3a" font-size="6" text-anchor="middle">auto-width</text>
+        <!-- IEC outlets -->
+        <rect x="36" y="18" width="42" height="14" rx="2" fill="#0a3a20" stroke="#2aaa5a" stroke-width="1"/>
+        <circle cx="46" cy="25" r="3" fill="none" stroke="#2aaa5a" stroke-width="1"/>
+        <circle cx="57" cy="25" r="3" fill="none" stroke="#2aaa5a" stroke-width="1"/>
+        <circle cx="68" cy="25" r="3" fill="none" stroke="#2aaa5a" stroke-width="1"/>
+        <rect x="36" y="38" width="42" height="14" rx="2" fill="#0a3a20" stroke="#2aaa5a" stroke-width="1"/>
+        <circle cx="46" cy="45" r="3" fill="none" stroke="#2aaa5a" stroke-width="1"/>
+        <circle cx="57" cy="45" r="3" fill="none" stroke="#2aaa5a" stroke-width="1"/>
+        <circle cx="68" cy="45" r="3" fill="none" stroke="#2aaa5a" stroke-width="1"/>
+        <rect x="36" y="58" width="42" height="14" rx="2" fill="#0a3a20" stroke="#2aaa5a" stroke-width="1"/>
+        <rect x="36" y="78" width="42" height="14" rx="2" fill="#0a3a20" stroke="#2aaa5a" stroke-width="1"/>
+
+        <!-- U-scale rail LEFT -->
+        <rect x="82" y="14" width="30" height="82" rx="1" fill="#1a1a20" stroke="#333" stroke-width="1"/>
+        <text x="97" y="62" fill="#555" font-size="7" text-anchor="middle" transform="rotate(-90,97,62)">U  SCALE  RAIL</text>
+        <!-- Holes -->
+        <rect x="88" y="20" width="8" height="6" rx="1" fill="#111" stroke="#333" stroke-width="1"/>
+        <rect x="88" y="34" width="8" height="6" rx="1" fill="#111" stroke="#333" stroke-width="1"/>
+        <rect x="88" y="48" width="8" height="6" rx="1" fill="#111" stroke="#333" stroke-width="1"/>
+        <rect x="88" y="62" width="8" height="6" rx="1" fill="#111" stroke="#333" stroke-width="1"/>
+        <rect x="88" y="76" width="8" height="6" rx="1" fill="#111" stroke="#333" stroke-width="1"/>
+
+        <!-- EQUIPMENT CENTER -->
+        <rect x="112" y="14" width="476" height="82" fill="#0d0e10"/>
+        <!-- Switch -->
+        <rect x="116" y="18" width="468" height="24" rx="2" fill="#152030" stroke="#204060" stroke-width="1"/>
+        <text x="350" y="34" fill="#3a80bf" font-size="9" text-anchor="middle">24-PORT SWITCH  ●●●●●●●●●●●●</text>
+        <!-- Server -->
+        <rect x="116" y="46" width="468" height="24" rx="2" fill="#201a10" stroke="#604020" stroke-width="1"/>
+        <text x="350" y="62" fill="#bf9a40" font-size="9" text-anchor="middle">1U SERVER    [PSU1]  [PSU2]</text>
+        <!-- Power cable from server PSU to PDU left -->
+        <path d="M 116 58 Q 100 58 97 70" stroke="#ff6622" stroke-width="2" fill="none" stroke-dasharray="3,2"/>
+        <path d="M 584 58 Q 600 58 603 70" stroke="#3399ff" stroke-width="2" fill="none" stroke-dasharray="3,2"/>
+
+        <!-- U-scale rail RIGHT -->
+        <rect x="588" y="14" width="30" height="82" rx="1" fill="#1a1a20" stroke="#333" stroke-width="1"/>
+        <text x="603" y="62" fill="#555" font-size="7" text-anchor="middle" transform="rotate(-90,603,62)">U  SCALE  RAIL</text>
+        <rect x="594" y="20" width="8" height="6" rx="1" fill="#111" stroke="#333" stroke-width="1"/>
+        <rect x="594" y="34" width="8" height="6" rx="1" fill="#111" stroke="#333" stroke-width="1"/>
+        <rect x="594" y="48" width="8" height="6" rx="1" fill="#111" stroke="#333" stroke-width="1"/>
+        <rect x="594" y="62" width="8" height="6" rx="1" fill="#111" stroke="#333" stroke-width="1"/>
+        <rect x="594" y="76" width="8" height="6" rx="1" fill="#111" stroke="#333" stroke-width="1"/>
+
+        <!-- PDU zone RIGHT -->
+        <rect x="618" y="14" width="50" height="82" rx="2" fill="#0d2b1a" stroke="#1a6a3a" stroke-width="1.5"/>
+        <text x="643" y="48" fill="#2aaa5a" font-size="7" text-anchor="middle">PDU</text>
+        <text x="643" y="59" fill="#2aaa5a" font-size="7" text-anchor="middle">ZONE</text>
+        <rect x="622" y="18" width="42" height="14" rx="2" fill="#0a3a20" stroke="#2aaa5a" stroke-width="1"/>
+        <circle cx="632" cy="25" r="3" fill="none" stroke="#2aaa5a" stroke-width="1"/>
+        <circle cx="643" cy="25" r="3" fill="none" stroke="#2aaa5a" stroke-width="1"/>
+        <circle cx="654" cy="25" r="3" fill="none" stroke="#2aaa5a" stroke-width="1"/>
+        <rect x="622" y="38" width="42" height="14" rx="2" fill="#0a3a20" stroke="#2aaa5a" stroke-width="1"/>
+        <circle cx="632" cy="45" r="3" fill="none" stroke="#2aaa5a" stroke-width="1"/>
+        <circle cx="643" cy="45" r="3" fill="none" stroke="#2aaa5a" stroke-width="1"/>
+        <circle cx="654" cy="45" r="3" fill="none" stroke="#2aaa5a" stroke-width="1"/>
+        <rect x="622" y="58" width="42" height="14" rx="2" fill="#0a3a20" stroke="#2aaa5a" stroke-width="1"/>
+        <rect x="622" y="78" width="42" height="14" rx="2" fill="#0a3a20" stroke="#2aaa5a" stroke-width="1"/>
+
+        <!-- Cable tray RIGHT -->
+        <rect x="668" y="14" width="28" height="82" rx="2" fill="#141418" stroke="#2a2a30" stroke-width="1"/>
+        <text x="682" y="62" fill="#444" font-size="8" text-anchor="middle" transform="rotate(-90,682,62)">CABLE TRAY</text>
+
+        <!-- Width annotations -->
+        <line x1="32" y1="100" x2="82" y2="100" stroke="#2aaa5a" stroke-width="1" stroke-dasharray="2,2"/>
+        <text x="57" y="108" fill="#2aaa5a" font-size="7" text-anchor="middle">auto-fit px</text>
+        <line x1="618" y1="100" x2="668" y2="100" stroke="#2aaa5a" stroke-width="1" stroke-dasharray="2,2"/>
+        <text x="643" y="108" fill="#2aaa5a" font-size="7" text-anchor="middle">auto-fit px</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SECTION 2: DRAG SOURCES ===== -->
+<div class="section">
+  <h3>2 · Two ways to add a vertical PDU</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">From catalog panel (drag)</div>
+      <div class="mockup-body" style="padding:12px">
+        <svg viewBox="0 0 180 200" width="100%" style="display:block">
+          <rect x="0" y="0" width="180" height="200" fill="#111" rx="4"/>
+          <!-- Catalog header -->
+          <rect x="0" y="0" width="180" height="28" fill="#1a1a24" rx="4"/>
+          <text x="12" y="19" fill="#888" font-size="9">Device Catalog</text>
+          <!-- Category: Vertical PDU (NEW) -->
+          <rect x="4" y="34" width="172" height="22" rx="3" fill="#0d2b1a" stroke="#1a6a3a" stroke-width="1"/>
+          <text x="12" y="49" fill="#2aaa5a" font-size="8">▼  Vertical PDU</text>
+          <!-- PDU items -->
+          <rect x="8" y="60" width="164" height="28" rx="3" fill="#141a14" stroke="#1a4a2a" stroke-width="1"/>
+          <text x="14" y="72" fill="#aaa" font-size="8">APC AP8858  (0U, C13×20)</text>
+          <text x="14" y="83" fill="#555" font-size="7">Drag → rack side wall</text>
+          <rect x="8" y="94" width="164" height="28" rx="3" fill="#141a14" stroke="#1a4a2a" stroke-width="1"/>
+          <text x="14" y="106" fill="#aaa" font-size="8">APC AP8868  (0U, C19×24)</text>
+          <text x="14" y="117" fill="#555" font-size="7">Drag → rack side wall</text>
+          <rect x="8" y="128" width="164" height="28" rx="3" fill="#141a14" stroke="#1a4a2a" stroke-width="1"/>
+          <text x="14" y="140" fill="#aaa" font-size="8">Vertiv VPDU  (0U, IS6538×16)</text>
+          <text x="14" y="151" fill="#555" font-size="7">Indian std. 5-pin sockets</text>
+          <!-- Drag arrow -->
+          <path d="M 160 108 L 174 108" stroke="#2aaa5a" stroke-width="1.5" marker-end="url(#arr)" fill="none"/>
+          <defs><marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#2aaa5a"/></marker></defs>
+        </svg>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">Side wall "+" handle (click)</div>
+      <div class="mockup-body" style="padding:12px">
+        <svg viewBox="0 0 180 200" width="100%" style="display:block">
+          <rect x="0" y="0" width="180" height="200" fill="#111" rx="4"/>
+          <!-- Rack outline -->
+          <rect x="30" y="10" width="120" height="180" rx="4" fill="#1a1a20" stroke="#333" stroke-width="1.5"/>
+          <!-- Empty left PDU zone with + handle -->
+          <rect x="4" y="10" width="26" height="180" rx="3" fill="#0a1a10" stroke="#1a5a2a" stroke-width="1.5" stroke-dasharray="4,3"/>
+          <circle cx="17" cy="100" r="10" fill="#0d3a1a" stroke="#2aaa5a" stroke-width="1.5"/>
+          <text x="17" y="104" fill="#2aaa5a" font-size="13" text-anchor="middle" font-weight="bold">+</text>
+          <text x="17" y="170" fill="#1a6a3a" font-size="6" text-anchor="middle" transform="rotate(-90,17,170)">click to add PDU</text>
+          <!-- PDU picker popup -->
+          <rect x="32" y="60" width="130" height="100" rx="4" fill="#0d1a10" stroke="#2aaa5a" stroke-width="1.5"/>
+          <text x="97" y="76" fill="#2aaa5a" font-size="8" text-anchor="middle">Choose PDU Model</text>
+          <rect x="38" y="82" width="118" height="18" rx="2" fill="#141a14" stroke="#2a4a2a" stroke-width="1"/>
+          <text x="50" y="95" fill="#aaa" font-size="7">APC AP8858  C13×20</text>
+          <rect x="38" y="104" width="118" height="18" rx="2" fill="#141a14" stroke="#2a4a2a" stroke-width="1"/>
+          <text x="50" y="117" fill="#aaa" font-size="7">APC AP8868  C19×24</text>
+          <rect x="38" y="126" width="118" height="18" rx="2" fill="#141a14" stroke="#2a4a2a" stroke-width="1"/>
+          <text x="50" y="139" fill="#aaa" font-size="7">Vertiv IS6538×16 (India)</text>
+          <!-- Right empty zone -->
+          <rect x="150" y="10" width="26" height="180" rx="3" fill="#0a1a10" stroke="#1a5a2a" stroke-width="1.5" stroke-dasharray="4,3"/>
+          <circle cx="163" cy="100" r="10" fill="#0d3a1a" stroke="#2aaa5a" stroke-width="1.5"/>
+          <text x="163" y="104" fill="#2aaa5a" font-size="13" text-anchor="middle" font-weight="bold">+</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SECTION 3: PLUG TYPES ===== -->
+<div class="section">
+  <h3>3 · Power outlet sub-categories</h3>
+  <div class="mockup">
+    <div class="mockup-header">Socket types — configurable per PDU</div>
+    <div class="mockup-body" style="padding:16px">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+
+        <div style="background:#141a14;border:1px solid #2a4a2a;border-radius:6px;padding:10px">
+          <div style="color:#2aaa5a;font-size:10px;font-weight:bold;margin-bottom:6px">IEC INTERNATIONAL</div>
+          <div style="color:#aaa;font-size:9px;line-height:1.8">
+            🔌 C13 — 10A input (most common)<br>
+            🔌 C19 — 16A input (high-density)<br>
+            🔌 C15 — 10A, high-temp<br>
+            🔌 C5 — 3-pin clover (laptop PSU)
+          </div>
+        </div>
+
+        <div style="background:#1a1410;border:1px solid #4a3010;border-radius:6px;padding:10px">
+          <div style="color:#bf9a40;font-size:10px;font-weight:bold;margin-bottom:6px">NORTH AMERICA (NEMA)</div>
+          <div style="color:#aaa;font-size:9px;line-height:1.8">
+            🔌 NEMA 5-15 — 15A 120V standard<br>
+            🔌 NEMA 5-20 — 20A 120V<br>
+            🔌 NEMA L5-30 — 30A twist-lock<br>
+            🔌 NEMA L6-20 — 20A 240V
+          </div>
+        </div>
+
+        <div style="background:#14141a;border:1px solid #2a2a4a;border-radius:6px;padding:10px">
+          <div style="color:#6a8abf;font-size:10px;font-weight:bold;margin-bottom:6px">UK / EUROPE</div>
+          <div style="color:#aaa;font-size:9px;line-height:1.8">
+            🔌 BS 1363 — UK 3-pin 13A<br>
+            🔌 Schuko CEE 7/4 — EU 16A<br>
+            🔌 BS EN 60309 — IEC 309 industrial
+          </div>
+        </div>
+
+        <div style="background:#1a1018;border:1px solid #4a1a3a;border-radius:6px;padding:10px">
+          <div style="color:#bf6aaa;font-size:10px;font-weight:bold;margin-bottom:6px">INDIA (IS 6538 / BIS)</div>
+          <div style="color:#aaa;font-size:9px;line-height:1.8">
+            🔌 IS 6538 Type D — 5A 3-round-pin<br>
+            🔌 IS 6538 Type M — 15A 3-round-pin<br>
+            🔌 IS 1293 — 6A 2+E / 16A 2+E<br>
+            🔌 C13 also widely used in India DCs
+          </div>
+        </div>
+
+        <div style="background:#141814;border:1px solid #2a3a1a;border-radius:6px;padding:10px">
+          <div style="color:#8abf5a;font-size:10px;font-weight:bold;margin-bottom:6px">POWER CABLE COLORS</div>
+          <div style="color:#aaa;font-size:9px;line-height:1.8">
+            🔴 Red — primary feed (A-side)<br>
+            🔵 Blue — redundant feed (B-side)<br>
+            ⚫ Black — standard power<br>
+            🟠 Orange — critical/UPS-backed
+          </div>
+        </div>
+
+        <div style="background:#101418;border:1px solid #1a2a3a;border-radius:6px;padding:10px">
+          <div style="color:#5aaaff;font-size:10px;font-weight:bold;margin-bottom:6px">PDU CATALOG ENTRIES</div>
+          <div style="color:#aaa;font-size:9px;line-height:1.8">
+            APC AP8858 (C13×20)<br>
+            APC AP8868 (C19×24)<br>
+            APC AP8853 (C13×16+C19×2)<br>
+            Vertiv MPH2 (IS6538×16)<br>
+            Legrand NEMA (5-15×24)<br>
+            <span style="color:#555">+ custom configurable</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SECTION 4: POWER CABLES ===== -->
+<div class="section">
+  <h3>4 · Power cable routing (device PSU → PDU outlet)</h3>
+  <div class="mockup">
+    <div class="mockup-header">Cable connection flow</div>
+    <div class="mockup-body" style="padding:12px">
+      <svg viewBox="0 0 500 160" width="100%" style="display:block">
+        <!-- PDU left -->
+        <rect x="0" y="10" width="44" height="140" rx="3" fill="#0d2b1a" stroke="#2aaa5a" stroke-width="1.5"/>
+        <text x="22" y="85" fill="#2aaa5a" font-size="7" text-anchor="middle" transform="rotate(-90,22,85)">LEFT PDU  (A-feed)</text>
+        <!-- Outlets left -->
+        <rect x="4" y="15" width="36" height="14" rx="2" fill="#0a3a20" stroke="#3aaa6a" stroke-width="1"/>
+        <text x="22" y="26" fill="#3aaa6a" font-size="7" text-anchor="middle">C13 #1</text>
+        <rect x="4" y="34" width="36" height="14" rx="2" fill="#0a3a20" stroke="#3aaa6a" stroke-width="1"/>
+        <text x="22" y="45" fill="#3aaa6a" font-size="7" text-anchor="middle">C13 #2</text>
+        <rect x="4" y="53" width="36" height="14" rx="2" fill="#0a3a20" stroke="#3aaa6a" stroke-width="1"/>
+        <text x="22" y="64" fill="#3aaa6a" font-size="7" text-anchor="middle">C13 #3  ●</text>
+        <rect x="4" y="72" width="36" height="14" rx="2" fill="#133a22" stroke="#3aaa6a" stroke-width="1.5"/>
+        <text x="22" y="83" fill="#5afa9a" font-size="7" text-anchor="middle">C13 #4  ●</text>
+        <rect x="4" y="91" width="36" height="14" rx="2" fill="#0a3a20" stroke="#3aaa6a" stroke-width="1"/>
+        <text x="22" y="102" fill="#3aaa6a" font-size="7" text-anchor="middle">C19 #1</text>
+        <!-- Power cables from left PDU to devices -->
+        <path d="M 40 60 Q 80 60 80 52" stroke="#ff4422" stroke-width="2.5" fill="none"/>
+        <path d="M 40 79 Q 80 79 80 82" stroke="#ff6633" stroke-width="2.5" fill="none"/>
+
+        <!-- U rail left -->
+        <rect x="50" y="10" width="14" height="140" rx="1" fill="#1a1a20" stroke="#333" stroke-width="1"/>
+
+        <!-- Equipment zone -->
+        <rect x="64" y="10" width="372" height="140" fill="#0d0e10"/>
+        <!-- Switch -->
+        <rect x="68" y="18" width="364" height="28" rx="2" fill="#152030" stroke="#204060" stroke-width="1"/>
+        <text x="250" y="30" fill="#3a80bf" font-size="9" text-anchor="middle">24-PORT SWITCH  (no PSU — LEDs off)</text>
+        <text x="250" y="42" fill="#555" font-size="7" text-anchor="middle">no cable connected → LEDs dark</text>
+        <!-- Server 1 (single PSU connected to Left PDU) -->
+        <rect x="68" y="50" width="364" height="28" rx="2" fill="#201a10" stroke="#604020" stroke-width="1"/>
+        <text x="200" y="63" fill="#bf9a40" font-size="9" text-anchor="middle">1U SERVER A</text>
+        <rect x="388" y="54" width="40" height="20" rx="2" fill="#2a1a10" stroke="#aa5522" stroke-width="1"/>
+        <text x="408" y="68" fill="#ff8844" font-size="7" text-anchor="middle">PSU1</text>
+        <!-- Server 2 (dual PSU, both connected = HA) -->
+        <rect x="68" y="82" width="364" height="28" rx="2" fill="#201a10" stroke="#604020" stroke-width="1"/>
+        <text x="200" y="96" fill="#bf9a40" font-size="9" text-anchor="middle">1U SERVER B  (HA — dual PSU)</text>
+        <rect x="348" y="86" width="40" height="20" rx="2" fill="#2a1a10" stroke="#aa5522" stroke-width="1"/>
+        <text x="368" y="100" fill="#ff8844" font-size="7" text-anchor="middle">PSU1</text>
+        <rect x="392" y="86" width="40" height="20" rx="2" fill="#1a1a2a" stroke="#2255aa" stroke-width="1"/>
+        <text x="412" y="100" fill="#88aaff" font-size="7" text-anchor="middle">PSU2</text>
+        <!-- Power cables to right PDU (blue = B-feed) -->
+        <path d="M 432 96 Q 455 96 455 79" stroke="#3399ff" stroke-width="2.5" fill="none"/>
+
+        <!-- U rail right -->
+        <rect x="436" y="10" width="14" height="140" rx="1" fill="#1a1a20" stroke="#333" stroke-width="1"/>
+
+        <!-- PDU right -->
+        <rect x="450" y="10" width="44" height="140" rx="3" fill="#0d1a2b" stroke="#2a5aaa" stroke-width="1.5"/>
+        <text x="472" y="85" fill="#5a8aff" font-size="7" text-anchor="middle" transform="rotate(-90,472,85)">RIGHT PDU  (B-feed)</text>
+        <rect x="454" y="15" width="36" height="14" rx="2" fill="#0a2040" stroke="#3a6aaa" stroke-width="1"/>
+        <text x="472" y="26" fill="#5aaaff" font-size="7" text-anchor="middle">C13 #1</text>
+        <rect x="454" y="34" width="36" height="14" rx="2" fill="#0a2040" stroke="#3a6aaa" stroke-width="1"/>
+        <text x="472" y="45" fill="#5aaaff" font-size="7" text-anchor="middle">C13 #2</text>
+        <rect x="454" y="53" width="36" height="14" rx="2" fill="#0a2040" stroke="#3a6aaa" stroke-width="1"/>
+        <text x="472" y="64" fill="#5aaaff" font-size="7" text-anchor="middle">C13 #3</text>
+        <rect x="454" y="72" width="36" height="14" rx="2" fill="#132040" stroke="#3a6aaa" stroke-width="1.5"/>
+        <text x="472" y="83" fill="#88ccff" font-size="7" text-anchor="middle">C13 #4  ●</text>
+        <rect x="454" y="91" width="36" height="14" rx="2" fill="#0a2040" stroke="#3a6aaa" stroke-width="1"/>
+        <text x="472" y="102" fill="#5aaaff" font-size="7" text-anchor="middle">C19 #1</text>
+
+        <!-- Legend -->
+        <line x1="68" y1="120" x2="90" y2="120" stroke="#ff4422" stroke-width="2.5"/>
+        <text x="94" y="124" fill="#ff6644" font-size="7">Red = A-feed (Left PDU)</text>
+        <line x1="68" y1="135" x2="90" y2="135" stroke="#3399ff" stroke-width="2.5"/>
+        <text x="94" y="139" fill="#6699ff" font-size="7">Blue = B-feed (Right PDU)</text>
+        <circle cx="270" cy="121" r="4" fill="#3aaa6a"/>
+        <text x="278" y="124" fill="#3aaa6a" font-size="7">● outlet in use</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SECTION 5: LED FIX ===== -->
+<div class="section">
+  <h3>5 · Switch LED fix — blink only when port connected</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Before (current — fake pattern)</div>
+      <div class="mockup-body" style="padding:12px;background:#0d0e10">
+        <svg viewBox="0 0 260 60" width="100%" style="display:block">
+          <rect x="0" y="0" width="260" height="60" rx="3" fill="#1a2535" stroke="#2a4a6a" stroke-width="1.5"/>
+          <text x="10" y="14" fill="#3a70af" font-size="7">24-PORT SWITCH — no cables connected</text>
+          <!-- Port row with fake blink pattern every 3rd port off -->
+          <g transform="translate(8,20)">
+            <!-- ports -->
+            <rect x="0" y="0" width="18" height="24" rx="2" fill="#111" stroke="#333" stroke-width="1"/>
+            <circle cx="5" cy="6" r="2" fill="#39ff8a"/>
+            <circle cx="13" cy="6" r="2" fill="#39ff8a" opacity="0.3" class="blink"/>
+            <rect x="20" y="0" width="18" height="24" rx="2" fill="#111" stroke="#333" stroke-width="1"/>
+            <circle cx="25" cy="6" r="2" fill="#39ff8a"/>
+            <circle cx="33" cy="6" r="2" fill="#39ff8a" opacity="0.3"/>
+            <rect x="40" y="0" width="18" height="24" rx="2" fill="#111" stroke="#333" stroke-width="1"/>
+            <circle cx="45" cy="6" r="2" fill="#20262b"/>
+            <circle cx="53" cy="6" r="2" fill="#20262b"/>
+            <rect x="60" y="0" width="18" height="24" rx="2" fill="#111" stroke="#333" stroke-width="1"/>
+            <circle cx="65" cy="6" r="2" fill="#39ff8a"/>
+            <circle cx="73" cy="6" r="2" fill="#39ff8a" opacity="0.3"/>
+            <rect x="80" y="0" width="18" height="24" rx="2" fill="#111" stroke="#333" stroke-width="1"/>
+            <circle cx="85" cy="6" r="2" fill="#39ff8a"/>
+            <circle cx="93" cy="6" r="2" fill="#39ff8a" opacity="0.3"/>
+            <rect x="100" y="0" width="18" height="24" rx="2" fill="#111" stroke="#333" stroke-width="1"/>
+            <circle cx="105" cy="6" r="2" fill="#20262b"/>
+            <circle cx="113" cy="6" r="2" fill="#20262b"/>
+          </g>
+          <text x="10" y="55" fill="#aa3333" font-size="7">✗ LEDs lit even with no cables — n%3 pattern is fake</text>
+        </svg>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">After (real cable state)</div>
+      <div class="mockup-body" style="padding:12px;background:#0d0e10">
+        <svg viewBox="0 0 260 60" width="100%" style="display:block">
+          <rect x="0" y="0" width="260" height="60" rx="3" fill="#1a2535" stroke="#2a4a6a" stroke-width="1.5"/>
+          <text x="10" y="14" fill="#3a70af" font-size="7">24-PORT SWITCH — ports 1,2,4 connected</text>
+          <g transform="translate(8,20)">
+            <!-- Port 1: connected → green link + blink activity -->
+            <rect x="0" y="0" width="18" height="24" rx="2" fill="#111" stroke="#333" stroke-width="1"/>
+            <circle cx="5" cy="6" r="2" fill="#39ff8a"/>
+            <circle cx="13" cy="6" r="2" fill="#39ff8a" opacity="0.5"/>
+            <!-- Port 2: connected -->
+            <rect x="20" y="0" width="18" height="24" rx="2" fill="#111" stroke="#333" stroke-width="1"/>
+            <circle cx="25" cy="6" r="2" fill="#39ff8a"/>
+            <circle cx="33" cy="6" r="2" fill="#39ff8a" opacity="0.5"/>
+            <!-- Port 3: NOT connected → dark -->
+            <rect x="40" y="0" width="18" height="24" rx="2" fill="#111" stroke="#333" stroke-width="1"/>
+            <circle cx="45" cy="6" r="2" fill="#20262b"/>
+            <circle cx="53" cy="6" r="2" fill="#20262b"/>
+            <!-- Port 4: connected -->
+            <rect x="60" y="0" width="18" height="24" rx="2" fill="#111" stroke="#333" stroke-width="1"/>
+            <circle cx="65" cy="6" r="2" fill="#39ff8a"/>
+            <circle cx="73" cy="6" r="2" fill="#39ff8a" opacity="0.5"/>
+            <!-- Port 5: NOT connected → dark -->
+            <rect x="80" y="0" width="18" height="24" rx="2" fill="#111" stroke="#333" stroke-width="1"/>
+            <circle cx="85" cy="6" r="2" fill="#20262b"/>
+            <circle cx="93" cy="6" r="2" fill="#20262b"/>
+            <!-- Port 6: NOT connected → dark -->
+            <rect x="100" y="0" width="18" height="24" rx="2" fill="#111" stroke="#333" stroke-width="1"/>
+            <circle cx="105" cy="6" r="2" fill="#20262b"/>
+            <circle cx="113" cy="6" r="2" fill="#20262b"/>
+          </g>
+          <text x="10" y="55" fill="#2aaa5a" font-size="7">✓ LEDs reflect real cable connections from state</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="background:#0d1a10;border:1px solid #1a4a2a;border-radius:8px;padding:16px;margin-top:8px">
+  <h3 style="margin:0 0 8px;color:#2aaa5a">Does this design match what you want?</h3>
+  <p style="margin:0;color:#888;font-size:13px">
+    Review all 5 sections above — anatomy, drag sources, plug types, power cables, and LED fix. Let me know in the terminal if anything needs adjusting before we write the spec.
+  </p>
+</div>

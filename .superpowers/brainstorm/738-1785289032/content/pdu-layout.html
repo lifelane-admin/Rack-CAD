@@ -1,0 +1,131 @@
+<h2>PDU Side-Wall Layout — Rack Cross-Section</h2>
+<p class="subtitle">Where should the vertical PDU strip sit relative to the rack anatomy? Pick the layout that matches the reference image.</p>
+
+<div class="cards" style="gap:32px;flex-wrap:nowrap;align-items:flex-start">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)" style="flex:1;min-width:220px">
+    <div class="card-image" style="background:#111;padding:16px">
+      <svg viewBox="0 0 260 380" width="100%" style="display:block">
+        <!-- Outer frame -->
+        <rect x="0" y="0" width="260" height="380" rx="6" fill="#2a2a2e" stroke="#444" stroke-width="2"/>
+        <!-- Cable channel left -->
+        <rect x="4" y="4" width="22" height="372" rx="2" fill="#1a1a1f" stroke="#333" stroke-width="1"/>
+        <text x="15" y="195" fill="#555" font-size="7" text-anchor="middle" transform="rotate(-90,15,195)">CABLE</text>
+        <!-- PDU left (NEW ZONE) -->
+        <rect x="26" y="4" width="28" height="372" rx="2" fill="#1a3a2a" stroke="#2a6a4a" stroke-width="1.5"/>
+        <text x="40" y="195" fill="#2a8a5a" font-size="7" text-anchor="middle" transform="rotate(-90,40,195)">PDU ZONE</text>
+        <!-- IEC outlets on PDU left -->
+        <rect x="29" y="20" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="29" y="42" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="29" y="64" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="29" y="86" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="29" y="108" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="29" y="130" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="29" y="152" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="29" y="174" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="29" y="196" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="29" y="218" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="29" y="240" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="29" y="262" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <!-- U-scale left rail -->
+        <rect x="54" y="4" width="18" height="372" rx="1" fill="#222228" stroke="#3a3a44" stroke-width="1"/>
+        <text x="63" y="195" fill="#556" font-size="6" text-anchor="middle" transform="rotate(-90,63,195)">1  2  3  4  5  6  7  8  9 10 11 12</text>
+        <!-- Equipment area -->
+        <rect x="72" y="4" width="116" height="372" fill="#0d0e10"/>
+        <!-- Equipment examples -->
+        <rect x="74" y="12" width="112" height="26" rx="2" fill="#1e2830" stroke="#2a3a50" stroke-width="1"/>
+        <text x="130" y="29" fill="#4a8abf" font-size="8" text-anchor="middle">24-PORT SWITCH</text>
+        <rect x="74" y="46" width="112" height="26" rx="2" fill="#1e2830" stroke="#2a3a50" stroke-width="1"/>
+        <text x="130" y="63" fill="#4a8abf" font-size="8" text-anchor="middle">PATCH PANEL</text>
+        <rect x="74" y="80" width="112" height="26" rx="2" fill="#282018" stroke="#504020" stroke-width="1"/>
+        <text x="130" y="97" fill="#bf9a4a" font-size="8" text-anchor="middle">1U SERVER</text>
+        <rect x="74" y="114" width="112" height="52" rx="2" fill="#282018" stroke="#504020" stroke-width="1"/>
+        <text x="130" y="144" fill="#bf9a4a" font-size="8" text-anchor="middle">2U SERVER</text>
+        <!-- U-scale right rail -->
+        <rect x="188" y="4" width="18" height="372" rx="1" fill="#222228" stroke="#3a3a44" stroke-width="1"/>
+        <!-- PDU right (NEW ZONE) -->
+        <rect x="206" y="4" width="28" height="372" rx="2" fill="#1a3a2a" stroke="#2a6a4a" stroke-width="1.5"/>
+        <rect x="209" y="20" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="209" y="42" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="209" y="64" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="209" y="86" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="209" y="108" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="209" y="130" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="209" y="152" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="209" y="174" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="209" y="196" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="209" y="218" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="209" y="240" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="209" y="262" width="22" height="12" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <!-- Cable channel right -->
+        <rect x="234" y="4" width="22" height="372" rx="2" fill="#1a1a1f" stroke="#333" stroke-width="1"/>
+        <!-- Labels at bottom -->
+        <text x="15" y="370" fill="#444" font-size="5.5" text-anchor="middle">CABLE</text>
+        <text x="40" y="370" fill="#2a8a5a" font-size="5.5" text-anchor="middle">PDU</text>
+        <text x="63" y="370" fill="#444" font-size="5.5" text-anchor="middle">U-RAIL</text>
+        <text x="130" y="370" fill="#444" font-size="5.5" text-anchor="middle">EQUIPMENT</text>
+        <text x="197" y="370" fill="#444" font-size="5.5" text-anchor="middle">U-RAIL</text>
+        <text x="220" y="370" fill="#2a8a5a" font-size="5.5" text-anchor="middle">PDU</text>
+        <text x="245" y="370" fill="#444" font-size="5.5" text-anchor="middle">CABLE</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>A — Expanded Rack (Recommended)</h3>
+      <p>Rack canvas grows wider. New PDU zone strips sit between cable channel and U-scale rail — exactly like the reference image. Rack total width increases by ~56px (28px each side). PDU slots are dedicated drop targets; 1 PDU per side.</p>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)" style="flex:1;min-width:220px">
+    <div class="card-image" style="background:#111;padding:16px">
+      <svg viewBox="0 0 220 380" width="100%" style="display:block">
+        <!-- Outer frame (same width as today) -->
+        <rect x="0" y="0" width="220" height="380" rx="6" fill="#2a2a2e" stroke="#444" stroke-width="2"/>
+        <!-- U-scale left rail -->
+        <rect x="4" y="4" width="22" height="372" rx="1" fill="#222228" stroke="#3a3a44" stroke-width="1"/>
+        <text x="15" y="195" fill="#556" font-size="6" text-anchor="middle" transform="rotate(-90,15,195)">1  2  3  4  5  6  7  8  9 10</text>
+        <!-- PDU overlaid on left rail (same-width rack) -->
+        <rect x="4" y="4" width="22" height="372" rx="1" fill="#1a3a2a" stroke="#2a6a4a" stroke-width="1.5" opacity="0.85"/>
+        <rect x="6" y="20" width="18" height="10" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="6" y="40" width="18" height="10" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="6" y="60" width="18" height="10" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="6" y="80" width="18" height="10" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="6" y="100" width="18" height="10" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="6" y="120" width="18" height="10" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <text x="15" y="300" fill="#2a8a5a" font-size="6" text-anchor="middle" transform="rotate(-90,15,300)">PDU OVERLAY</text>
+        <!-- Equipment area -->
+        <rect x="26" y="4" width="168" height="372" fill="#0d0e10"/>
+        <rect x="28" y="12" width="164" height="26" rx="2" fill="#1e2830" stroke="#2a3a50" stroke-width="1"/>
+        <text x="110" y="29" fill="#4a8abf" font-size="8" text-anchor="middle">24-PORT SWITCH</text>
+        <rect x="28" y="46" width="164" height="26" rx="2" fill="#282018" stroke="#504020" stroke-width="1"/>
+        <text x="110" y="63" fill="#bf9a4a" font-size="8" text-anchor="middle">1U SERVER</text>
+        <!-- U-scale right rail -->
+        <rect x="194" y="4" width="22" height="372" rx="1" fill="#222228" stroke="#3a3a44" stroke-width="1"/>
+        <rect x="194" y="4" width="22" height="372" rx="1" fill="#1a3a2a" stroke="#2a6a4a" stroke-width="1.5" opacity="0.85"/>
+        <rect x="196" y="20" width="18" height="10" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="196" y="40" width="18" height="10" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="196" y="60" width="18" height="10" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="196" y="80" width="18" height="10" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="196" y="100" width="18" height="10" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <rect x="196" y="120" width="18" height="10" rx="2" fill="#1e4a33" stroke="#3aaa6a" stroke-width="1"/>
+        <!-- Warning label -->
+        <rect x="55" y="170" width="110" height="40" rx="4" fill="#2a1a1a" stroke="#aa3333" stroke-width="1"/>
+        <text x="110" y="187" fill="#ff6666" font-size="7" text-anchor="middle">⚠ U-scale numbers</text>
+        <text x="110" y="200" fill="#ff6666" font-size="7" text-anchor="middle">hidden behind PDU</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>B — PDU overlays on existing rails</h3>
+      <p>Same rack width. PDU visually overlays the U-scale rail when present. Simpler change but U-number labels are hidden when PDU is installed. Less accurate to real-world layout.</p>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:24px;background:#1a1a20;border-radius:8px;padding:16px">
+  <h3 style="margin:0 0 8px">Reference image anatomy</h3>
+  <p style="margin:0;font-size:13px;color:#aaa">
+    In the photo: <strong>outer door → inner cable tray (red/blue cables) → PDU strip (APC vertical, IEC outlets inward) → U-number rail (square hole pattern) → equipment mounting zone</strong>. Option A matches this exactly. The PDU sits in its own vertical strip, cables route from equipment ports directly into the nearest PDU outlet.
+  </p>
+</div>

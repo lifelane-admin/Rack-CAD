@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Switch Rendering v3 — Standardised Height</title>
+<style>
+  body { background:#0d1117; margin:0; padding:24px; font-family:system-ui,sans-serif; color:#ccc; }
+  h2 { color:#e6edf3; font-size:18px; margin-bottom:4px; }
+  .subtitle { color:#8b949e; font-size:13px; margin-bottom:20px; margin-top:4px; }
+  .label { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; margin-top:24px; }
+  .rack { background:linear-gradient(to right,#12121a,#1a1a24,#12121a); border:1.5px solid #2a2a3a; border-radius:6px; padding:16px 20px; margin-bottom:20px; }
+  svg { display:block; }
+</style>
+</head>
+<body>
+<h2>Switch Panel v3 — Standardised Port Height</h2>
+<p class="subtitle">Same chassis height and port size across all variants. Port numbers centered under each port. Per-port LEDs above each port.</p>
+
+<!-- ===== SHARED CONSTANTS ===== -->
+<script>
+// All dimensions in SVG pixels
+const C = {
+  svgW: 780,
+  svgH: 88,          // same for all variants
+
+  // Chassis
+  chY: 2,
+  chH: 64,           // chassis ends at y=66
+
+  // Port geometry (standard — based on 48p sizing)
+  portW: 18,
+  portH: 15,
+  portGap: 3,
+  portPitch: 21,     // portW + portGap
+
+  // LED bar above each port
+  ledH: 2.5,
+  ledGapAbovePort: 2,  // gap between LED bottom and port top
+
+  // Status block right edge
+  statusEnd: 48,
+
+  // Right panel start (after SFP+ cages)
+  sfpW: 36,
+  sfpGap: 4,
+  sfpPitch: 40,
+
+  // Label rows (below chassis)
+  labelRow1: 74,    // top port / single-row number
+  labelRow2: 83,    // bottom port number (48p only)
+};
+
+// Derived
+C.portStartX = C.statusEnd;
+C.ledY   = p => p - C.ledH - C.ledGapAbovePort;   // LED top-y given port top-y
+C.cavX   = 2;
+C.cavY   = p => p + 2;
+C.cavW   = C.portW - 4;
+C.cavH   = C.portH - 4;
+
+// Colours
+const LED_ON  = (op) => `fill="#00c853" opacity="${op}"`;
+const LED_OFF = (op) => `fill="#1a3a1a" opacity="${op}"`;
+
+function defs(id) {
+  return `<defs>
+  <linearGradient id="ch-${id}" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%"   stop-color="#2e3038"/>
+    <stop offset="20%"  stop-color="#23252d"/>
+    <stop offset="50%"  stop-color="#1e2028"/>
+    <stop offset="80%"  stop-color="#23252d"/>
+    <stop offset="100%" stop-color="#1a1c22"/>
+  </linearGradient>
+  <linearGradient id="pv-${id}" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%"   stop-color="#06080c"/>
+    <stop offset="100%" stop-color="#10121a"/>
+  </linearGradient>
+  <linearGradient id="pb-${id}" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%"   stop-color="#42465a"/>
+    <stop offset="100%" stop-color="#1e2028"/>
+  </linearGradient>
+  <linearGradient id="sf-${id}" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%"   stop-color="#353840"/>
+    <stop offset="100%" stop-color="#1c1e26"/>
+  </linearGradient>
+  <filter id="sh-${id}"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.7"/></filter>
+</defs>`;
+}
+
+function chassis(id) {
+  const bot = C.chY + C.chH;
+  return `
+  <rect x="0" y="${C.chY-1}" width="${C.svgW}" height="${C.chH+2}" rx="3" fill="#000" opacity="0.35" filter="url(#sh-${id})"/>
+  <rect x="0" y="${C.chY}" width="${C.svgW}" height="${C.chH}" rx="3" fill="url(#ch-${id})" stroke="#111" stroke-width="1"/>
+  <rect x="0" y="${C.chY}" width="${C.svgW}" height="2.5" rx="2" fill="#3a3d48" opacity="0.55"/>
+  <rect x="0" y="${bot-2}" width="${C.svgW}" height="2.5" rx="2" fill="#0d0e12" opacity="0.7"/>`;
+}
+
+function statusBlock() {
+  return `
+  <circle cx="18" cy="18" r="3.2" fill="#00c853" filter="drop-shadow(0 0 3px #00c853)"/>
+  <text x="25" y="21.5" fill="#555" font-size="6" font-family="monospace">SYS</text>
+  <circle cx="18" cy="31" r="3.2" fill="#00c853" filter="drop-shadow(0 0 2px #00c853)"/>
+  <text x="25" y="34.5" fill="#555" font-size="6" font-family="monospace">PWR</text>
+  <rect x="10" y="41" width="30" height="8" rx="2" fill="#181a22" stroke="#2e3140" stroke-width="0.7"/>
+  <text x="25" y="47.5" fill="#444" font-size="5.5" font-family="monospace" text-anchor="middle">MODE</text>
+  <rect x="10" y="53" width="15" height="10" rx="1.5" fill="url(#pv-s)" stroke="#35383f" stroke-width="0.7"/>
+  <text x="17.5" y="60" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">CON</text>
+  <line x1="${C.statusEnd}" y1="6" x2="${C.statusEnd}" y2="${C.chY+C.chH-6}" stroke="#282838" stroke-width="1"/>`;
+}
+
+// Single RJ45 port at absolute (ax, portTopY), label at labelY, LED on/off ratio
+function rj45(id, ax, portTopY, labelY, label, ledOn) {
+  const led  = C.ledY(portTopY);
+  const cx   = ax + C.portW/2;
+  const ledFill = ledOn ? `fill="#00c853" opacity="${0.6+Math.random()*0.35}"` : `fill="#1a3a1a" opacity="0.45"`;
+  return `
+  <rect x="${ax+1}" y="${led}" width="${C.portW-2}" height="${C.ledH}" rx="1" ${ledFill}/>
+  <rect x="${ax}" y="${portTopY}" width="${C.portW}" height="${C.portH}" rx="1.5" fill="url(#pb-${id})" stroke="#111" stroke-width="0.5"/>
+  <rect x="${ax+2}" y="${portTopY+2}" width="${C.portW-4}" height="${C.portH-4}" rx="1" fill="url(#pv-${id})"/>
+  <rect x="${ax+4}" y="${portTopY+C.portH-5}" width="3" height="3" rx="0.4" fill="#1e2a40"/>
+  <rect x="${ax+7.5}" y="${portTopY+C.portH-5}" width="3" height="3" rx="0.4" fill="#1e2a40"/>
+  <rect x="${ax+11}" y="${portTopY+C.portH-5}" width="3" height="3" rx="0.4" fill="#1e2a40"/>
+  <text x="${cx}" y="${labelY}" fill="#4a5060" font-size="6" font-family="monospace" text-anchor="middle">${label}</text>`;
+}
+
+// SFP+ cage at absolute ax
+function sfp(id, ax, label, hasModule, ledOn) {
+  const cageY = C.chY + 4;
+  const cageH = C.chH - 8;
+  const ledFill = ledOn ? `fill="#00c853" opacity="0.9"` : `fill="#1a3a1a" opacity="0.4"`;
+  const inner = hasModule
+    ? `<rect x="${ax+4}" y="${cageY+4}" width="${C.sfpW-8}" height="${cageH-8}" rx="1" fill="#141822" stroke="#1e2430" stroke-width="0.5"/>
+       <rect x="${ax+7}" y="${cageY+cageH-12}" width="${C.sfpW-14}" height="4" rx="0.5" fill="#1a2e42"/>
+       <circle cx="${ax+C.sfpW-8}" cy="${cageY+cageH/2}" r="3.5" fill="#08101a" stroke="#0a1828" stroke-width="0.5"/>
+       <circle cx="${ax+C.sfpW-8}" cy="${cageY+cageH/2}" r="1.5" fill="#002244"/>`
+    : '';
+  return `
+  <rect x="${ax}" y="${cageY}" width="${C.sfpW}" height="${cageH}" rx="2" fill="url(#sf-${id})" stroke="#1a1c24" stroke-width="0.8"/>
+  <rect x="${ax+2}" y="${cageY+2}" width="${C.sfpW-4}" height="${cageH-4}" rx="1.5" fill="${hasModule?'#06080c':'#04060a'}"/>
+  ${inner}
+  <rect x="${ax+1}" y="${C.chY+1}" width="${C.sfpW-2}" height="2.5" rx="1" ${ledFill}/>
+  <text x="${ax+C.sfpW/2}" y="${C.labelRow1}" fill="#4a5060" font-size="6" font-family="monospace" text-anchor="middle">${label}</text>
+  <text x="${ax+C.sfpW/2}" y="${C.labelRow2}" fill="#383e4a" font-size="5" font-family="monospace" text-anchor="middle">SFP+</text>`;
+}
+
+function ventSlots(startX) {
+  let out = '';
+  for (let x = startX; x < C.svgW-2; x += 6) {
+    out += `<rect x="${x}" y="${C.chY+6}" width="3" height="${C.chH-12}" rx="1" fill="#1a1c22" opacity="0.85"/>`;
+  }
+  return out;
+}
+
+function modelLabel(x, line1, line2) {
+  const cx = (x + C.svgW) / 2;
+  return `
+  <text x="${cx}" y="${C.chY+22}" fill="#3a3e4a" font-size="8" font-family="monospace" text-anchor="middle" font-weight="bold">${line1}</text>
+  <text x="${cx}" y="${C.chY+34}" fill="#2e3240" font-size="6.5" font-family="monospace" text-anchor="middle">${line2}</text>`;
+}
+
+function divider(x) {
+  return `<line x1="${x}" y1="${C.chY+4}" x2="${x}" y2="${C.chY+C.chH-4}" stroke="#28283a" stroke-width="1"/>`;
+}
+
+// ==============================
+// Build 24-port switch SVG
+// Single row, ports vertically centred in chassis
+// ==============================
+function build24() {
+  const ns = 'http://www.w3.org/2000/svg';
+  const portTopY = C.chY + Math.round((C.chH - C.portH) / 2);  // vertically centred
+  const nPorts = 24;
+  const sfpCount = 4;
+
+  let ports = '';
+  for (let i = 0; i < nPorts; i++) {
+    const ax = C.portStartX + i * C.portPitch;
+    const ledOn = Math.random() > 0.3;
+    ports += rj45('24', ax, portTopY, C.labelRow1, String(i+1), ledOn);
+  }
+
+  const sfpStartX = C.portStartX + nPorts * C.portPitch + 6;
+  let sfpPorts = '';
+  for (let i = 0; i < sfpCount; i++) {
+    const ax = sfpStartX + i * C.sfpPitch;
+    const hasModule = i === 0 || i === 2;
+    sfpPorts += sfp('24', ax, String(nPorts+i+1), hasModule, hasModule);
+  }
+
+  const ventStart = sfpStartX + sfpCount * C.sfpPitch + 6;
+  const labelX = ventStart - 2;
+
+  return `<svg width="${C.svgW}" height="${C.svgH}" viewBox="0 0 ${C.svgW} ${C.svgH}" xmlns="http://www.w3.org/2000/svg">
+  ${defs('24').replace(/url\(#pv\)/g,"url(#pv-24)").replace(/url\(#pb\)/g,"url(#pb-24)")}
+  <defs><linearGradient id="pv-s" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#06080c"/><stop offset="100%" stop-color="#10121a"/></linearGradient></defs>
+  ${chassis('24')}
+  ${statusBlock()}
+  ${divider(sfpStartX-4)}
+  ${ports}
+  ${sfpPorts}
+  ${ventSlots(ventStart)}
+  ${modelLabel(labelX, '24G+4SFP+', 'GIGABIT SWITCH')}
+</svg>`;
+}
+
+// ==============================
+// Build 48-port switch SVG
+// Paired columns: odd top, even bottom
+// ==============================
+function build48() {
+  const nPairs = 24;
+  const sfpCount = 4;
+
+  // Top row: 4px from chassis top (after LED)
+  // LED height=2.5, gap=2 → port starts at chY+4+2.5+2 = chY+8.5
+  const topPortY = C.chY + 10;
+  // Bottom row: topPortY + portH + ledGap*2 + ledH + gap
+  const botPortY = topPortY + C.portH + 3 + C.ledH + C.ledGapAbovePort;
+
+  let ports = '';
+  for (let i = 0; i < nPairs; i++) {
+    const ax = C.portStartX + i * C.portPitch;
+    const topNum  = 2*i+1;
+    const botNum  = 2*i+2;
+    const topOn   = Math.random() > 0.25;
+    const botOn   = Math.random() > 0.25;
+    ports += rj45('48', ax, topPortY, C.labelRow1, String(topNum), topOn);
+    ports += rj45('48', ax, botPortY, C.labelRow2, String(botNum), botOn);
+  }
+
+  const sfpStartX = C.portStartX + nPairs * C.portPitch + 6;
+  let sfpPorts = '';
+  for (let i = 0; i < sfpCount; i++) {
+    const ax = sfpStartX + i * C.sfpPitch;
+    const hasModule = i === 0 || i === 2;
+    sfpPorts += sfp('48', ax, String(nPairs*2+i+1), hasModule, hasModule);
+  }
+
+  const ventStart = sfpStartX + sfpCount * C.sfpPitch + 6;
+
+  return `<svg width="${C.svgW}" height="${C.svgH}" viewBox="0 0 ${C.svgW} ${C.svgH}" xmlns="http://www.w3.org/2000/svg">
+  ${defs('48').replace(/url\(#pv\)/g,"url(#pv-48)").replace(/url\(#pb\)/g,"url(#pb-48)")}
+  <defs><linearGradient id="pv-s" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#06080c"/><stop offset="100%" stop-color="#10121a"/></linearGradient></defs>
+  ${chassis('48')}
+  ${statusBlock()}
+  ${divider(sfpStartX-4)}
+  ${ports}
+  ${sfpPorts}
+  ${ventSlots(ventStart)}
+  ${modelLabel(ventStart-2, '48G+4SFP+', 'GIGABIT SWITCH')}
+</svg>`;
+}
+</script>
+
+<div class="label">24-Port Gigabit + 4×SFP+ (1U) — ports 1–24 left to right, single centred row</div>
+<div class="rack" id="rack24"></div>
+
+<div class="label">48-Port Gigabit + 4×SFP+ (1U) — paired columns, odd top (1,3,5…47) / even bottom (2,4,6…48)</div>
+<div class="rack" id="rack48"></div>
+
+<script>
+  document.getElementById('rack24').innerHTML = build24();
+  document.getElementById('rack48').innerHTML = build48();
+</script>
+
+<div style="margin-top:16px;color:#8b949e;font-size:13px;">
+  <strong style="color:#e6edf3">Standardised:</strong>
+  Both switches use identical port height (${C.portH}px), chassis height (${C.chH}px), same LED style (bar above each port, green=active, dim=down), same SVG canvas (780×${C.svgH}). Port numbers centered under their own port. Reply in terminal to confirm or request adjustments.
+</div>
+</body>
+</html>

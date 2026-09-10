@@ -1,0 +1,133 @@
+<h2>Console Section at True 1U Scale (H = 30px)</h2>
+<p class="subtitle">The JSX console section is 250px wide × 132px tall. At 1U (30px tall) it compresses to ~¼ scale. How much detail fits?</p>
+
+<div class="options" style="margin-top:24px;">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Full JSX console section (compressed)</h3>
+      <p>All elements from the reference: 4 status LEDs (PWR/SYS/ALM/LOC), brand wordmark, model text, USB-C icon, console RJ45 port, reset button. Very dense at 30px but pixel-for-pixel faithful.</p>
+      <div style="margin-top:12px; background:#0a0c0f; padding:16px; border-radius:6px;">
+        <p style="font-size:11px;color:#7b838a;margin-bottom:8px;">True 1U scale — 30px tall:</p>
+        <svg viewBox="0 0 350 30" width="100%" style="display:block;">
+          <defs>
+            <linearGradient id="ca-chassis" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#3a4046"/><stop offset="0.5" stop-color="#23282c"/><stop offset="1" stop-color="#141719"/>
+            </linearGradient>
+            <linearGradient id="ca-blade" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#2a3035"/><stop offset="0.55" stop-color="#454d53"/><stop offset="1" stop-color="#1a1e21"/>
+            </linearGradient>
+            <linearGradient id="ca-gold" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#f6d98a"/><stop offset="0.5" stop-color="#c9a24b"/><stop offset="1" stop-color="#7d6021"/>
+            </linearGradient>
+          </defs>
+          <!-- blade left (~20px for 24-port) -->
+          <rect x="0" y="0" width="20" height="30" rx="1.5" fill="url(#ca-blade)" stroke="#0c0f11" stroke-width="0.6"/>
+          <rect x="8" y="5" width="6" height="9" rx="3" fill="#0a0c0e" stroke="#525a61" stroke-width="0.6"/>
+          <rect x="8" y="17" width="6" height="9" rx="3" fill="#0a0c0e" stroke="#525a61" stroke-width="0.6"/>
+          <rect x="17.5" y="2" width="1.5" height="26" fill="#4c545b" opacity="0.5"/>
+          <!-- chassis -->
+          <rect x="20" y="1" width="310" height="28" rx="2" fill="url(#ca-chassis)" stroke="#0c0f11" stroke-width="0.8"/>
+          <rect x="20" y="2" width="310" height="1.5" rx="0.5" fill="#454b51" opacity="0.5"/>
+          <!-- blade right -->
+          <rect x="330" y="0" width="20" height="30" rx="1.5" fill="url(#ca-blade)" stroke="#0c0f11" stroke-width="0.6"/>
+          <rect x="322" y="5" width="6" height="9" rx="3" fill="#0a0c0e" stroke="#525a61" stroke-width="0.6"/>
+          <rect x="322" y="17" width="6" height="9" rx="3" fill="#0a0c0e" stroke="#525a61" stroke-width="0.6"/>
+          <rect x="330.5" y="2" width="1.5" height="26" fill="#4c545b" opacity="0.5"/>
+          <!-- console zone: 4 LEDs stacked -->
+          <circle cx="27" cy="6" r="1.6" fill="#39ff8a"/>
+          <text x="31" y="8.5" font-size="3.5" fill="#aeb6bd" font-family="sans-serif">PWR</text>
+          <circle cx="27" cy="12" r="1.6" fill="#39ff8a" opacity="0.4"/>
+          <text x="31" y="14.5" font-size="3.5" fill="#aeb6bd" font-family="sans-serif">SYS</text>
+          <circle cx="27" cy="18" r="1.6" fill="#1a1a1a"/>
+          <text x="31" y="20.5" font-size="3.5" fill="#aeb6bd" font-family="sans-serif">ALM</text>
+          <circle cx="27" cy="24" r="1.6" fill="#37b6ff" opacity="0.7"/>
+          <text x="31" y="26.5" font-size="3.5" fill="#aeb6bd" font-family="sans-serif">LOC</text>
+          <!-- brand wordmark (tiny) -->
+          <text x="50" y="11" font-size="4.5" font-weight="700" fill="#37b6ff" letter-spacing="0.8" font-family="sans-serif">RACK SLICER</text>
+          <text x="50" y="17" font-size="2.5" fill="#8b939a" letter-spacing="0.5" font-family="sans-serif">RS-SG2424</text>
+          <rect x="50" y="19" width="30" height="0.4" fill="#3a4147"/>
+          <text x="50" y="22.5" font-size="2" fill="#5b636a" letter-spacing="0.5" font-family="sans-serif">24×RJ45 + 4×SFP • 1U</text>
+          <!-- USB-C icon (tiny rect) -->
+          <rect x="84" y="17" width="6" height="2.5" rx="1.2" fill="#0a0d0f" stroke="#3a4147" stroke-width="0.4"/>
+          <text x="87" y="22.5" font-size="2" text-anchor="middle" fill="#7b838a" font-family="sans-serif">USB</text>
+          <!-- console RJ45 (mini) -->
+          <rect x="93" y="16" width="7" height="5" rx="0.5" fill="#0c0e10" stroke="#05070a" stroke-width="0.4"/>
+          <rect x="94" y="17.5" width="5" height="2.5" rx="0.3" fill="#111417"/>
+          <rect x="94.5" y="17.5" width="0.7" height="1.5" fill="url(#ca-gold)" rx="0.1"/>
+          <rect x="96" y="17.5" width="0.7" height="1.5" fill="url(#ca-gold)" rx="0.1"/>
+          <rect x="97.5" y="17.5" width="0.7" height="1.5" fill="url(#ca-gold)" rx="0.1"/>
+          <rect x="99" y="17.5" width="0.7" height="1.5" fill="url(#ca-gold)" rx="0.1"/>
+          <text x="96" y="24" font-size="2" text-anchor="middle" fill="#7b838a" font-family="sans-serif">CON</text>
+          <!-- reset button (circle, barely visible) -->
+          <circle cx="104" cy="20" r="1" fill="#0a0d0f" stroke="#3a4147" stroke-width="0.3"/>
+          <!-- separator -->
+          <line x1="108" y1="3" x2="108" y2="27" stroke="#3a4147" stroke-width="0.6" opacity="0.5"/>
+          <!-- abbreviated ports area -->
+          <text x="215" y="18" font-size="6" fill="#444" text-anchor="middle" font-family="monospace">← RJ45 stacked pairs →</text>
+        </svg>
+        <p style="font-size:11px;color:#5b636a;margin-top:8px;">All elements present but very dense — brand text is 4.5px, LEDs are 1.6px radius.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Simplified console — 3 LEDs + brand only</h3>
+      <p>Keep 3 status LEDs (PWR, SYS, LOC), a small brand text strip, and one console RJ45 port. Drop USB-C and reset button — they're invisible at 30px. More readable, still captures the industrial look.</p>
+      <div style="margin-top:12px; background:#0a0c0f; padding:16px; border-radius:6px;">
+        <p style="font-size:11px;color:#7b838a;margin-bottom:8px;">True 1U scale — 30px tall:</p>
+        <svg viewBox="0 0 350 30" width="100%" style="display:block;">
+          <defs>
+            <linearGradient id="cb-chassis" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#3a4046"/><stop offset="0.5" stop-color="#23282c"/><stop offset="1" stop-color="#141719"/>
+            </linearGradient>
+            <linearGradient id="cb-blade" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#2a3035"/><stop offset="0.55" stop-color="#454d53"/><stop offset="1" stop-color="#1a1e21"/>
+            </linearGradient>
+            <linearGradient id="cb-gold" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#f6d98a"/><stop offset="0.5" stop-color="#c9a24b"/><stop offset="1" stop-color="#7d6021"/>
+            </linearGradient>
+          </defs>
+          <!-- blade left -->
+          <rect x="0" y="0" width="20" height="30" rx="1.5" fill="url(#cb-blade)" stroke="#0c0f11" stroke-width="0.6"/>
+          <rect x="8" y="5" width="6" height="9" rx="3" fill="#0a0c0e" stroke="#525a61" stroke-width="0.6"/>
+          <rect x="8" y="17" width="6" height="9" rx="3" fill="#0a0c0e" stroke="#525a61" stroke-width="0.6"/>
+          <rect x="17.5" y="2" width="1.5" height="26" fill="#4c545b" opacity="0.5"/>
+          <!-- chassis -->
+          <rect x="20" y="1" width="310" height="28" rx="2" fill="url(#cb-chassis)" stroke="#0c0f11" stroke-width="0.8"/>
+          <rect x="20" y="2" width="310" height="1.5" rx="0.5" fill="#454b51" opacity="0.5"/>
+          <!-- blade right -->
+          <rect x="330" y="0" width="20" height="30" rx="1.5" fill="url(#cb-blade)" stroke="#0c0f11" stroke-width="0.6"/>
+          <rect x="322" y="5" width="6" height="9" rx="3" fill="#0a0c0e" stroke="#525a61" stroke-width="0.6"/>
+          <rect x="322" y="17" width="6" height="9" rx="3" fill="#0a0c0e" stroke="#525a61" stroke-width="0.6"/>
+          <rect x="330.5" y="2" width="1.5" height="26" fill="#4c545b" opacity="0.5"/>
+          <!-- console zone: 3 LEDs -->
+          <circle cx="26" cy="8" r="2" fill="#39ff8a" filter="drop-shadow(0 0 1px #39ff8a)"/>
+          <text x="30" y="10.5" font-size="3.8" fill="#aeb6bd" font-family="sans-serif">PWR</text>
+          <circle cx="26" cy="16" r="2" fill="#39ff8a" opacity="0.4"/>
+          <text x="30" y="18.5" font-size="3.8" fill="#aeb6bd" font-family="sans-serif">SYS</text>
+          <circle cx="26" cy="24" r="2" fill="#37b6ff" opacity="0.7"/>
+          <text x="30" y="26.5" font-size="3.8" fill="#aeb6bd" font-family="sans-serif">LOC</text>
+          <!-- brand wordmark + console RJ45 -->
+          <text x="52" y="13" font-size="5.5" font-weight="700" fill="#37b6ff" letter-spacing="1" font-family="sans-serif">RackCAD</text>
+          <rect x="52" y="17" width="7" height="5" rx="0.6" fill="#0c0e10" stroke="#2a2f34" stroke-width="0.4"/>
+          <rect x="53" y="18.3" width="5" height="2.5" rx="0.3" fill="#111417"/>
+          <rect x="53.5" y="18.3" width="0.7" height="1.5" fill="url(#cb-gold)" rx="0.1"/>
+          <rect x="55" y="18.3" width="0.7" height="1.5" fill="url(#cb-gold)" rx="0.1"/>
+          <rect x="56.5" y="18.3" width="0.7" height="1.5" fill="url(#cb-gold)" rx="0.1"/>
+          <rect x="58" y="18.3" width="0.7" height="1.5" fill="url(#cb-gold)" rx="0.1"/>
+          <text x="55" y="25" font-size="3" text-anchor="middle" fill="#7b838a" font-family="sans-serif">CON</text>
+          <!-- separator -->
+          <line x1="73" y1="3" x2="73" y2="27" stroke="#3a4147" stroke-width="0.6" opacity="0.5"/>
+          <!-- ports area -->
+          <text x="200" y="18" font-size="6" fill="#444" text-anchor="middle" font-family="monospace">← RJ45 stacked pairs →</text>
+        </svg>
+        <p style="font-size:11px;color:#5b636a;margin-top:8px;">3 LEDs at 2px radius, 5.5px brand text, 7×5px console RJ45. Clean and readable.</p>
+      </div>
+    </div>
+  </div>
+
+</div>

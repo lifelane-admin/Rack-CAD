@@ -1,0 +1,334 @@
+<h2>Cloud Tools — Where Do They Live?</h2>
+<p class="subtitle">In Cloud / Hybrid view, where should cloud-specific drawing tools appear?</p>
+
+<style>
+  .opt-card {
+    border: 2px solid #1e293b; border-radius: 8px;
+    overflow: hidden; margin-bottom: 20px;
+    cursor: pointer; transition: border-color .15s;
+    background: #0b0f1a;
+  }
+  .opt-card:hover { border-color: #334155; }
+  .opt-card.selected { border-color: #38bdf8; box-shadow: 0 0 0 1px #38bdf8; }
+  .opt-label {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px; background: #1e293b;
+    font-size: 11px; font-weight: 600; letter-spacing: .8px;
+    text-transform: uppercase; color: #64748b;
+  }
+  .opt-label.selected-label { color: #38bdf8; }
+  .opt-letter {
+    width: 20px; height: 20px; border-radius: 4px;
+    background: #0f172a; border: 1px solid #334155;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #94a3b8; flex-shrink: 0;
+  }
+  .opt-card.selected .opt-letter { background: rgba(56,189,248,.15); border-color: #38bdf8; color: #38bdf8; }
+  .check { display: none; color: #38bdf8; }
+  .opt-card.selected .check { display: inline; }
+
+  .view-row {
+    display: flex; gap: 1px; background: #1e293b;
+  }
+  .view-col {
+    flex: 1; background: #080b12; padding: 12px 14px;
+  }
+  .view-title {
+    font-size: 9px; font-weight: 700; color: #334155;
+    letter-spacing: .8px; text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* toolbar strip */
+  .tb {
+    height: 44px; background: #090c12;
+    border-bottom: 1px solid #1e293b;
+    display: flex; align-items: center; padding: 0 10px; gap: 0;
+  }
+  .tb-tools { display: flex; gap: 3px; margin-right: 10px; }
+  .tb-tool {
+    width: 26px; height: 26px; border-radius: 5px;
+    border: 1px solid transparent;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tb-tool.active { background: rgba(56,189,248,.12); border-color: #38bdf8; }
+  .tb-tool.cloud { border-color: #7c3aed; background: rgba(124,58,237,.1); }
+  .tb-sep { width: 1px; height: 24px; background: #1e293b; margin: 0 8px; }
+  .tb-menus { display: flex; align-items: center; gap: 1px; }
+  .tb-menu {
+    padding: 4px 8px; font-size: 11px; font-weight: 500;
+    color: #94a3b8; border-radius: 4px; white-space: nowrap;
+    display: flex; align-items: center; gap: 3px;
+  }
+  .tb-menu .caret { font-size: 7px; opacity: .5; }
+  .tb-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .tb-ai { padding: 3px 8px; font-size: 10px; font-weight: 600; color: #475569; border: 1px solid #1e293b; border-radius: 4px; }
+
+  /* floating toolbar */
+  .float-tb {
+    display: inline-flex; align-items: center; gap: 3px;
+    background: rgba(9,12,18,.92); border: 1px solid #1e293b;
+    border-radius: 8px; padding: 4px 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    margin-top: 8px;
+  }
+  .float-tool {
+    width: 24px; height: 24px; border-radius: 4px;
+    border: 1px solid transparent;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .float-tool.active { background: rgba(56,189,248,.12); border-color: #38bdf8; }
+  .float-tool.cloud { border-color: #7c3aed; background: rgba(124,58,237,.1); }
+  .float-sep { width: 1px; height: 18px; background: #1e293b; margin: 0 2px; }
+  .float-zoom { font-size: 9px; color: #475569; padding: 0 4px; }
+
+  /* badge */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 6px; font-size: 9px; font-weight: 600;
+    letter-spacing: .5px; border-radius: 3px;
+    text-transform: uppercase;
+  }
+  .badge.rack { background: rgba(56,189,248,.1); color: #38bdf8; border: 1px solid rgba(56,189,248,.2); }
+  .badge.cloud { background: rgba(124,58,237,.1); color: #a78bfa; border: 1px solid rgba(124,58,237,.2); }
+  .badge.hybrid { background: rgba(52,211,153,.08); color: #34d399; border: 1px solid rgba(52,211,153,.2); }
+
+  .note {
+    font-size: 10px; color: #475569; margin-top: 8px;
+    padding: 6px 8px; background: #080b12; border-left: 2px solid #1e293b; border-radius: 2px;
+  }
+
+  svg { display: block; }
+</style>
+
+<svg style="display:none">
+  <defs>
+    <symbol id="ic-cursor" viewBox="0 0 24 24"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" fill="currentColor" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="ic-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 00-2-2 2 2 0 00-2 2v5m0-5V5a2 2 0 00-2-2 2 2 0 00-2 2v8m0-8V7a2 2 0 00-2-2 2 2 0 00-2 2v6m0-5V9a2 2 0 00-2-2 2 2 0 00-2 2v10a7 7 0 0014 0v-8"/></symbol>
+    <symbol id="ic-cable" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M12 9v4M6 15v-2h12v2"/></symbol>
+    <symbol id="ic-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2v4M15 2v4"/><path d="M7 6h10v4a5 5 0 01-10 0V6z"/><path d="M12 15v7"/></symbol>
+    <symbol id="ic-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M12 5v14M9 19h6"/></symbol>
+    <symbol id="ic-box" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></symbol>
+    <symbol id="ic-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></symbol>
+    <symbol id="ic-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></symbol>
+    <symbol id="ic-zoom" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/></symbol>
+  </defs>
+</svg>
+
+<script>
+  function pick(el) {
+    document.querySelectorAll('.opt-card').forEach(c => {
+      c.classList.remove('selected');
+      c.querySelector('.opt-label').classList.remove('selected-label');
+    });
+    el.classList.add('selected');
+    el.querySelector('.opt-label').classList.add('selected-label');
+  }
+</script>
+
+<!-- ══════════════ OPTION A ══════════════ -->
+<div class="opt-card" onclick="pick(this)">
+  <div class="opt-label">
+    <div class="opt-letter">A</div>
+    Floating toolbar adapts per view — rack tools swap for cloud tools
+    <span class="check">✓</span>
+  </div>
+
+  <div style="padding: 14px 16px;">
+    <div style="display:flex; gap: 24px; flex-wrap: wrap;">
+
+      <!-- Rack view -->
+      <div>
+        <div style="margin-bottom:6px;"><span class="badge rack">Rack View</span></div>
+        <div class="float-tb">
+          <div class="float-tool active">
+            <svg width="11" height="11"><use href="#ic-cursor" color="#38bdf8"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-hand" color="#475569"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-cable" color="#475569"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-power" color="#475569"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-text" color="#475569"/></svg>
+          </div>
+          <div class="float-sep"></div>
+          <div class="float-zoom">100%</div>
+        </div>
+        <div class="note">5 rack tools</div>
+      </div>
+
+      <!-- Cloud view -->
+      <div>
+        <div style="margin-bottom:6px;"><span class="badge cloud">Cloud View</span></div>
+        <div class="float-tb">
+          <div class="float-tool active">
+            <svg width="11" height="11"><use href="#ic-cursor" color="#38bdf8"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-hand" color="#475569"/></svg>
+          </div>
+          <div class="float-sep"></div>
+          <div class="float-tool cloud">
+            <svg width="11" height="11"><use href="#ic-box" color="#a78bfa"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-link" color="#475569"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-cloud" color="#475569"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-text" color="#475569"/></svg>
+          </div>
+          <div class="float-sep"></div>
+          <div class="float-zoom">100%</div>
+        </div>
+        <div class="note">Select + Pan + cloud-specific tools</div>
+      </div>
+
+      <!-- Hybrid view -->
+      <div>
+        <div style="margin-bottom:6px;"><span class="badge hybrid">Hybrid View</span></div>
+        <div style="display:flex; gap:8px; flex-direction:column;">
+          <div>
+            <div style="font-size:9px;color:#334155;margin-bottom:3px;">Left pane (rack)</div>
+            <div class="float-tb" style="display:inline-flex;">
+              <div class="float-tool active"><svg width="11" height="11"><use href="#ic-cursor" color="#38bdf8"/></svg></div>
+              <div class="float-tool"><svg width="11" height="11"><use href="#ic-hand" color="#475569"/></svg></div>
+              <div class="float-tool"><svg width="11" height="11"><use href="#ic-cable" color="#475569"/></svg></div>
+              <div class="float-sep"></div>
+              <div class="float-zoom">100%</div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:9px;color:#334155;margin-bottom:3px;">Right pane (cloud)</div>
+            <div class="float-tb" style="display:inline-flex;">
+              <div class="float-tool active"><svg width="11" height="11"><use href="#ic-cursor" color="#38bdf8"/></svg></div>
+              <div class="float-tool"><svg width="11" height="11"><use href="#ic-hand" color="#475569"/></svg></div>
+              <div class="float-tool cloud"><svg width="11" height="11"><use href="#ic-box" color="#a78bfa"/></svg></div>
+              <div class="float-sep"></div>
+              <div class="float-zoom">100%</div>
+            </div>
+          </div>
+        </div>
+        <div class="note">Two independent floating toolbars, one per pane</div>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:12px;">Top toolbar tool strip stays fixed (Select/Pan only in cloud mode); full toolset lives in the floating toolbar. Clean separation.</div>
+  </div>
+</div>
+
+<!-- ══════════════ OPTION B ══════════════ -->
+<div class="opt-card" onclick="pick(this)">
+  <div class="opt-label">
+    <div class="opt-letter">B</div>
+    Top toolbar expands — cloud tool icons appear in the strip when in cloud/hybrid
+    <span class="check">✓</span>
+  </div>
+
+  <div style="padding: 14px 16px;">
+    <div style="display:flex; gap: 24px; flex-direction:column;">
+
+      <!-- Rack view toolbar -->
+      <div>
+        <div style="margin-bottom:6px;"><span class="badge rack">Rack View — top toolbar</span></div>
+        <div class="tb" style="border-radius:5px;">
+          <div class="tb-tools">
+            <div class="tb-tool active"><svg width="11" height="11"><use href="#ic-cursor" color="#38bdf8"/></svg></div>
+            <div class="tb-tool"><svg width="11" height="11"><use href="#ic-hand" color="#475569"/></svg></div>
+            <div class="tb-tool"><svg width="11" height="11"><use href="#ic-cable" color="#475569"/></svg></div>
+            <div class="tb-tool"><svg width="11" height="11"><use href="#ic-power" color="#475569"/></svg></div>
+            <div class="tb-tool"><svg width="11" height="11"><use href="#ic-text" color="#475569"/></svg></div>
+          </div>
+          <div class="tb-sep"></div>
+          <div class="tb-menus">
+            <div class="tb-menu">File <span class="caret">▾</span></div>
+            <div class="tb-menu">Edit <span class="caret">▾</span></div>
+            <div class="tb-menu">View <span class="caret">▾</span></div>
+            <div class="tb-menu">Export <span class="caret">▾</span></div>
+          </div>
+          <div class="tb-right"><div class="tb-ai">⚙ Rules</div></div>
+        </div>
+      </div>
+
+      <!-- Cloud view toolbar -->
+      <div>
+        <div style="margin-bottom:6px;"><span class="badge cloud">Cloud View — top toolbar (expands)</span></div>
+        <div class="tb" style="border-radius:5px;">
+          <div class="tb-tools">
+            <div class="tb-tool active"><svg width="11" height="11"><use href="#ic-cursor" color="#38bdf8"/></svg></div>
+            <div class="tb-tool"><svg width="11" height="11"><use href="#ic-hand" color="#475569"/></svg></div>
+            <div class="tb-sep" style="margin:0 4px;"></div>
+            <!-- Cloud tools slide in -->
+            <div class="tb-tool cloud"><svg width="11" height="11"><use href="#ic-box" color="#a78bfa"/></svg></div>
+            <div class="tb-tool"><svg width="11" height="11"><use href="#ic-link" color="#475569"/></svg></div>
+            <div class="tb-tool"><svg width="11" height="11"><use href="#ic-cloud" color="#475569"/></svg></div>
+            <div class="tb-tool"><svg width="11" height="11"><use href="#ic-text" color="#475569"/></svg></div>
+          </div>
+          <div class="tb-sep"></div>
+          <div class="tb-menus">
+            <div class="tb-menu">File <span class="caret">▾</span></div>
+            <div class="tb-menu">Edit <span class="caret">▾</span></div>
+            <div class="tb-menu">View <span class="caret">▾</span></div>
+            <div class="tb-menu">Export <span class="caret">▾</span></div>
+            <div class="tb-menu" style="color:#64748b;">Cloud <span class="caret">▾</span></div>
+          </div>
+          <div class="tb-right"><div class="tb-ai">⚙ Rules</div></div>
+        </div>
+        <div class="note" style="margin-top:6px;">Cloud tools slide in left of the separator. Same approach the current code already uses.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ OPTION C ══════════════ -->
+<div class="opt-card" onclick="pick(this)">
+  <div class="opt-label">
+    <div class="opt-letter">C</div>
+    Cloud tools only in floating toolbar — top strip is always just Select + Pan
+    <span class="check">✓</span>
+  </div>
+
+  <div style="padding: 14px 16px;">
+    <div style="display:flex; gap: 16px; flex-wrap:wrap; align-items:flex-start;">
+      <div>
+        <div style="margin-bottom:6px;"><span class="badge rack">Rack</span></div>
+        <div class="float-tb">
+          <div class="float-tool active"><svg width="11" height="11"><use href="#ic-cursor" color="#38bdf8"/></svg></div>
+          <div class="float-tool"><svg width="11" height="11"><use href="#ic-hand" color="#475569"/></svg></div>
+          <div class="float-tool"><svg width="11" height="11"><use href="#ic-cable" color="#475569"/></svg></div>
+          <div class="float-tool"><svg width="11" height="11"><use href="#ic-power" color="#475569"/></svg></div>
+          <div class="float-tool"><svg width="11" height="11"><use href="#ic-text" color="#475569"/></svg></div>
+          <div class="float-sep"></div>
+          <div class="float-zoom">100%</div>
+        </div>
+      </div>
+      <div>
+        <div style="margin-bottom:6px;"><span class="badge cloud">Cloud</span></div>
+        <div class="float-tb">
+          <div class="float-tool active"><svg width="11" height="11"><use href="#ic-cursor" color="#38bdf8"/></svg></div>
+          <div class="float-tool"><svg width="11" height="11"><use href="#ic-hand" color="#475569"/></svg></div>
+          <div class="float-sep"></div>
+          <div class="float-tool cloud"><svg width="11" height="11"><use href="#ic-box" color="#a78bfa"/></svg></div>
+          <div class="float-tool"><svg width="11" height="11"><use href="#ic-link" color="#475569"/></svg></div>
+          <div class="float-tool"><svg width="11" height="11"><use href="#ic-cloud" color="#475569"/></svg></div>
+          <div class="float-tool"><svg width="11" height="11"><use href="#ic-text" color="#475569"/></svg></div>
+          <div class="float-sep"></div>
+          <div class="float-zoom">100%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:10px;">
+      Top tool strip is always just <strong style="color:#94a3b8">Select + Pan</strong> in every view — maximum simplicity. All drawing tools live in the floating toolbar which adapts per view. Top bar stays 100% stable.
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:8px;">Click to choose A, B, or C, then reply in the terminal.</p>

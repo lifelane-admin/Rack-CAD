@@ -69,6 +69,7 @@ class StateManager {
       cloudContainers: [],
       cloudConnectors: [],
       cloudHierarchies: [],
+      activeElevationRackId: null,
     };
   }
 

@@ -1,0 +1,343 @@
+<h2>Sidebar Redesign — Pick a Direction</h2>
+<p class="subtitle">Three approaches to reorganizing the left panel. Same content, different structure and visual treatment.</p>
+
+<style>
+  .sidebar-demo {
+    display: flex;
+    flex-direction: column;
+    width: 240px;
+    height: 520px;
+    background: #0d1117;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 12px;
+    color: #e2e8f0;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ── A: Workspace Tabs ── */
+  .ws-tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: #090c12;
+    flex-shrink: 0;
+  }
+  .ws-tab {
+    flex: 1;
+    padding: 8px 4px 7px;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: #475569;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    text-transform: uppercase;
+  }
+  .ws-tab.active {
+    color: #38bdf8;
+    border-bottom-color: #38bdf8;
+    background: rgba(56,189,248,0.04);
+  }
+  .search-box {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    flex-shrink: 0;
+  }
+  .search-box input {
+    width: 100%;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 4px;
+    color: #94a3b8;
+    padding: 5px 10px;
+    font-size: 11px;
+    outline: none;
+    box-sizing: border-box;
+  }
+  .cat-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+  .cat-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+  }
+  .cat-row:hover { background: rgba(255,255,255,0.03); color: #e2e8f0; }
+  .cat-row svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+  .cat-row .cat-caret { margin-left: auto; opacity: 0.4; font-size: 9px; }
+  .cat-row .cat-badge { margin-left: auto; font-size: 9px; color: #475569; font-weight: 400; }
+  .cat-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px 5px 30px;
+    color: #64748b;
+    font-size: 11px;
+    border-left: 2px solid transparent;
+  }
+  .cat-item.accent-orange { border-left-color: #fb8c00; color: #94a3b8; }
+  .cat-item.accent-cyan { border-left-color: #00f2fe; color: #94a3b8; }
+  .cat-item.accent-red { border-left-color: #ef4444; color: #94a3b8; }
+  .cat-item.accent-yellow { border-left-color: #fdd835; color: #94a3b8; }
+  .cat-item-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.5; flex-shrink: 0; }
+  .sidebar-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    height: 44px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+  .sidebar-header-bar span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; }
+  .sidebar-header-bar button { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #475569; border-radius: 4px; padding: 3px 7px; font-size: 11px; cursor: pointer; }
+
+  /* ── B: Icon Rail ── */
+  .rail-layout { flex-direction: row !important; }
+  .icon-rail {
+    width: 40px;
+    background: #090c12;
+    border-right: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 0;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .rail-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #475569;
+    border: 1px solid transparent;
+  }
+  .rail-btn:hover { background: rgba(255,255,255,0.05); color: #94a3b8; }
+  .rail-btn.active { background: rgba(56,189,248,0.12); border-color: rgba(56,189,248,0.3); color: #38bdf8; }
+  .rail-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+  .rail-label { font-size: 7px; color: #475569; letter-spacing: 0.3px; text-transform: uppercase; margin-top: 1px; }
+  .rail-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .rail-panel-title { padding: 8px 10px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #475569; border-bottom: 1px solid rgba(255,255,255,0.05); flex-shrink: 0; }
+
+  /* ── C: Section Groups (current but cleaned) ── */
+  .section-group { border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .section-group-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 12px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: #475569;
+    cursor: pointer;
+  }
+  .section-group-title:hover { color: #94a3b8; background: rgba(255,255,255,0.02); }
+  .section-group-title svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+  .section-group.open .section-group-title { color: #94a3b8; }
+  .section-items { display: none; padding: 2px 0 4px; background: rgba(0,0,0,0.12); }
+  .section-group.open .section-items { display: block; }
+  .s-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px 5px 28px;
+    font-size: 11px;
+    color: #64748b;
+  }
+  .s-item .s-dot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; }
+
+  .options { gap: 20px; }
+  .option { padding: 0 !important; overflow: hidden; }
+  .option .content { padding: 12px 14px 14px; }
+  .option .content h3 { margin: 0 0 4px; font-size: 13px; }
+  .option .content p { margin: 0; font-size: 11px; color: #94a3b8; }
+  .option .letter { padding: 12px 14px; font-size: 15px; min-width: 48px; display: flex; align-items: flex-start; padding-top: 14px; }
+  .demo-wrapper { padding: 12px 14px 0; }
+  .pro-tag { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; margin-bottom: 6px; }
+  .pro-tag.recommended { background: rgba(56,189,248,0.12); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); }
+  .pro-tag.minimal { background: rgba(71,85,105,0.2); color: #64748b; border: 1px solid rgba(71,85,105,0.3); }
+  .pro-tag.power { background: rgba(16,185,129,0.1); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+</style>
+
+<div class="options">
+
+  <!-- Option A: Workspace Tabs -->
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content" style="padding-bottom:0">
+      <div class="pro-tag recommended">Recommended</div>
+      <h3>Workspace Tabs</h3>
+      <p>Tabs replace the nav tree. Clean, compact, familiar pattern.</p>
+      <div class="demo-wrapper">
+        <div class="sidebar-demo">
+          <div class="sidebar-header-bar"><span>Components</span><button>«</button></div>
+          <div class="ws-tabs">
+            <div class="ws-tab active">Rack</div>
+            <div class="ws-tab">Cloud</div>
+            <div class="ws-tab">Hybrid</div>
+          </div>
+          <div class="search-box"><input placeholder="Search components…" /></div>
+          <div class="cat-list">
+            <div class="cat-row">
+              <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+              Servers
+              <span class="cat-badge">12</span>
+            </div>
+            <div class="cat-item accent-orange"><div class="cat-item-dot"></div>Dell PowerEdge R750</div>
+            <div class="cat-item accent-orange"><div class="cat-item-dot"></div>HPE ProLiant DL380</div>
+            <div class="cat-row" style="margin-top:2px">
+              <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="1"/><path d="M6 11h.01M10 11h.01"/></svg>
+              Network Switches
+              <span class="cat-badge">8</span>
+            </div>
+            <div class="cat-row" style="margin-top:2px">
+              <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Firewalls
+              <span class="cat-badge">4</span>
+            </div>
+            <div class="cat-row">
+              <svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+              PDU
+              <span class="cat-badge">9</span>
+            </div>
+            <div class="cat-row">
+              <svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>
+              Cables
+              <span class="cat-badge">5</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option B: Icon Rail -->
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content" style="padding-bottom:0">
+      <div class="pro-tag power">Power User</div>
+      <h3>Icon Rail + Panel</h3>
+      <p>Narrow icon strip for workspaces. More canvas space.</p>
+      <div class="demo-wrapper">
+        <div class="sidebar-demo rail-layout">
+          <div class="icon-rail">
+            <div class="rail-btn active" title="Rack">
+              <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M2 9h20M2 15h20M6 6h.01M6 12h.01M6 18h.01"/></svg>
+            </div>
+            <div style="font-size:7px;color:#38bdf8;letter-spacing:0.3px;text-align:center;margin-top:-2px;margin-bottom:4px">RACK</div>
+            <div class="rail-btn" title="Cloud">
+              <svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+            </div>
+            <div style="font-size:7px;color:#475569;letter-spacing:0.3px;text-align:center;margin-top:-2px;margin-bottom:4px">CLOUD</div>
+            <div class="rail-btn" title="Hybrid">
+              <svg viewBox="0 0 24 24"><rect x="2" y="3" width="9" height="18" rx="1"/><rect x="13" y="3" width="9" height="18" rx="1"/></svg>
+            </div>
+            <div style="font-size:7px;color:#475569;letter-spacing:0.3px;text-align:center;margin-top:-2px">HYBRID</div>
+          </div>
+          <div class="rail-panel">
+            <div class="rail-panel-title">Rack Components</div>
+            <div class="search-box" style="padding:6px 8px"><input placeholder="Search…" /></div>
+            <div class="cat-list">
+              <div class="cat-row">
+                <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/></svg>
+                Servers <span class="cat-badge">12</span>
+              </div>
+              <div class="cat-item accent-orange"><div class="cat-item-dot"></div>Dell PowerEdge R750</div>
+              <div class="cat-item accent-orange"><div class="cat-item-dot"></div>HPE ProLiant DL380</div>
+              <div class="cat-row">
+                <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="1"/></svg>
+                Switches <span class="cat-badge">8</span>
+              </div>
+              <div class="cat-row">
+                <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Firewalls <span class="cat-badge">4</span>
+              </div>
+              <div class="cat-row">
+                <svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                PDU <span class="cat-badge">9</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option C: Grouped Sections -->
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content" style="padding-bottom:0">
+      <div class="pro-tag minimal">Minimal Change</div>
+      <h3>Cleaned Sections</h3>
+      <p>Same structure, remove emojis, add SVG icons, collapse by default.</p>
+      <div class="demo-wrapper">
+        <div class="sidebar-demo">
+          <div class="sidebar-header-bar"><span>On-Prem · Rack</span><button>«</button></div>
+          <div class="search-box"><input placeholder="Search components…" /></div>
+          <div class="cat-list" style="padding:0">
+            <div class="section-group open">
+              <div class="section-group-title">
+                <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                Servers
+                <span class="cat-badge" style="margin-left:auto">12</span>
+              </div>
+              <div class="section-items">
+                <div class="s-item"><div class="s-dot" style="background:#fb8c00"></div>Dell PowerEdge R750</div>
+                <div class="s-item"><div class="s-dot" style="background:#fb8c00"></div>HPE ProLiant DL380</div>
+              </div>
+            </div>
+            <div class="section-group">
+              <div class="section-group-title">
+                <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="1"/><path d="M6 11h.01M10 11h.01"/></svg>
+                Network Switches
+                <span class="cat-badge" style="margin-left:auto">8</span>
+              </div>
+              <div class="section-items"></div>
+            </div>
+            <div class="section-group">
+              <div class="section-group-title">
+                <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Firewalls
+                <span class="cat-badge" style="margin-left:auto">4</span>
+              </div>
+              <div class="section-items"></div>
+            </div>
+            <div class="section-group">
+              <div class="section-group-title">
+                <svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><circle cx="12" cy="20" r="1"/></svg>
+                Network Cables
+                <span class="cat-badge" style="margin-left:auto">5</span>
+              </div>
+              <div class="section-items"></div>
+            </div>
+            <div class="section-group">
+              <div class="section-group-title">
+                <svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                PDU
+                <span class="cat-badge" style="margin-left:auto">9</span>
+              </div>
+              <div class="section-items"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:20px;text-align:center">Click an option to select it, then let me know in the terminal.</p>

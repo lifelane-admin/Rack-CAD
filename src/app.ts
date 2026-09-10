@@ -4992,8 +4992,12 @@ export class App {
       rackLayer.appendChild(trayGroup);
     }
 
-    // Render racks
-    for (const rack of s.racks) {
+    // Render racks (isolated to activeElevationRackId if working on a datacenter rack)
+    const racksToRender = s.activeElevationRackId
+      ? s.racks.filter(r => r.id === s.activeElevationRackId)
+      : s.racks;
+
+    for (const rack of racksToRender) {
       let rackGroup: SVGGElement;
       try {
         rackGroup = renderRack(rack, rackLayer);

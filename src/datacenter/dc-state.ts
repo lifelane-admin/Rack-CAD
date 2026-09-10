@@ -1,9 +1,37 @@
-import { DcState, DcFloor, DcRack, DcFloorTile, DcUnit } from './types';
+import { DcState, DcFloor, DcRack, DcFloorTile, DcUnit, DcAddressFormat, DcTileType, DcAirflowDirection, DcInfrastructureItem } from './types';
 
-const STORAGE_KEY = 'dc_state_v1';
+const STORAGE_KEY = 'dc_state_v3';
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+export function getRowLabel(r: number, scheme: 'letters' | 'numbers' = 'letters'): string {
+  if (scheme === 'numbers') {
+    return String(r + 1).padStart(2, '0');
+  }
+  // Standard spreadsheet/datacenter letter sequence: A..Z, AA..AZ, etc.
+  let label = '';
+  let n = r;
+  while (n >= 0) {
+    label = String.fromCharCode(65 + (n % 26)) + label;
+    n = Math.floor(n / 26) - 1;
+  }
+  return label;
+}
+
+export function getColLabel(c: number, scheme: 'letters' | 'numbers' = 'numbers', format: DcAddressFormat = 'compact'): string {
+  if (scheme === 'letters') {
+    let label = '';
+    let n = c;
+    while (n >= 0) {
+      label = String.fromCharCode(65 + (n % 26)) + label;
+      n = Math.floor(n / 26) - 1;
+    }
+    return label;
+  }
+  // In compact format (e.g. A1, A2), 1-based without leading 0 for single digit, or 2 digits if hyphen
+  return format === 'compact' ? String(c + 1) : String(c + 1).padStart(2, '0');
 }
 
 function buildTileGrid(floor: DcFloor): DcFloorTile[] {
@@ -11,16 +39,21 @@ function buildTileGrid(floor: DcFloor): DcFloorTile[] {
   const colCount = Math.ceil(floor.lengthM / tileSizeM);
   const rowCount = Math.ceil(floor.widthM / tileSizeM);
   const tiles: DcFloorTile[] = [];
+  const rScheme = floor.rowScheme ?? 'letters';
+  const cScheme = floor.colScheme ?? 'numbers';
+  const format = floor.addressFormat ?? 'compact';
+  const separator = format === 'hyphen' ? '-' : '';
+
   for (let r = 0; r < rowCount; r++) {
     for (let c = 0; c < colCount; c++) {
       const x = c * tileSizeM;
       const y = r * tileSizeM;
       const isPartialW = x + tileSizeM > floor.lengthM;
       const isPartialH = y + tileSizeM > floor.widthM;
-      const rowLabel = String.fromCharCode(65 + (r % 26)) + (r >= 26 ? Math.floor(r / 26) : '');
-      const colLabel = String(c + 1).padStart(2, '0');
+      const rowLabel = getRowLabel(r, rScheme);
+      const colLabel = getColLabel(c, cScheme, format);
       tiles.push({
-        id: `${rowLabel}-${colLabel}`,
+        id: `${rowLabel}${separator}${colLabel}`,
         row: r,
         col: c,
         x: parseFloat(x.toFixed(4)),
@@ -42,8 +75,11 @@ const defaultState: DcState = {
   gridVisible: true,
   snapEnabled: true,
   labelsVisible: true,
+  floorOpacity: 1.0,
+  xrayMode: false,
   selectedTileId: null,
   selectedRackId: null,
+  selectedInfraId: null,
   zoom: 1,
   panX: 40,
   panY: 40,
@@ -60,20 +96,48 @@ class DcStateManager {
     } catch {
       this.state = { ...defaultState };
     }
-    if (this.state.floors.length === 0) {
-      this.initDefaultFloor();
-    }
   }
 
-  private initDefaultFloor(): void {
-    const floor = this.createFloor('Main Data Hall', 12, 8, 600);
-    const racks: DcRack[] = [
-      { id: 'RACK-001', name: 'RACK-001', type: 'server', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 2.4, y: 2.4, z: 0 }, rotation: 0, color: '#1e3a5f', manufacturer: 'APC', model: 'AR3100' },
-      { id: 'RACK-002', name: 'RACK-002', type: 'server', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 3.0, y: 2.4, z: 0 }, rotation: 0, color: '#1e3a5f', manufacturer: 'APC', model: 'AR3100' },
-      { id: 'RACK-003', name: 'RACK-003', type: 'server', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 3.6, y: 2.4, z: 0 }, rotation: 0, color: '#1e3a5f', manufacturer: 'APC', model: 'AR3100' },
-      { id: 'RACK-004', name: 'RACK-004', type: 'server', widthMm: 600, depthMm: 1200, heightU: 42, position: { x: 4.2, y: 2.4, z: 0 }, rotation: 0, color: '#1e3a5f', manufacturer: 'APC', model: 'AR3100' },
-    ];
-    this.updateFloor(floor.id, { racks });
+  resetToEmptyFloor(
+    name: string = 'Main Data Hall',
+    lengthM: number = 12,
+    widthM: number = 8,
+    tileSizeMm: number = 600,
+    unit: DcUnit = 'm',
+    rowScheme: 'letters' | 'numbers' = 'letters',
+    colScheme: 'letters' | 'numbers' = 'numbers',
+    addressFormat: DcAddressFormat = 'compact'
+  ): DcFloor {
+    const floor: DcFloor = {
+      id: generateId(),
+      name,
+      unit,
+      lengthM,
+      widthM,
+      tileSizeMm,
+      rowScheme,
+      colScheme,
+      addressFormat,
+      tiles: [],
+      racks: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    floor.tiles = buildTileGrid(floor);
+    this.setState({
+      floors: [floor],
+      activeFloorId: floor.id,
+      selectedRackId: null,
+      selectedTileId: null,
+    });
+    return floor;
+  }
+
+  clearCurrentFloor(): void {
+    const floor = this.getActiveFloor();
+    if (!floor) return;
+    this.updateFloor(floor.id, { racks: [] });
+    this.setState({ selectedRackId: null, selectedTileId: null });
   }
 
   getState(): DcState { return this.state; }
@@ -94,7 +158,16 @@ class DcStateManager {
   }
 
   // Floor operations
-  createFloor(name: string, lengthM: number, widthM: number, tileSizeMm: number, unit: DcUnit = 'm'): DcFloor {
+  createFloor(
+    name: string,
+    lengthM: number,
+    widthM: number,
+    tileSizeMm: number,
+    unit: DcUnit = 'm',
+    rowScheme: 'letters' | 'numbers' = 'letters',
+    colScheme: 'letters' | 'numbers' = 'numbers',
+    addressFormat: DcAddressFormat = 'compact'
+  ): DcFloor {
     const floor: DcFloor = {
       id: generateId(),
       name,
@@ -102,6 +175,9 @@ class DcStateManager {
       lengthM,
       widthM,
       tileSizeMm,
+      rowScheme,
+      colScheme,
+      addressFormat,
       tiles: [],
       racks: [],
       createdAt: new Date().toISOString(),
@@ -164,6 +240,51 @@ class DcStateManager {
     };
     this.addRack(newRack);
     return newRack;
+  }
+
+  updateTile(tileId: string, partial: Partial<DcFloorTile>): void {
+    const floor = this.getActiveFloor();
+    if (!floor) return;
+    const tiles = floor.tiles.map(t => t.id === tileId ? { ...t, ...partial } : t);
+    this.updateFloor(floor.id, { tiles });
+  }
+
+  setFloorTileType(tileId: string, type: DcTileType, airflowDir?: DcAirflowDirection): void {
+    const floor = this.getActiveFloor();
+    if (!floor) return;
+    const tiles = floor.tiles.map(t => {
+      if (t.id === tileId) {
+        return {
+          ...t,
+          type,
+          airflowDir: type === 'air-channel' ? (airflowDir || 'north') : undefined,
+        };
+      }
+      return t;
+    });
+    this.updateFloor(floor.id, { tiles });
+  }
+
+  addInfrastructureItem(item: DcInfrastructureItem): void {
+    const floor = this.getActiveFloor();
+    if (!floor) return;
+    const infrastructure = [...(floor.infrastructure || []), item];
+    this.updateFloor(floor.id, { infrastructure });
+  }
+
+  updateInfrastructureItem(itemId: string, partial: Partial<DcInfrastructureItem>): void {
+    const floor = this.getActiveFloor();
+    if (!floor || !floor.infrastructure) return;
+    const infrastructure = floor.infrastructure.map(i => i.id === itemId ? { ...i, ...partial } : i);
+    this.updateFloor(floor.id, { infrastructure });
+  }
+
+  deleteInfrastructureItem(itemId: string): void {
+    const floor = this.getActiveFloor();
+    if (!floor || !floor.infrastructure) return;
+    const infrastructure = floor.infrastructure.filter(i => i.id !== itemId);
+    this.updateFloor(floor.id, { infrastructure });
+    if (this.state.selectedInfraId === itemId) this.setState({ selectedInfraId: null });
   }
 
   rebuildTiles(): void {

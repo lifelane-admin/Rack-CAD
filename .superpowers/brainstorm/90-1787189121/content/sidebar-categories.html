@@ -1,0 +1,263 @@
+<h2>Category Organization</h2>
+<p class="subtitle">Inside the Rack tab — how should the 14 device types be arranged?</p>
+
+<style>
+  .sidebar-demo {
+    display: flex;
+    flex-direction: column;
+    width: 230px;
+    height: 480px;
+    background: #0d1117;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 12px;
+    color: #e2e8f0;
+    overflow: hidden;
+    user-select: none;
+  }
+  .header-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px; height: 40px;
+    border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;
+  }
+  .header-bar span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; }
+  .header-bar button { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #475569; border-radius: 4px; padding: 2px 7px; font-size: 11px; }
+  .ws-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.06); background: #090c12; flex-shrink: 0; }
+  .ws-tab { flex: 1; padding: 7px 4px; text-align: center; font-size: 10px; font-weight: 600; letter-spacing: 0.5px; color: #475569; border-bottom: 2px solid transparent; text-transform: uppercase; }
+  .ws-tab.active { color: #38bdf8; border-bottom-color: #38bdf8; background: rgba(56,189,248,0.04); }
+  .search-box { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); flex-shrink: 0; }
+  .search-box input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; color: #94a3b8; padding: 5px 10px; font-size: 11px; outline: none; box-sizing: border-box; }
+  .cat-scroll { flex: 1; overflow-y: auto; }
+
+  /* Flat list */
+  .flat-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px;
+    font-size: 11px; font-weight: 600; color: #64748b;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    cursor: pointer;
+  }
+  .flat-row:hover { background: rgba(255,255,255,0.03); color: #94a3b8; }
+  .flat-row svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+  .flat-row .count { margin-left: auto; font-size: 9px; color: #2d3748; font-weight: 400; }
+  .flat-row .accentbar { width: 3px; height: 14px; border-radius: 2px; flex-shrink: 0; }
+
+  /* Grouped list */
+  .grp-header {
+    display: flex; align-items: center; gap: 7px;
+    padding: 8px 12px 6px;
+    font-size: 9px; font-weight: 700; color: #38bdf8;
+    text-transform: uppercase; letter-spacing: 1.2px;
+    border-bottom: 1px solid rgba(56,189,248,0.08);
+    background: rgba(56,189,248,0.04);
+  }
+  .grp-header svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+  .grp-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px 6px 24px;
+    font-size: 11px; color: #64748b;
+    cursor: pointer; border-left: 2px solid transparent;
+  }
+  .grp-item:hover { background: rgba(255,255,255,0.02); color: #94a3b8; }
+  .grp-item svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+  .grp-item .count { margin-left: auto; font-size: 9px; color: #2d3748; }
+  .grp-item.c-server { border-left-color: #fb8c00; }
+  .grp-item.c-network { border-left-color: #00f2fe; }
+  .grp-item.c-security { border-left-color: #ef4444; }
+  .grp-item.c-power { border-left-color: #fdd835; }
+  .grp-item.c-infra { border-left-color: #64748b; }
+  .grp-item.c-cable { border-left-color: #10b981; }
+  .grp-spacer { height: 4px; }
+
+  .split { gap: 24px; align-items: flex-start; }
+  .options { gap: 24px; }
+  .option { padding: 0 !important; overflow: hidden; }
+  .option .letter { padding: 14px; font-size: 15px; min-width: 44px; display: flex; align-items: flex-start; }
+  .option .content { padding: 12px 14px 0; }
+  .option .content h3 { margin: 0 0 3px; font-size: 13px; }
+  .option .content p { margin: 0 0 10px; font-size: 11px; color: #94a3b8; }
+  .pro-tag { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; margin-bottom: 6px; }
+  .pro-tag.recommended { background: rgba(56,189,248,0.12); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); }
+  .pro-tag.alt { background: rgba(16,185,129,0.1); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+</style>
+
+<div class="options">
+
+  <!-- Option A: Flat list, all collapsed -->
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <div class="pro-tag recommended">Recommended</div>
+      <h3>Flat List — Collapsed by Default</h3>
+      <p>All 14 categories visible at a glance, expand any to browse devices. Fast scanning.</p>
+      <div class="sidebar-demo">
+        <div class="header-bar"><span>Components</span><button>«</button></div>
+        <div class="ws-tabs">
+          <div class="ws-tab active">Rack</div>
+          <div class="ws-tab">Cloud</div>
+          <div class="ws-tab">Hybrid</div>
+        </div>
+        <div class="search-box"><input placeholder="Search…" /></div>
+        <div class="cat-scroll">
+          <div class="flat-row">
+            <div class="accentbar" style="background:#fb8c00"></div>
+            <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            Servers <span class="count">12</span>
+          </div>
+          <div class="flat-row">
+            <div class="accentbar" style="background:#00f2fe"></div>
+            <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="1"/><path d="M6 11h.01M10 11h.01"/></svg>
+            Switches <span class="count">8</span>
+          </div>
+          <div class="flat-row">
+            <div class="accentbar" style="background:#00f2fe"></div>
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20 15 15 0 010-20z"/></svg>
+            Routers <span class="count">3</span>
+          </div>
+          <div class="flat-row">
+            <div class="accentbar" style="background:#ef4444"></div>
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Firewalls <span class="count">4</span>
+          </div>
+          <div class="flat-row">
+            <div class="accentbar" style="background:#ef4444"></div>
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            NAC <span class="count">2</span>
+          </div>
+          <div class="flat-row">
+            <div class="accentbar" style="background:#8e24aa"></div>
+            <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+            Storage <span class="count">5</span>
+          </div>
+          <div class="flat-row">
+            <div class="accentbar" style="background:#fdd835"></div>
+            <svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+            PDU <span class="count">9</span>
+          </div>
+          <div class="flat-row">
+            <div class="accentbar" style="background:#fdd835"></div>
+            <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></svg>
+            UPS <span class="count">4</span>
+          </div>
+          <div class="flat-row">
+            <div class="accentbar" style="background:#64748b"></div>
+            <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="1"/><path d="M6 11h.01M9 11h.01M12 11h.01M15 11h.01M18 11h.01"/></svg>
+            Patch Panels <span class="count">6</span>
+          </div>
+          <div class="flat-row">
+            <div class="accentbar" style="background:#64748b"></div>
+            <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+            Cable Mgmt <span class="count">3</span>
+          </div>
+          <div class="flat-row">
+            <div class="accentbar" style="background:#10b981"></div>
+            <svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0114.08 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="20" r="1"/></svg>
+            Cables <span class="count">5</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option B: Domain groups -->
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <div class="pro-tag alt">Grouped</div>
+      <h3>Domain Groups</h3>
+      <p>Categories nested under Compute / Network / Security / Power / Infrastructure.</p>
+      <div class="sidebar-demo">
+        <div class="header-bar"><span>Components</span><button>«</button></div>
+        <div class="ws-tabs">
+          <div class="ws-tab active">Rack</div>
+          <div class="ws-tab">Cloud</div>
+          <div class="ws-tab">Hybrid</div>
+        </div>
+        <div class="search-box"><input placeholder="Search…" /></div>
+        <div class="cat-scroll">
+          <div class="grp-header">
+            <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            Compute
+          </div>
+          <div class="grp-item c-server">
+            <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/></svg>
+            Servers <span class="count">12</span>
+          </div>
+          <div class="grp-item c-server">
+            <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+            Storage <span class="count">5</span>
+          </div>
+          <div class="grp-spacer"></div>
+          <div class="grp-header">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>
+            Network
+          </div>
+          <div class="grp-item c-network">
+            <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="1"/></svg>
+            Switches <span class="count">8</span>
+          </div>
+          <div class="grp-item c-network">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20 15 15 0 010-20z"/></svg>
+            Routers <span class="count">3</span>
+          </div>
+          <div class="grp-item c-cable">
+            <svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0114.08 0"/><circle cx="12" cy="20" r="1"/></svg>
+            Cables <span class="count">5</span>
+          </div>
+          <div class="grp-spacer"></div>
+          <div class="grp-header">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Security
+          </div>
+          <div class="grp-item c-security">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Firewalls <span class="count">4</span>
+          </div>
+          <div class="grp-item c-security">
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            NAC <span class="count">2</span>
+          </div>
+          <div class="grp-spacer"></div>
+          <div class="grp-header">
+            <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Power
+          </div>
+          <div class="grp-item c-power">
+            <svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+            PDU <span class="count">9</span>
+          </div>
+          <div class="grp-item c-power">
+            <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></svg>
+            UPS <span class="count">4</span>
+          </div>
+          <div class="grp-item c-power">
+            <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+            ATS <span class="count">2</span>
+          </div>
+          <div class="grp-spacer"></div>
+          <div class="grp-header">
+            <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="1"/></svg>
+            Infrastructure
+          </div>
+          <div class="grp-item c-infra">
+            <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="1"/><path d="M6 11h.01M9 11h.01M12 11h.01M15 11h.01M18 11h.01"/></svg>
+            Patch Panels <span class="count">6</span>
+          </div>
+          <div class="grp-item c-infra">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+            Cable Mgmt <span class="count">3</span>
+          </div>
+          <div class="grp-item c-infra">
+            <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="3"/><rect x="2" y="14" width="20" height="3"/></svg>
+            Blanks &amp; KVM <span class="count">5</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:18px;text-align:center">Click to select, then confirm in the terminal.</p>

@@ -554,7 +554,12 @@ export class PropertiesPanel {
   private renderEmpty() {
     const content = this.container.querySelector('#properties-content');
     if (content) {
-      content.innerHTML = `<div class="properties-empty">Select an element to view properties</div>`;
+      const state = (State as any).getState?.() || (State as any);
+      if (state?.activeView === 'datacenter') {
+        content.innerHTML = `<div class="properties-empty">Select a rack or ESD tile on the floor to view details.</div>`;
+      } else {
+        content.innerHTML = `<div class="properties-empty">Select an element to view properties</div>`;
+      }
     }
   }
 

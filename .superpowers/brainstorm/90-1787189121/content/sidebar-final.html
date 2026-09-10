@@ -1,0 +1,474 @@
+<h2>Full Sidebar Redesign — Review</h2>
+<p class="subtitle">The complete redesigned sidebar. Look at all three tabs. Does this feel right?</p>
+
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-deep: #090c12;
+    --border: rgba(255,255,255,0.07);
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #475569;
+    --text-faint: #2d3748;
+    --accent: #38bdf8;
+    --font: 'Inter', system-ui, sans-serif;
+  }
+  .wrap {
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .demo-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .demo-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+  }
+
+  /* ── Sidebar shell ── */
+  .sb {
+    display: flex;
+    flex-direction: column;
+    width: 232px;
+    height: 540px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--font);
+    font-size: 12px;
+    color: var(--text-primary);
+    overflow: hidden;
+    user-select: none;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+
+  /* ── Header ── */
+  .sb-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    height: 44px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--bg-deep);
+  }
+  .sb-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+  }
+  .sb-collapse {
+    width: 26px; height: 26px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+
+  /* ── Tabs ── */
+  .sb-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-deep);
+    flex-shrink: 0;
+  }
+  .sb-tab {
+    flex: 1;
+    padding: 8px 4px 7px;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .sb-tab.on {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    background: rgba(56,189,248,0.04);
+  }
+
+  /* ── Search ── */
+  .sb-search {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .sb-search-inner {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(0,0,0,0.28);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 5px 9px;
+  }
+  .sb-search-inner svg { width: 11px; height: 11px; stroke: var(--text-muted); fill: none; stroke-width: 2; flex-shrink: 0; }
+  .sb-search-inner input { background: none; border: none; color: var(--text-secondary); font-size: 11px; outline: none; width: 100%; }
+  .sb-search-inner input::placeholder { color: var(--text-muted); }
+
+  /* ── My Library strip ── */
+  .sb-library {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    cursor: pointer;
+    background: rgba(255,255,255,0.01);
+  }
+  .sb-library:hover { background: rgba(255,255,255,0.03); }
+  .sb-library svg { width: 12px; height: 12px; stroke: #fbbf24; fill: none; stroke-width: 2; flex-shrink: 0; }
+  .sb-library-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #fbbf24; }
+  .sb-library-count { margin-left: auto; font-size: 9px; color: var(--text-faint); }
+  .sb-library-add { font-size: 16px; line-height: 1; color: #fbbf24; opacity: 0.6; }
+
+  /* ── Catalog list ── */
+  .sb-catalog { flex: 1; overflow-y: auto; padding: 2px 0; }
+
+  .cat-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 34px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.025);
+    position: relative;
+  }
+  .cat-row:hover .cat-label { color: var(--text-primary); }
+  .cat-row:hover { background: rgba(255,255,255,0.025); }
+
+  .cat-accent { width: 3px; height: 100%; flex-shrink: 0; }
+  .cat-icon { width: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cat-icon svg { width: 12px; height: 12px; stroke: var(--text-muted); fill: none; stroke-width: 2; }
+  .cat-row:hover .cat-icon svg { stroke: var(--text-secondary); }
+  .cat-label { flex: 1; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .cat-count { font-size: 9px; color: var(--text-faint); padding-right: 8px; }
+  .cat-chevron { width: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding-right: 6px; }
+  .cat-chevron svg { width: 9px; height: 9px; stroke: var(--text-faint); fill: none; stroke-width: 2.5; }
+
+  /* Expanded sub-items */
+  .cat-items { display: none; background: rgba(0,0,0,0.15); }
+  .cat-items.open { display: block; }
+  .cat-item {
+    display: flex;
+    align-items: center;
+    padding: 5px 10px 5px 35px;
+    gap: 7px;
+    font-size: 11px;
+    color: #64748b;
+    cursor: grab;
+    border-bottom: 1px solid rgba(255,255,255,0.02);
+  }
+  .cat-item:hover { background: rgba(255,255,255,0.03); color: var(--text-secondary); }
+  .cat-item-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .cat-item-meta { margin-left: auto; font-size: 9px; color: var(--text-faint); }
+
+  /* Cloud palette rows */
+  .cloud-provider {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    font-size: 11px; font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.6px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    cursor: pointer;
+  }
+  .cloud-provider:hover { background: rgba(255,255,255,0.025); color: var(--text-secondary); }
+  .cloud-provider .cp-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .cloud-provider .cp-count { margin-left: auto; font-size: 9px; color: var(--text-faint); font-weight: 400; }
+  .cloud-provider svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+  .recent-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--text-muted);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .recent-row svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2; }
+  .hint { padding: 10px 12px; font-size: 10px; color: var(--text-faint); font-style: italic; line-height: 1.4; }
+
+  .options { display: none !important; }
+  .mockup-body { display: flex; flex-direction: column; align-items: center; }
+</style>
+
+<div class="wrap">
+
+  <!-- TAB 1: RACK -->
+  <div class="demo-col">
+    <div class="demo-label">Rack Tab (default)</div>
+    <div class="sb">
+      <div class="sb-header">
+        <span class="sb-title">Rack Slicer</span>
+        <div class="sb-collapse">«</div>
+      </div>
+      <div class="sb-tabs">
+        <div class="sb-tab on">Rack</div>
+        <div class="sb-tab">Cloud</div>
+        <div class="sb-tab">Hybrid</div>
+      </div>
+      <div class="sb-search">
+        <div class="sb-search-inner">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input placeholder="Search components…" />
+        </div>
+      </div>
+      <div class="sb-library">
+        <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <span class="sb-library-label">My Library</span>
+        <span class="sb-library-count">0 items</span>
+        <span class="sb-library-add">+</span>
+      </div>
+      <div class="sb-catalog">
+        <!-- Servers -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#fb8c00"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+          <span class="cat-label">Servers</span>
+          <span class="cat-count">12</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <div class="cat-items open">
+          <div class="cat-item"><div class="cat-item-dot" style="background:#fb8c00"></div>Dell PowerEdge R750<span class="cat-item-meta">2U</span></div>
+          <div class="cat-item"><div class="cat-item-dot" style="background:#fb8c00"></div>HPE ProLiant DL380<span class="cat-item-meta">2U</span></div>
+          <div class="cat-item"><div class="cat-item-dot" style="background:#fb8c00"></div>Dell PowerEdge R650<span class="cat-item-meta">1U</span></div>
+        </div>
+        <!-- Switches -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#00f2fe"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="1"/><path d="M6 11h.01M10 11h.01"/></svg></div>
+          <span class="cat-label">Switches</span>
+          <span class="cat-count">8</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- Routers -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#00f2fe"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20"/></svg></div>
+          <span class="cat-label">Routers</span>
+          <span class="cat-count">3</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- Firewalls -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#ef4444"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+          <span class="cat-label">Firewalls</span>
+          <span class="cat-count">4</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- NAC -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#ef4444"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+          <span class="cat-label">NAC</span>
+          <span class="cat-count">2</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- Storage -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#8e24aa"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
+          <span class="cat-label">Storage</span>
+          <span class="cat-count">5</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- KVM -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#64748b"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M7 8h10M7 12h5"/></svg></div>
+          <span class="cat-label">KVM &amp; Console</span>
+          <span class="cat-count">4</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- Patch Panels -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#64748b"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><rect x="2" y="8" width="20" height="8" rx="1"/><path d="M6 8v8M10 8v8M14 8v8M18 8v8"/></svg></div>
+          <span class="cat-label">Patch Panels</span>
+          <span class="cat-count">6</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- PDU -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#fdd835"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
+          <span class="cat-label">PDU</span>
+          <span class="cat-count">9</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- ATS -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#fdd835"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <span class="cat-label">ATS</span>
+          <span class="cat-count">2</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- UPS -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#fdd835"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></svg></div>
+          <span class="cat-label">UPS</span>
+          <span class="cat-count">4</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- Cooling -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#38bdf8"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/><circle cx="12" cy="12" r="3"/></svg></div>
+          <span class="cat-label">Cooling</span>
+          <span class="cat-count">3</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- Cable Mgmt -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#64748b"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg></div>
+          <span class="cat-label">Cable Mgmt</span>
+          <span class="cat-count">3</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- Blanks -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#2d3748"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><rect x="2" y="9" width="20" height="6" rx="1"/></svg></div>
+          <span class="cat-label">Blanks</span>
+          <span class="cat-count">2</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- Cables -->
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#10b981"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0114.08 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="20" r="1"/></svg></div>
+          <span class="cat-label">Cables</span>
+          <span class="cat-count">5</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: CLOUD -->
+  <div class="demo-col">
+    <div class="demo-label">Cloud Tab</div>
+    <div class="sb">
+      <div class="sb-header">
+        <span class="sb-title">Rack Slicer</span>
+        <div class="sb-collapse">«</div>
+      </div>
+      <div class="sb-tabs">
+        <div class="sb-tab">Rack</div>
+        <div class="sb-tab on">Cloud</div>
+        <div class="sb-tab">Hybrid</div>
+      </div>
+      <div class="sb-search">
+        <div class="sb-search-inner">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input placeholder="Search AWS / Azure / GCP…" />
+        </div>
+      </div>
+      <div class="sb-catalog">
+        <div class="recent-row">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          Recently Used
+        </div>
+        <div class="hint">Icons you drag in will appear here.</div>
+
+        <div class="cloud-provider">
+          <div class="cp-dot" style="background:#ff9900"></div>
+          AWS
+          <span class="cp-count">714 services</span>
+          <svg viewBox="0 0 24 24" style="margin-left:4px"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+        <div class="cloud-provider">
+          <div class="cp-dot" style="background:#0078d4"></div>
+          Azure
+          <span class="cp-count">338 services</span>
+          <svg viewBox="0 0 24 24" style="margin-left:4px"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+        <div class="cloud-provider">
+          <div class="cp-dot" style="background:#4285f4"></div>
+          Google Cloud
+          <span class="cp-count">222 services</span>
+          <svg viewBox="0 0 24 24" style="margin-left:4px"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+        <div class="cloud-provider">
+          <div class="cp-dot" style="background:#64748b"></div>
+          Local Resources
+          <span class="cp-count">—</span>
+          <svg viewBox="0 0 24 24" style="margin-left:4px"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: HYBRID -->
+  <div class="demo-col">
+    <div class="demo-label">Hybrid Tab</div>
+    <div class="sb">
+      <div class="sb-header">
+        <span class="sb-title">Rack Slicer</span>
+        <div class="sb-collapse">«</div>
+      </div>
+      <div class="sb-tabs">
+        <div class="sb-tab">Rack</div>
+        <div class="sb-tab">Cloud</div>
+        <div class="sb-tab on">Hybrid</div>
+      </div>
+      <div class="sb-search">
+        <div class="sb-search-inner">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input placeholder="Search rack devices + cloud…" />
+        </div>
+      </div>
+      <div class="sb-catalog">
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#fb8c00"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/></svg></div>
+          <span class="cat-label">Rack Components</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#ff9900"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg></div>
+          <span class="cat-label">AWS</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#0078d4"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg></div>
+          <span class="cat-label">Azure</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <div class="cat-row">
+          <div class="cat-accent" style="background:#4285f4"></div>
+          <div class="cat-icon"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg></div>
+          <span class="cat-label">Google Cloud</span>
+          <div class="cat-chevron"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:20px;text-align:center">Does this look right? Any sections to add, remove, or rename? Let me know in the terminal.</p>

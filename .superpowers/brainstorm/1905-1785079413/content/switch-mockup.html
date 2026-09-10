@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Switch Rendering — High Fidelity</title>
+<style>
+  body { background: #0d1117; margin: 0; padding: 24px; font-family: system-ui, sans-serif; color: #ccc; }
+  h2 { color: #e6edf3; font-size: 18px; margin-bottom: 4px; }
+  .subtitle { color: #8b949e; font-size: 13px; margin-bottom: 24px; margin-top: 4px; }
+  .label { color: #8b949e; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; margin-top: 20px; }
+  .rack { background: linear-gradient(to right, #12121a, #1a1a24, #12121a); border: 1.5px solid #2a2a3a; border-radius: 6px; padding: 18px 20px; margin-bottom: 20px; }
+  svg { display: block; }
+</style>
+</head>
+<body>
+
+<h2>High-Fidelity Switch Panel Rendering</h2>
+<p class="subtitle">Proposed SVG rendering for enterprise rack switches — no OEM branding, industrial layout</p>
+
+<div class="label">Current (what you have)</div>
+<div class="rack">
+  <svg width="780" height="60" viewBox="0 0 780 60" xmlns="http://www.w3.org/2000/svg">
+    <rect width="780" height="60" fill="#1c2424" rx="2"/>
+    <circle cx="12" cy="30" r="3" fill="#00ff00"/>
+    <!-- flat port squares - current state -->
+    <rect x="30" y="20" width="10" height="20" fill="#333" rx="1" stroke="#444" stroke-width="0.5"/>
+    <rect x="44" y="20" width="10" height="20" fill="#333" rx="1" stroke="#444" stroke-width="0.5"/>
+    <rect x="58" y="20" width="10" height="20" fill="#333" rx="1" stroke="#444" stroke-width="0.5"/>
+    <rect x="72" y="20" width="10" height="20" fill="#333" rx="1" stroke="#444" stroke-width="0.5"/>
+    <rect x="86" y="20" width="10" height="20" fill="#333" rx="1" stroke="#444" stroke-width="0.5"/>
+    <rect x="100" y="20" width="10" height="20" fill="#333" rx="1" stroke="#444" stroke-width="0.5"/>
+    <rect x="114" y="20" width="10" height="20" fill="#333" rx="1" stroke="#444" stroke-width="0.5"/>
+    <rect x="128" y="20" width="10" height="20" fill="#333" rx="1" stroke="#444" stroke-width="0.5"/>
+    <rect x="142" y="20" width="10" height="20" fill="#333" rx="1" stroke="#444" stroke-width="0.5"/>
+    <rect x="156" y="20" width="10" height="20" fill="#333" rx="1" stroke="#444" stroke-width="0.5"/>
+    <rect x="170" y="20" width="10" height="20" fill="#333" rx="1" stroke="#444" stroke-width="0.5"/>
+    <rect x="184" y="20" width="10" height="20" fill="#333" rx="1" stroke="#444" stroke-width="0.5"/>
+    <text x="250" y="35" fill="#555" font-size="11">← flat, no depth, no LEDs, no texture</text>
+  </svg>
+</div>
+
+<div class="label">Proposed — 24-Port Gigabit Switch (1U)</div>
+<div class="rack">
+<svg width="780" height="80" viewBox="0 0 780 80" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <!-- Brushed metal gradient -->
+    <linearGradient id="chassis" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2e3038"/>
+      <stop offset="18%" stop-color="#252830"/>
+      <stop offset="50%" stop-color="#20222a"/>
+      <stop offset="82%" stop-color="#252830"/>
+      <stop offset="100%" stop-color="#1a1c22"/>
+    </linearGradient>
+    <!-- Port cavity -->
+    <linearGradient id="portcav" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#06080c"/>
+      <stop offset="100%" stop-color="#111418"/>
+    </linearGradient>
+    <!-- Port frame bevel -->
+    <linearGradient id="portbevel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#484c5a"/>
+      <stop offset="100%" stop-color="#1e2028"/>
+    </linearGradient>
+    <!-- SFP cage -->
+    <linearGradient id="sfpcage" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3a3d48"/>
+      <stop offset="100%" stop-color="#1c1e26"/>
+    </linearGradient>
+    <!-- Drop shadow -->
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.7"/>
+    </filter>
+    <!-- Subtle metal texture via turbulence -->
+    <filter id="metal-texture" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.65 0.01" numOctaves="1" result="noise"/>
+      <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
+      <feBlend in="SourceGraphic" in2="grayNoise" mode="overlay" result="blended"/>
+      <feComposite in="blended" in2="SourceGraphic" operator="in"/>
+    </filter>
+  </defs>
+
+  <!-- Chassis body with shadow -->
+  <rect x="0" y="4" width="780" height="72" rx="3" fill="#000" opacity="0.5" filter="url(#shadow)"/>
+  <rect x="0" y="4" width="780" height="72" rx="3" fill="url(#chassis)" stroke="#111" stroke-width="1"/>
+
+  <!-- Top edge highlight (machined bezel) -->
+  <rect x="0" y="4" width="780" height="3" rx="2" fill="#3a3d48" opacity="0.7"/>
+  <!-- Bottom edge shadow line -->
+  <rect x="0" y="73" width="780" height="3" rx="2" fill="#0d0e12" opacity="0.8"/>
+
+  <!-- ===================== LEFT STATUS BLOCK ===================== -->
+  <!-- SYS LED -->
+  <circle cx="22" cy="22" r="4" fill="#00c853" filter="drop-shadow(0 0 3px #00c853)"/>
+  <text x="30" y="25" fill="#6a6e7a" font-size="6.5" font-family="monospace">SYS</text>
+
+  <!-- PWR LED -->
+  <circle cx="22" cy="38" r="4" fill="#00c853" filter="drop-shadow(0 0 2px #00c853)"/>
+  <text x="30" y="41" fill="#6a6e7a" font-size="6.5" font-family="monospace">PWR</text>
+
+  <!-- SPEED mode button -->
+  <rect x="14" y="48" width="28" height="10" rx="2" fill="#181a22" stroke="#35383f" stroke-width="0.8"/>
+  <text x="28" y="56.5" fill="#5a5e6a" font-size="6" font-family="monospace" text-anchor="middle">MODE</text>
+
+  <!-- Console port (RJ45 style) -->
+  <rect x="14" y="62" width="14" height="10" rx="1" fill="url(#portcav)" stroke="#3a3d48" stroke-width="0.8"/>
+  <text x="21" y="70" fill="#4a4e58" font-size="5" font-family="monospace" text-anchor="middle">CON</text>
+
+  <!-- Divider -->
+  <line x1="52" y1="10" x2="52" y2="70" stroke="#2a2d36" stroke-width="1"/>
+
+  <!-- ===================== 24 RJ45 PORTS (2 rows of 12) ===================== -->
+  <!-- Ports are 20px wide, 5px gap, starting at x=58 -->
+  <!-- Row 1: ports 1-12 (top) | Row 2: ports 13-24 (bottom) -->
+  <!-- Port pair groups (1+13, 2+14, ...) with 3px gap between groups -->
+
+  <!-- Port group function: each pair = upper + lower port stacked, then LED strip above -->
+  <!-- Upper row y=12, lower row y=34, LED row y=8 -->
+
+  <!-- 12 port-pair groups -->
+  <!-- Group spacing: 22px per pair -->
+  <!-- Start x: 58 -->
+
+  <!-- MACRO: generate 24 ports as 12 paired columns -->
+  <!-- Pair 1 -->
+  <g transform="translate(58,0)">
+    <!-- port pair frame -->
+    <rect x="0" y="10" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="11.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <!-- clip contacts -->
+    <rect x="5" y="15" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+
+    <rect x="0" y="33" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="34.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="38" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+
+    <!-- per-port LEDs (link + activity) -->
+    <rect x="0" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.9"/>
+    <rect x="10" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.6"/>
+    <!-- port labels -->
+    <text x="4" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">1</text>
+    <text x="14" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">13</text>
+  </g>
+  <g transform="translate(80,0)">
+    <rect x="0" y="10" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="11.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="15" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="33" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="34.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="38" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="6" width="8" height="3" rx="1" fill="#1a3a1a" opacity="0.7"/>
+    <rect x="10" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.9"/>
+    <text x="4" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">2</text>
+    <text x="14" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">14</text>
+  </g>
+  <g transform="translate(102,0)">
+    <rect x="0" y="10" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="11.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="15" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="33" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="34.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="38" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.9"/>
+    <rect x="10" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.8"/>
+    <text x="4" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">3</text>
+    <text x="14" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">15</text>
+  </g>
+  <g transform="translate(124,0)">
+    <rect x="0" y="10" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="11.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="15" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="33" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="34.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="38" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="6" width="8" height="3" rx="1" fill="#1a3a1a" opacity="0.5"/>
+    <rect x="10" y="6" width="8" height="3" rx="1" fill="#1a3a1a" opacity="0.5"/>
+    <text x="4" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">4</text>
+    <text x="14" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">16</text>
+  </g>
+  <g transform="translate(146,0)">
+    <rect x="0" y="10" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="11.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="15" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="33" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="34.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="38" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.9"/>
+    <rect x="10" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.7"/>
+    <text x="4" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">5</text>
+    <text x="14" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">17</text>
+  </g>
+  <g transform="translate(168,0)">
+    <rect x="0" y="10" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="11.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="15" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="33" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="34.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="38" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="6" width="8" height="3" rx="1" fill="#1a3a1a" opacity="0.5"/>
+    <rect x="10" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.9"/>
+    <text x="4" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">6</text>
+    <text x="14" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">18</text>
+  </g>
+  <g transform="translate(190,0)">
+    <rect x="0" y="10" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="11.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="15" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="33" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="34.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="38" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.8"/>
+    <rect x="10" y="6" width="8" height="3" rx="1" fill="#1a3a1a" opacity="0.5"/>
+    <text x="4" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">7</text>
+    <text x="14" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">19</text>
+  </g>
+  <g transform="translate(212,0)">
+    <rect x="0" y="10" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="11.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="15" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="33" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="34.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="38" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.9"/>
+    <rect x="10" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.7"/>
+    <text x="4" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">8</text>
+    <text x="14" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">20</text>
+  </g>
+  <g transform="translate(234,0)">
+    <rect x="0" y="10" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="11.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="15" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="33" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="34.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="38" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="6" width="8" height="3" rx="1" fill="#1a3a1a" opacity="0.5"/>
+    <rect x="10" y="6" width="8" height="3" rx="1" fill="#1a3a1a" opacity="0.5"/>
+    <text x="4" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">9</text>
+    <text x="14" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">21</text>
+  </g>
+  <g transform="translate(256,0)">
+    <rect x="0" y="10" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="11.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="15" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="33" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="34.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="38" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.9"/>
+    <rect x="10" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.6"/>
+    <text x="4" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">10</text>
+    <text x="14" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">22</text>
+  </g>
+  <g transform="translate(278,0)">
+    <rect x="0" y="10" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="11.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="15" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="33" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="34.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="38" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="6" width="8" height="3" rx="1" fill="#1a3a1a" opacity="0.5"/>
+    <rect x="10" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.9"/>
+    <text x="4" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">11</text>
+    <text x="14" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">23</text>
+  </g>
+  <g transform="translate(300,0)">
+    <rect x="0" y="10" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="11.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="15" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="16" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="33" width="19" height="14" rx="1.5" fill="url(#portbevel)" stroke="#111" stroke-width="0.5"/>
+    <rect x="1.5" y="34.5" width="16" height="11" rx="1" fill="url(#portcav)"/>
+    <rect x="5" y="38" width="9" height="5" rx="0.5" fill="#0d1017"/>
+    <rect x="6" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="9" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="12" y="39" width="2" height="3" fill="#2a3040" rx="0.3"/>
+    <rect x="0" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.9"/>
+    <rect x="10" y="6" width="8" height="3" rx="1" fill="#00c853" opacity="0.8"/>
+    <text x="4" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">12</text>
+    <text x="14" y="55" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">24</text>
+  </g>
+
+  <!-- Divider between RJ45 and uplinks -->
+  <line x1="326" y1="10" x2="326" y2="68" stroke="#2a2d36" stroke-width="1"/>
+
+  <!-- ===================== 4x SFP+ UPLINK CAGES ===================== -->
+  <g transform="translate(332,0)">
+    <!-- SFP cage 1 (occupied - has transceiver) -->
+    <rect x="0" y="10" width="22" height="28" rx="2" fill="url(#sfpcage)" stroke="#1a1c24" stroke-width="1"/>
+    <rect x="2" y="12" width="18" height="24" rx="1" fill="#0d0f14"/>
+    <!-- Transceiver body inside cage -->
+    <rect x="3" y="14" width="16" height="18" rx="1" fill="#1a2030" stroke="#2a3040" stroke-width="0.5"/>
+    <rect x="5" y="28" width="12" height="3" rx="0.5" fill="#2a4060"/>
+    <circle cx="20" cy="24" r="2.5" fill="#0d1a2a" stroke="#1a3050" stroke-width="0.5"/>
+    <circle cx="20" cy="24" r="1" fill="#003366"/>
+    <!-- SFP LED -->
+    <rect x="1" y="6" width="20" height="3" rx="1" fill="#00c853" opacity="0.9"/>
+    <text x="11" y="56" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">25</text>
+
+    <!-- SFP cage 2 (empty) -->
+    <rect x="24" y="10" width="22" height="28" rx="2" fill="url(#sfpcage)" stroke="#1a1c24" stroke-width="1"/>
+    <rect x="26" y="12" width="18" height="24" rx="1" fill="#06080c"/>
+    <rect x="25" y="6" width="20" height="3" rx="1" fill="#1a2a1a" opacity="0.5"/>
+    <text x="35" y="56" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">26</text>
+
+    <!-- SFP cage 3 (occupied) -->
+    <rect x="48" y="10" width="22" height="28" rx="2" fill="url(#sfpcage)" stroke="#1a1c24" stroke-width="1"/>
+    <rect x="50" y="12" width="18" height="24" rx="1" fill="#0d0f14"/>
+    <rect x="51" y="14" width="16" height="18" rx="1" fill="#1a2030" stroke="#2a3040" stroke-width="0.5"/>
+    <rect x="53" y="28" width="12" height="3" rx="0.5" fill="#2a4060"/>
+    <circle cx="66" cy="24" r="2.5" fill="#0d1a2a" stroke="#1a3050" stroke-width="0.5"/>
+    <circle cx="66" cy="24" r="1" fill="#003366"/>
+    <rect x="49" y="6" width="20" height="3" rx="1" fill="#00c853" opacity="0.7"/>
+    <text x="59" y="56" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">27</text>
+
+    <!-- SFP cage 4 (empty) -->
+    <rect x="72" y="10" width="22" height="28" rx="2" fill="url(#sfpcage)" stroke="#1a1c24" stroke-width="1"/>
+    <rect x="74" y="12" width="18" height="24" rx="1" fill="#06080c"/>
+    <rect x="73" y="6" width="20" height="3" rx="1" fill="#1a2a1a" opacity="0.4"/>
+    <text x="83" y="56" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">28</text>
+  </g>
+
+  <!-- Divider -->
+  <line x1="440" y1="10" x2="440" y2="68" stroke="#2a2d36" stroke-width="1"/>
+
+  <!-- ===================== RIGHT PANEL: Model label + USB + power ===================== -->
+  <text x="448" y="30" fill="#5a5e6a" font-size="8" font-family="monospace" font-weight="bold">24G+4SFP+</text>
+  <text x="448" y="42" fill="#3a3e4a" font-size="6.5" font-family="monospace">GIGABIT SWITCH</text>
+
+  <!-- USB port -->
+  <rect x="448" y="48" width="14" height="10" rx="1.5" fill="#0d0f14" stroke="#35383f" stroke-width="0.8"/>
+  <rect x="450" y="50" width="10" height="6" rx="0.5" fill="#1a1c22"/>
+  <text x="455" y="66" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">USB</text>
+
+  <!-- Reset pinhole -->
+  <circle cx="476" cy="53" r="2.5" fill="#111" stroke="#35383f" stroke-width="0.8"/>
+  <circle cx="476" cy="53" r="1" fill="#0a0a0c"/>
+  <text x="476" y="64" fill="#3a3e4a" font-size="5" font-family="monospace" text-anchor="middle">RST</text>
+
+  <!-- AC Power inlet -->
+  <rect x="490" y="20" width="28" height="38" rx="2" fill="#151820" stroke="#35383f" stroke-width="0.8"/>
+  <!-- IEC C14 inlet shape -->
+  <rect x="494" y="24" width="20" height="14" rx="1" fill="#0d0f14"/>
+  <line x1="494" y1="31" x2="514" y2="31" stroke="#35383f" stroke-width="0.5"/>
+  <!-- Fan vent slots -->
+  <rect x="493" y="42" width="4" height="12" rx="1" fill="#0d0f14"/>
+  <rect x="499" y="42" width="4" height="12" rx="1" fill="#0d0f14"/>
+  <rect x="505" y="42" width="4" height="12" rx="1" fill="#0d0f14"/>
+
+  <!-- Chassis vent slots on right -->
+  <rect x="528" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="535" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="542" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="549" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="556" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="563" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="570" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="577" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="584" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="591" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="598" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="605" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="612" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="619" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="626" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="633" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="640" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="647" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="654" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="661" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="668" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="675" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="682" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="689" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="696" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="703" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="710" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="717" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="724" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="731" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="738" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="745" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="752" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="759" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="766" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+  <rect x="773" y="15" width="4" height="50" rx="1" fill="#1a1c22" opacity="0.8"/>
+</svg>
+</div>
+
+<p style="color:#8b949e;font-size:13px;margin-top:16px;">
+  Key improvements: <strong style="color:#e6edf3">beveled RJ45 cavity</strong> with inner contacts · <strong style="color:#e6edf3">per-port dual LEDs</strong> (link + activity, independently lit) · <strong style="color:#e6edf3">SFP+ cages</strong> with transceiver modules inserted · <strong style="color:#e6edf3">brushed metal gradient</strong> chassis · <strong style="color:#e6edf3">IEC C14 power inlet</strong> + vent slots · <strong style="color:#e6edf3">console port</strong> with CON label · no OEM branding.
+</p>
+<p style="color:#8b949e;font-size:13px;">Does this look right? Reply in the terminal.</p>
+</body>
+</html>

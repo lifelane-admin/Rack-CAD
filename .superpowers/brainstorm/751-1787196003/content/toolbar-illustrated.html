@@ -1,0 +1,574 @@
+<h2>Toolbar Layout — Illustrated</h2>
+<p class="subtitle">Full-context mockups. Click an option to select it.</p>
+
+<style>
+  .opt-card {
+    border: 2px solid #1e293b;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 24px;
+    cursor: pointer;
+    transition: border-color .15s;
+    background: #0b0f1a;
+  }
+  .opt-card:hover { border-color: #334155; }
+  .opt-card.selected { border-color: #38bdf8; box-shadow: 0 0 0 1px #38bdf8; }
+
+  .opt-label {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px;
+    background: #1e293b;
+    font-size: 11px; font-weight: 600; letter-spacing: .8px;
+    text-transform: uppercase; color: #64748b;
+  }
+  .opt-letter {
+    width: 20px; height: 20px; border-radius: 4px;
+    background: #0f172a; border: 1px solid #334155;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #94a3b8;
+    flex-shrink: 0;
+  }
+  .opt-card.selected .opt-letter {
+    background: rgba(56,189,248,.15); border-color: #38bdf8; color: #38bdf8;
+  }
+
+  /* ── App shell ── */
+  .app-shell {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #080b12;
+    border-top: 1px solid #0f172a;
+  }
+
+  /* ── Toolbar row ── */
+  .tb {
+    height: 48px; background: #090c12;
+    border-bottom: 1px solid #1e293b;
+    display: flex; align-items: center; padding: 0 10px; gap: 0;
+  }
+
+  .tb-logo {
+    font-size: 11px; font-weight: 800; color: #38bdf8;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(56,189,248,.35);
+    white-space: nowrap; margin-right: 14px;
+  }
+  .tb-sep {
+    width: 1px; height: 26px; background: #1e293b;
+    margin: 0 10px; flex-shrink: 0;
+  }
+
+  /* Tool strip */
+  .tb-tools { display: flex; gap: 3px; margin-right: 10px; }
+  .tb-tool {
+    width: 28px; height: 28px; border-radius: 5px;
+    border: 1px solid transparent;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+  .tb-tool.active {
+    background: rgba(56,189,248,.12); border-color: #38bdf8;
+  }
+  .tb-tool svg { display: block; }
+
+  /* Menu bar */
+  .tb-menus { display: flex; align-items: center; gap: 1px; }
+  .tb-menu {
+    padding: 5px 9px;
+    font-size: 11px; font-weight: 500; color: #94a3b8;
+    border-radius: 4px; cursor: pointer;
+    display: flex; align-items: center; gap: 3px;
+    white-space: nowrap;
+  }
+  .tb-menu:hover { background: #1e293b; color: #e2e8f0; }
+  .tb-menu .caret { font-size: 7px; opacity: .5; }
+  .tb-menu.cloud-menu { color: #64748b; }
+
+  /* Right zone */
+  .tb-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .tb-ai {
+    padding: 4px 9px;
+    font-size: 10px; font-weight: 600;
+    color: #475569; border: 1px solid #1e293b;
+    border-radius: 4px; letter-spacing: .4px;
+    white-space: nowrap;
+  }
+
+  /* ── Body strip (sidebar + canvas preview) ── */
+  .app-body {
+    display: flex; height: 110px;
+  }
+  .sidebar-strip {
+    width: 200px; flex-shrink: 0;
+    background: #080b12; border-right: 1px solid #1e293b;
+    display: flex; flex-direction: column;
+  }
+  .sb-header {
+    padding: 10px 12px 6px;
+    font-size: 11px; font-weight: 800; color: #38bdf8;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(56,189,248,.3);
+    border-bottom: 1px solid #1e293b;
+  }
+  .sb-tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid #1e293b;
+  }
+  .sb-tab {
+    flex: 1; text-align: center;
+    padding: 6px 4px;
+    font-size: 10px; font-weight: 500; color: #475569;
+    cursor: pointer; letter-spacing: .3px;
+  }
+  .sb-tab.active {
+    color: #38bdf8; border-bottom: 2px solid #38bdf8;
+  }
+  .sb-body {
+    flex: 1; padding: 8px 12px;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .cat-row-mini {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 6px; border-radius: 4px;
+    background: #0f172a;
+    font-size: 10px; color: #64748b;
+  }
+  .cat-accent-mini {
+    width: 3px; height: 14px; border-radius: 2px; flex-shrink: 0;
+  }
+
+  .canvas-area {
+    flex: 1; background: #080b12;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+  .canvas-grid {
+    position: absolute; inset: 0; opacity: .15;
+    background-image:
+      linear-gradient(#1e293b 1px, transparent 1px),
+      linear-gradient(90deg, #1e293b 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+  .canvas-rack {
+    position: relative; z-index: 1;
+    width: 60px; height: 80px;
+    background: #0f172a; border: 1px solid #334155;
+    border-radius: 3px;
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 4px;
+  }
+  .rack-u {
+    height: 12px; background: #1e293b; border-radius: 2px;
+  }
+  .rack-u.device {
+    background: linear-gradient(90deg,#1e3a5f,#1e293b);
+    border: 1px solid #38bdf8;
+  }
+
+  /* ── Floating canvas toolbar ── */
+  .float-tb {
+    position: absolute; bottom: 8px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(9,12,18,.92);
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    display: flex; align-items: center; gap: 3px;
+    padding: 4px 6px;
+    backdrop-filter: blur(8px);
+    z-index: 2;
+  }
+  .float-tool {
+    width: 24px; height: 24px; border-radius: 4px;
+    border: 1px solid transparent;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .float-tool.active {
+    background: rgba(56,189,248,.12); border-color: #38bdf8;
+  }
+  .float-sep {
+    width: 1px; height: 18px; background: #1e293b; margin: 0 2px;
+  }
+  .float-zoom {
+    font-size: 9px; color: #475569; padding: 0 4px; white-space: nowrap;
+  }
+
+  /* ── Dropdown preview ── */
+  .dropdown-row {
+    display: flex; gap: 12px; padding: 10px 14px;
+    background: #060810; border-top: 1px solid #0f172a;
+    flex-wrap: wrap;
+  }
+  .dd {
+    background: #0f172a; border: 1px solid #1e293b;
+    border-radius: 6px; overflow: hidden;
+    min-width: 140px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  .dd-title {
+    padding: 5px 10px;
+    font-size: 9px; font-weight: 700; color: #334155;
+    letter-spacing: .8px; text-transform: uppercase;
+    border-bottom: 1px solid #1e293b;
+  }
+  .dd-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 10px;
+    font-size: 10px; color: #94a3b8;
+    gap: 16px;
+  }
+  .dd-item:hover { background: #1e293b; }
+  .dd-item .kbd {
+    font-size: 9px; color: #334155;
+    background: #0b0f1a; border: 1px solid #1e293b;
+    border-radius: 3px; padding: 1px 4px;
+  }
+  .dd-sep { height: 1px; background: #1e293b; margin: 2px 0; }
+  .dd-item.dim { color: #475569; }
+
+  /* Selected badge */
+  .opt-card.selected .opt-label { color: #38bdf8; }
+  .check { display: none; font-size: 12px; }
+  .opt-card.selected .check { display: inline; color: #38bdf8; }
+</style>
+
+<script>
+  function pick(el) {
+    document.querySelectorAll('.opt-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+</script>
+
+<!-- SVG icon helpers (inline defs) -->
+<svg style="display:none">
+  <defs>
+    <symbol id="ic-cursor" viewBox="0 0 24 24" fill="none" stroke-width="2">
+      <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" fill="currentColor" stroke="currentColor"/>
+    </symbol>
+    <symbol id="ic-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M18 11V6a2 2 0 00-2-2 2 2 0 00-2 2v5m0-5V5a2 2 0 00-2-2 2 2 0 00-2 2v8m0-8V7a2 2 0 00-2-2 2 2 0 00-2 2v6m0-5V9a2 2 0 00-2-2 2 2 0 00-2 2v10a7 7 0 0014 0v-8"/>
+    </symbol>
+    <symbol id="ic-cable" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="9" y="3" width="6" height="6" rx="1"/>
+      <rect x="3" y="15" width="6" height="6" rx="1"/>
+      <rect x="15" y="15" width="6" height="6" rx="1"/>
+      <path d="M12 9v4M6 15v-2h12v2"/>
+    </symbol>
+    <symbol id="ic-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 2v4M15 2v4"/><path d="M7 6h10v4a5 5 0 01-10 0V6z"/><path d="M12 15v7"/>
+    </symbol>
+    <symbol id="ic-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M4 5h16M12 5v14M9 19h6"/>
+    </symbol>
+    <symbol id="ic-zoom" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ════════════════ OPTION A ════════════════ -->
+<div class="opt-card" onclick="pick(this)">
+  <div class="opt-label">
+    <div class="opt-letter">A</div>
+    Logo in toolbar &nbsp;·&nbsp; Logo + tools + menus
+    <span class="check">✓ Selected</span>
+  </div>
+
+  <div class="app-shell">
+    <!-- Toolbar -->
+    <div class="tb">
+      <div class="tb-logo">Rack Slicer</div>
+      <div class="tb-sep"></div>
+      <!-- Tools -->
+      <div class="tb-tools">
+        <div class="tb-tool active" title="Select">
+          <svg width="13" height="13"><use href="#ic-cursor" color="#38bdf8"/></svg>
+        </div>
+        <div class="tb-tool" title="Pan">
+          <svg width="13" height="13"><use href="#ic-hand" color="#475569"/></svg>
+        </div>
+        <div class="tb-tool" title="Cable">
+          <svg width="13" height="13"><use href="#ic-cable" color="#475569"/></svg>
+        </div>
+        <div class="tb-tool" title="Power">
+          <svg width="13" height="13"><use href="#ic-power" color="#475569"/></svg>
+        </div>
+        <div class="tb-tool" title="Text">
+          <svg width="13" height="13"><use href="#ic-text" color="#475569"/></svg>
+        </div>
+      </div>
+      <div class="tb-sep"></div>
+      <!-- Menus -->
+      <div class="tb-menus">
+        <div class="tb-menu">File <span class="caret">▾</span></div>
+        <div class="tb-menu">Edit <span class="caret">▾</span></div>
+        <div class="tb-menu">View <span class="caret">▾</span></div>
+        <div class="tb-menu">Export <span class="caret">▾</span></div>
+      </div>
+      <div class="tb-right">
+        <div class="tb-ai">⚙ Rules</div>
+      </div>
+    </div>
+
+    <!-- App body -->
+    <div class="app-body">
+      <div class="sidebar-strip">
+        <div class="sb-header">Rack Slicer</div>
+        <div class="sb-tabs">
+          <div class="sb-tab active">Rack</div>
+          <div class="sb-tab">Cloud</div>
+          <div class="sb-tab">Hybrid</div>
+        </div>
+        <div class="sb-body">
+          <div class="cat-row-mini">
+            <div class="cat-accent-mini" style="background:#38bdf8"></div>
+            Servers
+          </div>
+          <div class="cat-row-mini">
+            <div class="cat-accent-mini" style="background:#a78bfa"></div>
+            Networking
+          </div>
+          <div class="cat-row-mini">
+            <div class="cat-accent-mini" style="background:#34d399"></div>
+            Storage
+          </div>
+        </div>
+      </div>
+      <div class="canvas-area">
+        <div class="canvas-grid"></div>
+        <div class="canvas-rack">
+          <div class="rack-u device"></div>
+          <div class="rack-u"></div>
+          <div class="rack-u device"></div>
+          <div class="rack-u device"></div>
+          <div class="rack-u"></div>
+        </div>
+        <div class="float-tb">
+          <div class="float-tool active">
+            <svg width="11" height="11"><use href="#ic-cursor" color="#38bdf8"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-hand" color="#475569"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-cable" color="#475569"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-power" color="#475569"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-text" color="#475569"/></svg>
+          </div>
+          <div class="float-sep"></div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-zoom" color="#475569"/></svg>
+          </div>
+          <div class="float-zoom">100%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dropdown preview -->
+    <div class="dropdown-row">
+      <div class="dd">
+        <div class="dd-title">File</div>
+        <div class="dd-item">New Project <span class="kbd">⌘N</span></div>
+        <div class="dd-item">Open… <span class="kbd">⌘O</span></div>
+        <div class="dd-item">Save <span class="kbd">⌘S</span></div>
+        <div class="dd-sep"></div>
+        <div class="dd-item">Import JSON…</div>
+        <div class="dd-item">Import Custom Asset…</div>
+      </div>
+      <div class="dd">
+        <div class="dd-title">Edit</div>
+        <div class="dd-item">Undo <span class="kbd">⌘Z</span></div>
+        <div class="dd-item">Redo <span class="kbd">⌘⇧Z</span></div>
+        <div class="dd-sep"></div>
+        <div class="dd-item">Select All <span class="kbd">⌘A</span></div>
+        <div class="dd-item">Delete <span class="kbd">⌫</span></div>
+        <div class="dd-sep"></div>
+        <div class="dd-item">Add Rack…</div>
+      </div>
+      <div class="dd">
+        <div class="dd-title">View</div>
+        <div class="dd-item">Zoom In <span class="kbd">+</span></div>
+        <div class="dd-item">Zoom Out <span class="kbd">−</span></div>
+        <div class="dd-item">Fit to Screen <span class="kbd">⌘0</span></div>
+        <div class="dd-sep"></div>
+        <div class="dd-item">Show Rulers</div>
+        <div class="dd-item">Show Grid</div>
+        <div class="dd-item">Show Minimap</div>
+        <div class="dd-sep"></div>
+        <div class="dd-item">Switch to Cloud</div>
+        <div class="dd-item">Switch to Hybrid</div>
+      </div>
+      <div class="dd">
+        <div class="dd-title">Export</div>
+        <div class="dd-item">Export PNG…</div>
+        <div class="dd-item">Export SVG…</div>
+        <div class="dd-item">Export PDF…</div>
+        <div class="dd-sep"></div>
+        <div class="dd-item">BOM Report…</div>
+        <div class="dd-item">Power Report…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ OPTION B ════════════════ -->
+<div class="opt-card" onclick="pick(this)">
+  <div class="opt-label">
+    <div class="opt-letter">B</div>
+    No logo in toolbar &nbsp;·&nbsp; Tools + menus only (logo lives in sidebar)
+    <span class="check">✓ Selected</span>
+  </div>
+
+  <div class="app-shell">
+    <!-- Toolbar (no logo) -->
+    <div class="tb">
+      <!-- Tools first -->
+      <div class="tb-tools">
+        <div class="tb-tool active">
+          <svg width="13" height="13"><use href="#ic-cursor" color="#38bdf8"/></svg>
+        </div>
+        <div class="tb-tool">
+          <svg width="13" height="13"><use href="#ic-hand" color="#475569"/></svg>
+        </div>
+        <div class="tb-tool">
+          <svg width="13" height="13"><use href="#ic-cable" color="#475569"/></svg>
+        </div>
+        <div class="tb-tool">
+          <svg width="13" height="13"><use href="#ic-power" color="#475569"/></svg>
+        </div>
+        <div class="tb-tool">
+          <svg width="13" height="13"><use href="#ic-text" color="#475569"/></svg>
+        </div>
+      </div>
+      <div class="tb-sep"></div>
+      <!-- Menus -->
+      <div class="tb-menus">
+        <div class="tb-menu">File <span class="caret">▾</span></div>
+        <div class="tb-menu">Edit <span class="caret">▾</span></div>
+        <div class="tb-menu">View <span class="caret">▾</span></div>
+        <div class="tb-menu">Export <span class="caret">▾</span></div>
+        <div class="tb-menu cloud-menu">Cloud <span class="caret">▾</span></div>
+      </div>
+      <div class="tb-right">
+        <div class="tb-ai">⚙ Rules</div>
+      </div>
+    </div>
+
+    <!-- App body -->
+    <div class="app-body">
+      <div class="sidebar-strip">
+        <div class="sb-header">Rack Slicer</div>
+        <div class="sb-tabs">
+          <div class="sb-tab active">Rack</div>
+          <div class="sb-tab">Cloud</div>
+          <div class="sb-tab">Hybrid</div>
+        </div>
+        <div class="sb-body">
+          <div class="cat-row-mini">
+            <div class="cat-accent-mini" style="background:#38bdf8"></div>
+            Servers
+          </div>
+          <div class="cat-row-mini">
+            <div class="cat-accent-mini" style="background:#a78bfa"></div>
+            Networking
+          </div>
+          <div class="cat-row-mini">
+            <div class="cat-accent-mini" style="background:#34d399"></div>
+            Storage
+          </div>
+        </div>
+      </div>
+      <div class="canvas-area">
+        <div class="canvas-grid"></div>
+        <div class="canvas-rack">
+          <div class="rack-u device"></div>
+          <div class="rack-u"></div>
+          <div class="rack-u device"></div>
+          <div class="rack-u device"></div>
+          <div class="rack-u"></div>
+        </div>
+        <div class="float-tb">
+          <div class="float-tool active">
+            <svg width="11" height="11"><use href="#ic-cursor" color="#38bdf8"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-hand" color="#475569"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-cable" color="#475569"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-power" color="#475569"/></svg>
+          </div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-text" color="#475569"/></svg>
+          </div>
+          <div class="float-sep"></div>
+          <div class="float-tool">
+            <svg width="11" height="11"><use href="#ic-zoom" color="#475569"/></svg>
+          </div>
+          <div class="float-zoom">100%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dropdown preview — same menus + Cloud -->
+    <div class="dropdown-row">
+      <div class="dd">
+        <div class="dd-title">File</div>
+        <div class="dd-item">New Project <span class="kbd">⌘N</span></div>
+        <div class="dd-item">Open… <span class="kbd">⌘O</span></div>
+        <div class="dd-item">Save <span class="kbd">⌘S</span></div>
+        <div class="dd-sep"></div>
+        <div class="dd-item">Import JSON…</div>
+        <div class="dd-item">Import Custom Asset…</div>
+      </div>
+      <div class="dd">
+        <div class="dd-title">Edit</div>
+        <div class="dd-item">Undo <span class="kbd">⌘Z</span></div>
+        <div class="dd-item">Redo <span class="kbd">⌘⇧Z</span></div>
+        <div class="dd-sep"></div>
+        <div class="dd-item">Select All <span class="kbd">⌘A</span></div>
+        <div class="dd-item">Delete <span class="kbd">⌫</span></div>
+        <div class="dd-sep"></div>
+        <div class="dd-item">Add Rack…</div>
+      </div>
+      <div class="dd">
+        <div class="dd-title">View</div>
+        <div class="dd-item">Zoom In <span class="kbd">+</span></div>
+        <div class="dd-item">Zoom Out <span class="kbd">−</span></div>
+        <div class="dd-item">Fit to Screen <span class="kbd">⌘0</span></div>
+        <div class="dd-sep"></div>
+        <div class="dd-item">Show Rulers</div>
+        <div class="dd-item">Show Grid</div>
+        <div class="dd-item">Show Minimap</div>
+        <div class="dd-sep"></div>
+        <div class="dd-item">Switch to Cloud</div>
+        <div class="dd-item">Switch to Hybrid</div>
+      </div>
+      <div class="dd">
+        <div class="dd-title">Export</div>
+        <div class="dd-item">Export PNG…</div>
+        <div class="dd-item">Export SVG…</div>
+        <div class="dd-item">Export PDF…</div>
+        <div class="dd-sep"></div>
+        <div class="dd-item">BOM Report…</div>
+        <div class="dd-item">Power Report…</div>
+      </div>
+      <div class="dd">
+        <div class="dd-title">Cloud <span style="color:#334155;font-size:8px">(context-aware)</span></div>
+        <div class="dd-item dim">Connect to AWS…</div>
+        <div class="dd-item dim">Connect to Azure…</div>
+        <div class="dd-item dim">Connect to GCP…</div>
+        <div class="dd-sep"></div>
+        <div class="dd-item">Import Cloud Diagram…</div>
+        <div class="dd-item">Sync to Cloud…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:4px;">Both show tool icons in the top bar <em>and</em> in the floating canvas toolbar. Click to choose, then reply in the terminal.</p>

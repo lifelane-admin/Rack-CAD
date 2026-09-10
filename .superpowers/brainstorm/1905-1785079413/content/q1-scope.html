@@ -1,0 +1,169 @@
+<h2>Which aspect of visual detail matters most?</h2>
+<p class="subtitle">The reference image you shared has several distinct layers of detail — which one should we build first?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <svg viewBox="0 0 340 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:6px;background:#0d1117">
+        <!-- Rack frame -->
+        <rect x="10" y="5" width="320" height="150" rx="4" fill="#1b1b22" stroke="#333" stroke-width="1.5"/>
+        <!-- Rails -->
+        <rect x="10" y="5" width="18" height="150" fill="#2a2a32"/>
+        <rect x="312" y="5" width="18" height="150" fill="#2a2a32"/>
+        <!-- Server 1 - detailed -->
+        <rect x="28" y="15" width="284" height="42" fill="#1c1e24" stroke="#000" stroke-width="1"/>
+        <!-- Drive bays -->
+        <rect x="35" y="20" width="14" height="32" fill="#111" rx="1" stroke="#333" stroke-width="0.5"/>
+        <rect x="52" y="20" width="14" height="32" fill="#0d2a0d" rx="1" stroke="#1a4a1a" stroke-width="0.5"/>
+        <rect x="69" y="20" width="14" height="32" fill="#111" rx="1" stroke="#333" stroke-width="0.5"/>
+        <rect x="86" y="20" width="14" height="32" fill="#111" rx="1" stroke="#333" stroke-width="0.5"/>
+        <rect x="103" y="20" width="14" height="32" fill="#111" rx="1" stroke="#333" stroke-width="0.5"/>
+        <!-- LCD Panel -->
+        <rect x="125" y="22" width="40" height="14" fill="#001a33" rx="1" stroke="#0066aa" stroke-width="0.8"/>
+        <text x="145" y="33" fill="#00aaff" font-size="6" text-anchor="middle">IDRAC</text>
+        <!-- Dell branding -->
+        <text x="210" y="34" fill="#aaa" font-size="8" font-weight="bold">DELL</text>
+        <text x="210" y="44" fill="#666" font-size="6">PowerEdge R760</text>
+        <!-- LEDs -->
+        <circle cx="180" cy="36" r="3" fill="#00ff00" opacity="0.9"/>
+        <circle cx="190" cy="36" r="3" fill="#fb8c00" opacity="0.7"/>
+        <!-- Power button -->
+        <circle cx="300" cy="36" r="6" fill="#222" stroke="#555" stroke-width="1"/>
+        <path d="M300,30 L300,34 M296,31.5 A5,5 0 1,0 304,31.5" stroke="#fff" stroke-width="1" fill="none"/>
+        <!-- Ports right side -->
+        <rect x="270" y="23" width="9" height="6" fill="#333" rx="1"/>
+        <rect x="270" y="32" width="9" height="6" fill="#333" rx="1"/>
+        <rect x="282" y="23" width="9" height="6" fill="#1a3a1a" rx="1"/>
+        <!-- Server 2 - switch -->
+        <rect x="28" y="60" width="284" height="28" fill="#1c2424" stroke="#000" stroke-width="1"/>
+        <text x="50" y="77" fill="#aaa" font-size="7" font-weight="bold">CISCO Catalyst 9300-48P</text>
+        <!-- SFP ports -->
+        <rect x="200" y="65" width="7" height="6" fill="#0a1a0a" rx="0.5" stroke="#1a4a1a" stroke-width="0.5"/>
+        <rect x="210" y="65" width="7" height="6" fill="#0a1a0a" rx="0.5" stroke="#1a4a1a" stroke-width="0.5"/>
+        <rect x="220" y="65" width="7" height="6" fill="#0a1a0a" rx="0.5" stroke="#333" stroke-width="0.5"/>
+        <rect x="200" y="73" width="7" height="6" fill="#0a1a0a" rx="0.5" stroke="#1a4a1a" stroke-width="0.5"/>
+        <rect x="210" y="73" width="7" height="6" fill="#0a1a0a" rx="0.5" stroke="#333" stroke-width="0.5"/>
+        <!-- Server 3 - HPE -->
+        <rect x="28" y="91" width="284" height="42" fill="#161c24" stroke="#000" stroke-width="1"/>
+        <text x="50" y="106" fill="#aab4c2" font-size="7" font-weight="bold">HPE ProLiant DL360</text>
+        <text x="50" y="116" fill="#556" font-size="5.5">Gen10 Plus</text>
+        <!-- HPE UID button -->
+        <rect x="270" y="96" width="12" height="12" rx="2" fill="#001a33" stroke="#0044aa" stroke-width="0.8"/>
+        <circle cx="276" cy="102" r="3" fill="#0066ff" opacity="0.8"/>
+        <!-- Drive bays HPE -->
+        <rect x="155" y="97" width="10" height="30" fill="#111" rx="0.5" stroke="#333" stroke-width="0.5"/>
+        <rect x="168" y="97" width="10" height="30" fill="#111" rx="0.5" stroke="#333" stroke-width="0.5"/>
+        <rect x="181" y="97" width="10" height="30" fill="#0d2a0d" rx="0.5" stroke="#1a4a1a" stroke-width="0.5"/>
+        <!-- Blank panel -->
+        <rect x="28" y="136" width="284" height="14" fill="#111" stroke="#222" stroke-width="1"/>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>A — Richer Front Panel Detail</h3>
+      <p>More realistic SVG illustrations for each device: drive bays, LCD panels, power buttons, port clusters with proper branding (Dell, HPE, Cisco). Each device type gets a hand-crafted panel.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <svg viewBox="0 0 340 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:6px;background:#0d1117">
+        <!-- Rack -->
+        <rect x="20" y="5" width="200" height="150" rx="4" fill="#1b1b22" stroke="#333" stroke-width="1.5"/>
+        <rect x="20" y="5" width="14" height="150" fill="#2a2a32"/>
+        <rect x="206" y="5" width="14" height="150" fill="#2a2a32"/>
+        <!-- Devices simplified -->
+        <rect x="34" y="20" width="172" height="40" fill="#1c1e24" stroke="#000"/>
+        <text x="45" y="44" fill="#aaa" font-size="8">Dell R760</text>
+        <rect x="34" y="63" width="172" height="28" fill="#1c2424" stroke="#000"/>
+        <text x="45" y="80" fill="#aaa" font-size="8">Cisco 9300</text>
+        <rect x="34" y="94" width="172" height="40" fill="#161c24" stroke="#000"/>
+        <text x="45" y="117" fill="#aaa" font-size="8">HPE DL360</text>
+        <!-- Cables -->
+        <path d="M206 40 Q240 40 240 77 Q240 115 206 115" stroke="#43a047" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <path d="M206 35 Q250 35 250 45 Q250 55 240 77" stroke="#e53935" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <!-- Annotation callout 1 -->
+        <rect x="255" y="30" width="75" height="28" rx="3" fill="#1e2a1e" stroke="#43a047" stroke-width="1"/>
+        <line x1="255" y1="44" x2="240" y2="44" stroke="#43a047" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="260" y="43" fill="#43a047" font-size="6" font-weight="bold">VM Network</text>
+        <text x="260" y="52" fill="#7a7a7a" font-size="5.5">10GbE · Cat6A</text>
+        <!-- Annotation callout 2 -->
+        <rect x="255" y="80" width="75" height="28" rx="3" fill="#2a1a1a" stroke="#e53935" stroke-width="1"/>
+        <line x1="255" y1="94" x2="248" y2="55" stroke="#e53935" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="260" y="93" fill="#e53935" font-size="6" font-weight="bold">iDRAC OOB</text>
+        <text x="260" y="102" fill="#7a7a7a" font-size="5.5">1GbE · Mgmt</text>
+        <!-- Note box -->
+        <rect x="22" y="143" width="200" height="10" rx="2" fill="#1a1a0a" stroke="#fdd835" stroke-width="0.8"/>
+        <text x="28" y="150" fill="#fdd835" font-size="5.5">⚡ Rack A: 68% power capacity</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>B — Canvas Annotations & Labels</h3>
+      <p>Callout boxes that you place on the canvas to label connections, add design notes, flag issues. Cables get inline labels. Text annotation blocks you can position anywhere on the canvas.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <svg viewBox="0 0 340 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:6px;background:#0d1117">
+        <!-- Page layout mockup -->
+        <!-- Header -->
+        <rect x="5" y="5" width="330" height="18" rx="2" fill="#1b1b22" stroke="#333"/>
+        <text x="12" y="17" fill="#aaa" font-size="7" font-weight="bold">Proxmox 3-Node Cluster — Rack Design Document</text>
+        <text x="260" y="17" fill="#666" font-size="6">Rev 1.0 · 2026-07-26</text>
+        <!-- Rack view thumbnail -->
+        <rect x="5" y="26" width="110" height="130" rx="2" fill="#1b1b22" stroke="#333"/>
+        <text x="60" y="38" fill="#666" font-size="6" text-anchor="middle">Front View</text>
+        <rect x="18" y="42" width="84" height="110" fill="#111" rx="2"/>
+        <rect x="22" y="48" width="76" height="18" fill="#1c1e24"/>
+        <rect x="22" y="68" width="76" height="12" fill="#1c2424"/>
+        <rect x="22" y="82" width="76" height="18" fill="#161c24"/>
+        <rect x="22" y="102" width="76" height="12" fill="#1c2424"/>
+        <rect x="22" y="116" width="76" height="18" fill="#1c1e24"/>
+        <!-- Port mapping table -->
+        <rect x="118" y="26" width="217" height="85" rx="2" fill="#111418" stroke="#333"/>
+        <text x="125" y="37" fill="#aaa" font-size="6.5" font-weight="bold">Port Mapping</text>
+        <line x1="118" y1="40" x2="335" y2="40" stroke="#333" stroke-width="0.8"/>
+        <text x="122" y="49" fill="#666" font-size="5.5">FROM</text>
+        <text x="192" y="49" fill="#666" font-size="5.5">TO</text>
+        <text x="260" y="49" fill="#666" font-size="5.5">TYPE</text>
+        <text x="300" y="49" fill="#666" font-size="5.5">CABLE</text>
+        <line x1="118" y1="52" x2="335" y2="52" stroke="#333" stroke-width="0.5"/>
+        <text x="122" y="61" fill="#ccc" font-size="5.5">R760 NIC1</text>
+        <text x="192" y="61" fill="#ccc" font-size="5.5">Cisco Gi0/1</text>
+        <rect x="258" y="56" width="28" height="7" rx="1" fill="#1a3a1a"/>
+        <text x="262" y="62" fill="#43a047" font-size="5">VM-NET</text>
+        <text x="300" y="61" fill="#888" font-size="5.5">Cat6A</text>
+        <text x="122" y="72" fill="#ccc" font-size="5.5">R760 iDRAC</text>
+        <text x="192" y="72" fill="#ccc" font-size="5.5">Cisco Gi0/47</text>
+        <rect x="258" y="67" width="28" height="7" rx="1" fill="#2a1010"/>
+        <text x="262" y="73" fill="#e53935" font-size="5">iDRAC</text>
+        <text x="300" y="72" fill="#888" font-size="5.5">Cat6</text>
+        <text x="122" y="83" fill="#ccc" font-size="5.5">DL360 NIC1</text>
+        <text x="192" y="83" fill="#ccc" font-size="5.5">Cisco Gi0/2</text>
+        <rect x="258" y="78" width="28" height="7" rx="1" fill="#1a3a1a"/>
+        <text x="262" y="84" fill="#43a047" font-size="5">VM-NET</text>
+        <text x="300" y="83" fill="#888" font-size="5.5">Cat6A</text>
+        <text x="122" y="95" fill="#999" font-size="5.5">+ 14 more...</text>
+        <!-- Legend -->
+        <rect x="118" y="115" width="217" height="40" rx="2" fill="#111418" stroke="#333"/>
+        <text x="125" y="126" fill="#aaa" font-size="6.5" font-weight="bold">Cable Legend</text>
+        <circle cx="126" cy="136" r="4" fill="#e53935"/>
+        <text x="133" y="139" fill="#ccc" font-size="5.5">iDRAC / OOB Management</text>
+        <circle cx="200" cy="136" r="4" fill="#43a047"/>
+        <text x="207" y="139" fill="#ccc" font-size="5.5">VM Network</text>
+        <circle cx="126" cy="148" r="4" fill="#00acc1"/>
+        <text x="133" y="151" fill="#ccc" font-size="5.5">Ceph Storage</text>
+        <circle cx="200" cy="148" r="4" fill="#212529"/>
+        <text x="207" y="151" fill="#ccc" font-size="5.5">Power</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>C — Structured Export / Design Document</h3>
+      <p>Export a multi-page PDF or shareable PNG that looks like the reference image: rack front view + port mapping table + cable legend + design notes, all laid out as a professional design document.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:1.5rem">You can select more than one — but which is the highest priority?</p>

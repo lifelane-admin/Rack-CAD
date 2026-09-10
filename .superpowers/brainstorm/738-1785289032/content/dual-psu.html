@@ -1,0 +1,160 @@
+<h2>Dual PSU — Last N Holes = Power Inlets</h2>
+<p class="subtitle">Option A scales cleanly. The device declares psuCount and the last N ports become power inlets.</p>
+
+<div class="section">
+  <div class="split">
+
+    <!-- Single PSU -->
+    <div class="mockup">
+      <div class="mockup-header">Single PSU (psuCount: 1)</div>
+      <div class="mockup-body" style="background:#0d0e10;padding:14px">
+        <svg viewBox="0 0 280 160" width="100%" style="display:block">
+          <!-- Server -->
+          <rect x="0" y="0" width="280" height="55" rx="3" fill="#1e1e28" stroke="#3a3a50" stroke-width="1.5"/>
+          <text x="8" y="13" fill="#888" font-size="7">1U SERVER — Single PSU</text>
+
+          <!-- Data ports 1–5 -->
+          <rect x="8"  y="18" width="18" height="18" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+          <rect x="11" y="22" width="12" height="8"  rx="1" fill="#0a0a12" stroke="#2a2a40" stroke-width="1"/>
+          <text x="17" y="43" fill="#444" font-size="5.5" text-anchor="middle">1</text>
+
+          <rect x="30" y="18" width="18" height="18" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+          <rect x="33" y="22" width="12" height="8"  rx="1" fill="#0a0a12" stroke="#2a2a40" stroke-width="1"/>
+          <!-- cable on port 2 -->
+          <path d="M 39 18 L 39 0" stroke="#39ff8a" stroke-width="1.5" fill="none"/>
+          <text x="39" y="43" fill="#39ff8a" font-size="5.5" text-anchor="middle">2●</text>
+
+          <rect x="52" y="18" width="18" height="18" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+          <rect x="55" y="22" width="12" height="8"  rx="1" fill="#0a0a12" stroke="#2a2a40" stroke-width="1"/>
+          <text x="61" y="43" fill="#444" font-size="5.5" text-anchor="middle">3</text>
+
+          <rect x="74" y="18" width="18" height="18" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+          <rect x="77" y="22" width="12" height="8"  rx="1" fill="#0a0a12" stroke="#2a2a40" stroke-width="1"/>
+          <text x="83" y="43" fill="#444" font-size="5.5" text-anchor="middle">4</text>
+
+          <rect x="96" y="18" width="18" height="18" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+          <rect x="99" y="22" width="12" height="8"  rx="1" fill="#0a0a12" stroke="#2a2a40" stroke-width="1"/>
+          <text x="105" y="43" fill="#444" font-size="5.5" text-anchor="middle">5</text>
+
+          <!-- divider -->
+          <line x1="120" y1="16" x2="120" y2="38" stroke="#444" stroke-width="1" stroke-dasharray="3,2"/>
+
+          <!-- LAST 1 hole = PSU1 (power inlet) -->
+          <rect x="124" y="15" width="22" height="22" rx="3" fill="#1a0a20" stroke="#cc44ff" stroke-width="2"/>
+          <ellipse cx="130" cy="26" rx="2.5" ry="2.5" fill="none" stroke="#cc44ff" stroke-width="1.5"/>
+          <ellipse cx="136" cy="22" rx="2.5" ry="2.5" fill="none" stroke="#cc44ff" stroke-width="1.5"/>
+          <ellipse cx="142" cy="26" rx="2.5" ry="2.5" fill="none" stroke="#cc44ff" stroke-width="1.5"/>
+          <text x="135" y="44" fill="#cc44ff" font-size="5.5" text-anchor="middle">PSU1</text>
+
+          <!-- Power cable to left PDU -->
+          <path d="M 124 26 Q 60 26 60 80" stroke="#ff4422" stroke-width="2" fill="none"/>
+
+          <!-- Left PDU (A-feed) -->
+          <rect x="0" y="80" width="36" height="70" rx="3" fill="#0d2b1a" stroke="#2aaa5a" stroke-width="1.5"/>
+          <text x="18" y="118" fill="#2aaa5a" font-size="6" text-anchor="middle" transform="rotate(-90,18,118)">LEFT PDU (A)</text>
+          <rect x="4"  y="86" width="28" height="10" rx="2" fill="#0a3a20" stroke="#3aaa6a" stroke-width="1"/>
+          <rect x="4"  y="100" width="28" height="10" rx="2" fill="#133a22" stroke="#5afa9a" stroke-width="1.5"/>
+          <text x="18" y="109" fill="#5afa9a" font-size="5.5" text-anchor="middle">C13 ●</text>
+          <rect x="4"  y="114" width="28" height="10" rx="2" fill="#0a3a20" stroke="#3aaa6a" stroke-width="1"/>
+          <rect x="4"  y="128" width="28" height="10" rx="2" fill="#0a3a20" stroke="#3aaa6a" stroke-width="1"/>
+          <rect x="4"  y="142" width="28" height="10" rx="2" fill="#0a3a20" stroke="#3aaa6a" stroke-width="1"/>
+
+          <!-- Right PDU (empty, B-feed) -->
+          <rect x="240" y="80" width="36" height="70" rx="3" fill="#0d1a2b" stroke="#2a5aaa" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>
+          <text x="258" y="118" fill="#2a5aaa" font-size="6" text-anchor="middle" transform="rotate(-90,258,118)">RIGHT PDU (B)</text>
+          <text x="258" y="130" fill="#2a5aaa" font-size="5.5" text-anchor="middle">not</text>
+          <text x="258" y="139" fill="#2a5aaa" font-size="5.5" text-anchor="middle">used</text>
+
+          <text x="140" y="150" fill="#555" font-size="6.5" text-anchor="middle">Single PSU → only A-feed connected → no HA</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Dual PSU -->
+    <div class="mockup">
+      <div class="mockup-header">Dual PSU (psuCount: 2) — HA config</div>
+      <div class="mockup-body" style="background:#0d0e10;padding:14px">
+        <svg viewBox="0 0 280 160" width="100%" style="display:block">
+          <!-- Server -->
+          <rect x="0" y="0" width="280" height="55" rx="3" fill="#1e1e28" stroke="#3a3a50" stroke-width="1.5"/>
+          <text x="8" y="13" fill="#888" font-size="7">2U SERVER — Dual PSU (HA)</text>
+
+          <!-- Data ports 1–4 -->
+          <rect x="8"  y="18" width="18" height="18" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+          <rect x="11" y="22" width="12" height="8"  rx="1" fill="#0a0a12" stroke="#2a2a40" stroke-width="1"/>
+          <text x="17" y="43" fill="#444" font-size="5.5" text-anchor="middle">1</text>
+
+          <rect x="30" y="18" width="18" height="18" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+          <rect x="33" y="22" width="12" height="8"  rx="1" fill="#0a0a12" stroke="#2a2a40" stroke-width="1"/>
+          <path d="M 39 18 L 39 0" stroke="#39ff8a" stroke-width="1.5" fill="none"/>
+          <text x="39" y="43" fill="#39ff8a" font-size="5.5" text-anchor="middle">2●</text>
+
+          <rect x="52" y="18" width="18" height="18" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+          <rect x="55" y="22" width="12" height="8"  rx="1" fill="#0a0a12" stroke="#2a2a40" stroke-width="1"/>
+          <text x="61" y="43" fill="#444" font-size="5.5" text-anchor="middle">3</text>
+
+          <rect x="74" y="18" width="18" height="18" rx="2" fill="#111" stroke="#2a2a40" stroke-width="1"/>
+          <rect x="77" y="22" width="12" height="8"  rx="1" fill="#0a0a12" stroke="#2a2a40" stroke-width="1"/>
+          <text x="83" y="43" fill="#444" font-size="5.5" text-anchor="middle">4</text>
+
+          <!-- divider -->
+          <line x1="98" y1="16" x2="98" y2="38" stroke="#444" stroke-width="1" stroke-dasharray="3,2"/>
+
+          <!-- LAST 2 holes = PSU1 + PSU2 -->
+          <rect x="102" y="15" width="22" height="22" rx="3" fill="#1a0a20" stroke="#cc44ff" stroke-width="2"/>
+          <ellipse cx="108" cy="26" rx="2.5" ry="2.5" fill="none" stroke="#cc44ff" stroke-width="1.5"/>
+          <ellipse cx="114" cy="22" rx="2.5" ry="2.5" fill="none" stroke="#cc44ff" stroke-width="1.5"/>
+          <ellipse cx="120" cy="26" rx="2.5" ry="2.5" fill="none" stroke="#cc44ff" stroke-width="1.5"/>
+          <text x="113" y="44" fill="#cc44ff" font-size="5.5" text-anchor="middle">PSU1</text>
+
+          <rect x="128" y="15" width="22" height="22" rx="3" fill="#0a1020" stroke="#4466ff" stroke-width="2"/>
+          <ellipse cx="134" cy="26" rx="2.5" ry="2.5" fill="none" stroke="#4466ff" stroke-width="1.5"/>
+          <ellipse cx="140" cy="22" rx="2.5" ry="2.5" fill="none" stroke="#4466ff" stroke-width="1.5"/>
+          <ellipse cx="146" cy="26" rx="2.5" ry="2.5" fill="none" stroke="#4466ff" stroke-width="1.5"/>
+          <text x="139" y="44" fill="#4466ff" font-size="5.5" text-anchor="middle">PSU2</text>
+
+          <!-- Red cable: PSU1 → Left PDU -->
+          <path d="M 102 26 Q 50 26 50 80" stroke="#ff4422" stroke-width="2" fill="none"/>
+          <!-- Blue cable: PSU2 → Right PDU -->
+          <path d="M 150 26 Q 220 26 220 80" stroke="#3399ff" stroke-width="2" fill="none"/>
+
+          <!-- Left PDU (A-feed) -->
+          <rect x="0" y="80" width="36" height="70" rx="3" fill="#0d2b1a" stroke="#2aaa5a" stroke-width="1.5"/>
+          <text x="18" y="118" fill="#2aaa5a" font-size="6" text-anchor="middle" transform="rotate(-90,18,118)">LEFT PDU (A)</text>
+          <rect x="4"  y="86"  width="28" height="10" rx="2" fill="#0a3a20" stroke="#3aaa6a" stroke-width="1"/>
+          <rect x="4"  y="100" width="28" height="10" rx="2" fill="#133a22" stroke="#5afa9a" stroke-width="1.5"/>
+          <text x="18" y="109" fill="#5afa9a" font-size="5.5" text-anchor="middle">C13 ●</text>
+          <rect x="4"  y="114" width="28" height="10" rx="2" fill="#0a3a20" stroke="#3aaa6a" stroke-width="1"/>
+          <rect x="4"  y="128" width="28" height="10" rx="2" fill="#0a3a20" stroke="#3aaa6a" stroke-width="1"/>
+
+          <!-- Right PDU (B-feed) -->
+          <rect x="240" y="80" width="36" height="70" rx="3" fill="#0d1a2b" stroke="#2a5aaa" stroke-width="1.5"/>
+          <text x="258" y="118" fill="#5a8aff" font-size="6" text-anchor="middle" transform="rotate(-90,258,118)">RIGHT PDU (B)</text>
+          <rect x="244" y="86"  width="28" height="10" rx="2" fill="#0a2040" stroke="#3a6aaa" stroke-width="1"/>
+          <rect x="244" y="100" width="28" height="10" rx="2" fill="#132040" stroke="#6688ff" stroke-width="1.5"/>
+          <text x="258" y="109" fill="#88aaff" font-size="5.5" text-anchor="middle">C13 ●</text>
+          <rect x="244" y="114" width="28" height="10" rx="2" fill="#0a2040" stroke="#3a6aaa" stroke-width="1"/>
+          <rect x="244" y="128" width="28" height="10" rx="2" fill="#0a2040" stroke="#3a6aaa" stroke-width="1"/>
+
+          <!-- HA badge -->
+          <rect x="98" y="88" width="82" height="20" rx="4" fill="#0d2510" stroke="#2aaa5a" stroke-width="1"/>
+          <text x="139" y="102" fill="#2aaa5a" font-size="7.5" text-anchor="middle" font-weight="bold">✓ HA — Dual Feed</text>
+
+          <text x="140" y="155" fill="#555" font-size="6.5" text-anchor="middle">PSU1→A (red) + PSU2→B (blue) = fully redundant power</text>
+        </svg>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="background:#0d1a10;border:1px solid #1a4a2a;border-radius:8px;padding:14px">
+  <h3 style="margin:0 0 6px;color:#2aaa5a">Rule: last N ports = power inlets</h3>
+  <p style="margin:0;color:#888;font-size:12px">
+    <strong style="color:#ccc">DeviceTemplate gets a <code style="color:#5afa9a">psuCount: 1 | 2</code> field.</strong><br>
+    At render time: ports <code>[totalPorts - psuCount]</code> onwards are power inlets — rendered with a C14/IEC inlet graphic instead of an RJ45 jack.<br>
+    A power cable drawn from a PSU inlet to a PDU outlet is typed as <code>cableType: 'power'</code> and carries the plug sub-category (C13, IS 6538, etc.).<br><br>
+    <strong style="color:#ccc">Single PSU</strong> → only A-feed used, right PDU slot stays empty (or unconnected).<br>
+    <strong style="color:#ccc">Dual PSU</strong> → PSU1 → Left PDU (red), PSU2 → Right PDU (blue) = HA.
+  </p>
+</div>

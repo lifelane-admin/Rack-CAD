@@ -1,0 +1,64 @@
+<h2>What sections should the design document include?</h2>
+<p class="subtitle">Select all that apply. The export opens in a new browser tab — styled for print.</p>
+
+<div class="options" data-multiselect>
+
+  <div class="option" data-choice="rack-view" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>Rack Front View</h3>
+      <p>The SVG rack canvas (one section per rack). The core visual — always included.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="rear-view" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>Rack Rear View</h3>
+      <p>The rear panel showing PSUs, fans, and PCIe slots — side-by-side with front view.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="port-table" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>Port Mapping Table</h3>
+      <p>Every cable listed as a row: From Device / Port → To Device / Port, cable type, color.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="legend" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>Cable Legend</h3>
+      <p>Color swatch + label for each cable type used (iDRAC, VM Network, Ceph, Power…).</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="device-inventory" onclick="toggleSelect(this)">
+    <div class="letter">5</div>
+    <div class="content">
+      <h3>Device Inventory Table</h3>
+      <p>Per-rack list: Device, Model, RU position, Hostname, IP, Serial Number.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="design-notes" onclick="toggleSelect(this)">
+    <div class="letter">6</div>
+    <div class="content">
+      <h3>Design Notes</h3>
+      <p>A free-text section you type inside the app — appears at the bottom of the document as deployment notes / change log.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="power-summary" onclick="toggleSelect(this)">
+    <div class="letter">7</div>
+    <div class="content">
+      <h3>Power Summary</h3>
+      <p>Per-rack power draw vs. PDU capacity, weight totals, and any validation warnings.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:1.5rem">Click all you want, then tell me in the terminal.</p>

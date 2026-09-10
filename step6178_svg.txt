@@ -1,0 +1,446 @@
+export interface CableCatalogOption {
+  type: string;
+  label: string;
+  subLabel: string;
+  portBadgeType: 'rj45' | 'power' | 'fiber' | 'sfp' | 'serial' | 'sas' | 'video' | 'usb';
+  defaultColor: string;
+  isPower: boolean;
+}
+
+export interface CableCategoryGroup {
+  category: string;
+  items: CableCatalogOption[];
+}
+
+export const CABLE_CATEGORIES: CableCategoryGroup[] = [
+  {
+    category: '1. COPPER ETHERNET NETWORKING',
+    items: [
+      { type: 'general', label: 'Ethernet', subLabel: 'ethernet (cat6 / cat6a)', portBadgeType: 'rj45', defaultColor: '#2563eb', isPower: false }
+    ]
+  },
+  {
+    category: '2. POWER INFRASTRUCTURE',
+    items: [
+      { type: 'power', label: 'Power Primary', subLabel: 'power (c13-primary)', portBadgeType: 'power', defaultColor: '#dc2626', isPower: true },
+      { type: 'power-redundant', label: 'Power Redundant', subLabel: 'power-redundant', portBadgeType: 'power', defaultColor: '#2563eb', isPower: true },
+      { type: 'c19-power', label: 'High Amp Power', subLabel: 'high-amp (c19/c20)', portBadgeType: 'power', defaultColor: '#1e2024', isPower: true },
+      { type: 'ground', label: 'Chassis Ground', subLabel: 'rack-chassis-ground', portBadgeType: 'power', defaultColor: '#16a34a', isPower: true }
+    ]
+  },
+  {
+    category: '3. OPTICAL FIBER NETWORKS',
+    items: [
+      { type: 'om4', label: 'Fiber OM4 Duplex', subLabel: 'fiber-om4-duplex (lc-lc)', portBadgeType: 'fiber', defaultColor: '#06b6d4', isPower: false },
+      { type: 'om5', label: 'Fiber OS2 Singlemode', subLabel: 'fiber-os2-singlemode', portBadgeType: 'fiber', defaultColor: '#ea580c', isPower: false },
+      { type: 'sc-fiber', label: 'Fiber Simplex', subLabel: 'fiber-simplex (sc-single)', portBadgeType: 'fiber', defaultColor: '#ea580c', isPower: false },
+      { type: 'mpo-trunk', label: 'MPO/MTP-12 Trunk', subLabel: 'mpo/mtp-12 (trunk-spine)', portBadgeType: 'fiber', defaultColor: '#db2777', isPower: false },
+      { type: 'st-fiber', label: 'ST Bayonet Fiber', subLabel: 'st-fiber (bayonet-twist)', portBadgeType: 'fiber', defaultColor: '#ea580c', isPower: false }
+    ]
+  },
+  {
+    category: '4. SERIAL & OUT-OF-BAND CONSOLE',
+    items: [
+      { type: 'serial-rs232', label: 'Serial RS-232', subLabel: 'serial-rs232 (db9-null-modem)', portBadgeType: 'serial', defaultColor: '#64748b', isPower: false },
+      { type: 'serial-console', label: 'Cisco Rollover', subLabel: 'serial-console (rollover)', portBadgeType: 'serial', defaultColor: '#38bdf8', isPower: false }
+    ]
+  },
+  {
+    category: '5. HIGH-SPEED DIRECT ATTACH (DAC / AOC)',
+    items: [
+      { type: 'dac-twinax', label: 'SFP28 DAC', subLabel: 'dac-sfp28 (25g-twinax)', portBadgeType: 'sfp', defaultColor: '#1e2024', isPower: false },
+      { type: 'dac-qsfp28', label: 'QSFP28 DAC', subLabel: 'dac-qsfp28 (100g-fabric)', portBadgeType: 'sfp', defaultColor: '#1e2024', isPower: false },
+      { type: 'dac-breakout', label: '100G Breakout DAC', subLabel: 'dac-breakout (100g to 4×25g)', portBadgeType: 'sfp', defaultColor: '#1e2024', isPower: false }
+    ]
+  },
+  {
+    category: '6. STORAGE & BUS EXPANSION (SAS / PCIE / NVME)',
+    items: [
+      { type: 'mini-sas-hd', label: 'Mini-SAS HD', subLabel: 'mini-sas-hd (sff-8644)', portBadgeType: 'sas', defaultColor: '#1e2024', isPower: false },
+      { type: 'slimsas', label: 'SlimSAS / MCIO', subLabel: 'slimsas / mcio (pcie gen5)', portBadgeType: 'sas', defaultColor: '#334155', isPower: false },
+      { type: 'qsfp-dd', label: 'QSFP-DD 400G', subLabel: 'qsfp-dd (400g/800g pam4)', portBadgeType: 'sas', defaultColor: '#1e2024', isPower: false }
+    ]
+  },
+  {
+    category: '7. KVM, DISPLAY & VIDEO INTERFACES',
+    items: [
+      { type: 'vga-dsub', label: 'VGA D-Sub', subLabel: 'vga-dsub (kvm-video)', portBadgeType: 'video', defaultColor: '#0284c7', isPower: false },
+      { type: 'hdmi', label: 'HDMI Video', subLabel: 'hdmi-digital-video', portBadgeType: 'video', defaultColor: '#1e2024', isPower: false },
+      { type: 'displayport', label: 'DisplayPort', subLabel: 'displayport (dp-gpu)', portBadgeType: 'video', defaultColor: '#1e2024', isPower: false }
+    ]
+  },
+  {
+    category: '8. ENVIRONMENTAL SENSORS & USB DEBUG',
+    items: [
+      { type: 'rj11-sensor', label: 'RJ11/RJ12 Sensor', subLabel: 'rj11/rj12 (env-sensors)', portBadgeType: 'usb', defaultColor: '#475569', isPower: false },
+      { type: 'usb-a', label: 'USB Type-A', subLabel: 'usb-a (front-service-port)', portBadgeType: 'usb', defaultColor: '#1e2024', isPower: false },
+      { type: 'usb-c', label: 'USB Type-C', subLabel: 'usb-type-c (debug-console)', portBadgeType: 'usb', defaultColor: '#1e2024', isPower: false }
+    ]
+  }
+];
+
+const ALL_CABLE_OPTIONS: CableCatalogOption[] = CABLE_CATEGORIES.flatMap(c => c.items);
+
+const SVG_DEFS_RAW = `
+  <defs>
+    <filter id="cable-drop-shadow" x="-10%" y="-30%" width="130%" height="180%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.85" />
+    </filter>
+    <linearGradient id="metal-finish" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" /><stop offset="15%" stop-color="#E2E8F0" /><stop offset="50%" stop-color="#94A3B8" /><stop offset="85%" stop-color="#64748B" /><stop offset="100%" stop-color="#334155" />
+    </linearGradient>
+    <linearGradient id="silver-prong" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#94A3B8" /><stop offset="35%" stop-color="#FFFFFF" /><stop offset="70%" stop-color="#CBD5E1" /><stop offset="100%" stop-color="#475569" />
+    </linearGradient>
+    <linearGradient id="gold-contact" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A" /><stop offset="40%" stop-color="#EAB308" /><stop offset="100%" stop-color="#854D0E" />
+    </linearGradient>
+    <linearGradient id="ceramic-ferrule" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" /><stop offset="50%" stop-color="#F1F5F9" /><stop offset="100%" stop-color="#CBD5E1" />
+    </linearGradient>
+    <linearGradient id="polycarb" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9" /><stop offset="35%" stop-color="#94A3B8" stop-opacity="0.5" /><stop offset="75%" stop-color="#475569" stop-opacity="0.75" /><stop offset="100%" stop-color="#0F172A" stop-opacity="0.95" />
+    </linearGradient>
+    <linearGradient id="pvc-black" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#383D44" /><stop offset="35%" stop-color="#1E2024" /><stop offset="100%" stop-color="#0A0B0C" />
+    </linearGradient>
+    <linearGradient id="pvc-aqua" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#67E8F9" /><stop offset="40%" stop-color="#06B6D4" /><stop offset="100%" stop-color="#0E7490" />
+    </linearGradient>
+    <linearGradient id="pvc-magenta" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F472B6" /><stop offset="40%" stop-color="#DB2777" /><stop offset="100%" stop-color="#831843" />
+    </linearGradient>
+    <linearGradient id="pvc-orange" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FB923C" /><stop offset="40%" stop-color="#EA580C" /><stop offset="100%" stop-color="#7C2D12" />
+    </linearGradient>
+    <linearGradient id="pvc-blue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#60A5FA" /><stop offset="40%" stop-color="#2563EB" /><stop offset="100%" stop-color="#1E3A8A" />
+    </linearGradient>
+    <linearGradient id="pvc-red" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F87171" /><stop offset="40%" stop-color="#DC2626" /><stop offset="100%" stop-color="#7F1D1D" />
+    </linearGradient>
+    <linearGradient id="pvc-green-earth" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4ADE80" /><stop offset="40%" stop-color="#16A34A" /><stop offset="100%" stop-color="#14532D" />
+    </linearGradient>
+    <linearGradient id="vga-blue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" /><stop offset="40%" stop-color="#0284C7" /><stop offset="100%" stop-color="#0369A1" />
+    </linearGradient>
+    <linearGradient id="serial-grey" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#94A3B8" /><stop offset="40%" stop-color="#64748B" /><stop offset="100%" stop-color="#334155" />
+    </linearGradient>
+    <linearGradient id="lc-grey" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F8FAFC" /><stop offset="35%" stop-color="#CBD5E1" /><stop offset="75%" stop-color="#94A3B8" /><stop offset="100%" stop-color="#64748B" />
+    </linearGradient>
+    <linearGradient id="blue-upc" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#60A5FA" /><stop offset="35%" stop-color="#2563EB" /><stop offset="75%" stop-color="#1D4ED8" /><stop offset="100%" stop-color="#1E3A8A" />
+    </linearGradient>
+    <linearGradient id="mpo-teal-slate" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" /><stop offset="30%" stop-color="#0284C7" /><stop offset="75%" stop-color="#0F172A" /><stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <pattern id="brd-red" width="8" height="8" patternUnits="userSpaceOnUse">
+      <rect width="8" height="8" fill="#DC2626" />
+      <path d="M 0 0 L 8 8 M 8 0 L 0 8" stroke="#0F172A" stroke-width="2" />
+      <circle cx="2" cy="2" r="0.6" fill="#FCA5A5" opacity="0.5" />
+    </pattern>
+    <pattern id="brd-blue" width="8" height="8" patternUnits="userSpaceOnUse">
+      <rect width="8" height="8" fill="#2563EB" />
+      <path d="M 0 0 L 8 8 M 8 0 L 0 8" stroke="#0F172A" stroke-width="2" />
+      <circle cx="2" cy="2" r="0.6" fill="#BFDBFE" opacity="0.5" />
+    </pattern>
+    <g id="head-c13-red">
+      <path d="M 0 11 L 28 11 L 34 5 L 64 5 C 67 5, 70 8, 70 11 L 70 23 C 70 26, 67 29, 64 29 L 34 29 L 28 23 L 0 23 Z" fill="url(#pvc-red)" stroke="#991B1B" stroke-width="0.5" />
+      <path d="M 0 11.5 L 28 11.5 L 34 5.5 L 64 5.5" stroke="#FCA5A5" stroke-width="0.8" fill="none" opacity="0.6" />
+      <rect x="19" y="9.5" width="4" height="15" rx="1" fill="url(#pvc-red)" stroke="#7F1D1D" stroke-width="0.5" />
+      <path d="M 40 8 L 61 8 L 65 12 L 65 22 L 61 26 L 40 26 Z" fill="#450A0A" />
+      <rect x="52" y="10" width="2.4" height="4" rx="0.8" fill="url(#silver-prong)" />
+      <rect x="52" y="20" width="2.4" height="4" rx="0.8" fill="url(#silver-prong)" />
+      <rect x="57.5" y="15" width="2.4" height="4" rx="0.8" fill="url(#silver-prong)" />
+    </g>
+    <g id="head-c13-blue">
+      <path d="M 0 11 L 28 11 L 34 5 L 64 5 C 67 5, 70 8, 70 11 L 70 23 C 70 26, 67 29, 64 29 L 34 29 L 28 23 L 0 23 Z" fill="url(#pvc-blue)" stroke="#1E40AF" stroke-width="0.5" />
+      <path d="M 0 11.5 L 28 11.5 L 34 5.5 L 64 5.5" stroke="#93C5FD" stroke-width="0.8" fill="none" opacity="0.6" />
+      <rect x="19" y="9.5" width="4" height="15" rx="1" fill="url(#pvc-blue)" stroke="#1E3A8A" stroke-width="0.5" />
+      <path d="M 40 8 L 61 8 L 65 12 L 65 22 L 61 26 L 40 26 Z" fill="#0A1B3A" />
+      <rect x="52" y="10" width="2.4" height="4" rx="0.8" fill="url(#silver-prong)" />
+      <rect x="52" y="20" width="2.4" height="4" rx="0.8" fill="url(#silver-prong)" />
+      <rect x="57.5" y="15" width="2.4" height="4" rx="0.8" fill="url(#silver-prong)" />
+    </g>
+    <g id="head-c19">
+      <rect x="0" y="5" width="70" height="24" rx="3" fill="url(#pvc-black)" stroke="#000000" stroke-width="0.6" />
+      <rect x="0" y="6" width="70" height="2" fill="#64748B" opacity="0.4" />
+      <rect x="36" y="8" width="28" height="18" rx="2" fill="#000000" />
+      <rect x="42" y="10" width="5" height="2" fill="url(#silver-prong)" />
+      <rect x="42" y="22" width="5" height="2" fill="url(#silver-prong)" />
+      <rect x="52" y="16" width="5" height="2" fill="url(#silver-prong)" />
+      <line x1="14" y1="8" x2="14" y2="26" stroke="#000000" stroke-width="1.5" />
+      <line x1="20" y1="8" x2="20" y2="26" stroke="#000000" stroke-width="1.5" />
+    </g>
+    <g id="mod-sfp">
+      <path d="M 0 6 L 42 6 L 44 8 L 48 8 L 50 11 L 50 21 L 48 24 L 44 24 L 42 26 L 0 26 Z" fill="url(#metal-finish)" stroke="#334155" stroke-width="0.6" />
+      <line x1="0" y1="6.5" x2="42" y2="6.5" stroke="#FFFFFF" stroke-width="0.8" opacity="0.8" />
+      <rect x="6" y="9" width="28" height="14" rx="1" fill="#FFFFFF" opacity="0.85" stroke="#94A3B8" stroke-width="0.4" />
+      <rect x="0" y="4" width="4" height="24" rx="1.5" fill="#0F172A" />
+      <rect x="49" y="12" width="4" height="8" rx="0.5" fill="url(#gold-contact)" />
+    </g>
+    <g id="head-rj45">
+      <rect x="0" y="5.5" width="15" height="15" rx="1.5" fill="url(#polycarb)" stroke="#475569" stroke-width="0.5" />
+      <line x1="0.5" y1="6" x2="14.5" y2="6" stroke="#FFFFFF" stroke-width="0.8" opacity="0.7" />
+      <path d="M 4 5 L 12 3 L 13 5 Z" fill="#CBD5E1" opacity="0.6" />
+      <line x1="8" y1="9" x2="14" y2="9" stroke="#EA580C" stroke-width="1.2" />
+      <line x1="8" y1="11.5" x2="14" y2="11.5" stroke="#2563EB" stroke-width="1.2" />
+      <line x1="8" y1="14" x2="14" y2="14" stroke="#16A34A" stroke-width="1.2" />
+      <line x1="8" y1="16.5" x2="14" y2="16.5" stroke="#92400E" stroke-width="1.2" />
+      <rect x="1.5" y="7.5" width="4" height="1" fill="url(#gold-contact)" />
+      <rect x="1.5" y="9.5" width="4" height="1" fill="url(#gold-contact)" />
+      <rect x="1.5" y="11.5" width="4" height="1" fill="url(#gold-contact)" />
+      <rect x="1.5" y="13.5" width="4" height="1" fill="url(#gold-contact)" />
+      <rect x="1.5" y="15.5" width="4" height="1" fill="url(#gold-contact)" />
+      <rect x="1.5" y="17.5" width="4" height="1" fill="url(#gold-contact)" />
+    </g>
+  </defs>
+`;
+
+export class FloatingToolbar {
+  private element: HTMLElement | null = null;
+  private currentTool: ToolMode = 'select';
+  private selectedCableId: string | null = null;
+  private selectedPointerLabelId: string | null = null;
+  private activeCableEnd: 'source' | 'dest' = 'dest';
+  private isCableMenuOpen = false;
+
+  // Toolbar position dragging states
+  private toolbarX: number | null = null;
+  private toolbarY: number | null = null;
+  private isRepositioning = false;
+  private dragOffsetX = 0;
+  private dragOffsetY = 0;
+
+  constructor() {
+    this.ensureSvgDefs();
+    this.init();
+    this.setupListeners();
+  }
+
+  private ensureSvgDefs() {
+    if (!document.getElementById('ft-svg-defs-container')) {
+      const defsDiv = document.createElement('div');
+      defsDiv.id = 'ft-svg-defs-container';
+      defsDiv.style.position = 'absolute';
+      defsDiv.style.width = '0';
+      defsDiv.style.height = '0';
+      defsDiv.style.overflow = 'hidden';
+      defsDiv.style.pointerEvents = 'none';
+      defsDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0">${SVG_DEFS_RAW}</svg>`;
+      document.body.appendChild(defsDiv);
+    }
+  }
+
+  private getCableGraphicSvg(type: string, width = 100, height = 22): string {
+    let innerSvg = '';
+    switch (type) {
+      case 'general':
+        innerSvg = `
+          <use href="#head-rj45" x="0" y="2" />
+          <path d="M 14 7 L 29 9 L 31 21 L 14 23 Z" fill="url(#pvc-blue)" />
+          <rect x="31" y="11" width="11" height="8" rx="0.5" fill="url(#pvc-blue)" />
+          <rect x="42" y="11.5" width="82" height="7" rx="3.5" fill="url(#pvc-blue)" />
+          <rect x="42" y="12" width="82" height="1.8" fill="#FFFFFF" opacity="0.25" />
+        `;
+        break;
+      case 'power':
+        innerSvg = `
+          <rect x="0" y="11" width="55" height="8" rx="3.5" fill="url(#brd-red)" />
+          <use href="#head-c13-red" x="55" y="-2" />
+        `;
+        break;
+      case 'power-redundant':
+        innerSvg = `
+          <rect x="0" y="11" width="55" height="8" rx="3.5" fill="url(#brd-blue)" />
+          <use href="#head-c13-blue" x="55" y="-2" />
+        `;
+        break;
+      case 'c19-power':
+        innerSvg = `
+          <rect x="0" y="10" width="55" height="10" rx="4" fill="url(#pvc-black)" stroke="#0F172A" stroke-width="0.5" />
+          <use href="#head-c19" x="55" y="-2" />
+        `;
+        break;
+      case 'ground':
+        innerSvg = `
+          <rect x="0" y="10.5" width="80" height="7" rx="3.5" fill="url(#pvc-green-earth)" />
+          <line x1="0" y1="11" x2="80" y2="11" stroke="#FDE047" stroke-width="1.8" />
+          <path d="M 80 8 L 98 8 C 104 8, 108 11, 108 14 C 108 17, 104 20, 98 20 L 80 20 Z" fill="url(#gold-contact)" stroke="#78350F" stroke-width="0.5" />
+          <circle cx="88" cy="14" r="2.2" fill="#14171A" stroke="#78350F" stroke-width="0.5" />
+          <circle cx="98" cy="14" r="2.2" fill="#14171A" stroke="#78350F" stroke-width="0.5" />
+        `;
+        break;
+      case 'om4':
+        innerSvg = `
+          <rect x="0" y="6.5" width="6" height="5" rx="0.8" fill="url(#ceramic-ferrule)" stroke="#CBD5E1" stroke-width="0.4" />
+          <circle cx="1" cy="9" r="0.6" fill="#0284C7" />
+          <rect x="0" y="16.5" width="6" height="5" rx="0.8" fill="url(#ceramic-ferrule)" stroke="#CBD5E1" stroke-width="0.4" />
+          <circle cx="1" cy="19" r="0.6" fill="#0284C7" />
+          <rect x="6" y="5" width="22" height="18" rx="1.5" fill="url(#lc-grey)" stroke="#475569" stroke-width="0.5" />
+          <line x1="6" y1="5.5" x2="28" y2="5.5" stroke="#FFFFFF" stroke-width="0.6" opacity="0.7" />
+          <rect x="28" y="6" width="20" height="6" rx="1.5" fill="#E2E8F0" stroke="#94A3B8" stroke-width="0.4" />
+          <rect x="28" y="16" width="20" height="6" rx="1.5" fill="#E2E8F0" stroke="#94A3B8" stroke-width="0.4" />
+          <rect x="48" y="7.5" width="76" height="3" rx="1.5" fill="url(#pvc-aqua)" />
+          <rect x="48" y="17.5" width="76" height="3" rx="1.5" fill="url(#pvc-aqua)" />
+        `;
+        break;
+      case 'om5':
+        innerSvg = `
+          <rect x="0" y="6.5" width="6" height="5" rx="0.8" fill="url(#ceramic-ferrule)" stroke="#CBD5E1" stroke-width="0.4" />
+          <circle cx="1" cy="9" r="0.6" fill="#2563EB" />
+          <rect x="0" y="16.5" width="6" height="5" rx="0.8" fill="url(#ceramic-ferrule)" stroke="#CBD5E1" stroke-width="0.4" />
+          <circle cx="1" cy="19" r="0.6" fill="#2563EB" />
+          <rect x="6" y="5" width="22" height="18" rx="1.5" fill="url(#blue-upc)" stroke="#1D4ED8" stroke-width="0.5" />
+          <line x1="6" y1="5.5" x2="28" y2="5.5" stroke="#93C5FD" stroke-width="0.6" opacity="0.8" />
+          <rect x="28" y="6" width="20" height="6" rx="1.5" fill="url(#blue-upc)" stroke="#1E3A8A" stroke-width="0.4" />
+          <rect x="28" y="16" width="20" height="6" rx="1.5" fill="url(#blue-upc)" stroke="#1E3A8A" stroke-width="0.4" />
+          <rect x="48" y="7.5" width="76" height="3" rx="1.5" fill="url(#pvc-orange)" />
+          <rect x="48" y="17.5" width="76" height="3" rx="1.5" fill="url(#pvc-orange)" />
+        `;
+        break;
+      case 'sc-fiber':
+        innerSvg = `
+          <rect x="2" y="11.5" width="6" height="5" rx="0.8" fill="url(#ceramic-ferrule)" stroke="#CBD5E1" stroke-width="0.4" />
+          <circle cx="3" cy="14" r="0.6" fill="#2563EB" />
+          <rect x="8" y="7.5" width="26" height="13" rx="1.5" fill="url(#blue-upc)" stroke="#1D4ED8" stroke-width="0.5" />
+          <path d="M 42 11 L 34 9 L 34 19 L 42 17 Z" fill="url(#blue-upc)" stroke="#1E3A8A" stroke-width="0.4" />
+          <rect x="42" y="12" width="82" height="4" rx="2" fill="url(#pvc-orange)" />
+        `;
+        break;
+      case 'mpo-trunk':
+        innerSvg = `
+          <rect x="2" y="7" width="6" height="14" rx="0.5" fill="url(#ceramic-ferrule)" stroke="#94A3B8" stroke-width="0.4" />
+          <rect x="8" y="4" width="28" height="20" rx="2" fill="url(#mpo-teal-slate)" stroke="#0284C7" stroke-width="0.6" />
+          <path d="M 52 7 L 36 5 L 36 23 L 52 21 Z" fill="#1E293B" stroke="#0F172A" stroke-width="0.5" />
+          <rect x="52" y="9.5" width="72" height="9" rx="4.5" fill="url(#pvc-magenta)" />
+        `;
+        break;
+      case 'st-fiber':
+        innerSvg = `
+          <rect x="0" y="11.5" width="12" height="5" rx="1" fill="url(#ceramic-ferrule)" stroke="#CBD5E1" stroke-width="0.4" />
+          <rect x="12" y="10.5" width="4" height="7" rx="0.5" fill="url(#metal-finish)" stroke="#475569" stroke-width="0.4" />
+          <rect x="16" y="7" width="18" height="14" rx="2" fill="url(#metal-finish)" stroke="#334155" stroke-width="0.5" />
+          <rect x="34" y="10" width="30" height="8" rx="2" fill="#1E293B" stroke="#0F172A" stroke-width="0.4" />
+          <rect x="64" y="12" width="60" height="4" rx="2" fill="url(#pvc-orange)" />
+        `;
+        break;
+      case 'serial-rs232':
+        innerSvg = `
+          <polygon points="0,7 12,7 16,11 16,17 12,21 0,21" fill="url(#metal-finish)" stroke="#334155" stroke-width="0.5" />
+          <rect x="16" y="5" width="30" height="18" rx="2" fill="url(#serial-grey)" stroke="#334155" stroke-width="0.5" />
+          <rect x="46" y="11" width="78" height="6" rx="3" fill="#475569" />
+        `;
+        break;
+      case 'serial-console':
+        innerSvg = `
+          <use href="#head-rj45" x="0" y="2" />
+          <path d="M 14 9 L 24 10 L 24 20 L 14 21 Z" fill="#0284C7" />
+          <rect x="24" y="11" width="100" height="8" rx="1" fill="#38BDF8" stroke="#0284C7" stroke-width="0.5" />
+        `;
+        break;
+      case 'dac-twinax':
+        innerSvg = `
+          <path d="M 0 14 C 0 9, 10 9, 12 9 L 12 11 C 10 11, 2 11, 2 14 C 2 17, 10 17, 12 17 L 12 19 C 10 19, 0 19, 0 14 Z" fill="#38BDF8" />
+          <use href="#mod-sfp" x="12" y="-2" />
+          <rect x="64" y="9" width="60" height="10" rx="4.5" fill="url(#pvc-black)" stroke="#000000" stroke-width="0.5" />
+        `;
+        break;
+      case 'dac-qsfp28':
+        innerSvg = `
+          <path d="M 0 14 C 0 7, 10 7, 12 7 L 12 9 C 10 9, 2 9, 2 14 C 2 19, 10 19, 12 19 L 12 21 C 10 21, 0 21, 0 14 Z" fill="#F97316" />
+          <rect x="12" y="2" width="46" height="24" rx="2" fill="url(#metal-finish)" stroke="#334155" stroke-width="0.5" />
+          <rect x="63" y="7.5" width="61" height="13" rx="5" fill="url(#pvc-black)" stroke="#000000" stroke-width="0.5" />
+        `;
+        break;
+      case 'dac-breakout':
+        innerSvg = `
+          <rect x="12" y="3" width="35" height="22" rx="2" fill="url(#metal-finish)" stroke="#334155" stroke-width="0.5" />
+          <rect x="47" y="5" width="12" height="18" rx="2" fill="#0F172A" />
+          <line x1="59" y1="8" x2="124" y2="5" stroke="#000000" stroke-width="2" />
+          <line x1="59" y1="11" x2="124" y2="10" stroke="#000000" stroke-width="2" />
+          <line x1="59" y1="17" x2="124" y2="18" stroke="#000000" stroke-width="2" />
+          <line x1="59" y1="20" x2="124" y2="23" stroke="#000000" stroke-width="2" />
+        `;
+        break;
+      case 'mini-sas-hd':
+        innerSvg = `
+          <path d="M 0 14 C 0 8, 10 8, 14 8 L 14 10 C 10 10, 2 10, 2 14 C 2 18, 10 18, 14 18 L 14 20 C 10 20, 0 20, 0 14 Z" fill="#22C55E" />
+          <rect x="14" y="5" width="50" height="18" rx="1.5" fill="url(#metal-finish)" stroke="#334155" stroke-width="0.5" />
+          <rect x="76" y="10" width="48" height="8" rx="3" fill="url(#pvc-black)" />
+        `;
+        break;
+      case 'slimsas':
+        innerSvg = `
+          <rect x="14" y="7" width="45" height="14" rx="1.5" fill="#1E293B" stroke="#475569" stroke-width="0.5" />
+          <rect x="18" y="10" width="10" height="8" rx="1" fill="#38BDF8" opacity="0.8" />
+          <rect x="64" y="11" width="60" height="6" rx="1" fill="#334155" stroke="#1E293B" stroke-width="0.4" />
+        `;
+        break;
+      case 'qsfp-dd':
+        innerSvg = `
+          <path d="M 0 14 C 0 6, 10 6, 12 6 L 12 8 C 10 8, 2 8, 2 14 C 2 20, 10 20, 12 20 L 12 22 C 10 22, 0 22, 0 14 Z" fill="#A855F7" />
+          <rect x="12" y="1" width="48" height="26" rx="2" fill="url(#metal-finish)" stroke="#334155" stroke-width="0.5" />
+          <rect x="65" y="7" width="59" height="14" rx="5" fill="url(#pvc-black)" />
+        `;
+        break;
+      case 'vga-dsub':
+        innerSvg = `
+          <polygon points="0,6 14,6 18,10 18,18 14,22 0,22" fill="url(#metal-finish)" stroke="#334155" stroke-width="0.5" />
+          <rect x="18" y="4" width="30" height="20" rx="2" fill="url(#vga-blue)" stroke="#0284C7" stroke-width="0.5" />
+          <rect x="48" y="10.5" width="76" height="7" rx="3.5" fill="url(#pvc-black)" />
+        `;
+        break;
+      case 'hdmi':
+        innerSvg = `
+          <polygon points="0,9 0,19 4,19 6,22 16,22 16,6 6,6 4,9" fill="url(#gold-contact)" stroke="#78350F" stroke-width="0.5" />
+          <path d="M 16 5 L 42 5 C 45 5, 46 8, 46 11 L 46 17 C 46 20, 45 23, 42 23 L 16 23 Z" fill="#1E293B" stroke="#334155" stroke-width="0.5" />
+          <text x="24" y="16" fill="#94A3B8" font-family="sans-serif" font-size="6" font-weight="700">HDMI</text>
+          <rect x="46" y="10.5" width="78" height="7" rx="3.5" fill="url(#pvc-black)" />
+        `;
+        break;
+      case 'displayport':
+        innerSvg = `
+          <polygon points="0,7 14,7 18,11 18,21 0,21" fill="url(#metal-finish)" stroke="#334155" stroke-width="0.5" />
+          <rect x="18" y="5" width="30" height="18" rx="2" fill="#1E293B" stroke="#334155" stroke-width="0.5" />
+          <rect x="48" y="10.5" width="76" height="7" rx="3.5" fill="url(#pvc-black)" />
+        `;
+        break;
+      case 'rj11-sensor':
+        innerSvg = `
+          <rect x="0" y="6" width="12" height="16" rx="1" fill="url(#polycarb)" stroke="#475569" stroke-width="0.5" />
+          <rect x="12" y="10" width="112" height="8" rx="1" fill="#475569" stroke="#1E293B" stroke-width="0.4" />
+        `;
+        break;
+      case 'usb-a':
+        innerSvg = `
+          <rect x="0" y="8" width="22" height="12" rx="1" fill="url(#metal-finish)" stroke="#334155" stroke-width="0.5" />
+          <rect x="22" y="7" width="14" height="14" rx="1.5" fill="#1E293B" />
+          <rect x="36" y="11.5" width="88" height="5" rx="2.5" fill="url(#pvc-black)" />
+        `;
+        break;
+      case 'usb-c':
+        innerSvg = `
+          <rect x="0" y="10" width="18" height="8" rx="4" fill="url(#metal-finish)" stroke="#475569" stroke-width="0.5" />
+          <path d="M 18 8 L 38 8 C 40 8, 42 10, 42 12 L 42 16 C 42 18, 40 20, 38 20 L 18 20 Z" fill="#1E293B" stroke="#334155" stroke-width="0.5" />
+          <rect x="42" y="11.2" width="82" height="5.6" rx="2.8" fill="url(#pvc-black)" />
+        `;
+        break;
+      default:
+        innerSvg = `
+          <use href="#head-rj45" x="0" y="2" />
+          <path d="M 14 7 L 29 9 L 31 21 L 14 23 Z" fill="url(#pvc-blue)" />
+          <rect x="42" y="11.5" width="82" height="7" rx="3.5" fill="url(#pvc-blue)" />
+        `;
+        break;
+    }
+
+    return `<svg viewBox="0 0 126 28" width="${width}" height="${height}" fill="none" style="display:block; overflow:visible;">
+      <g filter="url(#cable-drop-shadow)">
+        ${innerSvg}
+      </g>
+    </svg>`;
+  }

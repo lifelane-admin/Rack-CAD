@@ -9,6 +9,9 @@ import { customRackModal } from './custom-rack-modal';
 import { cloudIconManifest, CloudIconEntry, getCloudIcon, isBoundaryIcon, BOUNDARY_MENU_KINDS, getBoundaryIconsByKind } from '../library/cloud-icon-catalog';
 import { recordIconUse, recordBoundaryUse, getRecentUsage } from '../library/recent-usage';
 import { getPortBadgeSvg, getCableGraphicSvg, ALL_CABLE_ITEMS } from './cable-graphics';
+import { dcState } from '../datacenter/dc-state';
+import { formatDimensionsMeters, formatArea, formatDimensionsMm, getUnitName } from '../datacenter/units';
+import { DcFloor, DcUnit } from '../datacenter/types';
 
 const CLOUD_SEARCH_RESULT_CAP = 150;
 let cloudSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -44,6 +47,11 @@ export class Sidebar {
 
   constructor(container: HTMLElement) {
     this.container = container;
+    dcState.subscribe(() => {
+      if (State.getState().activeView === 'datacenter') {
+        this.render();
+      }
+    });
   }
 
   /** Sets which cloud provider's palette section auto-expands, from outside the nav-tree click
@@ -81,17 +89,7 @@ export class Sidebar {
     this.container.appendChild(tabBar);
 
     if (isDc) {
-      const dcMsg = document.createElement('div');
-      dcMsg.className = 'sidebar-catalog';
-      dcMsg.style.padding = '16px 12px';
-      dcMsg.style.color = '#64748b';
-      dcMsg.style.fontSize = '12px';
-      dcMsg.style.lineHeight = '1.6';
-      dcMsg.innerHTML = `
-        <div style="font-weight: 700; color: #38bdf8; margin-bottom: 8px;">Datacenter Mode</div>
-        Visual floor planner active.<br>Use top controls to manage floor tiles & racks.
-      `;
-      this.container.appendChild(dcMsg);
+      this.renderDatacenterSidebar();
       return;
     }
 
@@ -142,6 +140,90 @@ export class Sidebar {
     } else {
       this.renderCatalog();
     }
+  }
+
+  private renderDatacenterSidebar(): void {
+    const dcSection = document.createElement('div');
+    dcSection.className = 'sidebar-catalog dc-sidebar-panel';
+    dcSection.style.padding = '12px 10px';
+    dcSection.style.overflowY = 'auto';
+
+    const floor = dcState.getActiveFloor();
+    if (!floor) {
+      dcSection.innerHTML = `
+        <div style="font-weight:700; color:#38bdf8; margin-bottom:8px; font-size:13px;">Datacenter Floor</div>
+        <div style="color:#64748b; font-size:12px; line-height:1.5;">No active floor loaded.<br>Click below to create your floor layout.</div>
+        <button class="dc-btn dc-btn-primary dc-btn-full" id="sb-dc-newfloor" style="margin-top:12px;">＋ New Floor</button>
+      `;
+      dcSection.querySelector('#sb-dc-newfloor')?.addEventListener('click', () => {
+        EventBus.emit('dc:newfloor' as any, undefined);
+      });
+      this.container.appendChild(dcSection);
+      return;
+    }
+
+    const unit = floor.unit ?? 'm';
+    const colCount = Math.ceil(floor.lengthM / (floor.tileSizeMm / 1000));
+    const rowCount = Math.ceil(floor.widthM / (floor.tileSizeMm / 1000));
+
+    dcSection.innerHTML = `
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid rgba(56,189,248,0.25);">
+        <span style="font-weight:700; font-size:13px; color:#38bdf8; letter-spacing:0.3px;">FLOOR OVERVIEW</span>
+        <span style="font-size:10px; background:rgba(56,189,248,0.15); color:#38bdf8; padding:2px 6px; border-radius:4px; font-weight:600;">${getUnitName(unit)}</span>
+      </div>
+
+      <div class="dc-info-row"><span class="dc-info-label">Floor</span><span class="dc-info-val" style="font-weight:600; color:#f0f6fc;">${floor.name}</span></div>
+      <div class="dc-info-row"><span class="dc-info-label">Dimensions</span><span class="dc-info-val">${formatDimensionsMeters(floor.lengthM, floor.widthM, unit)}</span></div>
+      <div class="dc-info-row"><span class="dc-info-label">Floor Area</span><span class="dc-info-val">${formatArea(floor.lengthM, floor.widthM)}</span></div>
+      <div class="dc-info-row"><span class="dc-info-label">ESD Tile</span><span class="dc-info-val">${formatDimensionsMm(floor.tileSizeMm, floor.tileSizeMm, unit === 'm' ? 'mm' : unit)}</span></div>
+      <div class="dc-info-row"><span class="dc-info-label">Grid Size</span><span class="dc-info-val">${colCount} cols × ${rowCount} rows</span></div>
+      <div class="dc-info-row"><span class="dc-info-label">Total Tiles</span><span class="dc-info-val">${floor.tiles.length.toLocaleString()}</span></div>
+      <div class="dc-info-row"><span class="dc-info-label">Total Racks</span><span class="dc-info-val" style="color:#38bdf8; font-weight:700;">${floor.racks.length}</span></div>
+
+      <div class="dc-divider-h" style="margin:10px 0 8px 0; border-bottom:1px solid rgba(255,255,255,0.08);"></div>
+
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="sb-dc-addrack" title="Add single server/network rack to floor">＋ Add Rack</button>
+        <button class="dc-btn dc-btn-sm dc-btn-full" id="sb-dc-addrow" title="Add Row of Racks (Standard Spacing)">▤ Add Row (Standards)</button>
+        <button class="dc-btn dc-btn-sm dc-btn-full dc-btn-secondary" id="sb-dc-editfloor" title="Edit Floor Name, Dimensions & Tiles">✎ Edit Floor</button>
+        <button class="dc-btn dc-btn-sm dc-btn-full dc-btn-secondary" id="sb-dc-resetfloor" title="Reset to clean empty floor layout">↺ Reset to Empty Floor</button>
+        <button class="dc-btn dc-btn-sm dc-btn-full dc-btn-danger" id="sb-dc-deletefloor" title="Delete this floor plan">🗑 Delete Floor</button>
+      </div>
+
+      <div class="dc-divider-h" style="margin:10px 0 8px 0; border-bottom:1px solid rgba(255,255,255,0.08);"></div>
+
+      <div style="display:flex; flex-direction:column; gap:4px;">
+        <label style="font-size:11px; color:#94a3b8; font-weight:600;">Active Measurement Unit</label>
+        <select id="sb-dc-unit-select" class="dc-select-sm" style="width:100%; height:28px;">
+          <option value="m"${unit === 'm' ? ' selected' : ''}>Meters (m)</option>
+          <option value="mm"${unit === 'mm' ? ' selected' : ''}>Millimeters (mm)</option>
+          <option value="ft"${unit === 'ft' ? ' selected' : ''}>Feet (ft)</option>
+          <option value="in"${unit === 'in' ? ' selected' : ''}>Inches (in)</option>
+        </select>
+      </div>
+    `;
+
+    dcSection.querySelector('#sb-dc-addrack')?.addEventListener('click', () => {
+      EventBus.emit('dc:addrack' as any, undefined);
+    });
+    dcSection.querySelector('#sb-dc-addrow')?.addEventListener('click', () => {
+      EventBus.emit('dc:addrow' as any, undefined);
+    });
+    dcSection.querySelector('#sb-dc-editfloor')?.addEventListener('click', () => {
+      EventBus.emit('dc:editfloor' as any, floor);
+    });
+    dcSection.querySelector('#sb-dc-resetfloor')?.addEventListener('click', () => {
+      EventBus.emit('dc:resetfloor' as any, undefined);
+    });
+    dcSection.querySelector('#sb-dc-deletefloor')?.addEventListener('click', () => {
+      EventBus.emit('dc:deletefloor' as any, floor);
+    });
+    dcSection.querySelector('#sb-dc-unit-select')?.addEventListener('change', (e: Event) => {
+      const newUnit = (e.target as HTMLSelectElement).value as DcUnit;
+      EventBus.emit('dc:setunit' as any, newUnit);
+    });
+
+    this.container.appendChild(dcSection);
   }
 
   private renderTabBar(container: HTMLElement, activeView: string): void {

@@ -1,0 +1,361 @@
+<h2>Switch Panel: Current vs. New Design</h2>
+<p class="subtitle">The rackstudio-demo.jsx introduces stacked-pair port layout, block grouping, rich gradients, a detailed console section, and rack ears. Pick which visual elements you want carried over into panel-renderer.ts.</p>
+
+<div class="split" style="gap:32px; margin-top:24px;">
+  <div class="mockup">
+    <div class="mockup-header">Current — panel-renderer.ts (24-port switch)</div>
+    <div class="mockup-body" style="padding:20px; background:#0d0f12;">
+      <svg viewBox="0 0 420 36" width="100%" style="display:block;">
+        <defs>
+          <linearGradient id="cur-chassis" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#3a3a3f"/>
+            <stop offset="30%" stop-color="#2a2a2f"/>
+            <stop offset="70%" stop-color="#22222a"/>
+            <stop offset="100%" stop-color="#1a1a1e"/>
+          </linearGradient>
+        </defs>
+        <!-- chassis -->
+        <rect x="0" y="2" width="420" height="32" rx="2" fill="url(#cur-chassis)" stroke="#111" stroke-width="1"/>
+        <rect x="1" y="3" width="418" height="1.5" rx="0.5" fill="rgba(255,255,255,0.07)"/>
+        <!-- status block -->
+        <circle cx="12" cy="13" r="3" fill="#00e676" filter="drop-shadow(0 0 2px #00e676)"/>
+        <circle cx="12" cy="22" r="3" fill="#fb8c00" opacity="0.9"/>
+        <rect x="7" y="27" width="10" height="6" rx="1" fill="#222" stroke="#555" stroke-width="0.5"/>
+        <rect x="26" y="13" width="12" height="10" rx="1" fill="#0a0a0f" stroke="#3a3a3f" stroke-width="0.7"/>
+        <line x1="48" y1="4" x2="48" y2="34" stroke="#333" stroke-width="0.8"/>
+        <!-- single-row RJ45 ports (labeled, LED strip above) -->
+        <!-- ports 1–12 -->
+        <g id="cur-ports">
+          <!-- port 1 -->
+          <rect x="51" y="5" width="11" height="2" rx="0.5" fill="#00e676"/>
+          <rect x="50" y="7" width="13" height="18" rx="1.5" fill="#0a0a0f"/>
+          <rect x="51" y="8" width="11" height="16" rx="1" fill="#050508"/>
+          <rect x="52" y="21" width="2.5" height="3" fill="#c0b870" rx="0.3"/>
+          <rect x="55.5" y="21" width="2.5" height="3" fill="#c0b870" rx="0.3"/>
+          <rect x="59" y="21" width="2.5" height="3" fill="#c0b870" rx="0.3"/>
+          <text x="56" y="4" text-anchor="middle" font-size="4.5" fill="#888" font-family="monospace">1</text>
+          <!-- port 2 -->
+          <rect x="62" y="5" width="11" height="2" rx="0.5" fill="#00e676"/>
+          <rect x="61" y="7" width="13" height="18" rx="1.5" fill="#0a0a0f"/>
+          <rect x="62" y="8" width="11" height="16" rx="1" fill="#050508"/>
+          <rect x="63" y="21" width="2.5" height="3" fill="#c0b870" rx="0.3"/>
+          <rect x="66.5" y="21" width="2.5" height="3" fill="#c0b870" rx="0.3"/>
+          <rect x="70" y="21" width="2.5" height="3" fill="#c0b870" rx="0.3"/>
+          <text x="67" y="4" text-anchor="middle" font-size="4.5" fill="#888" font-family="monospace">2</text>
+          <!-- more ports abbreviated -->
+          <text x="90" y="18" text-anchor="middle" font-size="8" fill="#444" font-family="monospace">… ports 3–20 …</text>
+          <!-- port 21 -->
+          <rect x="250" y="5" width="11" height="2" rx="0.5" fill="#152015"/>
+          <rect x="249" y="7" width="13" height="18" rx="1.5" fill="#0a0a0f"/>
+          <rect x="250" y="8" width="11" height="16" rx="1" fill="#050508"/>
+          <text x="255" y="4" text-anchor="middle" font-size="4.5" fill="#888" font-family="monospace">21</text>
+        </g>
+        <!-- SFP cages -->
+        <text x="275" y="8" text-anchor="middle" font-size="4" fill="#558" font-family="monospace">SFP1</text>
+        <rect x="270" y="9" width="9" height="18" rx="1.5" fill="#08080c"/>
+        <rect x="271.5" y="23" width="6" height="3" rx="0.5" fill="#00e5ff" opacity="0.55"/>
+        <text x="287" y="8" text-anchor="middle" font-size="4" fill="#558" font-family="monospace">SFP2</text>
+        <rect x="282" y="9" width="9" height="18" rx="1.5" fill="#08080c"/>
+        <rect x="283.5" y="23" width="6" height="3" rx="0.5" fill="#00e5ff" opacity="0.55"/>
+        <!-- vents -->
+        <rect x="298" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="302" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="306" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="310" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="314" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="318" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="322" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="326" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="330" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="334" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="338" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="342" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="346" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="350" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="354" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="358" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="362" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="366" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="370" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="374" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="378" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="382" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="386" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="390" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="394" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="398" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="402" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="406" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="410" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+        <rect x="414" y="6" width="2" height="24" rx="0.5" fill="#111114"/>
+      </svg>
+      <ul style="margin:12px 0 0; padding:0 0 0 18px; color:#8b939a; font-size:12px; line-height:1.8">
+        <li>Simple LED strip + flat rect socket, 3 pins</li>
+        <li>Single row; all ports at same height</li>
+        <li>Status section left (power LED, alarm, console)</li>
+        <li>SFP cages: plain dark rect + cyan glow at bottom</li>
+        <li>No rack ears, no brand area</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">New — rackstudio-demo.jsx style (24-port switch, 4U-scale render)</div>
+    <div class="mockup-body" style="padding:20px; background:#0d0f12;">
+      <svg viewBox="0 0 840 132" width="100%" style="display:block;">
+        <defs>
+          <linearGradient id="new-chassis" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#3a4046"/>
+            <stop offset="0.06" stop-color="#2c3237"/>
+            <stop offset="0.5" stop-color="#23282c"/>
+            <stop offset="0.94" stop-color="#1b1f22"/>
+            <stop offset="1" stop-color="#141719"/>
+          </linearGradient>
+          <linearGradient id="new-ear" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#31373c"/>
+            <stop offset="0.5" stop-color="#24292d"/>
+            <stop offset="1" stop-color="#181b1e"/>
+          </linearGradient>
+          <linearGradient id="new-cage" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#0c0e10"/>
+            <stop offset="0.12" stop-color="#2a2f34"/>
+            <stop offset="0.5" stop-color="#171b1e"/>
+            <stop offset="0.88" stop-color="#0a0c0d"/>
+            <stop offset="1" stop-color="#050607"/>
+          </linearGradient>
+          <linearGradient id="new-mouth" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#d9d3c2"/>
+            <stop offset="0.5" stop-color="#b3ad9c"/>
+            <stop offset="1" stop-color="#7c7768"/>
+          </linearGradient>
+          <linearGradient id="new-gold" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#f6d98a"/>
+            <stop offset="0.5" stop-color="#c9a24b"/>
+            <stop offset="1" stop-color="#7d6021"/>
+          </linearGradient>
+          <linearGradient id="new-sfpbody" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#c7ced4"/>
+            <stop offset="0.14" stop-color="#8f979e"/>
+            <stop offset="0.5" stop-color="#5c646b"/>
+            <stop offset="0.86" stop-color="#3a4147"/>
+            <stop offset="1" stop-color="#24292e"/>
+          </linearGradient>
+          <linearGradient id="new-lip" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#4b5258"/>
+            <stop offset="1" stop-color="#20252a"/>
+          </linearGradient>
+          <filter id="new-glow">
+            <feGaussianBlur stdDeviation="1.1" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="new-ao">
+            <feDropShadow dx="0" dy="1.4" stdDeviation="1.6" flood-color="#000" flood-opacity="0.55"/>
+          </filter>
+        </defs>
+
+        <!-- rack ears -->
+        <g filter="url(#new-ao)">
+          <rect x="0" y="0" width="44" height="132" rx="3" fill="url(#new-ear)" stroke="#0c0f11" stroke-width="1"/>
+          <circle cx="22" cy="29" r="5.4" fill="#0a0c0e" stroke="#4c5359" stroke-width="0.8"/>
+          <circle cx="22" cy="29" r="2.4" fill="#02040a"/>
+          <circle cx="22" cy="66" r="5.4" fill="#0a0c0e" stroke="#4c5359" stroke-width="0.8"/>
+          <circle cx="22" cy="66" r="2.4" fill="#02040a"/>
+          <circle cx="22" cy="103" r="5.4" fill="#0a0c0e" stroke="#4c5359" stroke-width="0.8"/>
+          <circle cx="22" cy="103" r="2.4" fill="#02040a"/>
+        </g>
+        <g filter="url(#new-ao)">
+          <rect x="796" y="0" width="44" height="132" rx="3" fill="url(#new-ear)" stroke="#0c0f11" stroke-width="1"/>
+          <circle cx="818" cy="29" r="5.4" fill="#0a0c0e" stroke="#4c5359" stroke-width="0.8"/>
+          <circle cx="818" cy="29" r="2.4" fill="#02040a"/>
+          <circle cx="818" cy="66" r="5.4" fill="#0a0c0e" stroke="#4c5359" stroke-width="0.8"/>
+          <circle cx="818" cy="66" r="2.4" fill="#02040a"/>
+          <circle cx="818" cy="103" r="5.4" fill="#0a0c0e" stroke="#4c5359" stroke-width="0.8"/>
+          <circle cx="818" cy="103" r="2.4" fill="#02040a"/>
+        </g>
+
+        <!-- chassis body -->
+        <g filter="url(#new-ao)">
+          <rect x="42" y="1" width="716" height="130" rx="4" fill="url(#new-chassis)" stroke="#0c0f11" stroke-width="1.2"/>
+          <rect x="44" y="2.5" width="712" height="2" rx="1" fill="#454b51" opacity="0.55"/>
+        </g>
+
+        <!-- console section: status LEDs -->
+        <circle cx="62" cy="28" r="3" fill="#39ff8a" filter="url(#new-glow)"/>
+        <text x="72" y="32" font-size="8" fill="#aeb6bd" font-family="sans-serif">PWR</text>
+        <circle cx="62" cy="52" r="3" fill="#39ff8a" opacity="0.4"/>
+        <text x="72" y="56" font-size="8" fill="#aeb6bd" font-family="sans-serif">SYS</text>
+        <circle cx="62" cy="76" r="3" fill="#1a1a1a"/>
+        <text x="72" y="80" font-size="8" fill="#aeb6bd" font-family="sans-serif">ALM</text>
+        <circle cx="62" cy="100" r="3" fill="#37b6ff" opacity="0.7"/>
+        <text x="72" y="104" font-size="8" fill="#aeb6bd" font-family="sans-serif">LOC</text>
+
+        <!-- brand wordmark -->
+        <text x="118" y="58" font-size="17" font-weight="700" fill="#37b6ff" letter-spacing="1.5" font-family="'Segoe UI',sans-serif">RACK SLICER</text>
+        <text x="118" y="75" font-size="9" fill="#8b939a" letter-spacing="1.2" font-family="sans-serif">RS-SG2424</text>
+        <rect x="118" y="82" width="112" height="1" fill="#3a4147"/>
+        <text x="118" y="96" font-size="7" fill="#5b636a" letter-spacing="1.2" font-family="sans-serif">24× RJ45 + 4× SFP • 1U</text>
+
+        <!-- console port (right of brand) -->
+        <rect x="290" y="57" width="26" height="18" rx="1.6" fill="url(#new-cage)" stroke="#05070a" stroke-width="0.9"/>
+        <rect x="292" y="59" width="22" height="14" rx="1" fill="#111417"/>
+        <path d="M299 59 h8 v4 h-2 v-2 h-4 v2 h-2 z" fill="#04060a"/>
+        <rect x="294" y="61.5" width="1.3" height="4" fill="#c9a24b" opacity="0.8"/>
+        <rect x="296.3" y="61.5" width="1.3" height="4" fill="#c9a24b" opacity="0.8"/>
+        <rect x="298.6" y="61.5" width="1.3" height="4" fill="#c9a24b" opacity="0.8"/>
+        <rect x="300.9" y="61.5" width="1.3" height="4" fill="#c9a24b" opacity="0.8"/>
+        <rect x="303.2" y="61.5" width="1.3" height="4" fill="#c9a24b" opacity="0.8"/>
+        <rect x="305.5" y="61.5" width="1.3" height="4" fill="#c9a24b" opacity="0.8"/>
+        <rect x="307.8" y="61.5" width="1.3" height="4" fill="#c9a24b" opacity="0.8"/>
+        <rect x="310.1" y="61.5" width="1.3" height="4" fill="#c9a24b" opacity="0.8"/>
+        <text x="303" y="86" font-size="6.5" text-anchor="middle" fill="#7b838a" font-family="sans-serif">CONSOLE</text>
+
+        <!-- separator before RJ45 -->
+        <line x1="338" y1="20" x2="338" y2="112" stroke="#3a4147" stroke-width="1" opacity="0.5"/>
+
+        <!-- RJ45 stacked pairs (simplified, 12 columns = 24 ports) -->
+        <!-- Block 1: ports 1-8 (cols 1-4, 2 rows) -->
+        <!-- Col 1: port 1 (top), port 2 (bottom) -->
+        <!-- Port label above top row: -->
+        <text x="356" y="20" text-anchor="middle" font-size="9.5" font-weight="600" fill="#aeb6bd" font-family="monospace">1</text>
+        <!-- top jack (port 1) -->
+        <rect x="341" y="22" width="30" height="40" rx="2.5" fill="url(#new-cage)" stroke="#05070a" stroke-width="1"/>
+        <rect x="342.5" y="23.5" width="27" height="37" rx="2" fill="none" stroke="url(#new-lip)" stroke-width="1" opacity="0.8"/>
+        <g transform="translate(356 48)">
+          <path d="M-10 -11 h20 v14 h-4 v4 a2 2 0 0 1 -2 2 h-4 a2 2 0 0 1 -2 -2 v-4 h-4 z" fill="url(#new-mouth)" stroke="#3a352a" stroke-width="0.8"/>
+          <rect x="-8" y="-9" width="16" height="9" rx="1" fill="#4a4638" opacity="0.55"/>
+          <rect x="-7.4" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="-5.55" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="-3.7" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="-1.85" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="0" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="1.85" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="3.7" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="5.55" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+        </g>
+        <!-- LED above top (link on) -->
+        <circle cx="347" cy="27" r="2.3" fill="#04060a" stroke="#2a3036" stroke-width="0.4"/>
+        <circle cx="347" cy="27" r="1.6" fill="#39ff8a" filter="url(#new-glow)"/>
+        <!-- LED top right -->
+        <circle cx="365" cy="27" r="2.3" fill="#04060a" stroke="#2a3036" stroke-width="0.4"/>
+        <circle cx="365" cy="27" r="1.6" fill="#39ff8a" opacity="0.4"/>
+        <!-- port 2 label below bottom row -->
+        <text x="356" y="122" text-anchor="middle" font-size="9.5" font-weight="600" fill="#aeb6bd" font-family="monospace">2</text>
+        <!-- bottom jack (port 2) -->
+        <rect x="341" y="69" width="30" height="40" rx="2.5" fill="url(#new-cage)" stroke="#05070a" stroke-width="1"/>
+        <rect x="342.5" y="70.5" width="27" height="37" rx="2" fill="none" stroke="url(#new-lip)" stroke-width="1" opacity="0.8"/>
+        <g transform="translate(356 84)">
+          <path d="M-10 11 h20 v-14 h-4 v-4 a2 2 0 0 0 -2 -2 h-4 a2 2 0 0 0 -2 2 v4 h-4 z" fill="url(#new-mouth)" stroke="#3a352a" stroke-width="0.8"/>
+          <rect x="-8" y="0" width="16" height="9" rx="1" fill="#4a4638" opacity="0.55"/>
+          <rect x="-7.4" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="-5.55" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="-3.7" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="-1.85" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="0" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="1.85" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="3.7" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="5.55" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+        </g>
+        <!-- LEDs below bottom -->
+        <circle cx="347" cy="105" r="2.3" fill="#04060a" stroke="#2a3036" stroke-width="0.4"/>
+        <circle cx="347" cy="105" r="1.6" fill="#20262b"/>
+        <circle cx="365" cy="105" r="2.3" fill="#04060a" stroke="#2a3036" stroke-width="0.4"/>
+        <circle cx="365" cy="105" r="1.6" fill="#20262b"/>
+
+        <!-- col 2: ports 3,4 -->
+        <text x="390" y="20" text-anchor="middle" font-size="9.5" font-weight="600" fill="#aeb6bd" font-family="monospace">3</text>
+        <rect x="375" y="22" width="30" height="40" rx="2.5" fill="url(#new-cage)" stroke="#05070a" stroke-width="1"/>
+        <rect x="376.5" y="23.5" width="27" height="37" rx="2" fill="none" stroke="url(#new-lip)" stroke-width="1" opacity="0.8"/>
+        <g transform="translate(390 48)">
+          <path d="M-10 -11 h20 v14 h-4 v4 a2 2 0 0 1 -2 2 h-4 a2 2 0 0 1 -2 -2 v-4 h-4 z" fill="url(#new-mouth)" stroke="#3a352a" stroke-width="0.8"/>
+          <rect x="-8" y="-9" width="16" height="9" rx="1" fill="#4a4638" opacity="0.55"/>
+          <rect x="-7.4" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="-5.55" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="-3.7" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="-1.85" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="0" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="1.85" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="3.7" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="5.55" y="-9" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+        </g>
+        <circle cx="381" cy="27" r="2.3" fill="#04060a" stroke="#2a3036" stroke-width="0.4"/>
+        <circle cx="381" cy="27" r="1.6" fill="#39ff8a" filter="url(#new-glow)"/>
+        <circle cx="399" cy="27" r="2.3" fill="#04060a" stroke="#2a3036" stroke-width="0.4"/>
+        <circle cx="399" cy="27" r="1.6" fill="#39ff8a" opacity="0.4"/>
+        <text x="390" y="122" text-anchor="middle" font-size="9.5" font-weight="600" fill="#aeb6bd" font-family="monospace">4</text>
+        <rect x="375" y="69" width="30" height="40" rx="2.5" fill="url(#new-cage)" stroke="#05070a" stroke-width="1"/>
+        <rect x="376.5" y="70.5" width="27" height="37" rx="2" fill="none" stroke="url(#new-lip)" stroke-width="1" opacity="0.8"/>
+        <g transform="translate(390 84)">
+          <path d="M-10 11 h20 v-14 h-4 v-4 a2 2 0 0 0 -2 -2 h-4 a2 2 0 0 0 -2 2 v4 h-4 z" fill="url(#new-mouth)" stroke="#3a352a" stroke-width="0.8"/>
+          <rect x="-8" y="0" width="16" height="9" rx="1" fill="#4a4638" opacity="0.55"/>
+          <rect x="-7.4" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="-5.55" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="-3.7" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="-1.85" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="0" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="1.85" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="3.7" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+          <rect x="5.55" y="2.5" width="1.1" height="6.5" fill="url(#new-gold)" rx="0.3"/>
+        </g>
+        <circle cx="381" cy="105" r="2.3" fill="#04060a" stroke="#2a3036" stroke-width="0.4"/>
+        <circle cx="381" cy="105" r="1.6" fill="#20262b"/>
+        <circle cx="399" cy="105" r="2.3" fill="#04060a" stroke="#2a3036" stroke-width="0.4"/>
+        <circle cx="399" cy="105" r="1.6" fill="#20262b"/>
+
+        <!-- Block gap label -->
+        <text x="430" y="66" text-anchor="middle" font-size="11" fill="#444" font-family="monospace">⋯ ports 5–22 ⋯</text>
+
+        <!-- SFP section separator -->
+        <line x1="640" y1="20" x2="640" y2="112" stroke="#3a4147" stroke-width="1" opacity="0.5"/>
+        <text x="660" y="20" font-size="8" fill="#7b838a" letter-spacing="1.4" font-family="sans-serif">SFP UPLINK</text>
+
+        <!-- SFP cage 1 (empty) -->
+        <rect x="650" y="22" width="46" height="42.5" rx="2.5" fill="url(#new-cage)" stroke="#05070a" stroke-width="1"/>
+        <rect x="651.5" y="23.5" width="43" height="39.5" rx="2" fill="none" stroke="url(#new-lip)" stroke-width="1" opacity="0.8"/>
+        <rect x="655" y="33" width="36" height="27" rx="1.5" fill="#111417"/>
+        <g opacity="0.9">
+          <rect x="657.5" y="35" width="3.7" height="21" fill="url(#new-gold)" rx="0.4"/>
+          <rect x="663" y="35" width="3.7" height="21" fill="url(#new-gold)" rx="0.4"/>
+          <rect x="668.5" y="35" width="3.7" height="21" fill="url(#new-gold)" rx="0.4"/>
+          <rect x="674" y="35" width="3.7" height="21" fill="url(#new-gold)" rx="0.4"/>
+          <rect x="679.5" y="35" width="3.7" height="21" fill="url(#new-gold)" rx="0.4"/>
+          <rect x="685" y="35" width="3.7" height="21" fill="url(#new-gold)" rx="0.4"/>
+          <rect x="690.5" y="35" width="3.7" height="21" fill="url(#new-gold)" rx="0.4"/>
+        </g>
+        <!-- SFP cage 2 (with fiber module) -->
+        <rect x="705" y="22" width="46" height="42.5" rx="2.5" fill="url(#new-cage)" stroke="#05070a" stroke-width="1"/>
+        <rect x="709" y="26" width="38" height="34.5" rx="2" fill="url(#new-sfpbody)" stroke="#1b2024" stroke-width="0.8"/>
+        <rect x="711" y="27.4" width="34" height="1.6" rx="0.8" fill="#e8edf1" opacity="0.55"/>
+        <!-- fiber bore holes -->
+        <rect x="716" y="36" width="8" height="9" rx="1.6" fill="#0d1319" stroke="#454d54" stroke-width="0.7"/>
+        <circle cx="720" cy="41" r="2.6" fill="#060b12"/>
+        <rect x="726" y="36" width="8" height="9" rx="1.6" fill="#0d1319" stroke="#454d54" stroke-width="0.7"/>
+        <circle cx="730" cy="41" r="2.6" fill="#060b12"/>
+        <rect x="711" y="52" width="34" height="3" rx="0.6" fill="#c9ccce" opacity="0.85"/>
+        <!-- LEDs at bottom of SFP cages -->
+        <text x="673" y="78" text-anchor="middle" font-size="10" font-weight="600" fill="#aeb6bd" font-family="monospace">25</text>
+        <circle cx="656.5" cy="60" r="2.3" fill="#04060a"/>
+        <circle cx="656.5" cy="60" r="1.6" fill="#20262b"/>
+        <circle cx="689.5" cy="60" r="2.3" fill="#04060a"/>
+        <circle cx="689.5" cy="60" r="1.6" fill="#20262b"/>
+        <text x="728" y="78" text-anchor="middle" font-size="10" font-weight="600" fill="#aeb6bd" font-family="monospace">26</text>
+        <circle cx="711.5" cy="60" r="2.3" fill="#04060a"/>
+        <circle cx="711.5" cy="60" r="1.6" fill="#39ff8a" filter="url(#new-glow)"/>
+        <circle cx="744.5" cy="60" r="2.3" fill="#04060a"/>
+        <circle cx="744.5" cy="60" r="1.6" fill="#39ff8a" opacity="0.4"/>
+
+        <!-- note: scaled up here to be visible; actual render is 1U (30px tall) -->
+      </svg>
+      <p style="font-size:11px;color:#5b636a;margin:8px 0 0;font-style:italic;">Note: rendered at 4× scale above for visibility. The real 1U panel is 30px tall in the rack.</p>
+      <ul style="margin:8px 0 0; padding:0 0 0 18px; color:#8b939a; font-size:12px; line-height:1.8">
+        <li>Rack mounting ears with screw holes</li>
+        <li>Console section: 4 status LEDs + brand wordmark + console RJ45</li>
+        <li>Stacked-pair ports (odd top/even bottom), 8 gold contacts, oriented tabs</li>
+        <li>Block grouping with visible gap every 4 columns</li>
+        <li>SFP section with separator line + "SFP UPLINK" label + module renders</li>
+        <li>Rich multi-stop gradients on chassis, cages, contacts</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:24px;">The new design has 6 key improvements over the current renderer. We don't have to adopt all of them. <strong>First question below.</strong></p>

@@ -41,10 +41,13 @@
           <div id="cloud-viewport" class="hidden">
             <svg id="cloud-canvas"></svg>
           </div>
-          <div id="dc-viewport" class="hidden"></div>
         </div>
         <div id="minimap"></div>
       </main>
+      <!-- dc-viewport is a sibling of sidebar/properties-panel inside #workspace.
+           position:absolute;inset:0 on #workspace covers the full content area,
+           making it immune to sidebar and properties-panel CSS width transitions. -->
+      <div id="dc-viewport" class="hidden"></div>
       <aside id="properties-panel"></aside>
     </div>
     <footer id="statusbar"></footer>

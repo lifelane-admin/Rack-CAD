@@ -15,13 +15,19 @@ export class AssetManager {
       loader.load(
         '/hdri/datacenter.exr',
         (texture) => {
-          const pmrem = new THREE.PMREMGenerator(renderer);
-          pmrem.compileEquirectangularShader();
-          const envMap = pmrem.fromEquirectangular(texture).texture;
-          scene.environment = envMap; // IBL only — background stays dark
-          texture.dispose();
-          pmrem.dispose();
-          this.hdriTexture = envMap;
+          try {
+            if (texture && texture.image) {
+              const pmrem = new THREE.PMREMGenerator(renderer);
+              pmrem.compileEquirectangularShader();
+              const envMap = pmrem.fromEquirectangular(texture).texture;
+              scene.environment = envMap; // IBL only — background stays dark
+              texture.dispose();
+              pmrem.dispose();
+              this.hdriTexture = envMap;
+            }
+          } catch (err) {
+            console.warn('[AssetManager] HDRI processing failed, continuing without IBL:', err);
+          }
           resolve();
         },
         undefined,

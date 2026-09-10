@@ -1,9 +1,16 @@
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { MaterialManager } from '../three/MaterialManager';
+import { buildRackGroup } from '../three/rack-builder';
 import { dcState } from './dc-state';
-import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacingStandard } from './types';
+import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacingStandard, DcAddressFormat, DcFloorTile, DcAirflowDirection, DcInfrastructureItem, DcInfraCategory } from './types';
 import { RACK_PRESETS, SPACING_STANDARDS, RackPreset, SpacingStandardInfo } from './standards';
 import { stateManager } from '../core/state';
 import { eventBus } from '../core/event-bus';
-import { RackData } from '../core/types';
+import { RackData, RACK_CONSTANTS } from '../core/types';
+import { buildDeviceMesh } from '../three/device-builder';
+import { getTemplate } from '../library/device-catalog';
+import { DEVICE_FACE_Z } from '../three/rack-builder';
 import {
   formatSingleDistance,
   formatDimensionsMeters,
@@ -29,59 +36,233 @@ export class BuildFloorView {
   private ctx!: CanvasRenderingContext2D;
   private animFrame = 0;
   private ppm = 100; // pixels per meter
-  private panX = 40;
-  private panY = 40;
+  // Camera center in world coordinates (meters)
+  private camX = 6;
+  private camY = 4;
+  private get panX(): number {
+    const W = this.canvas?.width || 800;
+    return W / 2 - this.camX * this.ppm;
+  }
+  private set panX(val: number) {
+    const W = this.canvas?.width || 800;
+    this.camX = (W / 2 - val) / this.ppm;
+  }
+  private get panY(): number {
+    const H = this.canvas?.height || 600;
+    return H / 2 - this.camY * this.ppm;
+  }
+  private set panY(val: number) {
+    const H = this.canvas?.height || 600;
+    this.camY = (H / 2 - val) / this.ppm;
+  }
   private toolMode: 'select' | 'pan' = 'select';
   private isPanning = false;
-  private panStart = { x: 0, y: 0, px: 0, py: 0 };
+  private panStartCam = { camX: 0, camY: 0, mouseX: 0, mouseY: 0 };
   private isDraggingRack = false;
   private draggingRackId: string | null = null;
   private dragOffset = { x: 0, y: 0 };
   private dragPos: { x: number; y: number } | null = null;
   private unsub: (() => void) | null = null;
+  private unsubGlobal: (() => void) | null = null;
+  private unsubBus: (() => void) | null = null;
   private hasFittedInitialFloor = false;
   private resizeObserver: ResizeObserver | null = null;
+  private resizeDebounceId = 0;  // RAF handle for debounced resize
   private isLeftPanelCollapsed = false;
+
+  // Drag threshold to prevent unintended pan/drag resets on simple clicks
+  private pendingPan = false;
+  private pendingDragRack = false;
+  private mouseDownClientPos = { x: 0, y: 0 };
+  private readonly DRAG_THRESHOLD_PX = 6;
 
   // Snap Gap Indicators during dragging
   private snapGapInfo: { x1: number; y1: number; x2: number; y2: number; label: string } | null = null;
+  private strictGridOnly = false; // When true, movements lock strictly to whole tile boundaries only
+  private isMovingPlacementMode = false; // Active move mode from context menu, props, or hotkey
+
+  public startMovingRack(rackId: string) {
+    const floor = dcState.getActiveFloor();
+    if (!floor) return;
+    const rack = floor.racks.find(r => r.id === rackId);
+    if (!rack) return;
+
+    if (dcState.getState().viewMode === '3d') {
+      this.setViewMode('2d');
+    }
+
+    dcState.setState({ selectedRackId: rack.id, selectedTileId: null });
+    this.isMovingPlacementMode = true;
+    this.isDraggingRack = true;
+    this.draggingRackId = rack.id;
+    this.dragOffset = {
+      x: (rack.rotation % 180 === 0 ? rack.widthMm : rack.depthMm) / 2000,
+      y: (rack.rotation % 180 === 0 ? rack.depthMm : rack.widthMm) / 2000,
+    };
+    this.dragPos = { x: rack.position.x, y: rack.position.y };
+    this.canvas.style.cursor = 'move';
+    this.renderPropsPanel();
+    this.draw();
+
+    eventBus.emit('notification', {
+      message: `Moving ${rack.name}: Move cursor to position on floor grid and click to drop. [Esc] to cancel.`,
+      type: 'info',
+    });
+  }
+
+  public nudgeRack(rackId: string, dxM: number, dyM: number): boolean {
+    const floor = dcState.getActiveFloor();
+    if (!floor) return false;
+    const rack = floor.racks.find(r => r.id === rackId);
+    if (!rack) return false;
+
+    const rW = rack.widthMm / 1000;
+    const rD = rack.depthMm / 1000;
+    const eW = rack.rotation % 180 === 0 ? rW : rD;
+    const eD = rack.rotation % 180 === 0 ? rD : rW;
+
+    const targetX = Math.max(0, Math.min(floor.lengthM - eW, parseFloat((rack.position.x + dxM).toFixed(4))));
+    const targetY = Math.max(0, Math.min(floor.widthM - eD, parseFloat((rack.position.y + dyM).toFixed(4))));
+
+    if (Math.abs(targetX - rack.position.x) < 0.0001 && Math.abs(targetY - rack.position.y) < 0.0001) {
+      return false; // Already at boundary
+    }
+
+    const updatedRack = { ...rack, position: { x: targetX, y: targetY, z: 0 } };
+    if (dcState.isOverlapping(updatedRack, rack.id)) {
+      eventBus.emit('notification', { message: 'Cannot nudge: Overlaps another rack.', type: 'warning' });
+      return false;
+    }
+
+    dcState.updateRack(rack.id, { position: { x: targetX, y: targetY, z: 0 } });
+    this.renderPropsPanel();
+    const is3D = dcState.getState().viewMode === '3d';
+    if (is3D) this.render3D(); else this.draw();
+    return true;
+  }
 
   // 2D Canvas View Rotation: 0, 90, 180, 270 degrees
   private canvasRotationDeg: 0 | 90 | 180 | 270 = 0;
 
-  // 3D Isometric View Parameters
-  private rotX = 55; // degrees (Default isometric pitch)
-  private rotZ = -45; // degrees (Default isometric yaw)
-  private scale3D = 1.0; // 3D Zoom scale
-  private isOrbiting3D = false;
-  private orbitStart = { x: 0, y: 0, rx: 0, rz: 0 };
+  // 3D WebGL Viewport
+  private threeRenderer: THREE.WebGLRenderer | null = null;
+  private threeScene: THREE.Scene | null = null;
+  private threeCamera: THREE.PerspectiveCamera | null = null;
+  private threeControls: OrbitControls | null = null;
+  private threeMaterials: MaterialManager | null = null;
+  private threeAnimId: number | null = null;
+  private threeRaycaster = new THREE.Raycaster();
+  private threeMouse = new THREE.Vector2();
+  private rackMeshMap = new Map<THREE.Object3D, string>();
+  private hasInitialized3DTarget = false;
+  private lastRenderedFloorId: string | null = null;
+  private threeGridGroup: THREE.Group | null = null;
+  private threeFloorMaterials: THREE.Material[] = [];
 
   constructor(container: HTMLElement) {
     this.container = container;
     this.build();
     this.unsub = dcState.subscribe(() => this.refresh());
+    const onStateChanged = () => {
+      const s = dcState.getState();
+      const floor = dcState.getActiveFloor();
+      if (!floor) return;
+      if (s.viewMode === '3d') {
+        this.rebuildThreeScene(floor);
+      } else {
+        this.draw();
+      }
+      this.renderPropsPanel();
+    };
+
+    eventBus.on('state:changed', onStateChanged);
+    eventBus.on('device:added' as any, onStateChanged);
+    eventBus.on('device:updated' as any, onStateChanged);
+    eventBus.on('device:deleted' as any, onStateChanged);
+    eventBus.on('device:moved' as any, onStateChanged);
+
+    this.unsubGlobal = () => {
+      eventBus.off('state:changed', onStateChanged);
+      eventBus.off('device:added' as any, onStateChanged);
+      eventBus.off('device:updated' as any, onStateChanged);
+      eventBus.off('device:deleted' as any, onStateChanged);
+      eventBus.off('device:moved' as any, onStateChanged);
+    };
+
+    // Listen to events from the dedicated left sidebar
+    const onAddRack = () => this.showAddRackDialog();
+    const onAddRow = () => this.showAddRowDialog();
+    const onEditFloor = (fl: DcFloor) => this.showEditFloorDialog(fl || dcState.getActiveFloor()!);
+    const onDeleteFloor = (fl: DcFloor) => {
+      const target = fl || dcState.getActiveFloor();
+      if (target && confirm(`Delete floor "${target.name}"? This cannot be undone.`)) {
+        dcState.deleteFloor(target.id);
+      }
+    };
+    const onNewFloor = () => this.showCreateFloorDialog();
+    const onSetUnit = (unit: DcUnit) => {
+      const activeFl = dcState.getActiveFloor();
+      if (activeFl) dcState.updateFloor(activeFl.id, { unit });
+    };
+
+    const onResetFloor = () => this.promptResetFloor();
+
+    eventBus.on('dc:addrack' as any, onAddRack);
+    eventBus.on('dc:addrow' as any, onAddRow);
+    eventBus.on('dc:editfloor' as any, onEditFloor);
+    eventBus.on('dc:deletefloor' as any, onDeleteFloor);
+    eventBus.on('dc:newfloor' as any, onNewFloor);
+    eventBus.on('dc:resetfloor' as any, onResetFloor);
+    eventBus.on('dc:setunit' as any, onSetUnit);
+
+    this.unsubBus = () => {
+      eventBus.off('dc:addrack' as any, onAddRack);
+      eventBus.off('dc:addrow' as any, onAddRow);
+      eventBus.off('dc:editfloor' as any, onEditFloor);
+      eventBus.off('dc:deletefloor' as any, onDeleteFloor);
+      eventBus.off('dc:newfloor' as any, onNewFloor);
+      eventBus.off('dc:resetfloor' as any, onResetFloor);
+      eventBus.off('dc:setunit' as any, onSetUnit);
+    };
   }
 
   destroy() {
     this.unsub?.();
+    this.unsubGlobal?.();
+    this.unsubBus?.();
     this.resizeObserver?.disconnect();
     cancelAnimationFrame(this.animFrame);
+    if (this.threeAnimId !== null) cancelAnimationFrame(this.threeAnimId);
+    if (this.threeControls) this.threeControls.dispose();
+    if (this.threeRenderer) this.threeRenderer.dispose();
   }
 
   public show() {
+    // Always collapse the global right-panel when entering datacenter view.
+    // The datacenter uses its own internal panels; the global #properties-panel opening
+    // would cause a CSS width transition on #dc-canvas-wrap → ResizeObserver cascade → viewport jump.
+    document.getElementById('properties-panel')?.classList.add('collapsed');
+    document.getElementById('btn-unhide-properties')?.classList.remove('hidden');
+
     setTimeout(() => {
       this.resize();
-      if (!this.hasFittedInitialFloor) {
-        this.fitToFloor();
-        this.hasFittedInitialFloor = true;
+      const activeFloor = dcState.getActiveFloor();
+      if (!activeFloor) {
+        this.showCreateFloorDialog(true);
+        return;
       }
+      this.fitToFloor();
+      this.hasFittedInitialFloor = true;
       const s = dcState.getState();
       if (s.viewMode === '3d') {
         this.render3D();
+        this.rebuildThreeScene(activeFloor);
+        this.resizeThree();
       } else {
         this.draw();
       }
-    }, 20);
+      this.renderPropsPanel();
+    }, 40);
   }
 
   private build() {
@@ -93,6 +274,7 @@ export class BuildFloorView {
           </div>
           <div class="dc-topbar-center">
             <button class="dc-btn" id="dc-btn-newfloor" title="Create new floor">＋ New Floor</button>
+            <button class="dc-btn dc-btn-secondary" id="dc-btn-resetfloor" title="Reset Datacenter Floor to empty layout">↺ Reset Floor</button>
             <button class="dc-btn dc-btn-primary" id="dc-btn-addrack-topbar" title="Add single rack to floor">＋ Add Rack</button>
             <button class="dc-btn" id="dc-btn-addrow" title="Add Row of Racks (International Standard Spacing)">▤ Add Row (Standards)</button>
             <div class="dc-divider"></div>
@@ -103,11 +285,18 @@ export class BuildFloorView {
             <!-- View switch -->
             <button class="dc-btn dc-btn-icon active" id="dc-btn-2d" title="2D Top View">2D (Top View)</button>
             <button class="dc-btn dc-btn-icon" id="dc-btn-3d" title="3D Isometric View">3D (Isometric)</button>
-            <button class="dc-btn dc-btn-icon" id="dc-btn-rotate-2d" title="Rotate 2D View 90° (Hotkey: R)">↻ Rotate View (<span id="dc-rot-label">0°</span>)</button>
+            <div class="dc-divider"></div>
+            <!-- Floor Transparency & X-Ray Mode -->
+            <button class="dc-btn dc-btn-icon" id="dc-btn-xray" title="Toggle Under-Floor Infrastructure X-Ray Mode">🦴 X-Ray</button>
+            <div class="dc-slider-control" title="Adjust Raised Floor Surface Opacity (0% - 100%)">
+              <span>Floor:</span>
+              <input type="range" id="dc-floor-opacity" class="dc-slider" min="0" max="100" value="100" />
+            </div>
             <div class="dc-divider"></div>
             <!-- Grid & Labels -->
-            <button class="dc-btn dc-btn-icon" id="dc-btn-grid" title="Toggle Grid">⊞ Grid</button>
-            <button class="dc-btn dc-btn-icon" id="dc-btn-snap" title="Toggle Snap">⌂ Snap</button>
+            <button class="dc-btn dc-btn-icon" id="dc-btn-grid" title="Toggle Grid Lines">⊞ Grid</button>
+            <button class="dc-btn dc-btn-icon" id="dc-btn-snap" title="Toggle Smart Snap (Standards & Grid)">⌂ Snap</button>
+            <button class="dc-btn dc-btn-icon" id="dc-btn-grid-lock" title="Strict Grid Movement (Lock movement strictly to whole ESD grid tiles only)">▦ Grid-Only (Off)</button>
             <button class="dc-btn dc-btn-icon" id="dc-btn-labels" title="Toggle Labels">🏷 Labels</button>
             <div class="dc-divider"></div>
             <!-- Navigation & Zoom controls -->
@@ -150,24 +339,30 @@ export class BuildFloorView {
             <div id="dc-props-content"><p class="dc-muted">Select a tile or rack.</p></div>
           </div>
         </div>
-        <div class="dc-statusbar" id="dc-statusbar">Point-to-Zoom: Wheel | Right-Click Rack: Work on Rack / Elevate | Hotkeys: [S] Select | [M] Move | [Z] Fit | [R] Rotate</div>
+        <div class="dc-statusbar" id="dc-statusbar">Point-to-Zoom: Wheel | [Z] Zoom to Selected Rack / Fit Floor | [S] Select | [M] Move | [R] Rotate</div>
       </div>
     `;
 
     this.canvas = this.container.querySelector('#dc-canvas')!;
     this.ctx = this.canvas.getContext('2d')!;
 
-    // Setup ResizeObserver to handle dynamic viewport sizing
+    // Setup ResizeObserver to handle dynamic viewport sizing.
+    // IMPORTANT: debounce with rAF so that CSS panel open/close transitions (0.22s) only
+    // trigger ONE resize+redraw at the FINAL settled size, not 50+ during the animation.
     const wrap = this.container.querySelector('#dc-canvas-wrap') as HTMLElement;
     if (wrap && typeof ResizeObserver !== 'undefined') {
       this.resizeObserver = new ResizeObserver(() => {
-        if (wrap.clientWidth > 0 && wrap.clientHeight > 0) {
-          this.resize();
-          if (!this.hasFittedInitialFloor) {
-            this.fitToFloor();
-            this.hasFittedInitialFloor = true;
+        if (this.resizeDebounceId) cancelAnimationFrame(this.resizeDebounceId);
+        this.resizeDebounceId = requestAnimationFrame(() => {
+          this.resizeDebounceId = 0;
+          if (wrap.clientWidth > 0 && wrap.clientHeight > 0) {
+            this.resize();
+            if (!this.hasFittedInitialFloor) {
+              this.fitToFloor();
+              this.hasFittedInitialFloor = true;
+            }
           }
-        }
+        });
       });
       this.resizeObserver.observe(wrap);
     }
@@ -231,18 +426,74 @@ export class BuildFloorView {
     }, 220);
   }
 
+  public toggleXrayMode() {
+    const s = dcState.getState();
+    const newXray = !s.xrayMode;
+    dcState.setState({ xrayMode: newXray });
+    this.applyFloorOpacity(newXray ? 0.22 : s.floorOpacity);
+    this.updateButtonStates();
+    eventBus.emit('notification', { message: `X-Ray Mode ${newXray ? 'Enabled (Beneath Raised Floor Service View)' : 'Disabled'}.`, type: 'info' });
+  }
+
+  public setFloorOpacity(val: number) {
+    const clamped = Math.max(0, Math.min(1, val));
+    dcState.setState({ floorOpacity: clamped });
+    const s = dcState.getState();
+    const eff = s.xrayMode ? 0.22 : clamped;
+    this.applyFloorOpacity(eff);
+    this.updateButtonStates();
+  }
+
+  private applyFloorOpacity(effOpacity: number) {
+    if (this.threeControls) {
+      const isUnderfloor = dcState.getState().xrayMode || effOpacity < 0.85;
+      this.threeControls.maxPolarAngle = isUnderfloor ? Math.PI - 0.05 : Math.PI / 2 - 0.02;
+    }
+
+    if (this.threeFloorMaterials && this.threeFloorMaterials.length > 0) {
+      this.threeFloorMaterials.forEach(m => {
+        m.transparent = effOpacity < 0.99;
+        m.opacity = effOpacity;
+        m.needsUpdate = true;
+      });
+    }
+
+    if (dcState.getState().viewMode === '2d') {
+      this.draw();
+    }
+  }
+
   private bindButtons() {
     const on = (id: string, fn: () => void) => this.container.querySelector(`#${id}`)?.addEventListener('click', fn);
     on('dc-btn-newfloor', () => this.showCreateFloorDialog());
+    on('dc-btn-resetfloor', () => this.promptResetFloor());
     on('dc-btn-addrack-topbar', () => this.showAddRackDialog());
     on('dc-btn-addrow', () => this.showAddRowDialog());
     on('dc-btn-tool-select', () => this.setToolMode('select'));
-    on('dc-btn-tool-pan', () => this.setToolMode('pan'));
+    on('dc-btn-tool-pan', () => {
+      const s = dcState.getState();
+      if (s.selectedRackId) {
+        this.startMovingRack(s.selectedRackId);
+      } else {
+        this.setToolMode('pan');
+      }
+    });
     on('dc-btn-2d', () => this.setViewMode('2d'));
     on('dc-btn-3d', () => this.setViewMode('3d'));
     on('dc-btn-rotate-2d', () => this.rotate2DView());
+    on('dc-btn-xray', () => this.toggleXrayMode());
+    this.container.querySelector('#dc-floor-opacity')?.addEventListener('input', (e) => {
+      const val = parseInt((e.target as HTMLInputElement).value, 10) / 100;
+      this.setFloorOpacity(val);
+    });
     on('dc-btn-grid', () => { dcState.setState({ gridVisible: !dcState.getState().gridVisible }); });
     on('dc-btn-snap', () => { dcState.setState({ snapEnabled: !dcState.getState().snapEnabled }); });
+    on('dc-btn-grid-lock', () => {
+      this.strictGridOnly = !this.strictGridOnly;
+      if (this.strictGridOnly) dcState.setState({ snapEnabled: true });
+      this.updateButtonStates();
+      this.draw();
+    });
     on('dc-btn-labels', () => { dcState.setState({ labelsVisible: !dcState.getState().labelsVisible }); });
     on('dc-toggle-left-panel', () => this.toggleLeftPanel(true));
     on('dc-expand-left-panel', () => this.toggleLeftPanel(false));
@@ -257,17 +508,17 @@ export class BuildFloorView {
     });
 
     // Pan navigation buttons
-    on('dc-nav-left', () => { this.panX += 80; this.draw(); });
-    on('dc-nav-right', () => { this.panX -= 80; this.draw(); });
-    on('dc-nav-up', () => { this.panY += 80; this.draw(); });
-    on('dc-nav-down', () => { this.panY -= 80; this.draw(); });
+    on('dc-nav-left', () => { this.camX -= 80 / this.ppm; this.draw(); });
+    on('dc-nav-right', () => { this.camX += 80 / this.ppm; this.draw(); });
+    on('dc-nav-up', () => { this.camY -= 80 / this.ppm; this.draw(); });
+    on('dc-nav-down', () => { this.camY += 80 / this.ppm; this.draw(); });
 
     on('dc-btn-fit', () => {
-      if (dcState.getState().viewMode === '3d') {
-        this.scale3D = 1.0;
-        this.rotX = 55;
-        this.rotZ = -45;
-        this.apply3DTransform();
+      const s = dcState.getState();
+      if (s.selectedRackId) {
+        this.zoomToSelectedRack();
+      } else if (s.viewMode === '3d') {
+        this.set3DCameraPreset('iso');
       } else {
         this.fitToFloor();
       }
@@ -275,8 +526,7 @@ export class BuildFloorView {
 
     on('dc-btn-zoomin', () => {
       if (dcState.getState().viewMode === '3d') {
-        this.scale3D = Math.min(this.scale3D * 1.25, 4.0);
-        this.apply3DTransform();
+        this.zoom3D(0.8);
       } else {
         this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 1.25);
       }
@@ -284,8 +534,7 @@ export class BuildFloorView {
 
     on('dc-btn-zoomout', () => {
       if (dcState.getState().viewMode === '3d') {
-        this.scale3D = Math.max(this.scale3D * 0.8, 0.3);
-        this.apply3DTransform();
+        this.zoom3D(1.25);
       } else {
         this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 0.8);
       }
@@ -295,29 +544,112 @@ export class BuildFloorView {
   private resize() {
     const wrap = this.container.querySelector('#dc-canvas-wrap') as HTMLElement;
     if (!wrap || !this.canvas) return;
-    if (wrap.clientWidth > 0 && wrap.clientHeight > 0) {
-      this.canvas.width = wrap.clientWidth;
-      this.canvas.height = wrap.clientHeight;
+    const oldW = this.canvas.width;
+    const oldH = this.canvas.height;
+    const newW = wrap.clientWidth;
+    const newH = wrap.clientHeight;
+    if (newW > 0 && newH > 0) {
+      if (newW !== oldW || newH !== oldH) {
+        console.log('[DC-RESIZE] canvas changed:', oldW, 'x', oldH, '->', newW, 'x', newH, '| panX:', this.panX.toFixed(1), 'panY:', this.panY.toFixed(1), 'ppm:', this.ppm.toFixed(1));
+      }
+      this.canvas.width = newW;
+      this.canvas.height = newH;
+      if (this.hasFittedInitialFloor && dcState.getState().viewMode !== '3d') {
+        this.draw();
+      }
     }
+    this.resizeThree();
   }
 
   private zoomAtPoint(sx: number, sy: number, factor: number) {
     const oldPpm = this.ppm;
-    const newPpm = Math.min(Math.max(oldPpm * factor, 15), 2000);
+    // Cap zoom scale to 2,500 ppm max (1 meter fills 2,500px on screen).
+    // This allows inspecting 1RU devices down to millimeter precision without runaway floating-point compounding.
+    const newPpm = Math.min(Math.max(oldPpm * factor, 15), 2500);
     if (newPpm === oldPpm) return;
 
-    // Get the exact world coordinates (xM, yM) under screen cursor (sx, sy)
+    // Convert screen coordinates to world coordinates before zoom
     const { xM, yM } = this.screenToWorld(sx, sy);
 
-    // In unrotated space, world coordinate (xM, yM) maps to px = xM * oldPpm + panX
-    const px = xM * oldPpm + this.panX;
-    const py = yM * oldPpm + this.panY;
+    const W = this.canvas.width || 800;
+    const H = this.canvas.height || 600;
+    let px = sx;
+    let py = sy;
+    if (this.canvasRotationDeg !== 0) {
+      const cx = W / 2;
+      const cy = H / 2;
+      const rad = (-this.canvasRotationDeg * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const dx = sx - cx;
+      const dy = sy - cy;
+      px = cx + (dx * cos - dy * sin);
+      py = cy + (dx * sin + dy * cos);
+    }
 
-    // To keep (xM, yM) at the exact same screen position under newPpm:
-    this.panX = px - xM * newPpm;
-    this.panY = py - yM * newPpm;
+    // Keep world coordinate (xM, yM) anchored exactly under cursor (px, py)
+    this.camX = xM - (px - W / 2) / newPpm;
+    this.camY = yM - (py - H / 2) / newPpm;
     this.ppm = newPpm;
     this.draw();
+  }
+
+  public zoomToSelectedRack() {
+    const s = dcState.getState();
+    const floor = dcState.getActiveFloor();
+    if (!floor) return;
+
+    const rack = s.selectedRackId ? floor.racks.find(r => r.id === s.selectedRackId) : null;
+    if (!rack) {
+      if (s.viewMode === '3d') {
+        this.set3DCameraPreset('iso');
+      } else {
+        this.fitToFloor();
+      }
+      return;
+    }
+
+    if (s.viewMode === '3d') {
+      if (!this.threeCamera || !this.threeControls) return;
+      const rWMm = rack.widthMm;
+      const rDMm = rack.depthMm;
+      const posX = rack.position.x * 1000 + (rack.rotation % 180 === 0 ? rWMm / 2 : rDMm / 2);
+      const posZ = rack.position.y * 1000 + (rack.rotation % 180 === 0 ? rDMm / 2 : rWMm / 2);
+      const rackHeightMm = 65 + rack.heightU * 44.45 + 65;
+      const targetY = rackHeightMm / 2;
+
+      this.threeControls.target.set(posX, targetY, posZ);
+      const camDist = Math.max(Math.max(rWMm, rDMm) * 2.2, 1600);
+      this.threeCamera.position.set(posX + camDist * 0.7, targetY + camDist * 0.55, posZ + camDist * 0.95);
+      this.threeControls.update();
+      this.update3DSelectionHighlight();
+      return;
+    }
+
+    // 2D View Zoom to Rack
+    this.resize();
+    const rW = rack.widthMm / 1000;
+    const rD = rack.depthMm / 1000;
+    const effW = rack.rotation % 180 === 0 ? rW : rD;
+    const effD = rack.rotation % 180 === 0 ? rD : rW;
+
+    const rackCenterX = rack.position.x + effW / 2;
+    const rackCenterY = rack.position.y + effD / 2;
+
+    const W = this.canvas.width || 800;
+    const H = this.canvas.height || 600;
+    // Fit rack into ~40% of viewport
+    const targetPpm = Math.min(Math.max(Math.min((W * 0.45) / effW, (H * 0.45) / effD), 300), 1800);
+
+    this.ppm = targetPpm;
+    this.camX = rackCenterX;
+    this.camY = rackCenterY;
+    this.draw();
+
+    eventBus.emit('notification', {
+      message: `Zoomed to ${rack.name} (${rack.heightU}U ${rack.type.toUpperCase()})`,
+      type: 'info',
+    });
   }
 
   private bindKeyboardEvents() {
@@ -329,11 +661,11 @@ export class BuildFloorView {
       if (key === 'S') this.setToolMode('select');
       if (key === 'M') this.setToolMode('pan');
       if (key === 'Z') {
-        if (is3D) {
-          this.scale3D = 1.0;
-          this.rotX = 55;
-          this.rotZ = -45;
-          this.apply3DTransform();
+        const s = dcState.getState();
+        if (s.selectedRackId) {
+          this.zoomToSelectedRack();
+        } else if (is3D) {
+          this.set3DCameraPreset('iso');
         } else {
           this.fitToFloor();
         }
@@ -353,50 +685,105 @@ export class BuildFloorView {
         }
         this.rotate2DView();
       }
-      if (e.key === 'ArrowLeft' || key === 'A') { this.panX += 60; this.draw(); }
-      if (e.key === 'ArrowRight' || key === 'D') { this.panX -= 60; this.draw(); }
-      if (e.key === 'ArrowUp' || key === 'W') { this.panY += 60; this.draw(); }
-      if (e.key === 'ArrowDown') { this.panY -= 60; this.draw(); }
+      const s = dcState.getState();
+      const floor = dcState.getActiveFloor();
+      const stepM = floor ? floor.tileSizeMm / 1000 : 0.6;
+      const nudgeDist = e.shiftKey ? 0.1 : stepM;
+
+      if (e.key === 'ArrowLeft') {
+        if (s.selectedRackId && floor) {
+          e.preventDefault();
+          this.nudgeRack(s.selectedRackId, -nudgeDist, 0);
+          return;
+        }
+        this.camX -= 60 / this.ppm; this.draw();
+      } else if (key === 'A') {
+        this.camX -= 60 / this.ppm; this.draw();
+      }
+
+      if (e.key === 'ArrowRight') {
+        if (s.selectedRackId && floor) {
+          e.preventDefault();
+          this.nudgeRack(s.selectedRackId, nudgeDist, 0);
+          return;
+        }
+        this.camX += 60 / this.ppm; this.draw();
+      } else if (key === 'D') {
+        this.camX += 60 / this.ppm; this.draw();
+      }
+
+      if (e.key === 'ArrowUp') {
+        if (s.selectedRackId && floor) {
+          e.preventDefault();
+          this.nudgeRack(s.selectedRackId, 0, -nudgeDist);
+          return;
+        }
+        this.camY -= 60 / this.ppm; this.draw();
+      } else if (key === 'W') {
+        this.camY -= 60 / this.ppm; this.draw();
+      }
+
+      if (e.key === 'ArrowDown') {
+        if (s.selectedRackId && floor) {
+          e.preventDefault();
+          this.nudgeRack(s.selectedRackId, 0, nudgeDist);
+          return;
+        }
+        this.camY += 60 / this.ppm; this.draw();
+      }
       if (e.key === '=' || e.key === '+') {
         if (is3D) {
-          this.scale3D = Math.min(this.scale3D * 1.2, 4.0);
-          this.apply3DTransform();
+          this.zoom3D(0.8);
         } else {
           this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 1.2);
         }
       }
       if (e.key === '-' || e.key === '_') {
         if (is3D) {
-          this.scale3D = Math.max(this.scale3D * 0.8, 0.3);
-          this.apply3DTransform();
+          this.zoom3D(1.25);
         } else {
           this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 0.8);
         }
       }
       if (e.key === 'Escape') {
+        if (this.isMovingPlacementMode) {
+          this.isMovingPlacementMode = false;
+          this.isDraggingRack = false;
+          this.draggingRackId = null;
+          this.dragPos = null;
+          this.snapGapInfo = null;
+          this.canvas.style.cursor = this.toolMode === 'pan' ? 'grab' : 'crosshair';
+          this.draw();
+          eventBus.emit('notification', { message: 'Move rack cancelled.', type: 'info' });
+          return;
+        }
         dcState.setState({ selectedRackId: null, selectedTileId: null });
         this.renderPropsPanel();
-        if (is3D) this.render3D(); else this.draw();
+        if (is3D) this.update3DSelectionHighlight(); else this.draw();
       }
     });
   }
 
   private bindCanvasEvents() {
-    // 2D Point-to-Zoom & Scroll-to-Zoom with DPI scale awareness
-    this.canvas.addEventListener('wheel', (e) => {
+    const wrap = this.container.querySelector('#dc-canvas-wrap') as HTMLElement;
+    const wheelTarget = wrap || this.canvas;
+    wheelTarget.addEventListener('wheel', (e) => {
+      if (dcState.getState().viewMode === '3d') return; // Handled by 3D container
       e.preventDefault();
       let delta = -e.deltaY;
       if (e.deltaMode === 1) delta *= 30;
       else if (e.deltaMode === 2) delta *= 300;
       delta = Math.max(-120, Math.min(120, delta));
 
-      const factor = Math.pow(1.002, delta);
+      // Use a consistent, smooth geometric step
+      const factor = delta > 0 ? 1.12 : (1 / 1.12);
       const rect = this.canvas.getBoundingClientRect();
       const scaleX = this.canvas.width / (rect.width || 1);
       const scaleY = this.canvas.height / (rect.height || 1);
       const mouseSx = (e.clientX - rect.left) * scaleX;
       const mouseSy = (e.clientY - rect.top) * scaleY;
 
+      this.hasFittedInitialFloor = true;
       this.zoomAtPoint(mouseSx, mouseSy, factor);
     }, { passive: false });
 
@@ -421,13 +808,29 @@ export class BuildFloorView {
           return;
         }
       }
+
+      // Check if clicking on an ESD floor tile
+      if (xM >= 0 && yM >= 0 && xM < floor.lengthM && yM < floor.widthM) {
+        const tileM = floor.tileSizeMm / 1000;
+        const col = Math.floor(xM / tileM);
+        const row = Math.floor(yM / tileM);
+        const targetTile = floor.tiles.find(t => t.row === row && t.col === col);
+        if (targetTile) {
+          dcState.setState({ selectedTileId: targetTile.id, selectedRackId: null });
+          this.renderPropsPanel();
+          this.draw();
+          this.showTileContextMenu(e.clientX, e.clientY, targetTile);
+          return;
+        }
+      }
     });
 
     this.canvas.addEventListener('mousedown', (e) => {
       if (e.button === 1 || (e.button === 0 && e.altKey) || this.toolMode === 'pan') {
-        this.isPanning = true;
-        this.panStart = { x: e.clientX, y: e.clientY, px: this.panX, py: this.panY };
-        this.canvas.style.cursor = 'grabbing';
+        this.pendingPan = true;
+        this.isPanning = false;
+        this.mouseDownClientPos = { x: e.clientX, y: e.clientY };
+        this.panStartCam = { camX: this.camX, camY: this.camY, mouseX: e.clientX, mouseY: e.clientY };
         return;
       }
       if (e.button === 0) this.handleMouseDown(e);
@@ -446,13 +849,35 @@ export class BuildFloorView {
         const floor = dcState.getActiveFloor();
         const primaryUnit = floor?.unit ?? 'm';
         if (statusbar && xM >= 0 && yM >= 0) {
-          statusbar.textContent = `Cursor: X: ${formatSingleDistance(xM, primaryUnit)} | Y: ${formatSingleDistance(yM, primaryUnit)} | Right-Click Rack: Work on Rack | [S] Select | [M] Move | [Z] Fit | [R] Rotate`;
+          if (this.isMovingPlacementMode) {
+            statusbar.textContent = `✋ MOVING RACK: Click on floor to drop & position | [R] Rotate 90° | [Esc] Cancel | X: ${formatSingleDistance(xM, primaryUnit)} | Y: ${formatSingleDistance(yM, primaryUnit)}`;
+          } else {
+            statusbar.textContent = `Cursor: X: ${formatSingleDistance(xM, primaryUnit)} | Y: ${formatSingleDistance(yM, primaryUnit)} | [Z] Zoom to Rack / Fit | [S] Select | [M] Move | [R] Rotate`;
+          }
+        }
+      }
+
+      // Check drag threshold for panning
+      if (this.pendingPan && !this.isPanning) {
+        const dist = Math.hypot(e.clientX - this.mouseDownClientPos.x, e.clientY - this.mouseDownClientPos.y);
+        if (dist >= this.DRAG_THRESHOLD_PX) {
+          this.isPanning = true;
+          this.canvas.style.cursor = 'grabbing';
+        }
+      }
+
+      // Check drag threshold for dragging racks
+      if (this.pendingDragRack && !this.isDraggingRack) {
+        const dist = Math.hypot(e.clientX - this.mouseDownClientPos.x, e.clientY - this.mouseDownClientPos.y);
+        if (dist >= this.DRAG_THRESHOLD_PX) {
+          this.isDraggingRack = true;
+          this.canvas.style.cursor = 'move';
         }
       }
 
       if (this.isPanning) {
-        const dx = e.clientX - this.panStart.x;
-        const dy = e.clientY - this.panStart.y;
+        const dx = e.clientX - this.panStartCam.mouseX;
+        const dy = e.clientY - this.panStartCam.mouseY;
         let unrotDx = dx;
         let unrotDy = dy;
         if (this.canvasRotationDeg !== 0) {
@@ -462,8 +887,9 @@ export class BuildFloorView {
           unrotDx = dx * cos - dy * sin;
           unrotDy = dx * sin + dy * cos;
         }
-        this.panX = this.panStart.px + unrotDx;
-        this.panY = this.panStart.py + unrotDy;
+        // Shifting mouse right moves view right -> camera center moves left (negative dx)
+        this.camX = this.panStartCam.camX - unrotDx / this.ppm;
+        this.camY = this.panStartCam.camY - unrotDy / this.ppm;
         this.draw();
         return;
       }
@@ -471,11 +897,19 @@ export class BuildFloorView {
     });
 
     window.addEventListener('mouseup', (_e) => {
+      this.pendingPan = false;
+      this.pendingDragRack = false;
       if (this.isPanning) {
         this.isPanning = false;
         this.canvas.style.cursor = this.toolMode === 'pan' ? 'grab' : 'default';
       }
-      if (this.isDraggingRack) this.handleRackDrop(_e);
+      if (this.isDraggingRack && !this.isMovingPlacementMode) {
+        this.handleRackDrop(_e);
+      } else if (!this.isMovingPlacementMode) {
+        // Simple click without exceeding drag threshold: cleanly reset drag state so no ghost drag remains
+        this.draggingRackId = null;
+        this.dragPos = null;
+      }
     });
   }
 
@@ -509,18 +943,37 @@ export class BuildFloorView {
     const canvasSx = (e.clientX - rect.left) * scaleX;
     const canvasSy = (e.clientY - rect.top) * scaleY;
 
+    // DEBUG: log coordinate state on every click
+    console.log('[DC-CLICK] panX:', this.panX.toFixed(1), 'panY:', this.panY.toFixed(1),
+      'ppm:', this.ppm.toFixed(1),
+      'canvas:', this.canvas.width, 'x', this.canvas.height,
+      'rect:', rect.width.toFixed(0), 'x', rect.height.toFixed(0),
+      'rect.left:', rect.left.toFixed(0), 'rect.top:', rect.top.toFixed(0),
+      'scaleX:', scaleX.toFixed(3), 'scaleY:', scaleY.toFixed(3),
+      'canvasSx:', canvasSx.toFixed(1), 'canvasSy:', canvasSy.toFixed(1));
+
     const { xM, yM } = this.screenToWorld(canvasSx, canvasSy);
     const floor = dcState.getActiveFloor();
     if (!floor) return;
 
+    // If currently in active "Move Rack" placement mode, click to drop and place
+    if (this.isMovingPlacementMode && this.draggingRackId) {
+      this.handleRackDrop(e);
+      return;
+    }
+
+    this.mouseDownClientPos = { x: e.clientX, y: e.clientY };
+
     for (const rack of floor.racks) {
       if (this.hitTestRack(rack, xM, yM)) {
         dcState.setState({ selectedRackId: rack.id, selectedTileId: null });
-        this.isDraggingRack = true;
+        this.pendingDragRack = true;
+        this.isDraggingRack = false;
         this.draggingRackId = rack.id;
         this.dragOffset = { x: xM - rack.position.x, y: yM - rack.position.y };
         this.dragPos = { x: rack.position.x, y: rack.position.y };
         this.renderPropsPanel();
+        this.draw();
         return;
       }
     }
@@ -535,9 +988,11 @@ export class BuildFloorView {
       dcState.setState({ selectedTileId: tileId, selectedRackId: null });
       this.renderPropsPanel();
     } else {
-      this.isPanning = true;
-      this.panStart = { x: e.clientX, y: e.clientY, px: this.panX, py: this.panY };
-      this.canvas.style.cursor = 'grabbing';
+      if (this.toolMode === 'pan' || e.altKey) {
+        this.pendingPan = true;
+        this.isPanning = false;
+        this.panStartCam = { camX: this.camX, camY: this.camY, mouseX: e.clientX, mouseY: e.clientY };
+      }
       dcState.setState({ selectedTileId: null, selectedRackId: null });
       this.renderPropsPanel();
     }
@@ -560,7 +1015,14 @@ export class BuildFloorView {
 
     this.snapGapInfo = null;
 
-    if (dcState.getState().snapEnabled) {
+    if (this.strictGridOnly) {
+      // STRICT GRID LOCK: Move strictly on full ESD tile boundaries
+      const tileM = floor.tileSizeMm / 1000;
+      nx = Math.round(nx / tileM) * tileM;
+      ny = Math.round(ny / tileM) * tileM;
+      nx = parseFloat(nx.toFixed(4));
+      ny = parseFloat(ny.toFixed(4));
+    } else if (dcState.getState().snapEnabled) {
       const snapped = dcState.snapToGrid(nx, ny, floor.tileSizeMm / 1000);
       nx = snapped.x; ny = snapped.y;
 
@@ -609,20 +1071,46 @@ export class BuildFloorView {
       }
     }
 
-    this.dragPos = { x: nx, y: ny };
+    const currentRack = floor.racks.find(r => r.id === this.draggingRackId);
+    if (currentRack) {
+      const rW = currentRack.widthMm / 1000;
+      const rD = currentRack.depthMm / 1000;
+      const eW = currentRack.rotation % 180 === 0 ? rW : rD;
+      const eD = currentRack.rotation % 180 === 0 ? rD : rW;
+
+      // Strict Room Boundary Clamping: Never allow rack dragging outside the user-defined floor
+      const maxX = Math.max(0, floor.lengthM - eW);
+      const maxY = Math.max(0, floor.widthM - eD);
+      nx = Math.max(0, Math.min(maxX, nx));
+      ny = Math.max(0, Math.min(maxY, ny));
+    }
+
+    this.dragPos = { x: parseFloat(nx.toFixed(4)), y: parseFloat(ny.toFixed(4)) };
     this.draw();
   }
 
   private handleRackDrop(_e: MouseEvent) {
     this.isDraggingRack = false;
+    this.isMovingPlacementMode = false;
+    this.canvas.style.cursor = this.toolMode === 'pan' ? 'grab' : 'crosshair';
     this.snapGapInfo = null;
     if (!this.draggingRackId || !this.dragPos) { this.draggingRackId = null; this.dragPos = null; return; }
     const floor = dcState.getActiveFloor();
     if (!floor) return;
     const rack = floor.racks.find(r => r.id === this.draggingRackId);
     if (!rack) return;
-    const updated: DcRack = { ...rack, position: { x: this.dragPos.x, y: this.dragPos.y, z: 0 } };
-    if (!dcState.isOutOfBounds(updated) && !dcState.isOverlapping(updated)) {
+
+    const rW = rack.widthMm / 1000;
+    const rD = rack.depthMm / 1000;
+    const eW = rack.rotation % 180 === 0 ? rW : rD;
+    const eD = rack.rotation % 180 === 0 ? rD : rW;
+    const maxX = Math.max(0, floor.lengthM - eW);
+    const maxY = Math.max(0, floor.widthM - eD);
+    const clampedX = Math.max(0, Math.min(maxX, this.dragPos.x));
+    const clampedY = Math.max(0, Math.min(maxY, this.dragPos.y));
+
+    const updated: DcRack = { ...rack, position: { x: clampedX, y: clampedY, z: 0 } };
+    if (!dcState.isOutOfBounds(updated) && !dcState.isOverlapping(updated, rack.id)) {
       dcState.updateRack(this.draggingRackId, { position: updated.position });
     }
     this.draggingRackId = null;
@@ -673,7 +1161,28 @@ export class BuildFloorView {
     const tileM = floor.tileSizeMm / 1000;
     const tilePx = tileM * this.ppm;
 
-    // 1. Draw ESD Tiles
+    const { sx: fx, sy: fy } = this.worldToScreen(0, 0);
+    const fw = floor.lengthM * this.ppm;
+    const fh = floor.widthM * this.ppm;
+
+    // Strict defined room boundary letterbox / perimeter backdrop
+    // Outer room shadow to elevate the physical data hall above dark letterbox backdrop
+    this.ctx.save();
+    this.ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+    this.ctx.shadowBlur = 18;
+    this.ctx.shadowOffsetX = 0;
+    this.ctx.shadowOffsetY = 4;
+    this.ctx.fillStyle = '#f8fafc';
+    this.ctx.fillRect(fx, fy, fw, fh);
+    this.ctx.restore();
+
+    // STRICT ROOM BOUNDARY CLIPPING: Prevent any tile fills, lines, or textures from leaking outside
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.rect(fx, fy, fw, fh);
+    this.ctx.clip();
+
+    // 1. Draw ESD Tiles (Realistic White Static Dissipative Access Floor Tiles)
     for (const tile of floor.tiles) {
       const { sx, sy } = this.worldToScreen(tile.x, tile.y);
       const tw = tilePx;
@@ -684,39 +1193,206 @@ export class BuildFloorView {
       const isChecker = (tile.row + tile.col) % 2 === 0;
 
       if (isSelected) {
-        this.ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+        // Cyan-blue tech selection glow over white ESD tile
+        this.ctx.fillStyle = '#bae6fd';
+      } else if (tile.type === 'perforated') {
+        // High-airflow perforated cold-aisle vented tile (metallic tint)
+        this.ctx.fillStyle = '#e2e8f0';
+      } else if (tile.type === 'air-channel') {
+        // Under-floor air channel plenum tile (cool cyan tint)
+        this.ctx.fillStyle = '#e0f2fe';
       } else if (isPartial) {
-        this.ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
+        // Partial perimeter cut tile
+        this.ctx.fillStyle = isChecker ? '#e2e8f0' : '#cbd5e1';
       } else {
-        this.ctx.fillStyle = isChecker ? 'rgba(30, 41, 59, 0.7)' : 'rgba(21, 32, 50, 0.7)';
+        // Authentic White ESD Tile (Crisp off-white / light tech gray with static dissipative panel variation)
+        this.ctx.fillStyle = isChecker ? '#f8fafc' : '#f1f5f9';
       }
       this.ctx.fillRect(sx, sy, tw, th);
 
-      // Grid line border for individual tile
-      if (s.gridVisible) {
-        this.ctx.strokeStyle = isSelected ? '#38bdf8' : isPartial ? 'rgba(56, 189, 248, 0.25)' : 'rgba(56, 189, 248, 0.45)';
-        this.ctx.lineWidth = isSelected ? 2 : 1;
+      // Render Perforated Tile Dot Grille in 2D
+      if (tile.type === 'perforated' && tw >= 18) {
+        this.ctx.fillStyle = '#1e293b';
+        const colsHoles = Math.max(3, Math.min(8, Math.floor(tw / 6)));
+        const rowsHoles = Math.max(3, Math.min(8, Math.floor(th / 6)));
+        const dx = tw / (colsHoles + 1);
+        const dy = th / (rowsHoles + 1);
+        const r = Math.max(1, Math.min(2.5, dx * 0.25));
+        for (let ix = 1; ix <= colsHoles; ix++) {
+          for (let iy = 1; iy <= rowsHoles; iy++) {
+            this.ctx.beginPath();
+            this.ctx.arc(sx + ix * dx, sy + iy * dy, r, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+        }
+      }
+
+      // Render Under-Floor Air Channel Airflow Direction Arrow in 2D
+      if (tile.type === 'air-channel') {
+        this.ctx.save();
+        this.ctx.fillStyle = '#0284c7';
+        this.ctx.strokeStyle = '#0369a1';
+        this.ctx.lineWidth = 1.5;
+        const arrow = tile.airflowDir || 'north';
+        const cx = sx + tw / 2;
+        const cy = sy + th / 2;
+        const arrowSize = Math.min(tw, th) * 0.35;
+
+        this.ctx.beginPath();
+        if (arrow === 'north') {
+          this.ctx.moveTo(cx, cy - arrowSize);
+          this.ctx.lineTo(cx + arrowSize * 0.6, cy + arrowSize * 0.4);
+          this.ctx.lineTo(cx + arrowSize * 0.2, cy + arrowSize * 0.4);
+          this.ctx.lineTo(cx + arrowSize * 0.2, cy + arrowSize);
+          this.ctx.lineTo(cx - arrowSize * 0.2, cy + arrowSize);
+          this.ctx.lineTo(cx - arrowSize * 0.2, cy + arrowSize * 0.4);
+          this.ctx.lineTo(cx - arrowSize * 0.6, cy + arrowSize * 0.4);
+        } else if (arrow === 'south') {
+          this.ctx.moveTo(cx, cy + arrowSize);
+          this.ctx.lineTo(cx + arrowSize * 0.6, cy - arrowSize * 0.4);
+          this.ctx.lineTo(cx + arrowSize * 0.2, cy - arrowSize * 0.4);
+          this.ctx.lineTo(cx + arrowSize * 0.2, cy - arrowSize);
+          this.ctx.lineTo(cx - arrowSize * 0.2, cy - arrowSize);
+          this.ctx.lineTo(cx - arrowSize * 0.2, cy - arrowSize * 0.4);
+          this.ctx.lineTo(cx - arrowSize * 0.6, cy - arrowSize * 0.4);
+        } else if (arrow === 'east') {
+          this.ctx.moveTo(cx + arrowSize, cy);
+          this.ctx.lineTo(cx - arrowSize * 0.4, cy - arrowSize * 0.6);
+          this.ctx.lineTo(cx - arrowSize * 0.4, cy - arrowSize * 0.2);
+          this.ctx.lineTo(cx - arrowSize, cy - arrowSize * 0.2);
+          this.ctx.lineTo(cx - arrowSize, cy + arrowSize * 0.2);
+          this.ctx.lineTo(cx - arrowSize * 0.4, cy + arrowSize * 0.2);
+          this.ctx.lineTo(cx - arrowSize * 0.4, cy + arrowSize * 0.6);
+        } else if (arrow === 'west') {
+          this.ctx.moveTo(cx - arrowSize, cy);
+          this.ctx.lineTo(cx + arrowSize * 0.4, cy - arrowSize * 0.6);
+          this.ctx.lineTo(cx + arrowSize * 0.4, cy - arrowSize * 0.2);
+          this.ctx.lineTo(cx + arrowSize, cy - arrowSize * 0.2);
+          this.ctx.lineTo(cx + arrowSize, cy + arrowSize * 0.2);
+          this.ctx.lineTo(cx + arrowSize * 0.4, cy + arrowSize * 0.2);
+          this.ctx.lineTo(cx + arrowSize * 0.4, cy + arrowSize * 0.6);
+        }
+        this.ctx.closePath();
+        this.ctx.globalAlpha = 0.55;
+        this.ctx.fill();
+        this.ctx.globalAlpha = 1.0;
+        this.ctx.stroke();
+        this.ctx.restore();
+      }
+
+      // Fine static-dissipative micro-veins / conductive tech veins on full standard tiles
+      if (!isPartial && tile.type === 'standard' && tilePx >= 24) {
+        this.ctx.fillStyle = 'rgba(148, 163, 184, 0.28)';
+        // 2 subtle conductive micro-veins across tile surface
+        this.ctx.fillRect(sx + tw * 0.22, sy + th * 0.18, Math.max(1, tw * 0.35), 1);
+        this.ctx.fillRect(sx + tw * 0.48, sy + th * 0.65, Math.max(1, tw * 0.28), 1);
+      }
+
+      // Realistic 3D tile panel chamfer / bevel highlight (top and left edge)
+      if (!isPartial && tilePx > 16) {
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        this.ctx.fillRect(sx + 1, sy + 1, tw - 2, 1.2);
+        this.ctx.fillRect(sx + 1, sy + 1, 1.2, th - 2);
+
+        // Tile bevel inner shadow (bottom and right edge)
+        this.ctx.fillStyle = 'rgba(100, 116, 139, 0.25)';
+        this.ctx.fillRect(sx + 1, sy + th - 2, tw - 2, 1.2);
+        this.ctx.fillRect(sx + tw - 2, sy + 1, 1.2, th - 2);
+      }
+
+      // High-contrast conductive vinyl ESD tile perimeter seam (Grid lines on every tile)
+      if (s.gridVisible !== false) {
+        this.ctx.strokeStyle = '#334155'; // Dark industrial slate conductive gasket
+        this.ctx.lineWidth = 1.5;
         this.ctx.strokeRect(sx, sy, tw, th);
       }
 
-      // Tile ID Label
-      if (s.labelsVisible && tilePx >= 32) {
-        this.ctx.fillStyle = isSelected ? '#38bdf8' : 'rgba(255, 255, 255, 0.4)';
-        this.ctx.font = `${Math.max(9, Math.min(11, tilePx * 0.18))}px monospace`;
+      // Highlight selected tile boundary
+      if (isSelected) {
+        this.ctx.strokeStyle = '#0284c7';
+        this.ctx.lineWidth = 2.5;
+        this.ctx.strokeRect(sx, sy, tw, th);
+      }
+
+      // High-contrast Tile Coordinate ID Label (e.g. A1, A2 or A-01)
+      if (s.labelsVisible && tilePx >= 20) {
+        this.ctx.fillStyle = isSelected ? '#0369a1' : (tile.type === 'air-channel' ? '#0369a1' : '#1e293b');
+        const fontSize = Math.max(9, Math.min(13, Math.round(tilePx * 0.22)));
+        this.ctx.font = `bold ${fontSize}px "SF Mono", Monaco, Menlo, Consolas, monospace`;
         this.ctx.textAlign = 'center';
-        this.ctx.fillText(tile.id, sx + tw / 2, sy + th / 2 + 4);
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(tile.id, sx + tw / 2, sy + th / 2);
       }
     }
 
-    // 2. Draw Main Outer Floor Border
-    const { sx: fx, sy: fy } = this.worldToScreen(0, 0);
-    const fw = floor.lengthM * this.ppm;
-    const fh = floor.widthM * this.ppm;
-    this.ctx.strokeStyle = '#38bdf8';
-    this.ctx.lineWidth = 2.5;
+    // 2. Under-Floor Infrastructure Paths in 2D (Cable Trays, Ducts, Power/Data Bundles, Risers)
+    if (floor.infrastructure && floor.infrastructure.length > 0) {
+      for (const item of floor.infrastructure) {
+        const p1 = this.worldToScreen(item.start.x, item.start.y);
+        const p2 = this.worldToScreen(item.end.x, item.end.y);
+        const isSelected = item.id === s.selectedInfraId;
+
+        this.ctx.save();
+        if (item.category === 'cable-tray') {
+          this.ctx.strokeStyle = '#f59e0b'; // Industrial amber tray
+          this.ctx.lineWidth = Math.max(3, (item.widthMm / 1000) * this.ppm);
+          this.ctx.setLineDash([8, 4]);
+        } else if (item.category === 'cable-duct') {
+          this.ctx.strokeStyle = '#94a3b8'; // Galvanized metal duct
+          this.ctx.lineWidth = Math.max(3, (item.widthMm / 1000) * this.ppm);
+          this.ctx.setLineDash([]);
+        } else if (item.category === 'power-cable') {
+          this.ctx.strokeStyle = '#ef4444'; // Power red
+          this.ctx.lineWidth = 2.5;
+          this.ctx.setLineDash([4, 2]);
+        } else if (item.category === 'data-cable') {
+          this.ctx.strokeStyle = '#3b82f6'; // Data blue
+          this.ctx.lineWidth = 2.5;
+          this.ctx.setLineDash([4, 2]);
+        } else if (item.category === 'riser') {
+          // Circle riser pillar
+          this.ctx.fillStyle = '#10b981';
+          this.ctx.strokeStyle = '#047857';
+          this.ctx.lineWidth = 2;
+          const rPx = Math.max(6, (item.widthMm / 2000) * this.ppm);
+          this.ctx.beginPath();
+          this.ctx.arc(p1.sx, p1.sy, rPx, 0, Math.PI * 2);
+          this.ctx.fill();
+          this.ctx.stroke();
+          this.ctx.restore();
+          continue;
+        }
+
+        if (isSelected) {
+          this.ctx.shadowColor = '#38bdf8';
+          this.ctx.shadowBlur = 8;
+        }
+
+        this.ctx.beginPath();
+        this.ctx.moveTo(p1.sx, p1.sy);
+        this.ctx.lineTo(p2.sx, p2.sy);
+        this.ctx.stroke();
+
+        // Infrastructure label badge
+        const midX = (p1.sx + p2.sx) / 2;
+        const midY = (p1.sy + p2.sy) / 2;
+        this.ctx.fillStyle = isSelected ? '#38bdf8' : '#e2e8f0';
+        this.ctx.font = 'bold 9px system-ui';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'bottom';
+        this.ctx.fillText(item.name, midX, midY - 3);
+        this.ctx.restore();
+      }
+    }
+
+    // NOTE: Per-tile ESD seam borders are drawn individually via strokeRect inside the tile loop above.
+
+    // 2. Draw Main Outer Floor Architectural Border (Anodized Aluminum Perimeter Curb Trim)
+    this.ctx.strokeStyle = '#0284c7';
+    this.ctx.lineWidth = 3.5;
     this.ctx.strokeRect(fx, fy, fw, fh);
 
-    // 3. Draw Racks
+    // 3. Draw Racks strictly within floor area
     for (const rack of floor.racks) {
       const isDragging = rack.id === this.draggingRackId;
       const pos = isDragging && this.dragPos ? this.dragPos : rack.position;
@@ -729,7 +1405,7 @@ export class BuildFloorView {
       const p2 = this.worldToScreen(this.snapGapInfo.x2, this.snapGapInfo.y2);
 
       this.ctx.save();
-      this.ctx.strokeStyle = '#10b981';
+      this.ctx.strokeStyle = '#059669';
       this.ctx.lineWidth = 2;
       this.ctx.setLineDash([4, 4]);
       this.ctx.beginPath();
@@ -740,12 +1416,89 @@ export class BuildFloorView {
       // Label badge
       const midX = (p1.sx + p2.sx) / 2;
       const midY = (p1.sy + p2.sy) / 2;
-      this.ctx.fillStyle = '#10b981';
+      this.ctx.fillStyle = '#059669';
       this.ctx.font = 'bold 11px system-ui';
       this.ctx.textAlign = 'center';
       this.ctx.fillText(`SNAP: ${this.snapGapInfo.label}`, midX, midY - 6);
       this.ctx.restore();
     }
+
+    this.ctx.restore();
+
+    this.ctx.restore();
+
+    // 5. CAD Architectural Dimension Lines & Leader Arrows (Outside clipped floor boundary)
+    const unit = floor.unit ?? 'm';
+    const dimOffset = Math.max(22, Math.min(36, 18 * (this.ppm / 100)));
+    const arrowSz = 6;
+    const lenLabel = formatDimensionsMeters(floor.lengthM, 0, unit).split('×')[0].trim();
+    const widLabel = formatDimensionsMeters(0, floor.widthM, unit).split('×')[1]?.trim() || formatSingleDistance(floor.widthM, unit);
+
+    this.ctx.save();
+    this.ctx.strokeStyle = '#64748b';
+    this.ctx.fillStyle = '#94a3b8';
+    this.ctx.lineWidth = 1.2;
+    this.ctx.font = '600 11px system-ui, -apple-system, sans-serif';
+
+    // Top Width Dimension Line (Length along X)
+    const topY = fy - dimOffset;
+    // Extension witness lines
+    this.ctx.beginPath();
+    this.ctx.moveTo(fx, fy - 4);
+    this.ctx.lineTo(fx, topY - 5);
+    this.ctx.moveTo(fx + fw, fy - 4);
+    this.ctx.lineTo(fx + fw, topY - 5);
+    // Dimension line
+    this.ctx.moveTo(fx, topY);
+    this.ctx.lineTo(fx + fw, topY);
+    // Left arrow
+    this.ctx.moveTo(fx, topY);
+    this.ctx.lineTo(fx + arrowSz, topY - 3);
+    this.ctx.moveTo(fx, topY);
+    this.ctx.lineTo(fx + arrowSz, topY + 3);
+    // Right arrow
+    this.ctx.moveTo(fx + fw, topY);
+    this.ctx.lineTo(fx + fw - arrowSz, topY - 3);
+    this.ctx.moveTo(fx + fw, topY);
+    this.ctx.lineTo(fx + fw - arrowSz, topY + 3);
+    this.ctx.stroke();
+
+    // Top Dimension Text
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'bottom';
+    this.ctx.fillText(`◄── ${lenLabel} ──►`, fx + fw / 2, topY - 3);
+
+    // Left Height Dimension Line (Width along Y)
+    const leftX = fx - dimOffset;
+    // Extension witness lines
+    this.ctx.beginPath();
+    this.ctx.moveTo(fx - 4, fy);
+    this.ctx.lineTo(leftX - 5, fy);
+    this.ctx.moveTo(fx - 4, fy + fh);
+    this.ctx.lineTo(leftX - 5, fy + fh);
+    // Dimension line
+    this.ctx.moveTo(leftX, fy);
+    this.ctx.lineTo(leftX, fy + fh);
+    // Top arrow
+    this.ctx.moveTo(leftX, fy);
+    this.ctx.lineTo(leftX - 3, fy + arrowSz);
+    this.ctx.moveTo(leftX, fy);
+    this.ctx.lineTo(leftX + 3, fy + arrowSz);
+    // Bottom arrow
+    this.ctx.moveTo(leftX, fy + fh);
+    this.ctx.lineTo(leftX - 3, fy + fh - arrowSz);
+    this.ctx.moveTo(leftX, fy + fh);
+    this.ctx.lineTo(leftX + 3, fy + fh - arrowSz);
+    this.ctx.stroke();
+
+    // Left Dimension Text (Rotated along Y dimension line)
+    this.ctx.save();
+    this.ctx.translate(leftX - 6, fy + fh / 2);
+    this.ctx.rotate(-Math.PI / 2);
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'bottom';
+    this.ctx.fillText(`◄── ${widLabel} ──►`, 0, 0);
+    this.ctx.restore();
 
     this.ctx.restore();
 
@@ -788,14 +1541,26 @@ export class BuildFloorView {
     }
 
     if (s.labelsVisible && pw >= 20) {
+      // Query devices mounted in this rack from stateManager
+      const devices = stateManager.getState().devices?.filter(d => d.rackId === rack.id) || [];
+      const usedU = devices.reduce((sum, d) => {
+        const tmpl = getTemplate(d.templateId);
+        return sum + (tmpl?.heightUnits || 1);
+      }, 0);
+
       this.ctx.fillStyle = '#f0f6fc';
       this.ctx.font = `bold ${Math.max(9, Math.min(13, pw * 0.15))}px system-ui`;
       this.ctx.textAlign = 'center';
-      this.ctx.fillText(rack.name, sx + pw / 2, sy + ph / 2 - 4);
+      this.ctx.fillText(rack.name, sx + pw / 2, sy + ph / 2 - 8);
       if (ph >= 24) {
         this.ctx.font = `${Math.max(8, Math.min(10, pw * 0.12))}px system-ui`;
         this.ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        this.ctx.fillText(`${rack.heightU}U ${rack.type.toUpperCase()}`, sx + pw / 2, sy + ph / 2 + 10);
+        this.ctx.fillText(`${rack.heightU}U ${rack.type.toUpperCase()}`, sx + pw / 2, sy + ph / 2 + 5);
+      }
+      if (devices.length > 0 && ph >= 38) {
+        this.ctx.font = `600 ${Math.max(7.5, Math.min(9.5, pw * 0.10))}px system-ui`;
+        this.ctx.fillStyle = '#38bdf8';
+        this.ctx.fillText(`● ${devices.length} dev • ${usedU}/${rack.heightU}U`, sx + pw / 2, sy + ph / 2 + 18);
       }
     }
   }
@@ -811,8 +1576,8 @@ export class BuildFloorView {
     const ppmW = availW / floor.lengthM;
     const ppmH = availH / floor.widthM;
     this.ppm = Math.min(ppmW, ppmH);
-    this.panX = padding + (availW - floor.lengthM * this.ppm) / 2;
-    this.panY = padding + (availH - floor.widthM * this.ppm) / 2;
+    this.camX = floor.lengthM / 2;
+    this.camY = floor.widthM / 2;
     this.draw();
   }
 
@@ -835,11 +1600,13 @@ export class BuildFloorView {
       <button class="dc-btn dc-btn-sm dc-btn-full" id="dc-btn-addrack">＋ Add Single Rack</button>
       <button class="dc-btn dc-btn-sm dc-btn-full" id="dc-btn-addrow-info">▤ Add Row (Standards)</button>
       <button class="dc-btn dc-btn-sm dc-btn-full dc-btn-secondary" id="dc-btn-editfloor">✎ Edit Floor</button>
+      <button class="dc-btn dc-btn-sm dc-btn-full dc-btn-secondary" id="dc-btn-clearfloor">↺ Reset to Empty Floor</button>
       <button class="dc-btn dc-btn-sm dc-btn-full dc-btn-danger" id="dc-btn-deletefloor">🗑 Delete Floor</button>
     `;
     el.querySelector('#dc-btn-addrack')?.addEventListener('click', () => this.showAddRackDialog());
     el.querySelector('#dc-btn-addrow-info')?.addEventListener('click', () => this.showAddRowDialog());
     el.querySelector('#dc-btn-editfloor')?.addEventListener('click', () => this.showEditFloorDialog(floor));
+    el.querySelector('#dc-btn-clearfloor')?.addEventListener('click', () => this.promptResetFloor());
     el.querySelector('#dc-btn-deletefloor')?.addEventListener('click', () => {
       if (confirm(`Delete floor "${floor.name}"? This cannot be undone.`)) {
         dcState.deleteFloor(floor.id);
@@ -857,8 +1624,25 @@ export class BuildFloorView {
     setActive('dc-btn-2d', s.viewMode === '2d');
     setActive('dc-btn-3d', s.viewMode === '3d');
     setActive('dc-btn-grid', s.gridVisible);
-    setActive('dc-btn-snap', s.snapEnabled);
+    setActive('dc-btn-snap', s.snapEnabled && !this.strictGridOnly);
+    setActive('dc-btn-grid-lock', this.strictGridOnly);
+    const gridLockBtn = this.container.querySelector('#dc-btn-grid-lock');
+    if (gridLockBtn) {
+      gridLockBtn.textContent = this.strictGridOnly ? '▦ Grid-Only (ON)' : '▦ Grid-Only (Off)';
+    }
     setActive('dc-btn-labels', s.labelsVisible);
+    setActive('dc-btn-xray', s.xrayMode);
+    setActive('dc3d-btn-xray', s.xrayMode);
+
+    const opacityVal = Math.round((s.floorOpacity ?? 1) * 100);
+    const topbarSlider = this.container.querySelector('#dc-floor-opacity') as HTMLInputElement | null;
+    if (topbarSlider && parseInt(topbarSlider.value, 10) !== opacityVal) {
+      topbarSlider.value = String(opacityVal);
+    }
+    const threeSlider = this.container.querySelector('#dc3d-floor-opacity') as HTMLInputElement | null;
+    if (threeSlider && parseInt(threeSlider.value, 10) !== opacityVal) {
+      threeSlider.value = String(opacityVal);
+    }
 
     if (floor) {
       const topbarUnitSel = this.container.querySelector('#dc-topbar-unit') as HTMLSelectElement;
@@ -869,12 +1653,20 @@ export class BuildFloorView {
   }
 
   private refresh() {
+    this.updateButtonStates();
     const floor = dcState.getActiveFloor();
     if (!floor) {
       const el = this.container.querySelector('#dc-info-content');
       if (el) el.innerHTML = '<div class="dc-no-floor">No floor loaded.<br>Click <b>+ New Floor</b> to start.</div>';
     } else if (dcState.getState().viewMode === '3d') {
-      this.render3D();
+      if (this.threeGridGroup) {
+        this.threeGridGroup.visible = dcState.getState().gridVisible !== false;
+      }
+      if (!this.threeRenderer || this.lastRenderedFloorId !== floor.id) {
+        this.render3D();
+      } else {
+        this.update3DSelectionHighlight();
+      }
     } else {
       this.draw();
     }
@@ -883,98 +1675,207 @@ export class BuildFloorView {
 
   private renderPropsPanel() {
     const s = dcState.getState();
-    const el = this.container.querySelector('#dc-props-content');
-    if (!el) return;
+    const internalEl = this.container.querySelector('#dc-props-content') as HTMLElement | null;
+    const globalEl = document.getElementById('properties-content');
     const floor = dcState.getActiveFloor();
     const unit = floor?.unit ?? 'm';
 
-    if (s.selectedRackId && floor) {
-      const rack = floor.racks.find(r => r.id === s.selectedRackId);
-      if (rack) {
-        const posX = formatSingleDistance(rack.position.x, unit);
-        const posY = formatSingleDistance(rack.position.y, unit);
-        const typeBadge = `<span class="dc-type-badge ${rack.type}">${rack.type}</span>`;
+    const renderTo = (el: HTMLElement, isGlobal: boolean) => {
+      if (s.selectedRackId && floor) {
+        const rack = floor.racks.find(r => r.id === s.selectedRackId);
+        if (rack) {
+          const posX = formatSingleDistance(rack.position.x, unit);
+          const posY = formatSingleDistance(rack.position.y, unit);
+          const typeBadge = `<span class="dc-type-badge ${rack.type}">${rack.type}</span>`;
+          const devices = stateManager.getState().devices?.filter(d => d.rackId === rack.id) || [];
+          const usedU = devices.reduce((sum, d) => sum + (getTemplate(d.templateId)?.heightUnits || 1), 0);
 
-        el.innerHTML = `
-          <div class="dc-props-section">
-            <div class="dc-props-title">Rack Properties ${typeBadge}</div>
-            <div class="dc-info-row"><span class="dc-info-label">ID</span><span class="dc-info-val">${rack.id}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Name</span><span class="dc-info-val">${rack.name}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Type</span><span class="dc-info-val"><b>${rack.type.toUpperCase()}</b></span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(rack.widthMm, rack.depthMm, unit === 'm' ? 'mm' : unit)}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Height</span><span class="dc-info-val">${formatRackHeight(rack.heightU)}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Pos X</span><span class="dc-info-val">${posX}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Pos Y</span><span class="dc-info-val">${posY}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Rotation</span><span class="dc-info-val">${rack.rotation}°</span></div>
-            ${rack.doorStyle ? `<div class="dc-info-row"><span class="dc-info-label">Door</span><span class="dc-info-val">${rack.doorStyle}</span></div>` : ''}
-            ${rack.manufacturer ? `<div class="dc-info-row"><span class="dc-info-label">Mfr</span><span class="dc-info-val">${rack.manufacturer} ${rack.model || ''}</span></div>` : ''}
-          </div>
-          <div class="dc-props-actions">
-            <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-rack-work" title="Mount devices, servers & switches in this rack">⚙ Work on this Rack (Mount Devices)</button>
-            <button class="dc-btn dc-btn-sm" id="dc-rack-rotate" title="Rotate 90° (Hotkey: R)">↻ Rotate 90° (R)</button>
-            <button class="dc-btn dc-btn-sm" id="dc-rack-edit" title="Edit Properties">✎ Edit Rack</button>
-            <button class="dc-btn dc-btn-sm" id="dc-rack-duplicate" title="Duplicate">⊕ Duplicate</button>
-            <button class="dc-btn dc-btn-sm dc-btn-danger" id="dc-rack-delete" title="Delete">🗑 Delete</button>
-          </div>
-        `;
-        el.querySelector('#dc-rack-work')?.addEventListener('click', () => this.workOnRack(rack));
-        el.querySelector('#dc-rack-rotate')?.addEventListener('click', () => {
-          const rot = ((rack.rotation + 90) % 360) as 0 | 90 | 180 | 270;
-          dcState.updateRack(rack.id, { rotation: rot });
-          this.renderPropsPanel();
-          if (dcState.getState().viewMode === '3d') this.render3D(); else this.draw();
-        });
-        el.querySelector('#dc-rack-edit')?.addEventListener('click', () => this.showEditRackDialog(rack));
-        el.querySelector('#dc-rack-duplicate')?.addEventListener('click', () => {
-          const dup = dcState.duplicateRack(rack.id);
-          if (dup) dcState.setState({ selectedRackId: dup.id });
-        });
-        el.querySelector('#dc-rack-delete')?.addEventListener('click', () => {
-          if (confirm(`Delete rack "${rack.name}"?`)) dcState.deleteRack(rack.id);
-        });
-        return;
+          el.innerHTML = `
+            <div class="dc-props-section">
+              <div class="dc-props-title">Rack Properties ${typeBadge}</div>
+              <div class="dc-info-row"><span class="dc-info-label">ID</span><span class="dc-info-val">${rack.id}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Name</span><span class="dc-info-val">${rack.name}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Type</span><span class="dc-info-val"><b>${rack.type.toUpperCase()}</b></span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(rack.widthMm, rack.depthMm, unit === 'm' ? 'mm' : unit)}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Height</span><span class="dc-info-val">${formatRackHeight(rack.heightU)}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Capacity</span><span class="dc-info-val" style="color:#38bdf8;font-weight:600;">${devices.length} dev • ${usedU}/${rack.heightU}U</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Pos X</span><span class="dc-info-val">${posX}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Pos Y</span><span class="dc-info-val">${posY}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Rotation</span><span class="dc-info-val">${rack.rotation}°</span></div>
+              ${rack.doorStyle ? `<div class="dc-info-row"><span class="dc-info-label">Door</span><span class="dc-info-val">${rack.doorStyle}</span></div>` : ''}
+              ${rack.manufacturer ? `<div class="dc-info-row"><span class="dc-info-label">Mfr</span><span class="dc-info-val">${rack.manufacturer} ${rack.model || ''}</span></div>` : ''}
+            </div>
+            <div class="dc-nudge-section">
+              <div class="dc-nudge-title">
+                <span>Nudge Position</span>
+                <span class="dc-nudge-hint">Arrows (Shift=0.1m)</span>
+              </div>
+              <div class="dc-nudge-grid">
+                <div></div>
+                <button class="dc-nudge-btn" id="${isGlobal ? 'g-dc-nudge-up' : 'dc-nudge-up'}" title="Nudge Up (↑ / W)">↑</button>
+                <div></div>
+                <button class="dc-nudge-btn" id="${isGlobal ? 'g-dc-nudge-left' : 'dc-nudge-left'}" title="Nudge Left (← / A)">←</button>
+                <button class="dc-nudge-btn" id="${isGlobal ? 'g-dc-nudge-down' : 'dc-nudge-down'}" title="Nudge Down (↓ / S)">↓</button>
+                <button class="dc-nudge-btn" id="${isGlobal ? 'g-dc-nudge-right' : 'dc-nudge-right'}" title="Nudge Right (→ / D)">→</button>
+              </div>
+            </div>
+            <div class="dc-props-actions">
+              <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="${isGlobal ? 'g-dc-rack-work' : 'dc-rack-work'}" title="Mount devices, servers & switches in this rack">⚙ Work on this Rack (Mount Devices)</button>
+              <button class="dc-btn dc-btn-sm" id="${isGlobal ? 'g-dc-rack-zoom' : 'dc-rack-zoom'}" title="Zoom and center view directly onto this rack (Hotkey: Z)">🔍 Zoom to Rack (Hotkey: Z)</button>
+              <button class="dc-btn dc-btn-sm" id="${isGlobal ? 'g-dc-rack-move' : 'dc-rack-move'}" title="Move and reposition rack on floor grid (Hotkey: M)">✋ Move Rack</button>
+              <button class="dc-btn dc-btn-sm" id="${isGlobal ? 'g-dc-rack-rotate' : 'dc-rack-rotate'}" title="Rotate 90° (Hotkey: R)">↻ Rotate 90° (R)</button>
+              <button class="dc-btn dc-btn-sm" id="${isGlobal ? 'g-dc-rack-edit' : 'dc-rack-edit'}" title="Edit Properties">✎ Edit Rack</button>
+              <button class="dc-btn dc-btn-sm" id="${isGlobal ? 'g-dc-rack-duplicate' : 'dc-rack-duplicate'}" title="Duplicate">⊕ Duplicate</button>
+              <button class="dc-btn dc-btn-sm dc-btn-danger" id="${isGlobal ? 'g-dc-rack-delete' : 'dc-rack-delete'}" title="Delete">🗑 Delete</button>
+            </div>
+          `;
+
+          const prefix = isGlobal ? '#g-' : '#';
+          const stepM = floor.tileSizeMm / 1000;
+          el.querySelector(`${prefix}dc-nudge-up`)?.addEventListener('click', () => this.nudgeRack(rack.id, 0, -stepM));
+          el.querySelector(`${prefix}dc-nudge-down`)?.addEventListener('click', () => this.nudgeRack(rack.id, 0, stepM));
+          el.querySelector(`${prefix}dc-nudge-left`)?.addEventListener('click', () => this.nudgeRack(rack.id, -stepM, 0));
+          el.querySelector(`${prefix}dc-nudge-right`)?.addEventListener('click', () => this.nudgeRack(rack.id, stepM, 0));
+
+          el.querySelector(`${prefix}dc-rack-work`)?.addEventListener('click', () => this.workOnRack(rack));
+          el.querySelector(`${prefix}dc-rack-zoom`)?.addEventListener('click', () => this.zoomToSelectedRack());
+          el.querySelector(`${prefix}dc-rack-move`)?.addEventListener('click', () => this.startMovingRack(rack.id));
+          el.querySelector(`${prefix}dc-rack-rotate`)?.addEventListener('click', () => {
+            const rot = ((rack.rotation + 90) % 360) as 0 | 90 | 180 | 270;
+            dcState.updateRack(rack.id, { rotation: rot });
+            this.renderPropsPanel();
+            if (dcState.getState().viewMode === '3d') this.render3D(); else this.draw();
+          });
+          el.querySelector(`${prefix}dc-rack-edit`)?.addEventListener('click', () => this.showEditRackDialog(rack));
+          el.querySelector(`${prefix}dc-rack-duplicate`)?.addEventListener('click', () => {
+            const dup = dcState.duplicateRack(rack.id);
+            if (dup) dcState.setState({ selectedRackId: dup.id });
+          });
+          el.querySelector(`${prefix}dc-rack-delete`)?.addEventListener('click', () => {
+            if (confirm(`Delete rack "${rack.name}"?`)) dcState.deleteRack(rack.id);
+          });
+          return;
+        }
       }
-    }
 
-    if (s.selectedTileId && floor) {
-      const tile = floor.tiles.find(t => t.id === s.selectedTileId);
-      if (tile) {
-        el.innerHTML = `
-          <div class="dc-props-section">
-            <div class="dc-props-title">ESD Tile Properties</div>
-            <div class="dc-info-row"><span class="dc-info-label">ID</span><span class="dc-info-val">${tile.id}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Grid Pos</span><span class="dc-info-val">Row ${tile.row}, Col ${tile.col}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">X</span><span class="dc-info-val">${formatSingleDistance(tile.x, unit)}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Y</span><span class="dc-info-val">${formatSingleDistance(tile.y, unit)}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(tile.widthMm, tile.depthMm, unit === 'm' ? 'mm' : unit)}</span></div>
-            <div class="dc-info-row"><span class="dc-info-label">Type</span><span class="dc-info-val">${tile.type}</span></div>
-          </div>
-        `;
-        return;
+      if (s.selectedTileId && floor) {
+        const tile = floor.tiles.find(t => t.id === s.selectedTileId);
+        if (tile) {
+          const typeDesc = tile.type === 'air-channel'
+            ? `Air Channel (${tile.airflowDir?.toUpperCase() || 'NORTH'})`
+            : tile.type === 'perforated'
+            ? 'Perforated / Vented Panel'
+            : tile.type === 'partial'
+            ? 'Partial Perimeter Cut'
+            : 'Standard Raised Floor';
+
+          el.innerHTML = `
+            <div class="dc-props-section">
+              <div class="dc-props-title">Floor Tile Properties</div>
+              <div class="dc-info-row"><span class="dc-info-label">Address</span><span class="dc-info-val" style="color:#38bdf8;font-weight:700;">${tile.id}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Grid</span><span class="dc-info-val">Row ${tile.row}, Col ${tile.col}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">X Pos</span><span class="dc-info-val">${formatSingleDistance(tile.x, unit)}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Y Pos</span><span class="dc-info-val">${formatSingleDistance(tile.y, unit)}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(tile.widthMm, tile.depthMm, unit === 'm' ? 'mm' : unit)}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Type</span><span class="dc-info-val"><b>${typeDesc}</b></span></div>
+              ${tile.airflowDir ? `<div class="dc-info-row"><span class="dc-info-label">Airflow</span><span class="dc-info-val" style="color:#0284c7;font-weight:600;">${tile.airflowDir.toUpperCase()}</span></div>` : ''}
+              <div class="dc-info-row"><span class="dc-info-label">Plenum</span><span class="dc-info-val">${floor.raisedFloorHeightMm || 450} mm</span></div>
+            </div>
+            <div class="dc-props-actions">
+              <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-tile-btn-perf">▦ Set to Perforated / Vented</button>
+              <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-tile-btn-ac">💨 Under-Floor Air Channel</button>
+              <button class="dc-btn dc-btn-sm dc-btn-full" id="dc-tile-btn-addinfra">⚡ Add Cable Tray / Duct</button>
+              <button class="dc-btn dc-btn-sm dc-btn-secondary dc-btn-full" id="dc-tile-btn-std">↺ Convert to Standard</button>
+            </div>
+          `;
+
+          el.querySelector('#dc-tile-btn-perf')?.addEventListener('click', () => {
+            dcState.setFloorTileType(tile.id, 'perforated');
+            this.refresh();
+          });
+          el.querySelector('#dc-tile-btn-ac')?.addEventListener('click', () => {
+            const dirs: DcAirflowDirection[] = ['north', 'south', 'east', 'west'];
+            const curIdx = dirs.indexOf(tile.airflowDir || 'north');
+            const nextDir = dirs[(curIdx + 1) % dirs.length];
+            dcState.setFloorTileType(tile.id, 'air-channel', nextDir);
+            this.refresh();
+          });
+          el.querySelector('#dc-tile-btn-addinfra')?.addEventListener('click', () => {
+            this.showAddInfraDialog(tile);
+          });
+          el.querySelector('#dc-tile-btn-std')?.addEventListener('click', () => {
+            dcState.setFloorTileType(tile.id, 'standard');
+            this.refresh();
+          });
+          return;
+        }
       }
-    }
 
-    el.innerHTML = '<p class="dc-muted">Click any tile or rack to inspect details.</p>';
+      if (s.selectedInfraId && floor && floor.infrastructure) {
+        const item = floor.infrastructure.find(i => i.id === s.selectedInfraId);
+        if (item) {
+          el.innerHTML = `
+            <div class="dc-props-section">
+              <div class="dc-props-title">Under-Floor Infrastructure</div>
+              <div class="dc-info-row"><span class="dc-info-label">ID</span><span class="dc-info-val">${item.id}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Name</span><span class="dc-info-val">${item.name}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Category</span><span class="dc-info-val"><b>${item.category.toUpperCase()}</b></span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Layer</span><span class="dc-info-val">${item.layer}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${item.widthMm}W × ${item.heightMm}H mm</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Elevation</span><span class="dc-info-val">${item.elevationMm} mm</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Start</span><span class="dc-info-val">(${item.start.x.toFixed(2)}m, ${item.start.y.toFixed(2)}m)</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">End</span><span class="dc-info-val">(${item.end.x.toFixed(2)}m, ${item.end.y.toFixed(2)}m)</span></div>
+            </div>
+            <div class="dc-props-actions">
+              <button class="dc-btn dc-btn-sm dc-btn-danger dc-btn-full" id="dc-infra-delete">🗑 Delete Infrastructure</button>
+            </div>
+          `;
+          el.querySelector('#dc-infra-delete')?.addEventListener('click', () => {
+            if (confirm(`Delete infrastructure "${item.name}"?`)) {
+              dcState.deleteInfrastructureItem(item.id);
+              this.refresh();
+            }
+          });
+          return;
+        }
+      }
+
+      el.innerHTML = '<div class="properties-empty">Select a rack, ESD tile, or under-floor pathway to view details.</div>';
+    };
+
+    if (internalEl) renderTo(internalEl, false);
+    // NOTE: We intentionally do NOT render to the global #properties-panel or toggle its collapsed
+    // state here. Manipulating that panel triggers a CSS width transition on #dc-canvas-wrap
+    // (via ResizeObserver), causing 50+ rapid canvas resize/redraw cycles that make the viewport jump.
+    // The datacenter view uses its own internal #dc-props-content panel exclusively.
   }
 
   private workOnRack(rack: DcRack) {
     const racks = stateManager.getState().racks;
     let existing = racks.find(r => r.id === rack.id);
+    const targetRack = existing || {
+      id: rack.id,
+      name: rack.name,
+      units: rack.heightU,
+      depthMm: rack.depthMm,
+      rackType: (rack.type === 'open-frame' ? 'open-frame' : rack.type === 'network' ? 'network' : rack.type === 'wall-mount' ? 'wall-mount' : 'server') as any,
+      mounting: rack.mounting ?? 'floor',
+      rackColor: rack.color ?? '#1e3a5f',
+      x: 220,
+      y: 60,
+    };
+
     if (!existing) {
-      const newRack: RackData = {
-        id: rack.id,
-        name: rack.name,
-        units: rack.heightU,
-        depthMm: rack.depthMm,
-        rackType: rack.type === 'open-frame' ? 'open-frame' : rack.type === 'network' ? 'network' : rack.type === 'wall-mount' ? 'wall-mount' : 'server',
-        mounting: rack.mounting ?? 'floor',
-        rackColor: rack.color ?? '#1e3a5f',
-        x: 220,
-        y: 60,
-      };
-      stateManager.setState({ racks: [...racks, newRack], selection: [{ type: 'rack', id: rack.id }] });
+      stateManager.setState({
+        racks: [...racks, targetRack],
+        selection: [{ type: 'rack', id: rack.id }],
+        activeElevationRackId: rack.id,
+      });
     } else {
-      stateManager.setState({ selection: [{ type: 'rack', id: rack.id }] });
+      stateManager.setState({
+        selection: [{ type: 'rack', id: rack.id }],
+        activeElevationRackId: rack.id,
+      });
     }
 
     eventBus.emit('view:switch' as any, 'rack');
@@ -1006,6 +1907,7 @@ export class BuildFloorView {
     canvasWrap.prepend(banner);
 
     banner.querySelector('#dc-btn-return-dc')?.addEventListener('click', () => {
+      stateManager.setState({ activeElevationRackId: null });
       eventBus.emit('view:switch' as any, 'datacenter');
       banner?.remove();
     });
@@ -1024,6 +1926,8 @@ export class BuildFloorView {
     menu.innerHTML = `
       <div class="dc-menu-header">${rack.name} (${rack.heightU}U ${rack.type.toUpperCase()})</div>
       <div class="dc-menu-item primary" id="cm-work">⚙ Work on this Rack (Mount Devices)</div>
+      <div class="dc-menu-item" id="cm-zoom">🔍 Zoom to Rack (Hotkey: Z)</div>
+      <div class="dc-menu-item" id="cm-move">✋ Move Rack (Place on Floor)</div>
       <div class="dc-menu-item" id="cm-rotate">↻ Rotate 90° (R)</div>
       <div class="dc-menu-item" id="cm-duplicate">⊕ Duplicate Rack</div>
       <div class="dc-menu-item" id="cm-edit">✎ Edit Properties</div>
@@ -1035,6 +1939,8 @@ export class BuildFloorView {
     const close = () => menu.remove();
 
     menu.querySelector('#cm-work')?.addEventListener('click', () => { close(); this.workOnRack(rack); });
+    menu.querySelector('#cm-zoom')?.addEventListener('click', () => { close(); this.zoomToSelectedRack(); });
+    menu.querySelector('#cm-move')?.addEventListener('click', () => { close(); this.startMovingRack(rack.id); });
     menu.querySelector('#cm-rotate')?.addEventListener('click', () => {
       close();
       const rot = ((rack.rotation + 90) % 360) as 0 | 90 | 180 | 270;
@@ -1064,61 +1970,223 @@ export class BuildFloorView {
     }, 20);
   }
 
-  private showCreateFloorDialog() {
-    this.showModal('Create Datacenter Floor', `
+  private showTileContextMenu(clientX: number, clientY: number, tile: DcFloorTile) {
+    let existing = document.getElementById('dc-context-menu');
+    existing?.remove();
+
+    const menu = document.createElement('div');
+    menu.id = 'dc-context-menu';
+    menu.className = 'dc-context-menu';
+    menu.style.left = `${Math.min(clientX, window.innerWidth - 260)}px`;
+    menu.style.top = `${Math.min(clientY, window.innerHeight - 280)}px`;
+
+    const typeDesc = tile.type === 'air-channel'
+      ? `Air Channel (${tile.airflowDir?.toUpperCase() || 'NORTH'})`
+      : tile.type === 'perforated'
+      ? 'Perforated / Vented'
+      : tile.type === 'partial'
+      ? 'Partial Tile'
+      : 'Standard Tile';
+
+    menu.innerHTML = `
+      <div class="dc-menu-header">Tile ${tile.id} • ${typeDesc}</div>
+      <div class="dc-menu-item primary" id="cm-tile-standard">⬛ Standard Floor Panel</div>
+      <div class="dc-menu-item" id="cm-tile-perf">▦ Perforated / Vented Panel</div>
+      <div class="dc-menu-separator"></div>
+      <div class="dc-menu-section-title">💨 Under-Floor Air Channel</div>
+      <div class="dc-menu-item" id="cm-tile-ac-north">⬆ Airflow North</div>
+      <div class="dc-menu-item" id="cm-tile-ac-south">⬇ Airflow South</div>
+      <div class="dc-menu-item" id="cm-tile-ac-east">➡ Airflow East</div>
+      <div class="dc-menu-item" id="cm-tile-ac-west">⬅ Airflow West</div>
+      <div class="dc-menu-separator"></div>
+      <div class="dc-menu-item" id="cm-tile-add-infra">⚡ Add Under-Floor Cable Tray / Duct</div>
+      <div class="dc-menu-item danger" id="cm-tile-reset">↺ Convert to Standard Floor</div>
+    `;
+
+    document.body.appendChild(menu);
+
+    const close = () => menu.remove();
+
+    menu.querySelector('#cm-tile-standard')?.addEventListener('click', () => {
+      close();
+      dcState.setFloorTileType(tile.id, 'standard');
+      this.refresh();
+      eventBus.emit('notification', { message: `Tile ${tile.id} set to Standard Raised Floor Panel.`, type: 'info' });
+    });
+
+    menu.querySelector('#cm-tile-perf')?.addEventListener('click', () => {
+      close();
+      dcState.setFloorTileType(tile.id, 'perforated');
+      this.refresh();
+      eventBus.emit('notification', { message: `Tile ${tile.id} converted to Perforated / Vented Floor Panel.`, type: 'info' });
+    });
+
+    menu.querySelector('#cm-tile-ac-north')?.addEventListener('click', () => {
+      close();
+      dcState.setFloorTileType(tile.id, 'air-channel', 'north');
+      this.refresh();
+      eventBus.emit('notification', { message: `Tile ${tile.id} converted to Under-Floor Air Channel (Airflow North).`, type: 'info' });
+    });
+
+    menu.querySelector('#cm-tile-ac-south')?.addEventListener('click', () => {
+      close();
+      dcState.setFloorTileType(tile.id, 'air-channel', 'south');
+      this.refresh();
+      eventBus.emit('notification', { message: `Tile ${tile.id} converted to Under-Floor Air Channel (Airflow South).`, type: 'info' });
+    });
+
+    menu.querySelector('#cm-tile-ac-east')?.addEventListener('click', () => {
+      close();
+      dcState.setFloorTileType(tile.id, 'air-channel', 'east');
+      this.refresh();
+      eventBus.emit('notification', { message: `Tile ${tile.id} converted to Under-Floor Air Channel (Airflow East).`, type: 'info' });
+    });
+
+    menu.querySelector('#cm-tile-ac-west')?.addEventListener('click', () => {
+      close();
+      dcState.setFloorTileType(tile.id, 'air-channel', 'west');
+      this.refresh();
+      eventBus.emit('notification', { message: `Tile ${tile.id} converted to Under-Floor Air Channel (Airflow West).`, type: 'info' });
+    });
+
+    menu.querySelector('#cm-tile-reset')?.addEventListener('click', () => {
+      close();
+      dcState.setFloorTileType(tile.id, 'standard');
+      this.refresh();
+      eventBus.emit('notification', { message: `Tile ${tile.id} reset to Standard Floor.`, type: 'info' });
+    });
+
+    menu.querySelector('#cm-tile-add-infra')?.addEventListener('click', () => {
+      close();
+      this.showAddInfraDialog(tile);
+    });
+
+    setTimeout(() => {
+      const dismiss = (ev: MouseEvent) => {
+        if (!menu.contains(ev.target as Node)) {
+          close();
+          window.removeEventListener('click', dismiss);
+        }
+      };
+      window.addEventListener('click', dismiss);
+    }, 20);
+  }
+
+  public promptResetFloor() {
+    const floor = dcState.getActiveFloor();
+    const rackCount = floor?.racks.length ?? 0;
+    const msg = rackCount > 0
+      ? `Reset Datacenter Floor? This will clear all ${rackCount} racks and create a brand new clean empty floor layout.`
+      : 'Create a brand new clean Datacenter Floor layout?';
+
+    if (confirm(msg)) {
+      this.showCreateFloorDialog();
+    }
+  }
+
+  private showCreateFloorDialog(isMandatory: boolean = false) {
+    this.showModal('Create Datacenter Floor Layout', `
       <div class="dc-form">
         <label>Floor Name<input id="df-name" type="text" value="Main Data Hall" class="dc-input"/></label>
         <label>Measurement Unit System
           <select id="df-unit" class="dc-input">
             <option value="m" selected>Meters (m)</option>
-            <option value="mm">Millimeters (mm)</option>
             <option value="ft">Feet (ft)</option>
+            <option value="mm">Millimeters (mm)</option>
             <option value="in">Inches (in)</option>
           </select>
         </label>
         <label id="lbl-df-length">Length (meters)<input id="df-length" type="number" value="12" min="0.1" step="0.5" class="dc-input"/></label>
         <label id="lbl-df-width">Width (meters)<input id="df-width" type="number" value="8" min="0.1" step="0.5" class="dc-input"/></label>
         <label id="lbl-df-tile">ESD Tile Size (mm)<input id="df-tile" type="number" value="600" min="10" step="50" class="dc-input"/></label>
+        
+        <div style="display:flex; gap:10px;">
+          <label style="flex:1;">Row Addressing
+            <select id="df-rowscheme" class="dc-input">
+              <option value="letters" selected>Letters (A, B, C...)</option>
+              <option value="numbers">Numbers (01, 02, 03...)</option>
+            </select>
+          </label>
+          <label style="flex:1;">Column Addressing
+            <select id="df-colscheme" class="dc-input">
+              <option value="numbers" selected>Numbers (1, 2, 3...)</option>
+              <option value="letters">Letters (A, B, C...)</option>
+            </select>
+          </label>
+        </div>
+
+        <label>Coordinate Identifier Format
+          <select id="df-addrformat" class="dc-input">
+            <option value="compact" selected>Compact Coordinates: A1, A2, B1, B2...</option>
+            <option value="hyphen">Standard Hyphenated: A-01, A-02, B-01, B-02...</option>
+          </select>
+        </label>
+
         <div class="dc-form-preview" id="df-preview"></div>
       </div>
     `, 'Create Floor', () => {
       const name = (document.getElementById('df-name') as HTMLInputElement).value.trim() || 'Main Data Hall';
       const unit = (document.getElementById('df-unit') as HTMLSelectElement).value as DcUnit;
+      const rowScheme = ((document.getElementById('df-rowscheme') as HTMLSelectElement)?.value || 'letters') as 'letters' | 'numbers';
+      const colScheme = ((document.getElementById('df-colscheme') as HTMLSelectElement)?.value || 'numbers') as 'letters' | 'numbers';
+      const addrFormat = ((document.getElementById('df-addrformat') as HTMLSelectElement)?.value || 'compact') as DcAddressFormat;
+
       const rawLen = parseFloat((document.getElementById('df-length') as HTMLInputElement).value) || 12;
       const rawWid = parseFloat((document.getElementById('df-width') as HTMLInputElement).value) || 8;
-      const rawTile = parseFloat((document.getElementById('df-tile') as HTMLInputElement).value) || (unit === 'mm' ? 600 : 0.6);
+      const rawTile = parseFloat((document.getElementById('df-tile') as HTMLInputElement).value) || 600;
 
       const lenM = unitToMeters(rawLen, unit);
       const widM = unitToMeters(rawWid, unit);
-      const tileMm = unitToMm(rawTile, unit);
+      const tileMm = rawTile; // Tile size input is always in mm (label: "ESD Tile Size (mm)")
 
       if (lenM <= 0 || widM <= 0 || tileMm <= 0) { alert('Invalid dimensions.'); return false; }
-      dcState.createFloor(name, lenM, widM, tileMm, unit);
-      setTimeout(() => this.fitToFloor(), 50);
+      dcState.createFloor(name, lenM, widM, tileMm, unit, rowScheme, colScheme, addrFormat);
+      this.hasFittedInitialFloor = false;
+      this.hasInitialized3DTarget = false;
+      setTimeout(() => {
+        const s = dcState.getState();
+        if (s.viewMode === '3d') {
+          this.set3DCameraPreset('iso');
+        } else {
+          this.fitToFloor();
+        }
+        eventBus.emit('notification', { message: `Datacenter floor "${name}" created.`, type: 'info' });
+      }, 50);
       return true;
-    });
+    }, isMandatory);
 
     let activeUnit: DcUnit = 'm';
 
     const updatePreview = () => {
       const unit = ((document.getElementById('df-unit') as HTMLSelectElement)?.value as DcUnit) || 'm';
+      const rowScheme = ((document.getElementById('df-rowscheme') as HTMLSelectElement)?.value || 'letters') as 'letters' | 'numbers';
+      const colScheme = ((document.getElementById('df-colscheme') as HTMLSelectElement)?.value || 'numbers') as 'letters' | 'numbers';
+      const addrFormat = ((document.getElementById('df-addrformat') as HTMLSelectElement)?.value || 'compact') as DcAddressFormat;
+
       const rawLen = parseFloat((document.getElementById('df-length') as HTMLInputElement)?.value) || 12;
       const rawWid = parseFloat((document.getElementById('df-width') as HTMLInputElement)?.value) || 8;
-      const rawTile = parseFloat((document.getElementById('df-tile') as HTMLInputElement)?.value) || (unit === 'mm' ? 600 : 0.6);
+      const rawTile = parseFloat((document.getElementById('df-tile') as HTMLInputElement)?.value) || 600;
 
       const lenM = unitToMeters(rawLen, unit);
       const widM = unitToMeters(rawWid, unit);
-      const tileMm = unitToMm(rawTile, unit);
+      const tileMm = rawTile; // Always mm — label reads "ESD Tile Size (mm)"
 
       const cols = Math.ceil(lenM / (tileMm / 1000));
       const rows = Math.ceil(widM / (tileMm / 1000));
+
+      const sep = addrFormat === 'hyphen' ? '-' : '';
+      const firstRow = rowScheme === 'numbers' ? '01' : 'A';
+      const firstCol = colScheme === 'letters' ? 'A' : (addrFormat === 'hyphen' ? '01' : '1');
+      const lastRow = rowScheme === 'numbers' ? String(rows).padStart(2, '0') : String.fromCharCode(65 + ((rows - 1) % 26));
+      const lastCol = colScheme === 'letters' ? String.fromCharCode(65 + ((cols - 1) % 26)) : (addrFormat === 'hyphen' ? String(cols).padStart(2, '0') : String(cols));
+
       const prev = document.getElementById('df-preview');
       if (prev) {
         prev.innerHTML = `
           <div class="dc-preview-line"><b>Measurement Unit:</b> ${getUnitName(unit)}</div>
-          <div class="dc-preview-line"><b>Grid Layout:</b> ${cols} cols × ${rows} rows (${cols * rows} tiles)</div>
-          <div class="dc-preview-line"><b>Dimensions:</b> ${formatDimensionsMeters(lenM, widM, unit)}</div>
-          <div class="dc-preview-line"><b>Floor Area:</b> ${formatArea(lenM, widM)}</div>
+          <div class="dc-preview-line"><b>Dimensions:</b> ${formatDimensionsMeters(lenM, widM, unit)} (${formatArea(lenM, widM)})</div>
+          <div class="dc-preview-line"><b>Grid Layout:</b> ${cols} cols × ${rows} rows (${(cols * rows).toLocaleString()} ESD tiles)</div>
+          <div class="dc-preview-line"><b>Addressing Scheme:</b> ${firstRow}${sep}${firstCol} ... ${lastRow}${sep}${lastCol}</div>
         `;
       }
     };
@@ -1136,13 +2204,13 @@ export class BuildFloorView {
 
         const lenM = unitToMeters(parseFloat(lenEl?.value) || 0, oldUnit);
         const widM = unitToMeters(parseFloat(widEl?.value) || 0, oldUnit);
-        const tileM = unitToMeters(parseFloat(tileEl?.value) || 0, oldUnit);
+        // Tile size stays in mm regardless of unit system — do NOT convert
+        const tileCurrentMm = parseFloat(tileEl?.value) || 600;
 
         activeUnit = newUnit;
 
         const newLenVal = parseFloat(metersToUnit(lenM, newUnit).toFixed(2));
         const newWidVal = parseFloat(metersToUnit(widM, newUnit).toFixed(2));
-        const newTileVal = parseFloat(metersToUnit(tileM, newUnit).toFixed(2));
 
         const lblLen = document.getElementById('lbl-df-length');
         const lblWid = document.getElementById('lbl-df-width');
@@ -1151,7 +2219,8 @@ export class BuildFloorView {
 
         if (lblLen) lblLen.innerHTML = `Length (${unitName})<input id="df-length" type="number" value="${newLenVal}" min="0.1" step="0.5" class="dc-input"/>`;
         if (lblWid) lblWid.innerHTML = `Width (${unitName})<input id="df-width" type="number" value="${newWidVal}" min="0.1" step="0.5" class="dc-input"/>`;
-        if (lblTile) lblTile.innerHTML = `ESD Tile Size (${unitName})<input id="df-tile" type="number" value="${newTileVal}" min="0.1" step="0.5" class="dc-input"/>`;
+        // Tile size label stays "(mm)" — always enter tile size in mm
+        if (lblTile) lblTile.innerHTML = `ESD Tile Size (mm)<input id="df-tile" type="number" value="${tileCurrentMm}" min="50" step="50" class="dc-input"/>`;
 
         document.getElementById('df-length')?.addEventListener('input', updatePreview);
         document.getElementById('df-width')?.addEventListener('input', updatePreview);
@@ -1163,6 +2232,9 @@ export class BuildFloorView {
       document.getElementById('df-length')?.addEventListener('input', updatePreview);
       document.getElementById('df-width')?.addEventListener('input', updatePreview);
       document.getElementById('df-tile')?.addEventListener('input', updatePreview);
+      document.getElementById('df-rowscheme')?.addEventListener('change', updatePreview);
+      document.getElementById('df-colscheme')?.addEventListener('change', updatePreview);
+      document.getElementById('df-addrformat')?.addEventListener('change', updatePreview);
       updatePreview();
     }, 50);
   }
@@ -1171,34 +2243,65 @@ export class BuildFloorView {
     const initUnit = floor.unit ?? 'm';
     const initLen = parseFloat(metersToUnit(floor.lengthM, initUnit).toFixed(2));
     const initWid = parseFloat(metersToUnit(floor.widthM, initUnit).toFixed(2));
-    const initTile = parseFloat(mmToUnit(floor.tileSizeMm, initUnit).toFixed(2));
+    const initTile = floor.tileSizeMm; // Tile size always shown and stored in mm
+    const initRowScheme = floor.rowScheme ?? 'letters';
+    const initColScheme = floor.colScheme ?? 'numbers';
+    const initAddrFormat = floor.addressFormat ?? 'compact';
 
     this.showModal('Edit Floor', `
       <div class="dc-form">
-        <label>Floor Name<input id="df-name" type="text" value="${floor.name}" class="dc-input"/></label>
+        <label>Floor Name<input id="edf-name" type="text" value="${floor.name}" class="dc-input"/></label>
         <label>Measurement Unit System
-          <select id="df-unit" class="dc-input">
+          <select id="edf-unit" class="dc-input">
             <option value="m"${initUnit === 'm' ? ' selected' : ''}>Meters (m)</option>
-            <option value="mm"${initUnit === 'mm' ? ' selected' : ''}>Millimeters (mm)</option>
             <option value="ft"${initUnit === 'ft' ? ' selected' : ''}>Feet (ft)</option>
+            <option value="mm"${initUnit === 'mm' ? ' selected' : ''}>Millimeters (mm)</option>
             <option value="in"${initUnit === 'in' ? ' selected' : ''}>Inches (in)</option>
           </select>
         </label>
-        <label id="lbl-df-length">Length (${getUnitName(initUnit)})<input id="df-length" type="number" value="${initLen}" min="0.1" step="0.5" class="dc-input"/></label>
-        <label id="lbl-df-width">Width (${getUnitName(initUnit)})<input id="df-width" type="number" value="${initWid}" min="0.1" step="0.5" class="dc-input"/></label>
-        <label id="lbl-df-tile">ESD Tile Size (${getUnitName(initUnit)})<input id="df-tile" type="number" value="${initTile}" min="0.1" step="0.5" class="dc-input"/></label>
+        <label id="lbl-edf-length">Length (${getUnitName(initUnit)})<input id="edf-length" type="number" value="${initLen}" min="0.1" step="0.5" class="dc-input"/></label>
+        <label id="lbl-edf-width">Width (${getUnitName(initUnit)})<input id="edf-width" type="number" value="${initWid}" min="0.1" step="0.5" class="dc-input"/></label>
+        <label id="lbl-edf-tile">ESD Tile Size (mm)<input id="edf-tile" type="number" value="${initTile}" min="50" step="50" class="dc-input"/></label>
+        
+        <div style="display:flex; gap:10px;">
+          <label style="flex:1;">Row Addressing
+            <select id="edf-rowscheme" class="dc-input">
+              <option value="letters"${initRowScheme === 'letters' ? ' selected' : ''}>Letters (A, B, C...)</option>
+              <option value="numbers"${initRowScheme === 'numbers' ? ' selected' : ''}>Numbers (01, 02, 03...)</option>
+            </select>
+          </label>
+          <label style="flex:1;">Column Addressing
+            <select id="edf-colscheme" class="dc-input">
+              <option value="numbers"${initColScheme === 'numbers' ? ' selected' : ''}>Numbers (1, 2, 3...)</option>
+              <option value="letters"${initColScheme === 'letters' ? ' selected' : ''}>Letters (A, B, C...)</option>
+            </select>
+          </label>
+        </div>
+
+        <label>Coordinate Identifier Format
+          <select id="edf-addrformat" class="dc-input">
+            <option value="compact"${initAddrFormat === 'compact' ? ' selected' : ''}>Compact Coordinates: A1, A2, B1, B2...</option>
+            <option value="hyphen"${initAddrFormat === 'hyphen' ? ' selected' : ''}>Standard Hyphenated: A-01, A-02, B-01, B-02...</option>
+          </select>
+        </label>
+
+        <div class="dc-form-preview" id="edf-preview"></div>
         <p class="dc-warning">⚠ Changing dimensions will rebuild the tile grid. Racks outside new boundaries will be removed.</p>
       </div>
     `, 'Save Changes', () => {
-      const name = (document.getElementById('df-name') as HTMLInputElement).value.trim() || floor.name;
-      const unit = (document.getElementById('df-unit') as HTMLSelectElement).value as DcUnit;
-      const rawLen = parseFloat((document.getElementById('df-length') as HTMLInputElement).value) || initLen;
-      const rawWid = parseFloat((document.getElementById('df-width') as HTMLInputElement).value) || initWid;
-      const rawTile = parseFloat((document.getElementById('df-tile') as HTMLInputElement).value) || initTile;
+      const name = (document.getElementById('edf-name') as HTMLInputElement).value.trim() || floor.name;
+      const unit = (document.getElementById('edf-unit') as HTMLSelectElement).value as DcUnit;
+      const rowScheme = ((document.getElementById('edf-rowscheme') as HTMLSelectElement)?.value || 'letters') as 'letters' | 'numbers';
+      const colScheme = ((document.getElementById('edf-colscheme') as HTMLSelectElement)?.value || 'numbers') as 'letters' | 'numbers';
+      const addrFormat = ((document.getElementById('edf-addrformat') as HTMLSelectElement)?.value || 'compact') as DcAddressFormat;
+
+      const rawLen = parseFloat((document.getElementById('edf-length') as HTMLInputElement).value) || initLen;
+      const rawWid = parseFloat((document.getElementById('edf-width') as HTMLInputElement).value) || initWid;
+      const rawTile = parseFloat((document.getElementById('edf-tile') as HTMLInputElement).value) || floor.tileSizeMm;
 
       const lenM = unitToMeters(rawLen, unit);
       const widM = unitToMeters(rawWid, unit);
-      const tileMm = unitToMm(rawTile, unit);
+      const tileMm = rawTile; // Tile size is always in mm (label: "ESD Tile Size (mm)")
 
       const filteredRacks = floor.racks.filter(r => {
         const rW = r.widthMm / 1000, rD = r.depthMm / 1000;
@@ -1207,11 +2310,104 @@ export class BuildFloorView {
         return r.position.x + eW <= lenM && r.position.y + eD <= widM;
       });
 
-      dcState.updateFloor(floor.id, { name, unit, lengthM: lenM, widthM: widM, tileSizeMm: tileMm, racks: filteredRacks });
+      dcState.updateFloor(floor.id, {
+        name,
+        unit,
+        lengthM: lenM,
+        widthM: widM,
+        tileSizeMm: tileMm,
+        rowScheme,
+        colScheme,
+        addressFormat: addrFormat,
+        racks: filteredRacks,
+      });
       dcState.rebuildTiles();
       setTimeout(() => this.fitToFloor(), 50);
       return true;
     });
+
+    let editActiveUnit: DcUnit = initUnit;
+
+    const updateEditPreview = () => {
+      const unit = ((document.getElementById('edf-unit') as HTMLSelectElement)?.value as DcUnit) || 'm';
+      const rowScheme = ((document.getElementById('edf-rowscheme') as HTMLSelectElement)?.value || 'letters') as 'letters' | 'numbers';
+      const colScheme = ((document.getElementById('edf-colscheme') as HTMLSelectElement)?.value || 'numbers') as 'letters' | 'numbers';
+      const addrFormat = ((document.getElementById('edf-addrformat') as HTMLSelectElement)?.value || 'compact') as DcAddressFormat;
+
+      const rawLen = parseFloat((document.getElementById('edf-length') as HTMLInputElement)?.value) || initLen;
+      const rawWid = parseFloat((document.getElementById('edf-width') as HTMLInputElement)?.value) || initWid;
+      const rawTile = parseFloat((document.getElementById('edf-tile') as HTMLInputElement)?.value) || floor.tileSizeMm;
+
+      const lenM = unitToMeters(rawLen, unit);
+      const widM = unitToMeters(rawWid, unit);
+      const tileMm = rawTile; // Always mm
+
+      const cols = Math.ceil(lenM / (tileMm / 1000));
+      const rows = Math.ceil(widM / (tileMm / 1000));
+
+      const sep = addrFormat === 'hyphen' ? '-' : '';
+      const firstRow = rowScheme === 'numbers' ? '01' : 'A';
+      const firstCol = colScheme === 'letters' ? 'A' : (addrFormat === 'hyphen' ? '01' : '1');
+      const lastRow = rowScheme === 'numbers' ? String(rows).padStart(2, '0') : String.fromCharCode(65 + ((rows - 1) % 26));
+      const lastCol = colScheme === 'letters' ? String.fromCharCode(65 + ((cols - 1) % 26)) : (addrFormat === 'hyphen' ? String(cols).padStart(2, '0') : String(cols));
+
+      const prev = document.getElementById('edf-preview');
+      if (prev) {
+        prev.innerHTML = `
+          <div class="dc-preview-line"><b>Measurement Unit:</b> ${getUnitName(unit)}</div>
+          <div class="dc-preview-line"><b>Dimensions:</b> ${formatDimensionsMeters(lenM, widM, unit)} (${formatArea(lenM, widM)})</div>
+          <div class="dc-preview-line"><b>Grid Layout:</b> ${cols} cols × ${rows} rows (${(cols * rows).toLocaleString()} ESD tiles)</div>
+          <div class="dc-preview-line"><b>Addressing Scheme:</b> ${firstRow}${sep}${firstCol} ... ${lastRow}${sep}${lastCol}</div>
+        `;
+      }
+    };
+
+    setTimeout(() => {
+      const unitSel = document.getElementById('edf-unit') as HTMLSelectElement;
+      unitSel?.addEventListener('change', () => {
+        const newUnit = unitSel.value as DcUnit;
+        const oldUnit = editActiveUnit;
+        if (oldUnit === newUnit) return;
+
+        const lenEl = document.getElementById('edf-length') as HTMLInputElement;
+        const widEl = document.getElementById('edf-width') as HTMLInputElement;
+        const tileEl = document.getElementById('edf-tile') as HTMLInputElement;
+
+        const lenM = unitToMeters(parseFloat(lenEl?.value) || 0, oldUnit);
+        const widM = unitToMeters(parseFloat(widEl?.value) || 0, oldUnit);
+        // Tile stays in mm — preserve raw mm value
+        const tileCurrentMm = parseFloat(tileEl?.value) || floor.tileSizeMm;
+
+        editActiveUnit = newUnit;
+
+        const newLenVal = parseFloat(metersToUnit(lenM, newUnit).toFixed(2));
+        const newWidVal = parseFloat(metersToUnit(widM, newUnit).toFixed(2));
+
+        const lblLen = document.getElementById('lbl-edf-length');
+        const lblWid = document.getElementById('lbl-edf-width');
+        const lblTile = document.getElementById('lbl-edf-tile');
+        const unitName = getUnitName(newUnit);
+
+        if (lblLen) lblLen.innerHTML = `Length (${unitName})<input id="edf-length" type="number" value="${newLenVal}" min="0.1" step="0.5" class="dc-input"/>`;
+        if (lblWid) lblWid.innerHTML = `Width (${unitName})<input id="edf-width" type="number" value="${newWidVal}" min="0.1" step="0.5" class="dc-input"/>`;
+        // Tile stays mm always
+        if (lblTile) lblTile.innerHTML = `ESD Tile Size (mm)<input id="edf-tile" type="number" value="${tileCurrentMm}" min="50" step="50" class="dc-input"/>`;
+
+        document.getElementById('edf-length')?.addEventListener('input', updateEditPreview);
+        document.getElementById('edf-width')?.addEventListener('input', updateEditPreview);
+        document.getElementById('edf-tile')?.addEventListener('input', updateEditPreview);
+
+        updateEditPreview();
+      });
+
+      document.getElementById('edf-length')?.addEventListener('input', updateEditPreview);
+      document.getElementById('edf-width')?.addEventListener('input', updateEditPreview);
+      document.getElementById('edf-tile')?.addEventListener('input', updateEditPreview);
+      document.getElementById('edf-rowscheme')?.addEventListener('change', updateEditPreview);
+      document.getElementById('edf-colscheme')?.addEventListener('change', updateEditPreview);
+      document.getElementById('edf-addrformat')?.addEventListener('change', updateEditPreview);
+      updateEditPreview();
+    }, 50);
   }
 
   private showAddRackDialog() {
@@ -1241,10 +2437,13 @@ export class BuildFloorView {
         <label>Height (U)<input id="dr-height" type="number" value="42" min="2" max="54" step="2" class="dc-input"/></label>
         <label>Door Style
           <select id="dr-door" class="dc-input">
-            <option value="perforated" selected>Perforated High-Airflow Steel</option>
+            <option value="perforated" selected>Perforated High-Airflow Steel (Single Door)</option>
+            <option value="split-perforated">Split Perforated Twin-Doors (Dual Wardrobe)</option>
             <option value="glass">Tempered Glass Window Door</option>
-            <option value="solid">Solid Steel Door</option>
-            <option value="none">No Door (Open Frame)</option>
+            <option value="solid">Solid Steel Security Door</option>
+            <option value="multi-compartment-2">Multi-Compartment 2-Colo Doors</option>
+            <option value="multi-compartment-4">Multi-Compartment 4-Colo Doors</option>
+            <option value="none">No Door (Open Frame Relay Rack)</option>
           </select>
         </label>
         <label>Mounting Style
@@ -1331,10 +2530,13 @@ export class BuildFloorView {
         <label>Height (U)<input id="dr-height" type="number" value="${rack.heightU}" min="2" max="54" step="2" class="dc-input"/></label>
         <label>Door Style
           <select id="dr-door" class="dc-input">
-            <option value="perforated"${rack.doorStyle === 'perforated' ? ' selected' : ''}>Perforated High-Airflow Steel</option>
+            <option value="perforated"${rack.doorStyle === 'perforated' ? ' selected' : ''}>Perforated High-Airflow Steel (Single Door)</option>
+            <option value="split-perforated"${rack.doorStyle === 'split-perforated' ? ' selected' : ''}>Split Perforated Twin-Doors (Dual Wardrobe)</option>
             <option value="glass"${rack.doorStyle === 'glass' ? ' selected' : ''}>Tempered Glass Window Door</option>
-            <option value="solid"${rack.doorStyle === 'solid' ? ' selected' : ''}>Solid Steel Door</option>
-            <option value="none"${rack.doorStyle === 'none' ? ' selected' : ''}>No Door (Open Frame)</option>
+            <option value="solid"${rack.doorStyle === 'solid' ? ' selected' : ''}>Solid Steel Security Door</option>
+            <option value="multi-compartment-2"${rack.doorStyle === 'multi-compartment-2' ? ' selected' : ''}>Multi-Compartment 2-Colo Doors</option>
+            <option value="multi-compartment-4"${rack.doorStyle === 'multi-compartment-4' ? ' selected' : ''}>Multi-Compartment 4-Colo Doors</option>
+            <option value="none"${rack.doorStyle === 'none' ? ' selected' : ''}>No Door (Open Frame Relay Rack)</option>
           </select>
         </label>
         <label>Mounting Style
@@ -1476,7 +2678,87 @@ export class BuildFloorView {
     }, 50);
   }
 
-  private showModal(title: string, bodyHtml: string, confirmLabel: string, onConfirm: () => boolean) {
+  private showAddInfraDialog(tile?: DcFloorTile) {
+    const floor = dcState.getActiveFloor();
+    if (!floor) return;
+
+    const startX = tile ? tile.x : 0;
+    const startY = tile ? tile.y : 0;
+    const tileM = floor.tileSizeMm / 1000;
+    const endX = tile ? parseFloat((tile.x + tileM * 2).toFixed(2)) : 2.4;
+    const endY = tile ? tile.y : 0;
+    const defaultElevation = -220; // 220mm below raised floor surface
+
+    this.showModal('Add Under-Floor Infrastructure', `
+      <div class="dc-form">
+        <label>Infrastructure Category
+          <select id="infra-category" class="dc-input">
+            <option value="cable-tray" selected>Cable Tray (Basket / Ladder Mesh)</option>
+            <option value="cable-duct">Cable Duct (Galvanized / PVC Channel)</option>
+            <option value="power-cable">Power Cabling (Red Busway / Feeders)</option>
+            <option value="data-cable">Data / Network Fiber Optic Bundle</option>
+            <option value="riser">Vertical Floor Riser (Plenum Penetration)</option>
+          </select>
+        </label>
+        <label>Item Name / ID
+          <input id="infra-name" type="text" value="Underfloor Tray 1" class="dc-input"/>
+        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <label>Start X (m)<input id="infra-sx" type="number" step="0.1" value="${startX.toFixed(2)}" class="dc-input"/></label>
+          <label>Start Y (m)<input id="infra-sy" type="number" step="0.1" value="${startY.toFixed(2)}" class="dc-input"/></label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <label>End X (m)<input id="infra-ex" type="number" step="0.1" value="${endX.toFixed(2)}" class="dc-input"/></label>
+          <label>End Y (m)<input id="infra-ey" type="number" step="0.1" value="${endY.toFixed(2)}" class="dc-input"/></label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <label>Width (mm)<input id="infra-w" type="number" step="10" value="300" class="dc-input"/></label>
+          <label>Height (mm)<input id="infra-h" type="number" step="10" value="80" class="dc-input"/></label>
+        </div>
+        <label>Depth Below Floor (mm)
+          <input id="infra-elev" type="number" step="10" value="${defaultElevation}" class="dc-input" title="Elevation below floor (e.g. -220 mm)"/>
+        </label>
+      </div>
+    `, 'Add Infrastructure', () => {
+      const cat = (document.getElementById('infra-category') as HTMLSelectElement).value as DcInfraCategory;
+      const name = (document.getElementById('infra-name') as HTMLInputElement).value.trim() || 'Underfloor Item';
+      const sx = parseFloat((document.getElementById('infra-sx') as HTMLInputElement).value) || 0;
+      const sy = parseFloat((document.getElementById('infra-sy') as HTMLInputElement).value) || 0;
+      const ex = parseFloat((document.getElementById('infra-ex') as HTMLInputElement).value) || 0;
+      const ey = parseFloat((document.getElementById('infra-ey') as HTMLInputElement).value) || 0;
+      const w = parseFloat((document.getElementById('infra-w') as HTMLInputElement).value) || 300;
+      const h = parseFloat((document.getElementById('infra-h') as HTMLInputElement).value) || 80;
+      const elev = parseFloat((document.getElementById('infra-elev') as HTMLInputElement).value) || -220;
+
+      const id = `INFRA-${Date.now().toString(36).toUpperCase()}`;
+      const item: DcInfrastructureItem = {
+        id,
+        name,
+        category: cat,
+        layer: 'underfloor',
+        subtype: cat === 'cable-tray' ? 'basket-tray' : cat === 'cable-duct' ? 'solid-duct' : 'cable',
+        start: { x: sx, y: sy, z: elev / 1000 },
+        end: { x: ex, y: ey, z: elev / 1000 },
+        widthMm: w,
+        heightMm: h,
+        elevationMm: elev,
+      };
+
+      dcState.addInfrastructureItem(item);
+      dcState.setState({ selectedInfraId: id });
+      this.refresh();
+      eventBus.emit('notification', { message: `Added ${name} (${cat}) to under-floor infrastructure.`, type: 'info' });
+      return true;
+    });
+  }
+
+  private showModal(
+    title: string,
+    bodyHtml: string,
+    confirmLabel: string,
+    onConfirm: () => boolean,
+    isMandatory: boolean = false
+  ) {
     let existing = document.getElementById('dc-modal-overlay');
     existing?.remove();
     const overlay = document.createElement('div');
@@ -1486,30 +2768,845 @@ export class BuildFloorView {
       <div class="dc-modal">
         <div class="dc-modal-header">
           <h3>${title}</h3>
-          <button class="dc-modal-close" id="dc-modal-close">×</button>
+          ${!isMandatory ? '<button class="dc-modal-close" id="dc-modal-close">×</button>' : ''}
         </div>
         <div class="dc-modal-body">${bodyHtml}</div>
         <div class="dc-modal-footer">
-          <button class="dc-btn dc-btn-secondary" id="dc-modal-cancel">Cancel</button>
+          ${!isMandatory ? '<button class="dc-btn dc-btn-secondary" id="dc-modal-cancel">Cancel</button>' : ''}
           <button class="dc-btn dc-btn-primary" id="dc-modal-confirm">${confirmLabel}</button>
         </div>
       </div>
     `;
     document.body.appendChild(overlay);
     const close = () => overlay.remove();
-    overlay.querySelector('#dc-modal-close')?.addEventListener('click', close);
-    overlay.querySelector('#dc-modal-cancel')?.addEventListener('click', close);
+    if (!isMandatory) {
+      overlay.querySelector('#dc-modal-close')?.addEventListener('click', close);
+      overlay.querySelector('#dc-modal-cancel')?.addEventListener('click', close);
+    }
     overlay.querySelector('#dc-modal-confirm')?.addEventListener('click', () => {
       if (onConfirm()) close();
     });
   }
 
-  private apply3DTransform() {
-    const wrap3d = this.container.querySelector('#dc-3d-container');
-    const scene = wrap3d?.querySelector('.dc3d-scene') as HTMLElement;
-    if (scene) {
-      scene.style.transform = `scale(${this.scale3D}) perspective(900px) rotateX(${this.rotX}deg) rotateZ(${this.rotZ}deg)`;
+  private initThree3D(wrap3d: HTMLElement, floor: DcFloor) {
+    if (!this.threeRenderer) {
+      this.threeRenderer = new THREE.WebGLRenderer({
+        antialias: true,
+        powerPreference: 'high-performance',
+        logarithmicDepthBuffer: true,
+      });
+      this.threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      this.threeRenderer.shadowMap.enabled = true;
+      this.threeRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      const viewportEl = wrap3d.querySelector('#dc3d-viewport') as HTMLElement;
+      if (viewportEl) {
+        viewportEl.appendChild(this.threeRenderer.domElement);
+      }
+
+      this.threeMaterials = new MaterialManager();
+      this.threeScene = new THREE.Scene();
+      this.threeScene.background = new THREE.Color(0x0d1117);
+
+      this.threeCamera = new THREE.PerspectiveCamera(50, 1, 10, 50000);
+      this.threeControls = new OrbitControls(this.threeCamera, this.threeRenderer.domElement);
+      this.threeControls.enableDamping = true;
+      this.threeControls.dampingFactor = 0.08;
+      this.threeControls.zoomToCursor = true;
+      const isUnderfloorView = dcState.getState().xrayMode || dcState.getState().floorOpacity < 0.85;
+      this.threeControls.maxPolarAngle = isUnderfloorView ? Math.PI - 0.05 : Math.PI / 2 - 0.02;
+
+      // Lighting: Natural studio ambient + directional key & fill
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x334455, 1.6);
+      this.threeScene.add(hemiLight);
+
+      const ambLight = new THREE.AmbientLight(0xffffff, 1.1);
+      this.threeScene.add(ambLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
+      dirLight.position.set(2000, 5000, 3000);
+      this.threeScene.add(dirLight);
+
+      const fillLight = new THREE.DirectionalLight(0x90b0e0, 1.0);
+      fillLight.position.set(-3000, 4000, -2000);
+      this.threeScene.add(fillLight);
+
+      // Mouse picking / selection on 3D Racks
+      this.threeRenderer.domElement.addEventListener('pointerdown', (e) => {
+        if (e.button === 2) return; // Allow context menu
+        const rect = this.threeRenderer!.domElement.getBoundingClientRect();
+        this.threeMouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        this.threeMouse.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+        this.threeRaycaster.setFromCamera(this.threeMouse, this.threeCamera!);
+
+        const intersects = this.threeRaycaster.intersectObjects(this.threeScene!.children, true);
+        let clickedRackId: string | null = null;
+        let clickedTileId: string | null = null;
+        let clickedInfraId: string | null = null;
+        for (const hit of intersects) {
+          let cur: THREE.Object3D | null = hit.object;
+          while (cur && cur !== this.threeScene) {
+            if (this.rackMeshMap.has(cur)) {
+              clickedRackId = this.rackMeshMap.get(cur)!;
+              break;
+            }
+            if (cur.userData?.infraId) {
+              clickedInfraId = cur.userData.infraId;
+              break;
+            }
+            if (cur.userData?.tileId) {
+              clickedTileId = cur.userData.tileId;
+              break;
+            }
+            cur = cur.parent;
+          }
+          if (clickedRackId || clickedInfraId || clickedTileId) break;
+        }
+
+        if (clickedRackId) {
+          dcState.setState({ selectedRackId: clickedRackId, selectedTileId: null, selectedInfraId: null });
+          this.renderPropsPanel();
+          this.update3DSelectionHighlight();
+        } else if (clickedInfraId) {
+          dcState.setState({ selectedInfraId: clickedInfraId, selectedRackId: null, selectedTileId: null });
+          this.renderPropsPanel();
+          this.update3DSelectionHighlight();
+        } else if (clickedTileId) {
+          dcState.setState({ selectedTileId: clickedTileId, selectedRackId: null, selectedInfraId: null });
+          this.renderPropsPanel();
+          this.update3DSelectionHighlight();
+        }
+      });
+
+      this.threeRenderer.domElement.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const rect = this.threeRenderer!.domElement.getBoundingClientRect();
+        this.threeMouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        this.threeMouse.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+        this.threeRaycaster.setFromCamera(this.threeMouse, this.threeCamera!);
+
+        const intersects = this.threeRaycaster.intersectObjects(this.threeScene!.children, true);
+        let clickedRackId: string | null = null;
+        let clickedTileId: string | null = null;
+        for (const hit of intersects) {
+          let cur: THREE.Object3D | null = hit.object;
+          while (cur && cur !== this.threeScene) {
+            if (this.rackMeshMap.has(cur)) {
+              clickedRackId = this.rackMeshMap.get(cur)!;
+              break;
+            }
+            if (cur.userData?.tileId) {
+              clickedTileId = cur.userData.tileId;
+              break;
+            }
+            cur = cur.parent;
+          }
+          if (clickedRackId || clickedTileId) break;
+        }
+
+        if (clickedRackId) {
+          const rack = floor.racks.find(r => r.id === clickedRackId);
+          if (rack) {
+            dcState.setState({ selectedRackId: rack.id, selectedTileId: null, selectedInfraId: null });
+            this.renderPropsPanel();
+            this.update3DSelectionHighlight();
+            this.showContextMenu(e.clientX, e.clientY, rack);
+          }
+        } else if (clickedTileId) {
+          const tile = floor.tiles.find(t => t.id === clickedTileId);
+          if (tile) {
+            dcState.setState({ selectedTileId: tile.id, selectedRackId: null, selectedInfraId: null });
+            this.renderPropsPanel();
+            this.update3DSelectionHighlight();
+            this.showTileContextMenu(e.clientX, e.clientY, tile);
+          }
+        }
+      });
+
+      // Render loop
+      const animate3D = () => {
+        this.threeAnimId = requestAnimationFrame(animate3D);
+        if (this.threeControls) this.threeControls.update();
+        if (this.threeRenderer && this.threeScene && this.threeCamera) {
+          this.threeRenderer.render(this.threeScene, this.threeCamera);
+        }
+      };
+      animate3D();
     }
+
+    this.resizeThree();
+    this.rebuildThreeScene(floor);
+  }
+
+  private resizeThree() {
+    const wrap3d = this.container.querySelector('#dc-3d-container') as HTMLElement;
+    if (!wrap3d || !this.threeRenderer || !this.threeCamera) return;
+    const viewportEl = wrap3d.querySelector('#dc3d-viewport') as HTMLElement;
+    const width = viewportEl ? viewportEl.clientWidth : wrap3d.clientWidth;
+    const height = viewportEl ? viewportEl.clientHeight : wrap3d.clientHeight;
+    if (width > 0 && height > 0) {
+      this.threeRenderer.setSize(width, height);
+      this.threeCamera.aspect = width / height;
+      this.threeCamera.updateProjectionMatrix();
+    }
+  }
+
+  private rebuildThreeScene(floor: DcFloor) {
+    if (!this.threeScene || !this.threeMaterials || !this.threeCamera || !this.threeControls) return;
+
+    // Clear previous dynamic meshes (keep lights)
+    const toRemove: THREE.Object3D[] = [];
+    this.threeScene.traverse(child => {
+      if (child.userData?.isDynamic) toRemove.push(child);
+    });
+    toRemove.forEach(obj => {
+      this.threeScene!.remove(obj);
+      if ((obj as THREE.Mesh).geometry) (obj as THREE.Mesh).geometry.dispose();
+    });
+    this.rackMeshMap.clear();
+
+    const floorLenMm = floor.lengthM * 1000;
+    const floorWidMm = floor.widthM * 1000;
+    const tileMm = floor.tileSizeMm;
+
+    // 1. Authentic White ESD Raised Access Floor with Conductive Seams & Subtle Static-Dissipative Mottling
+    const cols = Math.max(1, Math.round(floorLenMm / tileMm));
+    const rows = Math.max(1, Math.round(floorWidMm / tileMm));
+
+    // Generate procedural White ESD tile texture with chamfered joints and conductive vinyl trim
+    const canvasW = 1024;
+    const canvasH = 1024;
+    const esdCanvas = document.createElement('canvas');
+    esdCanvas.width = canvasW;
+    esdCanvas.height = canvasH;
+    const esdCtx = esdCanvas.getContext('2d')!;
+
+    // Base White ESD tile tone
+    esdCtx.fillStyle = '#f8fafc';
+    esdCtx.fillRect(0, 0, canvasW, canvasH);
+
+    // Subtle 2x2 tile pattern variation across the floor
+    const halfW = canvasW / 2;
+    const halfH = canvasH / 2;
+    const subTiles = [
+      { x: 0, y: 0, w: halfW, h: halfH, bg: '#ffffff', specks: '#cbd5e1' },
+      { x: halfW, y: 0, w: halfW, h: halfH, bg: '#f1f5f9', specks: '#94a3b8' },
+      { x: 0, y: halfH, w: halfW, h: halfH, bg: '#f8fafc', specks: '#cbd5e1' },
+      { x: halfW, y: halfH, w: halfW, h: halfH, bg: '#f1f5f9', specks: '#94a3b8' },
+    ];
+
+    for (const t of subTiles) {
+      esdCtx.fillStyle = t.bg;
+      esdCtx.fillRect(t.x, t.y, t.w, t.h);
+
+      // Fine ESD static-dissipative carbon micro-speckles & conductive veins
+      esdCtx.fillStyle = t.specks;
+      for (let i = 0; i < 350; i++) {
+        const sx = t.x + 3 + (Math.sin(i * 19.3) * 0.5 + 0.5) * (t.w - 6);
+        const sy = t.y + 3 + (Math.cos(i * 37.7) * 0.5 + 0.5) * (t.h - 6);
+        esdCtx.fillRect(sx, sy, 1.2, 1.2);
+      }
+
+      // Tile surface chamfer / bevel highlight (top and left edge)
+      esdCtx.fillStyle = 'rgba(255, 255, 255, 0.90)';
+      esdCtx.fillRect(t.x + 1.5, t.y + 1.5, t.w - 3, 2);
+      esdCtx.fillRect(t.x + 1.5, t.y + 1.5, 2, t.h - 3);
+
+      // Tile surface shadow (bottom and right edge)
+      esdCtx.fillStyle = 'rgba(100, 116, 139, 0.28)';
+      esdCtx.fillRect(t.x + 1.5, t.y + t.h - 3.5, t.w - 3, 2);
+      esdCtx.fillRect(t.x + t.w - 3.5, t.y + 1.5, 2, t.h - 3);
+
+      // Conductive border gasket (recessed dark gray conductive vinyl trim)
+      esdCtx.strokeStyle = '#475569';
+      esdCtx.lineWidth = 2.5;
+      esdCtx.strokeRect(t.x + 1.5, t.y + 1.5, t.w - 3, t.h - 3);
+    }
+
+    const esdTexture = new THREE.CanvasTexture(esdCanvas);
+    esdTexture.wrapS = THREE.RepeatWrapping;
+    esdTexture.wrapT = THREE.RepeatWrapping;
+    esdTexture.repeat.set(cols / 2, rows / 2);
+    esdTexture.anisotropy = 16;
+    esdTexture.colorSpace = THREE.SRGBColorSpace;
+
+    // Create realistic bump map for tile seam depth
+    const bumpCanvas = document.createElement('canvas');
+    bumpCanvas.width = canvasW;
+    bumpCanvas.height = canvasH;
+    const bumpCtx = bumpCanvas.getContext('2d')!;
+    bumpCtx.fillStyle = '#808080';
+    bumpCtx.fillRect(0, 0, canvasW, canvasH);
+    for (const t of subTiles) {
+      bumpCtx.fillStyle = '#999999';
+      bumpCtx.fillRect(t.x + 3, t.y + 3, t.w - 6, t.h - 6);
+      bumpCtx.strokeStyle = '#333333';
+      bumpCtx.lineWidth = 3;
+      bumpCtx.strokeRect(t.x + 2, t.y + 2, t.w - 4, t.h - 4);
+    }
+    const esdBump = new THREE.CanvasTexture(bumpCanvas);
+    esdBump.wrapS = THREE.RepeatWrapping;
+    esdBump.wrapT = THREE.RepeatWrapping;
+    esdBump.repeat.set(cols / 2, rows / 2);
+    esdBump.anisotropy = 16;
+
+    // 1. Concrete Subfloor Base Slab (at y = -plenumDepthMm)
+    const plenumDepthMm = floor.raisedFloorHeightMm || 450;
+    const subfloorGeo = new THREE.PlaneGeometry(floorLenMm, floorWidMm);
+    const subfloorMat = new THREE.MeshStandardMaterial({
+      color: 0x22262d, // Industrial dark concrete
+      roughness: 0.92,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
+    });
+    const subfloorMesh = new THREE.Mesh(subfloorGeo, subfloorMat);
+    subfloorMesh.rotation.x = -Math.PI / 2;
+    subfloorMesh.position.set(floorLenMm / 2, -plenumDepthMm, floorWidMm / 2);
+    subfloorMesh.userData = { isDynamic: true };
+    this.threeScene.add(subfloorMesh);
+
+    // 2. Zinc-Plated Steel Raised Floor Pedestals / Stanchions with leveling heads at grid intersections
+    const pedestalGroup = new THREE.Group();
+    pedestalGroup.userData = { isDynamic: true };
+    const pedestalShaftGeo = new THREE.CylinderGeometry(14, 14, plenumDepthMm, 8);
+    const pedestalHeadGeo = new THREE.BoxGeometry(70, 8, 70);
+    const pedestalBaseGeo = new THREE.BoxGeometry(85, 6, 85);
+    const pedestalMat = new THREE.MeshStandardMaterial({
+      color: 0xa1a1aa, // Zinc-chromate passivated steel
+      roughness: 0.35,
+      metalness: 0.75,
+    });
+
+    const colPeds = cols + 1;
+    const rowPeds = rows + 1;
+    for (let r = 0; r < rowPeds; r++) {
+      for (let c = 0; c < colPeds; c++) {
+        const px = Math.min(floorLenMm, c * tileMm);
+        const pz = Math.min(floorWidMm, r * tileMm);
+        const stanchion = new THREE.Group();
+        const shaft = new THREE.Mesh(pedestalShaftGeo, pedestalMat);
+        shaft.position.y = -plenumDepthMm / 2;
+        const head = new THREE.Mesh(pedestalHeadGeo, pedestalMat);
+        head.position.y = -4;
+        const base = new THREE.Mesh(pedestalBaseGeo, pedestalMat);
+        base.position.y = -plenumDepthMm + 3;
+        stanchion.add(shaft, head, base);
+        stanchion.position.set(px, 0, pz);
+        pedestalGroup.add(stanchion);
+      }
+    }
+    this.threeScene.add(pedestalGroup);
+
+    // 3. Intelligent Floor Panels (Standard White ESD / Perforated Vented / Air-Channel Plenum)
+    const effectiveFloorOpacity = dcState.getState().xrayMode ? 0.22 : dcState.getState().floorOpacity;
+    this.threeFloorMaterials = [];
+
+    const stdFloorMat = new THREE.MeshStandardMaterial({
+      map: esdTexture,
+      bumpMap: esdBump,
+      bumpScale: 1.0,
+      roughness: 0.50,
+      metalness: 0.08,
+      transparent: effectiveFloorOpacity < 1.0,
+      opacity: effectiveFloorOpacity,
+      side: THREE.DoubleSide,
+    });
+    this.threeFloorMaterials.push(stdFloorMat);
+
+    // Procedural Perforated Vented Tile Texture (Datacenter Cold-Aisle high-flow metal grille)
+    const perfCanvas = document.createElement('canvas');
+    perfCanvas.width = 256;
+    perfCanvas.height = 256;
+    const pCtx = perfCanvas.getContext('2d')!;
+    pCtx.fillStyle = '#e2e8f0';
+    pCtx.fillRect(0, 0, 256, 256);
+    // Draw perforation hole matrix (60% open area)
+    pCtx.fillStyle = '#0f172a';
+    const holeRadius = 5.5;
+    const step = 20;
+    for (let hx = 14; hx < 246; hx += step) {
+      for (let hy = 14; hy < 246; hy += step) {
+        pCtx.beginPath();
+        pCtx.arc(hx, hy, holeRadius, 0, Math.PI * 2);
+        pCtx.fill();
+      }
+    }
+    pCtx.strokeStyle = '#334155';
+    pCtx.lineWidth = 4;
+    pCtx.strokeRect(2, 2, 252, 252);
+
+    const perfTexture = new THREE.CanvasTexture(perfCanvas);
+    perfTexture.colorSpace = THREE.SRGBColorSpace;
+    const perfTileMat = new THREE.MeshStandardMaterial({
+      map: perfTexture,
+      roughness: 0.35,
+      metalness: 0.65,
+      transparent: effectiveFloorOpacity < 1.0,
+      opacity: Math.max(0.35, effectiveFloorOpacity),
+      side: THREE.DoubleSide,
+    });
+    this.threeFloorMaterials.push(perfTileMat);
+
+    // Air Channel plenum tile group
+    const airChannelGroup = new THREE.Group();
+    airChannelGroup.userData = { isDynamic: true };
+
+    const airChannelDuctMat = new THREE.MeshStandardMaterial({
+      color: 0x0284c7, // HVAC galvanized supply duct blue
+      roughness: 0.40,
+      metalness: 0.60,
+      transparent: true,
+      opacity: 0.70,
+      side: THREE.DoubleSide,
+    });
+
+    const airArrowMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      side: THREE.DoubleSide,
+    });
+
+    const tilesGroup = new THREE.Group();
+    tilesGroup.userData = { isDynamic: true };
+
+    // Group standard tiles onto a single optimized plane or individual panels if specialized
+    const hasSpecialTiles = floor.tiles.some(t => t.type === 'perforated' || t.type === 'air-channel');
+    if (!hasSpecialTiles && effectiveFloorOpacity >= 0.99) {
+      // Fast single plane if all standard
+      const floorGeo = new THREE.PlaneGeometry(floorLenMm, floorWidMm);
+      const floorMesh = new THREE.Mesh(floorGeo, stdFloorMat);
+      floorMesh.rotation.x = -Math.PI / 2;
+      floorMesh.position.set(floorLenMm / 2, 0, floorWidMm / 2);
+      floorMesh.userData = { isDynamic: true };
+      this.threeScene.add(floorMesh);
+    } else {
+      // Individual panels for realistic tile-by-tile appearance
+      const panelSize = tileMm - 2;
+      const tilePanelGeo = new THREE.PlaneGeometry(panelSize, panelSize);
+      floor.tiles.forEach(t => {
+        const txMm = t.x * 1000 + panelSize / 2;
+        const tzMm = t.y * 1000 + panelSize / 2;
+
+        if (t.type === 'perforated') {
+          const perfMesh = new THREE.Mesh(tilePanelGeo, perfTileMat);
+          perfMesh.rotation.x = -Math.PI / 2;
+          perfMesh.position.set(txMm, 0.2, tzMm);
+          perfMesh.userData = { isDynamic: true, tileId: t.id };
+          tilesGroup.add(perfMesh);
+        } else if (t.type === 'air-channel') {
+          // Standard tile surface (tinted light cyan ESD) with under-floor plenum box
+          const acMat = stdFloorMat.clone();
+          acMat.color = new THREE.Color(0xdbeafe);
+          this.threeFloorMaterials.push(acMat);
+          const acMesh = new THREE.Mesh(tilePanelGeo, acMat);
+          acMesh.rotation.x = -Math.PI / 2;
+          acMesh.position.set(txMm, 0.1, tzMm);
+          acMesh.userData = { isDynamic: true, tileId: t.id };
+          tilesGroup.add(acMesh);
+
+          // Physical Under-Floor Air Duct Box below raised floor (y = -plenumDepthMm to 0)
+          const ductDepth = plenumDepthMm - 40;
+          const ductBoxGeo = new THREE.BoxGeometry(panelSize - 10, ductDepth, panelSize - 10);
+          const ductMesh = new THREE.Mesh(ductBoxGeo, airChannelDuctMat);
+          ductMesh.position.set(txMm, -ductDepth / 2 - 10, tzMm);
+          ductMesh.userData = { isDynamic: true, tileId: t.id };
+          airChannelGroup.add(ductMesh);
+
+          // Directional airflow arrow inside/on top of under-floor duct
+          const arrowDir = t.airflowDir || 'north';
+          const arrowConeGeo = new THREE.ConeGeometry(30, 80, 8);
+          const arrowMesh = new THREE.Mesh(arrowConeGeo, airArrowMat);
+          arrowMesh.position.set(txMm, -ductDepth / 2, tzMm);
+          if (arrowDir === 'north') arrowMesh.rotation.x = -Math.PI / 2;
+          else if (arrowDir === 'south') arrowMesh.rotation.x = Math.PI / 2;
+          else if (arrowDir === 'east') arrowMesh.rotation.z = -Math.PI / 2;
+          else if (arrowDir === 'west') arrowMesh.rotation.z = Math.PI / 2;
+          airChannelGroup.add(arrowMesh);
+        } else {
+          // Standard ESD tile
+          const stdMesh = new THREE.Mesh(tilePanelGeo, stdFloorMat);
+          stdMesh.rotation.x = -Math.PI / 2;
+          stdMesh.position.set(txMm, 0.1, tzMm);
+          stdMesh.userData = { isDynamic: true, tileId: t.id };
+          tilesGroup.add(stdMesh);
+        }
+      });
+      this.threeScene.add(tilesGroup);
+      this.threeScene.add(airChannelGroup);
+    }
+
+    // 4. Under-Floor Cabling, Cable Trays, Ducts & Risers
+    const infraGroup = new THREE.Group();
+    infraGroup.userData = { isDynamic: true };
+
+    const trayMat = new THREE.MeshStandardMaterial({
+      color: 0xf59e0b, // Industrial yellow cable tray
+      roughness: 0.40,
+      metalness: 0.70,
+    });
+    const ductMat = new THREE.MeshStandardMaterial({
+      color: 0x94a3b8, // Galvanized metal duct
+      roughness: 0.35,
+      metalness: 0.80,
+    });
+    const powerCableMat = new THREE.MeshStandardMaterial({
+      color: 0xef4444, // Red high-voltage / power busway
+      roughness: 0.50,
+      metalness: 0.20,
+    });
+    const dataCableMat = new THREE.MeshStandardMaterial({
+      color: 0x3b82f6, // Blue fiber / Cat6 data bundle
+      roughness: 0.50,
+      metalness: 0.20,
+    });
+    const riserMat = new THREE.MeshStandardMaterial({
+      color: 0x10b981, // Green riser pillar
+      roughness: 0.45,
+      metalness: 0.65,
+    });
+
+    (floor.infrastructure || []).forEach(item => {
+      const sX = item.start.x * 1000;
+      const sZ = item.start.y * 1000;
+      const eX = item.end.x * 1000;
+      const eZ = item.end.y * 1000;
+      const elevY = item.elevationMm !== undefined ? item.elevationMm : -220; // depth below raised floor
+      const lengthMm = Math.hypot(eX - sX, eZ - sZ) || 600;
+      const midX = (sX + eX) / 2;
+      const midZ = (sZ + eZ) / 2;
+      const angleY = Math.atan2(eX - sX, eZ - sZ);
+
+      let itemMat = trayMat;
+      if (item.category === 'cable-duct') itemMat = ductMat;
+      else if (item.category === 'power-cable') itemMat = powerCableMat;
+      else if (item.category === 'data-cable') itemMat = dataCableMat;
+      else if (item.category === 'riser') itemMat = riserMat;
+
+      if (item.category === 'riser') {
+        // Vertical riser pillar spanning from subfloor through raised floor
+        const rGeo = new THREE.CylinderGeometry(item.widthMm / 2, item.widthMm / 2, plenumDepthMm + 300, 16);
+        const rMesh = new THREE.Mesh(rGeo, itemMat);
+        rMesh.position.set(midX, -plenumDepthMm / 2 + 150, midZ);
+        rMesh.userData = { isDynamic: true, infraId: item.id };
+        infraGroup.add(rMesh);
+      } else {
+        // Linear horizontal under-floor pathway (Tray, Duct, Conduit, Cable Bundle)
+        const iGeo = new THREE.BoxGeometry(item.widthMm || 200, item.heightMm || 60, lengthMm);
+        const iMesh = new THREE.Mesh(iGeo, itemMat);
+        iMesh.position.set(midX, elevY, midZ);
+        iMesh.rotation.y = angleY;
+        iMesh.userData = { isDynamic: true, infraId: item.id };
+        infraGroup.add(iMesh);
+      }
+    });
+    this.threeScene.add(infraGroup);
+
+    // 5. Physical 3D Conductive Grounding Seam Grid — Per-Tile Edge Borders
+    // Each ESD tile gets its own 4-edge rectangular seam border (conductive vinyl gasket),
+    // matching the 2D per-tile strokeRect rendering exactly.
+    this.threeGridGroup = new THREE.Group();
+    this.threeGridGroup.userData = { isDynamic: true };
+
+    const seamsY = 0.6; // Slightly above white ESD tile surface to prevent z-fighting
+
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x334155, // Dark industrial slate — matches 2D strokeStyle '#334155'
+      linewidth: 1,
+      depthTest: true,
+      depthWrite: false,
+    });
+
+    // Build one shared BufferGeometry from all per-tile edge segments
+    const linePositions: number[] = [];
+    for (const tile of floor.tiles) {
+      // Tile world-space bounds in mm (tile.x / tile.y are in metres)
+      const x0 = tile.x * 1000;
+      const z0 = tile.y * 1000;
+      const x1 = x0 + tileMm;
+      const z1 = z0 + tileMm;
+
+      // 4 edges of this tile (each edge = 2 vertices = 6 floats)
+      // Top edge (north)
+      linePositions.push(x0, seamsY, z0, x1, seamsY, z0);
+      // Bottom edge (south)
+      linePositions.push(x0, seamsY, z1, x1, seamsY, z1);
+      // Left edge (west)
+      linePositions.push(x0, seamsY, z0, x0, seamsY, z1);
+      // Right edge (east)
+      linePositions.push(x1, seamsY, z0, x1, seamsY, z1);
+    }
+
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+    const gridLines = new THREE.LineSegments(lineGeo, lineMat);
+    this.threeGridGroup.add(gridLines);
+
+    // Synchronize grid visibility with state
+    this.threeGridGroup.visible = dcState.getState().gridVisible !== false;
+    this.threeScene.add(this.threeGridGroup);
+
+    // 6. Realistic Industrial Datacenter Raised Floor Anodized Aluminum Perimeter Curb Trim (Hollow 4-Edge Trim)
+    const curbThickness = 30; // 30mm trim
+    const curbHeight = 14;    // 14mm proud curb
+    const curbMat = new THREE.MeshStandardMaterial({
+      color: 0x475569, // Architectural anodized aluminum
+      roughness: 0.35,
+      metalness: 0.80,
+    });
+
+    const curbGroup = new THREE.Group();
+    curbGroup.userData = { isDynamic: true };
+
+    // North curb (z = -curbThickness / 2)
+    const curbNorthGeo = new THREE.BoxGeometry(floorLenMm + curbThickness * 2, curbHeight, curbThickness);
+    const curbNorth = new THREE.Mesh(curbNorthGeo, curbMat);
+    curbNorth.position.set(floorLenMm / 2, curbHeight / 2 - 2, -curbThickness / 2);
+    curbGroup.add(curbNorth);
+
+    // South curb (z = floorWidMm + curbThickness / 2)
+    const curbSouthGeo = new THREE.BoxGeometry(floorLenMm + curbThickness * 2, curbHeight, curbThickness);
+    const curbSouth = new THREE.Mesh(curbSouthGeo, curbMat);
+    curbSouth.position.set(floorLenMm / 2, curbHeight / 2 - 2, floorWidMm + curbThickness / 2);
+    curbGroup.add(curbSouth);
+
+    // West curb (x = -curbThickness / 2)
+    const curbWestGeo = new THREE.BoxGeometry(curbThickness, curbHeight, floorWidMm);
+    const curbWest = new THREE.Mesh(curbWestGeo, curbMat);
+    curbWest.position.set(-curbThickness / 2, curbHeight / 2 - 2, floorWidMm / 2);
+    curbGroup.add(curbWest);
+
+    // East curb (x = floorLenMm + curbThickness / 2)
+    const curbEastGeo = new THREE.BoxGeometry(curbThickness, curbHeight, floorWidMm);
+    const curbEast = new THREE.Mesh(curbEastGeo, curbMat);
+    curbEast.position.set(floorLenMm + curbThickness / 2, curbHeight / 2 - 2, floorWidMm / 2);
+    curbGroup.add(curbEast);
+
+    this.threeScene.add(curbGroup);
+
+    // 4. Real 3D Racks using buildRackGroup
+    const s = dcState.getState();
+    floor.racks.forEach(dcRack => {
+      const rackData: RackData = {
+        id: dcRack.id,
+        name: dcRack.name,
+        units: dcRack.heightU,
+        depthMm: dcRack.depthMm,
+        rackType: dcRack.type === 'open-frame' ? 'open-frame' : dcRack.type === 'network' ? 'network' : dcRack.type === 'wall-mount' ? 'wall-mount' : 'server',
+        mounting: dcRack.mounting ?? 'floor',
+        rackColor: dcRack.color ?? '#0c0e12',
+        frontDoor: dcRack.doorStyle ?? 'perforated',
+        sidePanels: dcRack.type !== 'open-frame',
+        x: 0,
+        y: 0,
+      };
+
+      const rackColorKey = (dcRack.color && !dcRack.color.startsWith('#') ? dcRack.color : 'black') as any;
+      const rackGroup = buildRackGroup(rackData, this.threeMaterials!, rackColorKey);
+      rackGroup.userData = { isDynamic: true, rackId: dcRack.id };
+
+      // Make rack side panels and door panels semi-transparent so mounted servers/switches/ports are clearly visible in DC 3D view
+      rackGroup.traverse(child => {
+        const mesh = child as THREE.Mesh;
+        if ((mesh as any).isMesh) {
+          if (mesh.name === 'rack-side-L' || mesh.name === 'rack-side-R') {
+            const m = (mesh.material as THREE.MeshStandardMaterial)?.clone?.() || mesh.material;
+            mesh.material = m;
+            m.transparent = true;
+            m.opacity = 0.35;
+            m.needsUpdate = true;
+          } else if (
+            mesh.name === 'rack-glass' ||
+            mesh.name === 'rack-perf-L' ||
+            mesh.name === 'rack-perf-R' ||
+            mesh.name.startsWith('rack-door')
+          ) {
+            const m = (mesh.material as THREE.MeshStandardMaterial)?.clone?.() || mesh.material;
+            mesh.material = m;
+            m.transparent = true;
+            m.opacity = 0.28;
+            m.needsUpdate = true;
+          }
+        }
+      });
+
+      // 3. Mount Devices into Rack (Synchronized from Elevation / StateManager)
+      const globalDevices = stateManager.getState().devices || [];
+      const customTemplates = stateManager.getState().customTemplates || [];
+      const rackDevices = globalDevices.filter(d => d.rackId === dcRack.id);
+
+      rackDevices.forEach(device => {
+        const template = getTemplate(device.templateId, customTemplates);
+        if (!template) return;
+        if (template.mountType === 'side' || device.sideMountPosition) return;
+
+        try {
+          const deviceResult = buildDeviceMesh(device, template, rackData, this.threeMaterials!);
+          if (deviceResult && deviceResult.group) {
+            // Map device meshes for raycast selection as well
+            this.rackMeshMap.set(deviceResult.group, dcRack.id);
+            deviceResult.group.traverse(dChild => {
+              if (dChild instanceof THREE.Mesh) {
+                this.rackMeshMap.set(dChild, dcRack.id);
+                dChild.userData.rackId = dcRack.id;
+              }
+            });
+            rackGroup.add(deviceResult.group);
+          }
+        } catch (err) {
+          console.warn('Failed to build 3D device mesh for DC rack:', err);
+        }
+      });
+
+      // Map group and all its children for raycast selection
+      this.rackMeshMap.set(rackGroup, dcRack.id);
+      rackGroup.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          this.rackMeshMap.set(child, dcRack.id);
+          child.userData.rackId = dcRack.id;
+        }
+      });
+
+      // Total rack height in mm (from RACK_CONSTANTS: RACK_PADDING_TOP + RU_HEIGHT * units + RACK_PADDING_BOTTOM)
+      const totalHMm = 65 + dcRack.heightU * 44.45 + 65;
+      const rWMm = dcRack.widthMm;
+      const rDMm = dcRack.depthMm;
+      const rotRad = (-dcRack.rotation * Math.PI) / 180;
+
+      // Group position: ground base flush onto floor surface at Y = 0
+      const posX = dcRack.position.x * 1000 + (dcRack.rotation % 180 === 0 ? rWMm / 2 : rDMm / 2);
+      const posZ = dcRack.position.y * 1000 + (dcRack.rotation % 180 === 0 ? rDMm / 2 : rWMm / 2);
+
+      rackGroup.position.set(posX, 0, posZ);
+      rackGroup.rotation.y = rotRad;
+      rackGroup.updateMatrixWorld(true);
+
+      // Compute actual lowest vertex Y and shift so cabinet base rests solidly on floor (Y = 0)
+      const initBox = new THREE.Box3().setFromObject(rackGroup);
+      if (isFinite(initBox.min.y)) {
+        rackGroup.position.y = -initBox.min.y;
+        rackGroup.updateMatrixWorld(true);
+      }
+
+      // 3D Floating Rack Identifier & Capacity Label
+      const labelCanvas = document.createElement('canvas');
+      labelCanvas.width = 384;
+      labelCanvas.height = 96;
+      const lCtx = labelCanvas.getContext('2d')!;
+      lCtx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+      lCtx.roundRect(4, 4, 376, 88, 12);
+      lCtx.fill();
+      lCtx.strokeStyle = '#38bdf8';
+      lCtx.lineWidth = 3;
+      lCtx.roundRect(4, 4, 376, 88, 12);
+      lCtx.stroke();
+      lCtx.fillStyle = '#ffffff';
+      lCtx.font = 'bold 32px system-ui, sans-serif';
+      lCtx.textAlign = 'center';
+      lCtx.textBaseline = 'middle';
+      lCtx.fillText(dcRack.name, 192, 34);
+      lCtx.fillStyle = '#94a3b8';
+      lCtx.font = 'bold 20px monospace';
+      lCtx.fillText(`${dcRack.heightU}U • (${dcRack.position.x.toFixed(1)}m, ${dcRack.position.y.toFixed(1)}m)`, 192, 68);
+
+      const labelTex = new THREE.CanvasTexture(labelCanvas);
+      labelTex.colorSpace = THREE.SRGBColorSpace;
+      const spriteMat = new THREE.SpriteMaterial({ map: labelTex, depthTest: false });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.scale.set(700, 175, 1);
+      const topY = initBox.max.y > 0 ? initBox.max.y - initBox.min.y + 160 : totalHMm + 160;
+      sprite.position.set(0, topY, 0);
+      sprite.userData = { isDynamic: true, rackId: dcRack.id };
+      rackGroup.add(sprite);
+
+      this.threeScene!.add(rackGroup);
+    });
+
+    // Add selection highlight on selected rack
+    this.update3DSelectionHighlight();
+
+    // Adjust camera target to floor center ONLY on initial scene setup or floor change, never on rack click
+    if (!this.hasInitialized3DTarget || this.lastRenderedFloorId !== floor.id) {
+      const centerX = floorLenMm / 2;
+      const centerZ = floorWidMm / 2;
+      this.threeControls.target.set(centerX, 900, centerZ);
+      this.threeControls.update();
+      this.hasInitialized3DTarget = true;
+    }
+
+    this.lastRenderedFloorId = floor.id;
+  }
+
+  private update3DSelectionHighlight() {
+    if (!this.threeScene) return;
+    const s = dcState.getState();
+    const floor = dcState.getActiveFloor();
+    if (!floor) return;
+
+    this.threeScene.traverse(child => {
+      if (child.name === 'selection-highlight') {
+        child.parent?.remove(child);
+      }
+    });
+
+    if (s.selectedRackId) {
+      const rack = floor.racks.find(r => r.id === s.selectedRackId);
+      if (rack) {
+        this.threeScene.traverse(child => {
+          if (child.userData?.rackId === rack.id && child instanceof THREE.Group) {
+            child.updateMatrixWorld(true);
+            const rackBox = new THREE.Box3().setFromObject(child);
+            const boxSize = new THREE.Vector3();
+            const boxCenter = new THREE.Vector3();
+            rackBox.getSize(boxSize);
+            rackBox.getCenter(boxCenter);
+
+            const selBoxGeo = new THREE.BoxGeometry(
+              Math.max(boxSize.x + 16, 20),
+              Math.max(boxSize.y + 10, 20),
+              Math.max(boxSize.z + 16, 20)
+            );
+            const selEdges = new THREE.EdgesGeometry(selBoxGeo);
+            const selLine = new THREE.LineSegments(
+              selEdges,
+              new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 2 })
+            );
+            selLine.name = 'selection-highlight';
+            selLine.userData = { isDynamic: true };
+            selLine.position.copy(boxCenter);
+            this.threeScene!.add(selLine);
+          }
+        });
+      }
+    }
+  }
+
+  private set3DCameraPreset(preset: 'iso' | 'top' | 'front') {
+    if (!this.threeCamera || !this.threeControls) return;
+    const floor = dcState.getActiveFloor();
+    if (!floor) return;
+
+    const floorLenMm = floor.lengthM * 1000;
+    const floorWidMm = floor.widthM * 1000;
+    const cx = floorLenMm / 2;
+    const cz = floorWidMm / 2;
+    const maxDim = Math.max(floorLenMm, floorWidMm, 6000);
+
+    this.threeControls.target.set(cx, 900, cz);
+
+    if (preset === 'iso') {
+      this.threeCamera.position.set(cx + maxDim * 0.95, maxDim * 0.85, cz + maxDim * 0.95);
+    } else if (preset === 'top') {
+      this.threeCamera.position.set(cx, maxDim * 1.4, cz + 10);
+    } else if (preset === 'front') {
+      this.threeCamera.position.set(cx, 1200, cz + maxDim * 1.2);
+    }
+    this.threeControls.update();
+  }
+
+  private zoom3D(factor: number) {
+    if (!this.threeCamera || !this.threeControls) return;
+    const dir = this.threeCamera.position.clone().sub(this.threeControls.target);
+    this.threeCamera.position.copy(this.threeControls.target).addScaledVector(dir, factor);
+    this.threeControls.update();
   }
 
   private render3D() {
@@ -1521,142 +3618,53 @@ export class BuildFloorView {
     this.canvas.classList.toggle('hidden', is3D);
     if (!is3D || !floor) return;
 
-    wrap3d.innerHTML = `
-      <div class="dc3d-controls">
-        <span class="dc3d-ctrl-label">Isometric 3D Hall</span>
-        <button class="dc-btn dc-btn-sm" id="dc3d-preset-iso">Isometric</button>
-        <button class="dc-btn dc-btn-sm" id="dc3d-preset-top">Top View</button>
-        <button class="dc-btn dc-btn-sm" id="dc3d-preset-front">Front View</button>
-        <div class="dc-divider"></div>
-        <button class="dc-btn dc-btn-sm" id="dc3d-zoomin" title="Zoom In (+)">＋</button>
-        <button class="dc-btn dc-btn-sm" id="dc3d-zoomout" title="Zoom Out (-)">－</button>
-        <button class="dc-btn dc-btn-sm" id="dc3d-reset-cam">Reset 3D (Z)</button>
-      </div>
-      <div class="dc3d-viewport-inner" id="dc3d-inner">
-        ${this.build3DHTML(floor)}
-      </div>
-    `;
+    let viewportEl = wrap3d.querySelector('#dc3d-viewport') as HTMLElement;
+    if (!viewportEl) {
+      wrap3d.innerHTML = `
+        <div class="dc3d-controls">
+          <span class="dc3d-ctrl-label">3D Real-Rack Data Hall</span>
+          <button class="dc-btn dc-btn-sm" id="dc3d-preset-iso" title="Isometric 3D Perspective">Isometric</button>
+          <button class="dc-btn dc-btn-sm" id="dc3d-preset-top" title="Top-Down Plan View">Top View</button>
+          <button class="dc-btn dc-btn-sm" id="dc3d-preset-front" title="Front Elevation View">Front View</button>
+          <div class="dc-divider"></div>
+          <button class="dc-btn dc-btn-sm" id="dc3d-btn-xray" title="Toggle Under-Floor Infrastructure X-Ray Mode">🦴 X-Ray</button>
+          <div class="dc-slider-control" title="Adjust Raised Floor Surface Opacity (0% - 100%)">
+            <span>Floor:</span>
+            <input type="range" id="dc3d-floor-opacity" class="dc-slider" min="0" max="100" value="${Math.round((dcState.getState().floorOpacity ?? 1) * 100)}" />
+          </div>
+          <div class="dc-divider"></div>
+          <button class="dc-btn dc-btn-sm" id="dc3d-zoomin" title="Zoom In (+)">＋</button>
+          <button class="dc-btn dc-btn-sm" id="dc3d-zoomout" title="Zoom Out (-)">－</button>
+          <button class="dc-btn dc-btn-sm" id="dc3d-reset-cam" title="Reset View (Z)">Reset (Z)</button>
+        </div>
+        <div class="dc3d-viewport-inner" id="dc3d-viewport"></div>
+        <div class="dc3d-label">3D Data Hall — ${floor.name} (${formatDimensionsMeters(floor.lengthM, floor.widthM, floor.unit ?? 'm')})</div>
+      `;
 
-    // 3D Scroll to Zoom
-    wrap3d.onwheel = (e) => {
-      e.preventDefault();
-      let delta = -e.deltaY;
-      if (e.deltaMode === 1) delta *= 30;
-      else if (e.deltaMode === 2) delta *= 300;
-      delta = Math.max(-120, Math.min(120, delta));
+      wrap3d.querySelector('#dc3d-preset-iso')?.addEventListener('click', () => this.set3DCameraPreset('iso'));
+      wrap3d.querySelector('#dc3d-preset-top')?.addEventListener('click', () => this.set3DCameraPreset('top'));
+      wrap3d.querySelector('#dc3d-preset-front')?.addEventListener('click', () => this.set3DCameraPreset('front'));
+      wrap3d.querySelector('#dc3d-reset-cam')?.addEventListener('click', () => this.set3DCameraPreset('iso'));
+      wrap3d.querySelector('#dc3d-btn-xray')?.addEventListener('click', () => this.toggleXrayMode());
+      wrap3d.querySelector('#dc3d-floor-opacity')?.addEventListener('input', (e) => {
+        const val = parseInt((e.target as HTMLInputElement).value, 10) / 100;
+        this.setFloorOpacity(val);
+      });
+      wrap3d.querySelector('#dc3d-zoomin')?.addEventListener('click', () => this.zoom3D(0.8));
+      wrap3d.querySelector('#dc3d-zoomout')?.addEventListener('click', () => this.zoom3D(1.25));
 
-      const factor = Math.pow(1.002, delta);
-      this.scale3D = Math.min(Math.max(this.scale3D * factor, 0.3), 4.0);
-      this.apply3DTransform();
-    };
-
-    // 3D Right-click context menu & left-click selection / orbiting
-    wrap3d.oncontextmenu = (e) => {
-      e.preventDefault();
-      const target = e.target as HTMLElement;
-      const rackEl = target.closest('.dc3d-rack') as HTMLElement;
-      if (rackEl) {
-        const rackId = rackEl.dataset.rackId;
-        const rack = floor.racks.find(r => r.id === rackId);
-        if (rack) {
-          dcState.setState({ selectedRackId: rack.id, selectedTileId: null });
-          this.renderPropsPanel();
-          this.showContextMenu(e.clientX, e.clientY, rack);
-        }
+      viewportEl = wrap3d.querySelector('#dc3d-viewport') as HTMLElement;
+    } else {
+      const labelEl = wrap3d.querySelector('.dc3d-label');
+      if (labelEl) {
+        labelEl.textContent = `3D Data Hall — ${floor.name} (${formatDimensionsMeters(floor.lengthM, floor.widthM, floor.unit ?? 'm')})`;
       }
-    };
+    }
 
-    wrap3d.onmousedown = (e) => {
-      if (e.button === 2) return;
-      const target = e.target as HTMLElement;
-      if (target.closest('.dc3d-controls')) return;
-
-      const rackEl = target.closest('.dc3d-rack') as HTMLElement;
-      if (rackEl) {
-        const rackId = rackEl.dataset.rackId;
-        if (rackId) {
-          dcState.setState({ selectedRackId: rackId, selectedTileId: null });
-          this.renderPropsPanel();
-          this.render3D();
-          return;
-        }
-      } else {
-        dcState.setState({ selectedRackId: null, selectedTileId: null });
-        this.renderPropsPanel();
-        this.render3D();
-      }
-
-      this.isOrbiting3D = true;
-      this.orbitStart = { x: e.clientX, y: e.clientY, rx: this.rotX, rz: this.rotZ };
-    };
-
-    window.onmousemove = (e) => {
-      if (!this.isOrbiting3D) return;
-      const dx = e.clientX - this.orbitStart.x;
-      const dy = e.clientY - this.orbitStart.y;
-      this.rotZ = this.orbitStart.rz + dx * 0.5;
-      this.rotX = Math.max(10, Math.min(85, this.orbitStart.rx - dy * 0.5));
-      this.apply3DTransform();
-    };
-
-    window.onmouseup = () => { this.isOrbiting3D = false; };
-
-    wrap3d.querySelector('#dc3d-preset-iso')?.addEventListener('click', () => {
-      this.rotX = 55; this.rotZ = -45; this.scale3D = 1.0;
-      this.apply3DTransform();
-    });
-
-    wrap3d.querySelector('#dc3d-preset-top')?.addEventListener('click', () => {
-      this.rotX = 15; this.rotZ = 0; this.scale3D = 1.0;
-      this.apply3DTransform();
-    });
-
-    wrap3d.querySelector('#dc3d-preset-front')?.addEventListener('click', () => {
-      this.rotX = 80; this.rotZ = 0; this.scale3D = 1.0;
-      this.apply3DTransform();
-    });
-
-    wrap3d.querySelector('#dc3d-reset-cam')?.addEventListener('click', () => {
-      this.rotX = 55; this.rotZ = -45; this.scale3D = 1.0;
-      this.apply3DTransform();
-    });
-
-    wrap3d.querySelector('#dc3d-zoomin')?.addEventListener('click', () => {
-      this.scale3D = Math.min(this.scale3D * 1.25, 4.0);
-      this.apply3DTransform();
-    });
-
-    wrap3d.querySelector('#dc3d-zoomout')?.addEventListener('click', () => {
-      this.scale3D = Math.max(this.scale3D * 0.8, 0.3);
-      this.apply3DTransform();
-    });
-  }
-
-  private build3DHTML(floor: DcFloor): string {
-    const s = dcState.getState();
-    const scale = 12;
-    const rackHtml = floor.racks.map(rack => {
-      const x = rack.position.x * scale * 10;
-      const y = rack.position.y * scale * 10;
-      const rW = rack.widthMm / 1000;
-      const rD = rack.depthMm / 1000;
-      const eW = rack.rotation % 180 === 0 ? rW : rD;
-      const eD = rack.rotation % 180 === 0 ? rD : rW;
-      const pw = eW * scale * 10;
-      const ph = eD * scale * 10;
-      const color = rack.color ?? '#1e3a5f';
-      const heightPx = Math.max(30, rack.heightU * 1.5);
-      const isSelected = rack.id === s.selectedRackId;
-      return `<div class="dc3d-rack${isSelected ? ' selected' : ''}" data-rack-id="${rack.id}" style="left:${x}px;top:${y}px;width:${pw}px;height:${ph}px;background:${color};">
-        <div class="dc3d-rack-top" style="width:${pw}px;height:${ph}px;transform: translateZ(${heightPx}px);"></div>
-        <span class="dc3d-rack-label" style="transform: translateZ(${heightPx + 4}px);">${rack.name} (${rack.type.toUpperCase()})</span>
-      </div>`;
-    }).join('');
-
-    return `<div class="dc3d-scene" style="width:${floor.lengthM * scale * 10}px;height:${floor.widthM * scale * 10}px;transform: scale(${this.scale3D}) perspective(900px) rotateX(${this.rotX}deg) rotateZ(${this.rotZ}deg);">
-      <div class="dc3d-floor" style="width:100%;height:100%;"></div>
-      ${rackHtml}
-      <div class="dc3d-label">3D Isometric Plot — ${floor.name} (${formatDimensionsMeters(floor.lengthM, floor.widthM, floor.unit ?? 'm')})</div>
-    </div>`;
+    const isInitial = !this.threeRenderer;
+    this.initThree3D(wrap3d, floor);
+    if (isInitial) {
+      this.set3DCameraPreset('iso');
+    }
   }
 }

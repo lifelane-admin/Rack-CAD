@@ -781,6 +781,7 @@ export interface AppState {
   cloudContainers: CloudContainer[];
   cloudConnectors: CloudConnector[];
   cloudHierarchies: CloudHierarchy[];
+  activeElevationRackId?: string | null;
 }
 
 // === Events ===

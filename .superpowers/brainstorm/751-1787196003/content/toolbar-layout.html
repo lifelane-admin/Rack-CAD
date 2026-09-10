@@ -1,0 +1,102 @@
+<h2>Toolbar Layout Options</h2>
+<p class="subtitle">Both keep tool icons visible at left. Difference is whether the logo stays in the toolbar (it's already in the sidebar header now).</p>
+
+<div style="margin-bottom: 32px;">
+
+  <!-- OPTION A -->
+  <div class="option" data-choice="a" onclick="toggleSelect(this)" style="display:block;padding:0;overflow:hidden;margin-bottom:20px;">
+    <div style="background:#0f172a;border:1px solid #1e293b;border-radius:6px;overflow:hidden;">
+      <div style="background:#1e293b;padding:4px 10px;font-size:10px;color:#475569;letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;gap:8px;">
+        <div class="letter" style="position:static;width:18px;height:18px;font-size:10px;flex-shrink:0;">A</div>
+        Logo + tool strip + menus
+      </div>
+      <!-- Toolbar mockup A -->
+      <div style="height:52px;background:#090c12;display:flex;align-items:center;padding:0 12px;gap:0;border-bottom:1px solid #1e293b;">
+        <!-- Logo -->
+        <div style="font-size:12px;font-weight:800;color:#38bdf8;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 0 8px rgba(56,189,248,0.4);margin-right:16px;white-space:nowrap;">Rack Slicer</div>
+        <!-- Separator -->
+        <div style="width:1px;height:28px;background:#1e293b;margin-right:12px;"></div>
+        <!-- Tool strip -->
+        <div style="display:flex;gap:4px;margin-right:12px;">
+          <div style="width:28px;height:28px;border-radius:5px;background:rgba(56,189,248,0.15);border:1px solid #38bdf8;display:flex;align-items:center;justify-content:center;" title="Select (active)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" fill="#38bdf8"/></svg>
+          </div>
+          <div style="width:28px;height:28px;border-radius:5px;border:1px solid transparent;display:flex;align-items:center;justify-content:center;" title="Pan">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2"><path d="M18 11V6a2 2 0 00-2-2v0a2 2 0 00-2 2v5m0-5V5a2 2 0 00-2-2v0a2 2 0 00-2 2v8m0-8V7a2 2 0 00-2-2v0a2 2 0 00-2 2v6m0-5V9a2 2 0 00-2-2v0a2 2 0 00-2 2v10a7 7 0 0014 0v-8"/></svg>
+          </div>
+          <div style="width:28px;height:28px;border-radius:5px;border:1px solid transparent;display:flex;align-items:center;justify-content:center;" title="Cable">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2"><rect x="9" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M12 9v4M6 15v-2h12v2"/></svg>
+          </div>
+          <div style="width:28px;height:28px;border-radius:5px;border:1px solid transparent;display:flex;align-items:center;justify-content:center;" title="Power">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2"><path d="M9 2v4M15 2v4"/><path d="M7 6h10v4a5 5 0 01-10 0V6z"/><path d="M12 15v7"/></svg>
+          </div>
+          <div style="width:28px;height:28px;border-radius:5px;border:1px solid transparent;display:flex;align-items:center;justify-content:center;" title="Text">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2"><path d="M4 5h16M12 5v14M9 19h6"/></svg>
+          </div>
+        </div>
+        <!-- Separator -->
+        <div style="width:1px;height:28px;background:#1e293b;margin-right:12px;"></div>
+        <!-- Menu bar -->
+        <div style="display:flex;align-items:center;gap:2px;">
+          <div style="padding:5px 10px;font-size:11px;font-weight:500;color:#94a3b8;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px;">File <span style="font-size:8px;opacity:0.6;">▾</span></div>
+          <div style="padding:5px 10px;font-size:11px;font-weight:500;color:#94a3b8;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px;">Edit <span style="font-size:8px;opacity:0.6;">▾</span></div>
+          <div style="padding:5px 10px;font-size:11px;font-weight:500;color:#94a3b8;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px;">View <span style="font-size:8px;opacity:0.6;">▾</span></div>
+          <div style="padding:5px 10px;font-size:11px;font-weight:500;color:#94a3b8;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px;">Export <span style="font-size:8px;opacity:0.6;">▾</span></div>
+        </div>
+        <!-- Right: AI -->
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+          <div style="padding:5px 10px;font-size:11px;font-weight:600;color:#475569;border-radius:4px;border:1px solid #1e293b;letter-spacing:0.5px;">⚙ Rules</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPTION B -->
+  <div class="option" data-choice="b" onclick="toggleSelect(this)" style="display:block;padding:0;overflow:hidden;margin-bottom:20px;">
+    <div style="background:#0f172a;border:1px solid #1e293b;border-radius:6px;overflow:hidden;">
+      <div style="background:#1e293b;padding:4px 10px;font-size:10px;color:#475569;letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;gap:8px;">
+        <div class="letter" style="position:static;width:18px;height:18px;font-size:10px;flex-shrink:0;">B</div>
+        Tool strip + menus only (no logo — it's already in the sidebar)
+      </div>
+      <!-- Toolbar mockup B -->
+      <div style="height:52px;background:#090c12;display:flex;align-items:center;padding:0 12px;gap:0;border-bottom:1px solid #1e293b;">
+        <!-- Tool strip (no logo) -->
+        <div style="display:flex;gap:4px;margin-right:12px;">
+          <div style="width:28px;height:28px;border-radius:5px;background:rgba(56,189,248,0.15);border:1px solid #38bdf8;display:flex;align-items:center;justify-content:center;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" fill="#38bdf8"/></svg>
+          </div>
+          <div style="width:28px;height:28px;border-radius:5px;border:1px solid transparent;display:flex;align-items:center;justify-content:center;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2"><path d="M18 11V6a2 2 0 00-2-2v0a2 2 0 00-2 2v5m0-5V5a2 2 0 00-2-2v0a2 2 0 00-2 2v8m0-8V7a2 2 0 00-2-2v0a2 2 0 00-2 2v6m0-5V9a2 2 0 00-2-2v0a2 2 0 00-2 2v10a7 7 0 0014 0v-8"/></svg>
+          </div>
+          <div style="width:28px;height:28px;border-radius:5px;border:1px solid transparent;display:flex;align-items:center;justify-content:center;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2"><rect x="9" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M12 9v4M6 15v-2h12v2"/></svg>
+          </div>
+          <div style="width:28px;height:28px;border-radius:5px;border:1px solid transparent;display:flex;align-items:center;justify-content:center;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2"><path d="M9 2v4M15 2v4"/><path d="M7 6h10v4a5 5 0 01-10 0V6z"/><path d="M12 15v7"/></svg>
+          </div>
+          <div style="width:28px;height:28px;border-radius:5px;border:1px solid transparent;display:flex;align-items:center;justify-content:center;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2"><path d="M4 5h16M12 5v14M9 19h6"/></svg>
+          </div>
+        </div>
+        <!-- Separator -->
+        <div style="width:1px;height:28px;background:#1e293b;margin-right:12px;"></div>
+        <!-- Menu bar -->
+        <div style="display:flex;align-items:center;gap:2px;">
+          <div style="padding:5px 10px;font-size:11px;font-weight:500;color:#94a3b8;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px;">File <span style="font-size:8px;opacity:0.6;">▾</span></div>
+          <div style="padding:5px 10px;font-size:11px;font-weight:500;color:#94a3b8;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px;">Edit <span style="font-size:8px;opacity:0.6;">▾</span></div>
+          <div style="padding:5px 10px;font-size:11px;font-weight:500;color:#94a3b8;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px;">View <span style="font-size:8px;opacity:0.6;">▾</span></div>
+          <div style="padding:5px 10px;font-size:11px;font-weight:500;color:#94a3b8;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px;">Export <span style="font-size:8px;opacity:0.6;">▾</span></div>
+          <div style="padding:5px 10px;font-size:11px;font-weight:500;color:#64748b;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px;">Cloud <span style="font-size:8px;opacity:0.6;">▾</span></div>
+        </div>
+        <!-- Right: AI -->
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+          <div style="padding:5px 10px;font-size:11px;font-weight:600;color:#475569;border-radius:4px;border:1px solid #1e293b;letter-spacing:0.5px;">⚙ Rules</div>
+        </div>
+      </div>
+      <div style="padding:6px 12px;font-size:10px;color:#475569;background:#080a0f;">Note: "Cloud" menu only appears in Cloud / Hybrid view</div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:8px;">Click to select your preference, then reply in the terminal.</p>
