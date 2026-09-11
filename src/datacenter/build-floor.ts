@@ -4179,7 +4179,7 @@ export class BuildFloorView {
       const hudCanvas = this.createRackHUDGaugeCanvas(dcRack, rackDevices, rackData);
       const labelTex = new THREE.CanvasTexture(hudCanvas);
       labelTex.colorSpace = THREE.SRGBColorSpace;
-      const spriteMat = new THREE.SpriteMaterial({ map: labelTex, depthTest: false });
+      const spriteMat = new THREE.SpriteMaterial({ map: labelTex, depthTest: false, transparent: true });
       const sprite = new THREE.Sprite(spriteMat);
       // Width 490mm in 3D world (25% reduction from 650mm), height proportional (1024x768 -> 367.5mm)
       const spriteW = 490;
@@ -4243,43 +4243,40 @@ export class BuildFloorView {
     const powerRatio = Math.max(0, Math.min(1, powerKw / maxKw));
     const loadRatio = Math.max(0, Math.min(1, loadPercent / 100));
 
-    // 2. Background Gradient & Subtle Grid (SVG: #bg & #network)
-    const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
-    bgGrad.addColorStop(0, '#202832');
-    bgGrad.addColorStop(1, '#101820');
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, W, H);
-
-    // Subtle Network Pattern
-    ctx.strokeStyle = 'rgba(83, 101, 116, 0.14)';
-    ctx.fillStyle = 'rgba(145, 162, 175, 0.18)';
-    ctx.lineWidth = 1;
-    for (let py = 40; py < H; py += 90) {
-      for (let px = 0; px < W; px += 150) {
-        ctx.beginPath();
-        ctx.moveTo(px, py + 65);
-        ctx.lineTo(px + 55, py + 30);
-        ctx.lineTo(px + 105, py + 62);
-        ctx.lineTo(px + 150, py + 25);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(px + 55, py + 30, 2, 0, Math.PI * 2);
-        ctx.arc(px + 105, py + 62, 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    // Top Header Banner with Rack Name & Info (+50% title, +100% subtitle)
+    // 2. Top Header Banner with Rack Name & Info (Transparent backdrop + smart text accommodation)
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 54px system-ui, -apple-system, sans-serif';
-    ctx.fillText(dcRack.name.toUpperCase(), W / 2, 46);
 
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = 'bold 36px monospace';
-    ctx.fillText(`${dcRack.heightU}U Cabinet  •  Pos: (${dcRack.position.x.toFixed(1)}m, ${dcRack.position.y.toFixed(1)}m)  •  ${rackDevices.length} Devices Mounted`, W / 2, 96);
+    // Rack Name with shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 44px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(dcRack.name.toUpperCase(), W / 2, 38);
+    ctx.restore();
+
+    // Subtitle banner with smart width fitting and dark pill backing
+    const subtext = `${dcRack.heightU}U Cabinet  •  Pos: (${dcRack.position.x.toFixed(1)}m, ${dcRack.position.y.toFixed(1)}m)  •  ${rackDevices.length} Devices Mounted`;
+    let subFontSize = 22;
+    ctx.font = `600 ${subFontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    while (ctx.measureText(subtext).width > W - 100 && subFontSize > 14) {
+      subFontSize -= 1;
+      ctx.font = `600 ${subFontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    }
+    const subMetrics = ctx.measureText(subtext);
+    const pillW = Math.min(W - 40, subMetrics.width + 40);
+    const pillH = subFontSize + 16;
+    ctx.fillStyle = 'rgba(11, 20, 29, 0.85)';
+    ctx.strokeStyle = '#303e4b';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect((W - pillW) / 2, 82 - pillH / 2, pillW, pillH, pillH / 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText(subtext, W / 2, 82);
 
     // 3. Geometry Setup: Center Origin (512, 680)
     const Cx = 512;
@@ -4362,12 +4359,12 @@ export class BuildFloorView {
     drawHalfArc(282, 265, 0, Math.PI);
     ctx.fill();
 
-    // ── D. SCALE TICKS & LABELS (+50% font size) ──
+    // ── D. SCALE TICKS & LABELS ──
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // 1. Rack Load Ticks (0% to 100%, 11 steps of 10% - font size 32px)
-    ctx.font = 'bold 32px Arial, Helvetica, sans-serif';
+    // 1. Rack Load Ticks (0% to 100%, 11 steps of 10% - font size 30px)
+    ctx.font = 'bold 30px Arial, Helvetica, sans-serif';
     for (let i = 0; i <= 10; i++) {
       const frac = i / 10;
       const angle = Math.PI * (1 - frac);
@@ -4394,8 +4391,8 @@ export class BuildFloorView {
       ctx.fillText(`${i * 10}%`, lx, ly);
     }
 
-    // 2. Power Ticks (0 to maxKw, 11 steps - font size 26px)
-    ctx.font = 'bold 26px Arial, Helvetica, sans-serif';
+    // 2. Power Ticks (0 to maxKw, 11 steps - font size 25px)
+    ctx.font = 'bold 25px Arial, Helvetica, sans-serif';
     for (let i = 0; i <= 10; i++) {
       const frac = i / 10;
       const angle = Math.PI * (1 - frac);
@@ -4424,35 +4421,37 @@ export class BuildFloorView {
       ctx.fillText(tickLabel, lx, ly);
     }
 
-    // ── E. SECTION TITLES ──
-    ctx.fillStyle = '#d3dce3';
-    ctx.font = 'bold 36px Arial, Helvetica, sans-serif';
-    ctx.fillText('RACK LOAD', Cx, 252);
+    // ── E. SECTION TITLES (Dedicated non-overlapping badges) ──
 
-    ctx.font = 'bold 32px Arial, Helvetica, sans-serif';
-    ctx.fillText(`POWER (${maxKw}kW max)`, Cx, 375);
-
-    // Decorative Rack Icon at (Cx, 412)
-    ctx.save();
-    ctx.strokeStyle = '#d5dde4';
-    ctx.lineWidth = 2;
-    ctx.fillStyle = 'transparent';
+    // 1. RACK LOAD Badge (Placed at y = 132 above the outer arc)
+    const rlText = 'RACK LOAD';
+    ctx.font = 'bold 20px Arial, Helvetica, sans-serif';
+    const rlw = ctx.measureText(rlText).width + 32;
+    ctx.fillStyle = 'rgba(11, 20, 29, 0.90)';
+    ctx.strokeStyle = '#48535e';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(Cx - 13, 412, 26, 30, 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(Cx - 8, 420);
-    ctx.lineTo(Cx + 7, 420);
-    ctx.moveTo(Cx - 8, 426);
-    ctx.lineTo(Cx + 7, 426);
-    ctx.moveTo(Cx - 8, 432);
-    ctx.lineTo(Cx + 3, 432);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(Cx + 7, 436, 2, 0, Math.PI * 2);
-    ctx.fillStyle = '#d5dde4';
+    ctx.roundRect(Cx - rlw / 2, 118, rlw, 28, 14);
     ctx.fill();
-    ctx.restore();
+    ctx.stroke();
+
+    ctx.fillStyle = '#63ee55';
+    ctx.fillText(rlText, Cx, 132);
+
+    // 2. POWER Badge (Placed at y = 425 above the digital panel)
+    const pwText = `POWER (${maxKw}kW MAX)`;
+    ctx.font = 'bold 18px Arial, Helvetica, sans-serif';
+    const pww = ctx.measureText(pwText).width + 32;
+    ctx.fillStyle = 'rgba(11, 20, 29, 0.90)';
+    ctx.strokeStyle = '#303e4b';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(Cx - pww / 2, 411, pww, 28, 14);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillText(pwText, Cx, 425);
 
     // ── F. MATHEMATICALLY ACCURATE NEEDLES ──
 
@@ -4524,7 +4523,7 @@ export class BuildFloorView {
     ctx.arc(Cx, Cy, 5, 0, Math.PI * 2);
     ctx.fill();
 
-    // ── G. CENTER DIGITAL INFORMATION PANEL (+50% font size) ──
+    // ── G. CENTER DIGITAL INFORMATION PANEL ──
     const pw = 380;
     const ph = 160;
     const px = Cx - pw / 2;
@@ -4546,25 +4545,25 @@ export class BuildFloorView {
     ctx.lineTo(px + pw - 20, py + 80);
     ctx.stroke();
 
-    // Upper Section: Power (Label 24px, Value 54px)
+    // Upper Section: Power (Label 22px, Value 52px)
     ctx.fillStyle = '#b9c5cf';
-    ctx.font = 'bold 24px Arial, Helvetica, sans-serif';
+    ctx.font = 'bold 22px Arial, Helvetica, sans-serif';
     ctx.fillText('POWER', Cx, py + 26);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 54px Arial, Helvetica, sans-serif';
+    ctx.font = 'bold 52px Arial, Helvetica, sans-serif';
     ctx.fillText(`${powerKw.toFixed(1)}KW`, Cx, py + 62);
 
-    // Lower Section: Rack Load (Label 24px, Value 54px)
+    // Lower Section: Rack Load (Label 22px, Value 52px)
     ctx.fillStyle = '#b9c5cf';
-    ctx.font = 'bold 24px Arial, Helvetica, sans-serif';
+    ctx.font = 'bold 22px Arial, Helvetica, sans-serif';
     ctx.fillText('RACK LOAD', Cx, py + 106);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 54px Arial, Helvetica, sans-serif';
+    ctx.font = 'bold 52px Arial, Helvetica, sans-serif';
     ctx.fillText(`${loadPercent.toFixed(1)}%`, Cx, py + 142);
 
-    // ── H. STATUS READOUT (Bottom Center) (+50% font size) ──
+    // ── H. STATUS READOUT (Bottom Center) ──
     let statusText = 'OK / OPTIMAL';
     let statusColor = '#63ee55';
     if (loadPercent >= 90 || powerKw >= maxKw * 0.9) {
@@ -4575,28 +4574,37 @@ export class BuildFloorView {
       statusColor = '#ffd21a';
     }
 
-    // Status circular badge at (345, 706)
+    // Status background pill
+    ctx.fillStyle = 'rgba(11, 20, 29, 0.90)';
+    ctx.strokeStyle = '#2b3945';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(300, 680, 424, 60, 18);
+    ctx.fill();
+    ctx.stroke();
+
+    // Status circular badge at (345, 710)
     ctx.save();
     ctx.strokeStyle = statusColor === '#63ee55' ? '#f6bf16' : statusColor;
-    ctx.lineWidth = 8;
+    ctx.lineWidth = 7;
     ctx.beginPath();
-    ctx.arc(345, 706, 20, -Math.PI * 0.7, Math.PI * 0.8);
+    ctx.arc(345, 710, 18, -Math.PI * 0.7, Math.PI * 0.8);
     ctx.stroke();
 
     ctx.fillStyle = statusColor;
     ctx.beginPath();
-    ctx.arc(345, 706, 7, 0, Math.PI * 2);
+    ctx.arc(345, 710, 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#c6d0d8';
-    ctx.font = 'bold 24px Arial, Helvetica, sans-serif';
-    ctx.fillText('Total Rack Status', 385, 694);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 18px Arial, Helvetica, sans-serif';
+    ctx.fillText('Total Rack Status', 380, 699);
 
     ctx.fillStyle = statusColor;
-    ctx.font = 'bold 32px Arial, Helvetica, sans-serif';
-    ctx.fillText(statusText, 385, 724);
+    ctx.font = 'bold 26px Arial, Helvetica, sans-serif';
+    ctx.fillText(statusText, 380, 726);
 
     return canvas;
   }
