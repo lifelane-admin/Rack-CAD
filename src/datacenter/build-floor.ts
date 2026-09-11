@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { MaterialManager } from '../three/MaterialManager';
 import { buildRackGroup } from '../three/rack-builder';
 import { dcState, getRowLabel, getColLabel } from './dc-state';
-import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacingStandard, DcAddressFormat, DcFloorTile, DcAirflowDirection, DcInfrastructureItem, DcInfraCategory } from './types';
+import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacingStandard, DcAddressFormat, DcFloorTile, DcAirflowDirection, DcInfrastructureItem, DcInfraCategory, DcGaugeStyle } from './types';
 import { RACK_PRESETS, SPACING_STANDARDS, RackPreset, SpacingStandardInfo } from './standards';
 import { stateManager } from '../core/state';
 import { eventBus } from '../core/event-bus';
@@ -1854,6 +1854,13 @@ export class BuildFloorView {
               <div class="dc-info-row"><span class="dc-info-label">Height</span><span class="dc-info-val">${formatRackHeight(rack.heightU)}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Capacity</span><span class="dc-info-val" style="color:#38bdf8;font-weight:600;">${devices.length} dev • ${usedU}/${rack.heightU}U</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Max Power</span><span class="dc-info-val" style="color:#ffd21a;font-weight:600;">${rack.maxPowerKw ?? 20} kW</span></div>
+              <div class="dc-info-row">
+                <span class="dc-info-label" style="display:flex;align-items:center;gap:4px;">HUD Style</span>
+                <select id="${isGlobal ? 'g-dc-rack-gauge-style' : 'dc-rack-gauge-style'}" class="dc-input" style="width:138px;padding:2px 4px;font-size:11px;height:24px;background:#0d1520;color:#38bdf8;border:1px solid #304560;border-radius:4px;font-weight:600;">
+                  <option value="radial" ${(rack.gaugeStyle ?? 'radial') === 'radial' ? 'selected' : ''}>Radial Dial (Classic)</option>
+                  <option value="linear" ${rack.gaugeStyle === 'linear' ? 'selected' : ''}>Linear Dashboard</option>
+                </select>
+              </div>
               <div class="dc-info-row"><span class="dc-info-label">Pos X</span><span class="dc-info-val">${posX}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Pos Y</span><span class="dc-info-val">${posY}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Rotation</span><span class="dc-info-val">${rack.rotation}°</span></div>
@@ -1904,6 +1911,13 @@ export class BuildFloorView {
             dcState.updateRack(rack.id, { rotation: rot });
             this.renderPropsPanel();
             if (dcState.getState().viewMode === '3d') this.render3D(); else this.draw();
+          });
+          el.querySelector(`${prefix}dc-rack-gauge-style`)?.addEventListener('change', (e: any) => {
+            const newStyle = e.target.value as 'radial' | 'linear';
+            dcState.updateRack(rack.id, { gaugeStyle: newStyle });
+            this.renderPropsPanel();
+            const activeFloor = dcState.getActiveFloor();
+            if (activeFloor) this.rebuildThreeScene(activeFloor);
           });
           el.querySelector(`${prefix}dc-rack-edit`)?.addEventListener('click', () => this.showEditRackDialog(rack));
           el.querySelector(`${prefix}dc-rack-duplicate`)?.addEventListener('click', () => {
@@ -2481,6 +2495,23 @@ export class BuildFloorView {
     menu.innerHTML = `
       <div class="dc-menu-header">${rack.name} (${rack.heightU}U ${rack.type.toUpperCase()})</div>
       <div class="dc-menu-item primary" id="cm-work">⚙ Work on this Rack (Mount Devices)</div>
+      
+      <div class="dc-menu-separator"></div>
+      <div class="dc-menu-section-title">📊 3D HUD GAUGE DESIGN</div>
+      <div class="dc-menu-item ${(rack.gaugeStyle ?? 'radial') === 'radial' ? 'primary' : ''}" id="cm-gauge-radial">
+        ${(rack.gaugeStyle ?? 'radial') === 'radial' ? '● ' : '○ '}Radial Dual Arc Dial (Classic)
+      </div>
+      <div class="dc-menu-item ${rack.gaugeStyle === 'linear' ? 'primary' : ''}" id="cm-gauge-linear">
+        ${rack.gaugeStyle === 'linear' ? '● ' : '○ '}Linear Telemetry Dashboard (New)
+      </div>
+      <div class="dc-menu-item" id="cm-gauge-all-radial">
+        ⚡ Apply Radial Dial to All Racks
+      </div>
+      <div class="dc-menu-item" id="cm-gauge-all-linear">
+        ⚡ Apply Linear Dashboard to All Racks
+      </div>
+
+      <div class="dc-menu-separator"></div>
       <div class="dc-menu-item" id="cm-import-json">📥 Import Rack Config (.json)</div>
       <div class="dc-menu-item" id="cm-export-json">📤 Export Rack Config (.json)</div>
       <div class="dc-menu-item" id="cm-zoom">🔍 Zoom to Rack (Hotkey: Z)</div>
@@ -2496,6 +2527,40 @@ export class BuildFloorView {
     const close = () => menu.remove();
 
     menu.querySelector('#cm-work')?.addEventListener('click', () => { close(); this.workOnRack(rack); });
+    menu.querySelector('#cm-gauge-radial')?.addEventListener('click', () => {
+      close();
+      dcState.updateRack(rack.id, { gaugeStyle: 'radial' });
+      this.renderPropsPanel();
+      const currentFloor = dcState.getActiveFloor();
+      if (currentFloor) this.rebuildThreeScene(currentFloor);
+      eventBus.emit('notification', { message: `Set ${rack.name} HUD to Radial Dual Arc Dial`, type: 'info' });
+    });
+    menu.querySelector('#cm-gauge-linear')?.addEventListener('click', () => {
+      close();
+      dcState.updateRack(rack.id, { gaugeStyle: 'linear' });
+      this.renderPropsPanel();
+      const currentFloor = dcState.getActiveFloor();
+      if (currentFloor) this.rebuildThreeScene(currentFloor);
+      eventBus.emit('notification', { message: `Set ${rack.name} HUD to Linear Telemetry Dashboard`, type: 'success' });
+    });
+    menu.querySelector('#cm-gauge-all-radial')?.addEventListener('click', () => {
+      close();
+      const currentFloor = dcState.getActiveFloor();
+      if (!currentFloor) return;
+      currentFloor.racks.forEach(r => dcState.updateRack(r.id, { gaugeStyle: 'radial' }));
+      this.renderPropsPanel();
+      this.rebuildThreeScene(currentFloor);
+      eventBus.emit('notification', { message: `Applied Radial Dial gauge style to all ${currentFloor.racks.length} racks`, type: 'info' });
+    });
+    menu.querySelector('#cm-gauge-all-linear')?.addEventListener('click', () => {
+      close();
+      const currentFloor = dcState.getActiveFloor();
+      if (!currentFloor) return;
+      currentFloor.racks.forEach(r => dcState.updateRack(r.id, { gaugeStyle: 'linear' }));
+      this.renderPropsPanel();
+      this.rebuildThreeScene(currentFloor);
+      eventBus.emit('notification', { message: `Applied Linear Dashboard gauge style to all ${currentFloor.racks.length} racks`, type: 'success' });
+    });
     menu.querySelector('#cm-import-json')?.addEventListener('click', () => { close(); this.importRackJSON(rack.id); });
     menu.querySelector('#cm-export-json')?.addEventListener('click', () => { close(); this.exportRackJSON(rack.id); });
     menu.querySelector('#cm-zoom')?.addEventListener('click', () => { close(); this.zoomToSelectedRack(); });
@@ -3168,6 +3233,12 @@ export class BuildFloorView {
         <label>Manufacturer<input id="dr-mfr" type="text" value="${rack.manufacturer || ''}" class="dc-input"/></label>
         <label>Model Number<input id="dr-model" type="text" value="${rack.model || ''}" class="dc-input"/></label>
         <label>Max Power Load (kW)<input id="dr-power" type="number" value="${rack.maxPowerKw ?? 20}" min="1" max="200" step="1" class="dc-input"/></label>
+        <label>3D HUD Gauge Design
+          <select id="dr-gauge-style" class="dc-input">
+            <option value="radial"${(rack.gaugeStyle ?? 'radial') === 'radial' ? ' selected' : ''}>Radial Dual Arc Dial (Classic)</option>
+            <option value="linear"${rack.gaugeStyle === 'linear' ? ' selected' : ''}>Linear Telemetry Dashboard (Modern)</option>
+          </select>
+        </label>
         <label>Cabinet Color<input id="dr-color" type="color" value="${rack.color || '#1e3a5f'}" class="dc-input" style="height:36px;padding:2px;"/></label>
       </div>
     `, 'Save Rack Properties', () => {
@@ -3181,6 +3252,7 @@ export class BuildFloorView {
       const mfr = (document.getElementById('dr-mfr') as HTMLInputElement).value.trim();
       const model = (document.getElementById('dr-model') as HTMLInputElement).value.trim();
       const maxPowerKw = parseFloat((document.getElementById('dr-power') as HTMLInputElement).value) || (rack.maxPowerKw ?? 20);
+      const gaugeStyle = (document.getElementById('dr-gauge-style') as HTMLSelectElement).value as DcGaugeStyle;
       const color = (document.getElementById('dr-color') as HTMLInputElement).value || rack.color;
 
       dcState.updateRack(rack.id, {
@@ -3195,6 +3267,7 @@ export class BuildFloorView {
         model: model || undefined,
         color,
         maxPowerKw,
+        gaugeStyle,
       });
       this.refresh();
       return true;
@@ -4327,14 +4400,21 @@ export class BuildFloorView {
         rackGroup.updateMatrixWorld(true);
       }
 
-      // 3D Floating Radial Gauge HUD (Power Consumption & Rack Load)
-      const hudCanvas = this.createRackHUDGaugeCanvas(dcRack, rackDevices, rackData);
+      // 3D Floating Gauge HUD (Radial Dial or Linear Telemetry Dashboard)
+      const gaugeStyle = dcRack.gaugeStyle || 'radial';
+      const hudCanvas = gaugeStyle === 'linear'
+        ? this.createRackHUDLinearDashboardCanvas(dcRack, rackDevices, rackData)
+        : this.createRackHUDGaugeCanvas(dcRack, rackDevices, rackData);
       const labelTex = new THREE.CanvasTexture(hudCanvas);
       labelTex.colorSpace = THREE.SRGBColorSpace;
+      labelTex.anisotropy = 16;
+      labelTex.generateMipmaps = true;
+      labelTex.minFilter = THREE.LinearMipmapLinearFilter;
+      labelTex.magFilter = THREE.LinearFilter;
       const spriteMat = new THREE.SpriteMaterial({ map: labelTex, depthTest: false, transparent: true });
       const sprite = new THREE.Sprite(spriteMat);
-      // Width 490mm in 3D world (25% reduction from 650mm), height proportional (1024x768 -> 367.5mm)
-      const spriteW = 490;
+      // Width in 3D world: 520mm for linear dashboard or 490mm for radial dial, height proportional
+      const spriteW = gaugeStyle === 'linear' ? 520 : 490;
       const spriteH = spriteW * (hudCanvas.height / hudCanvas.width);
       sprite.scale.set(spriteW, spriteH, 1);
       
@@ -4342,8 +4422,9 @@ export class BuildFloorView {
       sprite.center.set(0.5, 0);
       const topY = (isFinite(initBox.max.y) ? initBox.max.y : totalHMm / 2) + 15;
       sprite.position.set(0, topY, 0);
-      sprite.userData = { isDynamic: true, rackId: dcRack.id };
+      sprite.userData = { isDynamic: true, rackId: dcRack.id, isGauge: true };
       rackGroup.add(sprite);
+      this.rackMeshMap.set(sprite, dcRack.id);
 
       this.threeScene!.add(rackGroup);
 
@@ -4362,6 +4443,541 @@ export class BuildFloorView {
     }
 
     this.lastRenderedFloorId = floor.id;
+  }
+
+  private createRackHUDLinearDashboardCanvas(dcRack: DcRack, rackDevices: DeviceData[], _rackData: RackData): HTMLCanvasElement {
+    const W = 1024;
+    const H = 600;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d')!;
+
+    // 1. Calculations for Real-time Power & Space Load
+    let totalWatts = 0;
+    let occupiedU = 0;
+    const totalU = dcRack.heightU || 42;
+
+    rackDevices.forEach(d => {
+      const template = getTemplate(d.templateId);
+      const isPdu = template?.category === 'pdu' || d.templateId?.includes('pdu');
+      if (!isPdu) {
+        totalWatts += getDevicePowerWatts(d);
+        if (template?.mountType !== 'side' && !d.sideMountPosition) {
+          occupiedU += (template?.heightUnits ?? 1);
+        }
+      }
+    });
+
+    const maxKw = dcRack.maxPowerKw && dcRack.maxPowerKw > 0 ? dcRack.maxPowerKw : 20;
+    const powerKw = totalWatts / 1000;
+    const loadPercent = Math.min(100, Math.round((occupiedU / totalU) * 1000) / 10);
+    const powerRatio = Math.max(0, Math.min(1, powerKw / maxKw));
+    const loadRatio = Math.max(0, Math.min(1, loadPercent / 100));
+
+    const powerHeadroomKw = Math.max(0, maxKw - powerKw);
+    const powerHeadroomPct = Math.max(0, Math.min(100, Math.round((powerHeadroomKw / maxKw) * 100)));
+    const freeU = Math.max(0, totalU - occupiedU);
+    const rackHeadroomPct = Math.max(0, 100 - Math.round(loadPercent));
+
+    // Status evaluation
+    let statusText = 'OK / OPTIMAL';
+    let statusColor = '#00e676';
+    if (loadPercent >= 90 || powerRatio >= 0.9) {
+      statusText = 'CRITICAL';
+      statusColor = '#ff1744';
+    } else if (loadPercent >= 70 || powerRatio >= 0.7) {
+      statusText = 'HIGH LOAD';
+      statusColor = '#ff9100';
+    } else if (loadPercent >= 50 || powerRatio >= 0.5) {
+      statusText = 'MODERATE';
+      statusColor = '#ffea00';
+    }
+
+    // 2. Outer Card Backdrop (Glassmorphism dark navy panel with rounded corners and glowing border)
+    const cardRadius = 22;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+    ctx.shadowBlur = 24;
+    ctx.fillStyle = 'rgba(10, 18, 30, 0.94)';
+    ctx.strokeStyle = '#1e3048';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(8, 8, W - 16, H - 16, cardRadius);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // Inner subtle card gradient glow
+    const bgGrad = ctx.createLinearGradient(0, 8, 0, H - 8);
+    bgGrad.addColorStop(0, 'rgba(30, 58, 90, 0.25)');
+    bgGrad.addColorStop(0.3, 'rgba(15, 28, 45, 0.1)');
+    bgGrad.addColorStop(1, 'rgba(6, 12, 22, 0.4)');
+    ctx.fillStyle = bgGrad;
+    ctx.beginPath();
+    ctx.roundRect(10, 10, W - 20, H - 20, cardRadius - 2);
+    ctx.fill();
+
+    // Helper icon renderers
+    const drawLightning = (cx: number, cy: number, size: number, color: string) => {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(cx + size * 0.1, cy - size * 0.45);
+      ctx.lineTo(cx - size * 0.35, cy + size * 0.05);
+      ctx.lineTo(cx - size * 0.05, cy + size * 0.05);
+      ctx.lineTo(cx - size * 0.15, cy + size * 0.48);
+      ctx.lineTo(cx + size * 0.38, cy - size * 0.05);
+      ctx.lineTo(cx + size * 0.05, cy - size * 0.05);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    };
+
+    const drawServerIcon = (cx: number, cy: number, size: number, color: string) => {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
+      const w = size * 0.78;
+      const h = size * 0.30;
+      // Top unit
+      ctx.beginPath();
+      ctx.roundRect(cx - w / 2, cy - size * 0.38, w, h, 3);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx - w / 2 + 5, cy - size * 0.38 + h / 2, 1.8, 0, Math.PI * 2);
+      ctx.arc(cx - w / 2 + 11, cy - size * 0.38 + h / 2, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      // Bottom unit
+      ctx.beginPath();
+      ctx.roundRect(cx - w / 2, cy + size * 0.08, w, h, 3);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx - w / 2 + 5, cy + size * 0.08 + h / 2, 1.8, 0, Math.PI * 2);
+      ctx.arc(cx - w / 2 + 11, cy + size * 0.08 + h / 2, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    };
+
+    const drawGaugeIcon = (cx: number, cy: number, size: number, color: string) => {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3.5;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(cx, cy + 3, size * 0.38, -Math.PI * 0.8, Math.PI * -0.2, false);
+      ctx.stroke();
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + 3);
+      ctx.lineTo(cx + size * 0.22, cy - size * 0.16);
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    // Shared Meter Bar Multi-stop gradient
+    const createMeterGradient = (x1: number, x2: number) => {
+      const grad = ctx.createLinearGradient(x1, 0, x2, 0);
+      grad.addColorStop(0.00, '#00e676'); // Vivid Green
+      grad.addColorStop(0.25, '#76ff03'); // Lime
+      grad.addColorStop(0.50, '#ffea00'); // Yellow
+      grad.addColorStop(0.70, '#ff9100'); // Orange
+      grad.addColorStop(1.00, '#ff1744'); // Red
+      return grad;
+    };
+
+    // ── SECTION 1: POWER CONSUMPTION (Upper Card) ──
+    const sec1X = 24;
+    const sec1Y = 24;
+    const sec1W = W - 48;
+    const sec1H = 172;
+
+    ctx.fillStyle = 'rgba(13, 24, 38, 0.75)';
+    ctx.strokeStyle = '#1e3048';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(sec1X, sec1Y, sec1W, sec1H, 16);
+    ctx.fill();
+    ctx.stroke();
+
+    // Power Icon Circle
+    const pIconX = sec1X + 42;
+    const pIconY = sec1Y + 44;
+    ctx.fillStyle = 'rgba(0, 230, 118, 0.12)';
+    ctx.strokeStyle = '#00e676';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(pIconX, pIconY, 24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    drawLightning(pIconX, pIconY, 28, '#00ff88');
+
+    // Title & Subtitle
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 22px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('POWER CONSUMPTION', sec1X + 80, sec1Y + 34);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '500 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Total IT Load', sec1X + 80, sec1Y + 58);
+
+    // Digital Power Readout (Right aligned)
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffd600';
+    ctx.font = 'bold 42px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(powerKw.toFixed(1), sec1X + sec1W - 74, sec1Y + 44);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '600 20px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('KW', sec1X + sec1W - 64, sec1Y + 44);
+
+    // Power Meter Bar
+    const pBarX = sec1X + 28;
+    const pBarY = sec1Y + 98;
+    const pBarW = sec1W - 56;
+    const pBarH = 22;
+    const pBarR = 11;
+
+    // Outer glow under bar
+    ctx.save();
+    ctx.shadowColor = powerRatio > 0.7 ? 'rgba(255, 23, 68, 0.35)' : powerRatio > 0.4 ? 'rgba(255, 234, 0, 0.35)' : 'rgba(0, 230, 118, 0.35)';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = createMeterGradient(pBarX, pBarX + pBarW);
+    ctx.beginPath();
+    ctx.roundRect(pBarX, pBarY, pBarW, pBarH, pBarR);
+    ctx.fill();
+    ctx.restore();
+
+    // Dark track border & inner highlight
+    ctx.strokeStyle = '#223852';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(pBarX, pBarY, pBarW, pBarH, pBarR);
+    ctx.stroke();
+
+    // Scale Ticks & Labels for Power (0 to maxKw, 8 intervals)
+    const pTicks = 8;
+    for (let i = 0; i <= pTicks; i++) {
+      const frac = i / pTicks;
+      const tx = pBarX + frac * pBarW;
+      
+      // Divider line through bar
+      if (i > 0 && i < pTicks) {
+        ctx.strokeStyle = 'rgba(10, 18, 30, 0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(tx, pBarY);
+        ctx.lineTo(tx, pBarY + pBarH);
+        ctx.stroke();
+      }
+
+      // Tick mark below bar
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(tx, pBarY + pBarH + 2);
+      ctx.lineTo(tx, pBarY + pBarH + 8);
+      ctx.stroke();
+
+      // Tick label
+      const val = (frac * maxKw);
+      const labelStr = val % 1 === 0 ? String(val) : val.toFixed(1);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '600 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(i === pTicks ? `${labelStr} KW` : labelStr, tx + (i === pTicks ? 8 : 0), pBarY + pBarH + 12);
+    }
+
+    // Power Indicator Cursor (Downward Triangle + Vertical Line)
+    const pCurX = Math.max(pBarX + 6, Math.min(pBarX + pBarW - 6, pBarX + powerRatio * pBarW));
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 8;
+    // Triangle pointing down
+    ctx.beginPath();
+    ctx.moveTo(pCurX - 8, pBarY - 14);
+    ctx.lineTo(pCurX + 8, pBarY - 14);
+    ctx.lineTo(pCurX, pBarY - 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Vertical indicator line through bar
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(pCurX, pBarY - 2);
+    ctx.lineTo(pCurX, pBarY + pBarH + 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // ── SECTION 2: RACK LOAD (Middle Card) ──
+    const sec2X = 24;
+    const sec2Y = 212;
+    const sec2W = W - 48;
+    const sec2H = 172;
+
+    ctx.fillStyle = 'rgba(13, 24, 38, 0.75)';
+    ctx.strokeStyle = '#1e3048';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(sec2X, sec2Y, sec2W, sec2H, 16);
+    ctx.fill();
+    ctx.stroke();
+
+    // Rack Load Icon Circle
+    const rIconX = sec2X + 42;
+    const rIconY = sec2Y + 44;
+    ctx.fillStyle = 'rgba(0, 229, 255, 0.12)';
+    ctx.strokeStyle = '#00e5ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(rIconX, rIconY, 24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    drawServerIcon(rIconX, rIconY, 28, '#00e5ff');
+
+    // Title & Subtitle
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 22px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('RACK LOAD', sec2X + 80, sec2Y + 34);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '500 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Used Rack Capacity', sec2X + 80, sec2Y + 58);
+
+    // Digital Load Readout (Right aligned)
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffd600';
+    ctx.font = 'bold 42px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(`${Math.round(loadPercent)}`, sec2X + sec2W - 60, sec2Y + 44);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '600 20px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('%', sec2X + sec2W - 52, sec2Y + 44);
+
+    // Rack Load Meter Bar
+    const rBarX = sec2X + 28;
+    const rBarY = sec2Y + 98;
+    const rBarW = sec2W - 56;
+    const rBarH = 22;
+    const rBarR = 11;
+
+    // Outer glow under bar
+    ctx.save();
+    ctx.shadowColor = loadRatio > 0.7 ? 'rgba(255, 23, 68, 0.35)' : loadRatio > 0.4 ? 'rgba(255, 234, 0, 0.35)' : 'rgba(0, 230, 118, 0.35)';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = createMeterGradient(rBarX, rBarX + rBarW);
+    ctx.beginPath();
+    ctx.roundRect(rBarX, rBarY, rBarW, rBarH, rBarR);
+    ctx.fill();
+    ctx.restore();
+
+    // Dark track border & inner highlight
+    ctx.strokeStyle = '#223852';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(rBarX, rBarY, rBarW, rBarH, rBarR);
+    ctx.stroke();
+
+    // Scale Ticks & Labels for Rack Load (0 to 100%, 10 intervals of 10%)
+    const rTicks = 10;
+    for (let i = 0; i <= rTicks; i++) {
+      const frac = i / rTicks;
+      const tx = rBarX + frac * rBarW;
+      
+      // Divider line through bar
+      if (i > 0 && i < rTicks) {
+        ctx.strokeStyle = 'rgba(10, 18, 30, 0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(tx, rBarY);
+        ctx.lineTo(tx, rBarY + rBarH);
+        ctx.stroke();
+      }
+
+      // Tick mark below bar
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(tx, rBarY + rBarH + 2);
+      ctx.lineTo(tx, rBarY + rBarH + 8);
+      ctx.stroke();
+
+      // Tick label
+      const val = i * 10;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '600 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(i === rTicks ? `${val} %` : String(val), tx + (i === rTicks ? 6 : 0), rBarY + rBarH + 12);
+    }
+
+    // Rack Load Indicator Cursor (Downward Triangle + Vertical Line)
+    const rCurX = Math.max(rBarX + 6, Math.min(rBarX + rBarW - 6, rBarX + loadRatio * rBarW));
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(rCurX - 8, rBarY - 14);
+    ctx.lineTo(rCurX + 8, rBarY - 14);
+    ctx.lineTo(rCurX, rBarY - 2);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(rCurX, rBarY - 2);
+    ctx.lineTo(rCurX, rBarY + rBarH + 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // ── SECTION 3: BOTTOM SUMMARY CARDS (4 Cards Row) ──
+    const row3Y = 400;
+    const row3H = 176;
+    const gap = 16;
+    const totalAvailW = W - 48; // 976
+    const cardW1 = 224;
+    const cardW2 = 224;
+    const cardW3 = 228;
+    const cardW4 = totalAvailW - (cardW1 + cardW2 + cardW3 + gap * 3); // 252
+
+    const c1X = 24;
+    const c2X = c1X + cardW1 + gap;
+    const c3X = c2X + cardW2 + gap;
+    const c4X = c3X + cardW3 + gap;
+
+    // ── Card 1: Power Headroom ──
+    ctx.fillStyle = 'rgba(13, 24, 38, 0.85)';
+    ctx.strokeStyle = '#1e3048';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(c1X, row3Y, cardW1, row3H, 14);
+    ctx.fill();
+    ctx.stroke();
+
+    drawLightning(c1X + 34, row3Y + 84, 32, '#00e676');
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('POWER HEADROOM', c1X + 62, row3Y + 40);
+
+    ctx.fillStyle = '#00e676';
+    ctx.font = 'bold 26px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(`${powerHeadroomKw.toFixed(1)} KW`, c1X + 62, row3Y + 82);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '500 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(`(${powerHeadroomPct}% available)`, c1X + 62, row3Y + 124);
+
+    // ── Card 2: Rack Headroom ──
+    ctx.fillStyle = 'rgba(13, 24, 38, 0.85)';
+    ctx.strokeStyle = '#1e3048';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(c2X, row3Y, cardW2, row3H, 14);
+    ctx.fill();
+    ctx.stroke();
+
+    drawServerIcon(c2X + 34, row3Y + 84, 32, '#00e5ff');
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('RACK HEADROOM', c2X + 62, row3Y + 40);
+
+    ctx.fillStyle = '#00e676';
+    ctx.font = 'bold 26px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(`${rackHeadroomPct} %`, c2X + 62, row3Y + 82);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '500 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(`(${freeU}U available)`, c2X + 62, row3Y + 124);
+
+    // ── Card 3: Overall Status ──
+    ctx.fillStyle = 'rgba(13, 24, 38, 0.85)';
+    ctx.strokeStyle = '#1e3048';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(c3X, row3Y, cardW3, row3H, 14);
+    ctx.fill();
+    ctx.stroke();
+
+    drawGaugeIcon(c3X + 36, row3Y + 84, 34, '#ffd600');
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('OVERALL STATUS', c3X + 68, row3Y + 48);
+
+    ctx.fillStyle = statusColor;
+    ctx.font = 'bold 20px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(statusText, c3X + 68, row3Y + 98);
+
+    // ── Card 4: Legend Table ──
+    ctx.fillStyle = 'rgba(13, 24, 38, 0.85)';
+    ctx.strokeStyle = '#1e3048';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(c4X, row3Y, cardW4, row3H, 14);
+    ctx.fill();
+    ctx.stroke();
+
+    const legendItems = [
+      { color: '#00e676', name: 'Normal', range: `0 – 50% / 0 – ${(maxKw * 0.5).toFixed(0)} KW` },
+      { color: '#ffea00', name: 'Moderate', range: `50 – 70% / ${(maxKw * 0.5).toFixed(0)} – ${(maxKw * 0.7).toFixed(0)} KW` },
+      { color: '#ff9100', name: 'High', range: `70 – 90% / ${(maxKw * 0.7).toFixed(0)} – ${(maxKw * 0.9).toFixed(0)} KW` },
+      { color: '#ff1744', name: 'Critical', range: `90 – 100% / ${(maxKw * 0.9).toFixed(0)} – ${maxKw.toFixed(0)} KW` },
+    ];
+
+    const lStartY = row3Y + 28;
+    const lRowGap = 34;
+
+    legendItems.forEach((item, idx) => {
+      const ly = lStartY + idx * lRowGap;
+      // Dot
+      ctx.fillStyle = item.color;
+      ctx.shadowColor = item.color;
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(c4X + 20, ly, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Label
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = '600 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(item.name, c4X + 34, ly);
+
+      // Range
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '500 12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(item.range, c4X + cardW4 - 14, ly);
+    });
+
+    return canvas;
   }
 
   private createRackHUDGaugeCanvas(dcRack: DcRack, rackDevices: DeviceData[], _rackData: RackData): HTMLCanvasElement {

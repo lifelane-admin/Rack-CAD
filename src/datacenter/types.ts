@@ -45,6 +45,8 @@ export type DcSpacingStandard =
   | 'inrow-300mm'
   | 'inrow-600mm';
 
+export type DcGaugeStyle = 'radial' | 'linear';
+
 export interface DcRack {
   id: string;       // e.g. "RACK-001"
   name: string;
@@ -66,6 +68,7 @@ export interface DcRack {
   leftPduId?: string;
   rightPduId?: string;
   maxPowerKw?: number; // User-defined maximum power capacity in kW (default 20)
+  gaugeStyle?: DcGaugeStyle; // 'radial' | 'linear'
 }
 
 
