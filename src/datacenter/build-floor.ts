@@ -2153,9 +2153,12 @@ export class BuildFloorView {
       item.addEventListener('click', () => {
         const idx = parseInt(item.getAttribute('data-rack-idx') || '0', 10);
         const selRack = racks[idx];
-        const selDevices = allDevices.filter(d => d.rackId === selRack.id);
+        const selDevices = allDevices.filter(d => d.rackId === selRack.id || !d.rackId);
+        const selPortIds = new Set<string>();
+        selDevices.forEach(d => (d.ports || []).forEach(p => selPortIds.add(p.id)));
+        const selCables = allCables.filter(c => (c.sourcePortId && selPortIds.has(c.sourcePortId)) || (c.destPortId && selPortIds.has(c.destPortId)));
         modalEl.remove();
-        this.applyImportedRackConfig(targetDcRack, selRack, selDevices, customTemplates, allCables);
+        this.applyImportedRackConfig(targetDcRack, selRack, selDevices, customTemplates, selCables.length > 0 ? selCables : allCables);
       });
     });
   }
@@ -2187,72 +2190,54 @@ export class BuildFloorView {
     });
     const otherCables = (s.cables || []).filter(c => (!c.sourcePortId || !oldTargetPortIds.has(c.sourcePortId)) && (!c.destPortId || !oldTargetPortIds.has(c.destPortId)));
 
-    // 3. Remap devices & port IDs to target rack
-    const portIdMap = new Map<string, string>(); // oldPortId -> newPortId
-    const deviceIdMap = new Map<string, string>(); // oldDevId -> newDevId
+    // 3. Remap devices & cables to target rack (preserving exact port IDs so connections stay intact)
+    const existingOtherDevIds = new Set(otherDevices.map(d => d.id));
+    const isCollision = sourceDevices.some(d => existingOtherDevIds.has(d.id));
 
-    const newDevices: DeviceData[] = sourceDevices.map(d => {
-      const newDevId = `dev-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
-      deviceIdMap.set(d.id, newDevId);
+    let newDevices: DeviceData[] = [];
+    let newCables: CableData[] = [];
 
-      const devPorts = (d.ports || []).map((p: any) => {
-        let newPortId = p.id;
-        if (p.id.includes(d.id)) {
-          newPortId = p.id.replace(d.id, newDevId);
-        } else if (p.id.startsWith('port-') || p.id.startsWith('ear-')) {
-          newPortId = `${newDevId}-${p.id}`;
-        }
-        portIdMap.set(p.id, newPortId);
+    if (!isCollision) {
+      newDevices = sourceDevices.map(d => ({
+        ...d,
+        rackId: targetDcRack.id,
+      }));
+      newCables = sourceCables.map(c => ({
+        ...c,
+        id: c.id || `cable-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`,
+      }));
+    } else {
+      const prefix = `${targetDcRack.id}-`;
+      const portIdMap = new Map<string, string>();
+      newDevices = sourceDevices.map(d => {
+        const newDevId = `${prefix}${d.id}`;
+        const newPorts = (d.ports || []).map((p: any) => {
+          const newPortId = `${prefix}${p.id}`;
+          portIdMap.set(p.id, newPortId);
+          return {
+            ...p,
+            id: newPortId,
+            deviceId: newDevId,
+          };
+        });
         return {
-          ...p,
-          id: newPortId,
-          deviceId: newDevId,
-          connected: false,
-          cableId: null,
+          ...d,
+          id: newDevId,
+          rackId: targetDcRack.id,
+          ports: newPorts,
         };
       });
 
-      return {
-        ...d,
-        id: newDevId,
-        rackId: targetDcRack.id,
-        ports: devPorts,
-      };
-    });
-
-    // 4. Remap cables
-    const newCables: CableData[] = [];
-    for (const cable of sourceCables) {
-      const newSrcPortId = cable.sourcePortId ? (portIdMap.get(cable.sourcePortId) || cable.sourcePortId) : null;
-      const newDestPortId = cable.destPortId ? (portIdMap.get(cable.destPortId) || cable.destPortId) : null;
-
-      if (newSrcPortId) {
-        const newCableId = `cable-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
-        const remappedCable: CableData = {
-          ...cable,
-          id: newCableId,
-          sourcePortId: newSrcPortId,
-          destPortId: newDestPortId,
-          anchorPoints: [],
-          anchorsLocked: false,
-          bendPoints: [],
-          floatingSource: null,
-          floatingDest: null,
+      newCables = sourceCables.map(c => {
+        const newSrc = c.sourcePortId ? (portIdMap.get(c.sourcePortId) || `${prefix}${c.sourcePortId}`) : null;
+        const newDest = c.destPortId ? (portIdMap.get(c.destPortId) || `${prefix}${c.destPortId}`) : null;
+        return {
+          ...c,
+          id: `cable-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`,
+          sourcePortId: newSrc,
+          destPortId: newDest,
         };
-        newCables.push(remappedCable);
-
-        // Update port connection states in newDevices
-        for (const dev of newDevices) {
-          if (dev.ports) {
-            for (const port of dev.ports) {
-              if (port.id === newSrcPortId || (newDestPortId && port.id === newDestPortId)) {
-                port.connected = true;
-                port.cableId = newCableId;
-              }
-            }
-          }
-        }
-      }
+      });
     }
 
     // 5. Clean / purge foreign ghost racks, keeping ONLY the target rack and existing valid DC racks
