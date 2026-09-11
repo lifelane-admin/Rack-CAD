@@ -928,6 +928,26 @@ export class App {
       this.setActiveView(view);
     });
 
+    (eventBus as any).on('view:focus-rack', (rackId: string) => {
+      const rack = stateManager.getRack(rackId);
+      if (!rack) return;
+      const viewport = document.getElementById('canvas-viewport');
+      if (!viewport) return;
+      const vpW = viewport.clientWidth || 1000;
+      const vpH = viewport.clientHeight || 800;
+      const rackW = RACK_CONSTANTS.RACK_OUTER_WIDTH + (rack.leftCableManagerWidth ? 100 : 0) + (rack.rightCableManagerWidth ? 100 : 0);
+      const rackH = RACK_CONSTANTS.RACK_PADDING_TOP + rack.units * RACK_CONSTANTS.RU_HEIGHT + RACK_CONSTANTS.RACK_PADDING_BOTTOM;
+
+      const scale = Math.min(Math.max((vpH - 140) / rackH, 0.45), 1.05);
+      const targetScreenX = (vpW - rackW * scale) / 2;
+      const targetScreenY = Math.max(30, (vpH - rackH * scale) / 2);
+
+      const transX = targetScreenX - rack.x * scale;
+      const transY = targetScreenY - rack.y * scale;
+
+      this.canvas.setTransform({ x: transX, y: transY, scale });
+    });
+
     eventBus.on('cloud-shape:prime', (kind) => {
       const shape = CLOUD_SHAPE_KINDS.find(s => s.kind === kind);
       this.pendingCloudContainerSpec = { kind, label: shape?.label ?? kind };
@@ -2161,7 +2181,10 @@ export class App {
         
         if (finalRack) {
           const sState = stateManager.getState();
-          const overlap = sState.racks.some(r => r.id !== rackId && Math.abs(r.x - finalRack.x) < RACK_CONSTANTS.RACK_OUTER_WIDTH - 20);
+          const visibleRacks = sState.activeElevationRackId
+            ? sState.racks.filter(r => r.id === sState.activeElevationRackId)
+            : sState.racks;
+          const overlap = visibleRacks.some(r => r.id !== rackId && Math.abs(r.x - finalRack.x) < RACK_CONSTANTS.RACK_OUTER_WIDTH - 20);
           if (overlap) {
             if (this.dragStartRacksState) {
               stateManager.setState({ racks: this.dragStartRacksState }, true);
@@ -3029,9 +3052,13 @@ export class App {
           const vcmTpl = VCM_TEMPLATES.find(v => v.id === targetVcmId);
           const widthVal: any = vcmTpl?.width || (templateId === 'vertical-mgr-6' ? '6-inch' : '4-inch');
 
+          const candidateRacks = s.activeElevationRackId
+            ? s.racks.filter(r => r.id === s.activeElevationRackId)
+            : s.racks;
+
           let closestRack: RackData | null = null;
           let minDist = Infinity;
-          for (const rack of s.racks) {
+          for (const rack of candidateRacks) {
             const rx = rack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH / 2;
             const ry = rack.y + (rack.units * RACK_CONSTANTS.RU_HEIGHT) / 2;
             const dist = Math.sqrt(Math.pow(worldPos.x - rx, 2) + Math.pow(worldPos.y - ry, 2));
@@ -3078,9 +3105,13 @@ export class App {
 
         // Special handling for legacy vertical-mgr-4 / vertical-mgr-6 items
         if (template.id === 'vertical-mgr-4' || template.id === 'vertical-mgr-6') {
+          const candidateRacks = s.activeElevationRackId
+            ? s.racks.filter(r => r.id === s.activeElevationRackId)
+            : s.racks;
+
           let closestRack: RackData | null = null;
           let minDist = Infinity;
-          for (const rack of s.racks) {
+          for (const rack of candidateRacks) {
             const rx = rack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH / 2;
             const ry = rack.y + (rack.units * RACK_CONSTANTS.RU_HEIGHT) / 2;
             const dist = Math.sqrt(Math.pow(worldPos.x - rx, 2) + Math.pow(worldPos.y - ry, 2));
@@ -3114,9 +3145,13 @@ export class App {
 
         // Handle side-mount devices (vertical PDUs)
         if (template.mountType === 'side') {
+          const candidateRacks = s.activeElevationRackId
+            ? s.racks.filter(r => r.id === s.activeElevationRackId)
+            : s.racks;
+
           let closestRack: RackData | null = null;
           let minDist = Infinity;
-          for (const rack of s.racks) {
+          for (const rack of candidateRacks) {
             const rx = rack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH / 2;
             const ry = rack.y + (rack.units * RACK_CONSTANTS.RU_HEIGHT) / 2;
             const dist = Math.sqrt(Math.pow(worldPos.x - rx, 2) + Math.pow(worldPos.y - ry, 2));
@@ -3173,8 +3208,11 @@ export class App {
 
         // Find which rack was dropped on
         let targetRack: RackData | null = null;
+        const candidateRacks = s.activeElevationRackId
+          ? s.racks.filter(r => r.id === s.activeElevationRackId)
+          : s.racks;
 
-        for (const rack of s.racks) {
+        for (const rack of candidateRacks) {
           const rackLeft = rack.x;
           const rackRight = rack.x + RACK_CONSTANTS.RACK_OUTER_WIDTH;
           const rackTop = rack.y;
@@ -3191,8 +3229,8 @@ export class App {
         const wasDroppedInsideRack = targetRack !== null;
 
         if (!targetRack) {
-          // If not dropped on a rack, use the first rack
-          targetRack = s.racks[0];
+          // If not dropped directly on a rack, use the active elevation rack (or first candidate)
+          targetRack = candidateRacks[0] || s.racks[0];
           if (!targetRack) return;
         }
 
@@ -5082,12 +5120,15 @@ export class App {
       if (s.showLegends) {
         // While actively dragging, splice in the transient live offset for just that rack —
         // never written to real state, so nothing hits the undo stack until mouseup commits it.
-        const racksForPreview = this.summaryCardDragPreview
+        const racksForPreview = (this.summaryCardDragPreview
           ? s.racks.map(r => r.id === this.summaryCardDragPreview!.rackId
               ? { ...r, summaryCardOffset: this.summaryCardDragPreview!.offset }
               : r)
-          : s.racks;
-        appendExportSummaryOverlay(summaryPreviewLayer, racksForPreview, s.devices, s.cables, s.customLegendItems, { draggable: true });
+          : s.racks).filter(r => s.activeElevationRackId ? r.id === s.activeElevationRackId : true);
+        const devicesForPreview = s.activeElevationRackId
+          ? s.devices.filter(d => d.rackId === s.activeElevationRackId)
+          : s.devices;
+        appendExportSummaryOverlay(summaryPreviewLayer, racksForPreview, devicesForPreview, s.cables, s.customLegendItems, { draggable: true });
       }
     }
   }

@@ -1978,11 +1978,8 @@ export class BuildFloorView {
     });
 
     const otherRacks = cleanRacks.filter(r => r.id !== rack.id);
-    let posX = existing ? existing.x : 220;
-    // Ensure posX does not collide with any other rack in 2D elevation canvas
-    while (otherRacks.some(r => Math.abs(r.x - posX) < 520)) {
-      posX += 520;
-    }
+    const posX = existing ? existing.x : 200;
+    const posY = existing ? existing.y : 40;
 
     const targetRack: RackData = {
       id: rack.id,
@@ -1993,7 +1990,7 @@ export class BuildFloorView {
       mounting: rack.mounting ?? 'floor',
       rackColor: rack.color ?? '#1e3a5f',
       x: posX,
-      y: existing ? existing.y : 60,
+      y: posY,
       leftCableManagerWidth: existing?.leftCableManagerWidth,
       rightCableManagerWidth: existing?.rightCableManagerWidth,
       leftPduId: existing?.leftPduId,
@@ -2009,6 +2006,10 @@ export class BuildFloorView {
     });
 
     eventBus.emit('view:switch' as any, 'rack');
+    setTimeout(() => {
+      eventBus.emit('view:focus-rack' as any, rack.id);
+    }, 60);
+
     eventBus.emit('notification', {
       message: `Opened ${rack.name} in Rack Elevation Editor. Place your servers & active devices!`,
       type: 'info',
