@@ -1,7 +1,7 @@
 import { eventBus } from '../core/event-bus';
 import { stateManager } from '../core/state';
 import { buildReport, ReportMetadata } from '../export/report-builder';
-import { DeviceTemplate, RACK_CONSTANTS, RackData, DeviceData, CableData } from '../core/types';
+import { DeviceTemplate, RACK_CONSTANTS, RackData, DeviceData, CableData, PortData } from '../core/types';
 import canvasCss from '../styles/canvas.css?raw';
 import reportsCss from '../styles/reports.css?raw';
 import { appendExportSummaryOverlay, Rect } from '../renderers/export-summary-overlay';
@@ -919,6 +919,11 @@ export function importJSON(jsonString: string): void {
       throw new Error('Unrecognized project JSON format');
     }
 
+    // Auto-repair missing switch faceplate ports and heal floating cable endpoints
+    const repaired = sanitizeAndRepairDevicesAndCables(devices, cables);
+    devices = repaired.devices;
+    cables = repaired.cables;
+
     // Merge custom templates: project file wins on ID conflict
     const projectTemplates: DeviceTemplate[] = project.customTemplates ?? [];
     const existingTemplates = stateManager.getState().customTemplates ?? [];
@@ -950,6 +955,118 @@ export function importJSON(jsonString: string): void {
     eventBus.emit('notification', { message: `Failed to load project: ${err}`, type: 'error' });
   }
 }
+
+/**
+ * Self-healing routine for imported devices and cables:
+ * 1. Ensures switch devices have faceplate ports (RJ45 / SFP) rather than just ear ports.
+ * 2. Re-connects unattached / floating cable endpoints to matching switch ports.
+ * 3. Unlocks rigid hardcoded canvas anchor points so clean orthogonal paths calculate automatically.
+ */
+export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables: CableData[]): { devices: DeviceData[], cables: CableData[] } {
+  // 1. Ensure switches have faceplate ports
+  const repairedDevices: DeviceData[] = devices.map(d => {
+    const isSwitch = d.templateId?.includes('switch') || (d as any).category === 'switch' || d.name?.toLowerCase().includes('switch');
+    const existingNonEarPorts = (d.ports || []).filter(p => !p.id.includes('-ear-'));
+    if (isSwitch && existingNonEarPorts.length === 0) {
+      const earPorts = (d.ports || []).filter(p => p.id.includes('-ear-'));
+      const numRj45 = (d.deviceConfig as any)?.rj45Count ?? 24;
+      const numSfp = (d.deviceConfig as any)?.sfpPlusCount ?? 4;
+      const facePorts: PortData[] = [];
+      const cols = Math.ceil(numRj45 / 2);
+      for (let i = 0; i < numRj45; i++) {
+        const col = Math.floor(i / 2);
+        const row = i % 2;
+        facePorts.push({
+          id: `${d.id}-port-${i}`,
+          deviceId: d.id,
+          name: `Port ${i + 1}`,
+          type: 'rj45',
+          relativeX: 50 + col * 18,
+          relativeY: row === 0 ? 6 : 14,
+          speed: '1 Gbps',
+          connected: false,
+          cableId: null,
+        });
+      }
+      for (let i = 0; i < numSfp; i++) {
+        facePorts.push({
+          id: `${d.id}-sfp-${i}`,
+          deviceId: d.id,
+          name: `SFP+ ${i + 1}`,
+          type: 'sfp',
+          relativeX: 50 + cols * 18 + 15 + i * 16,
+          relativeY: 8,
+          speed: '10 Gbps',
+          connected: false,
+          cableId: null,
+        });
+      }
+      return {
+        ...d,
+        ports: [...facePorts, ...earPorts]
+      };
+    }
+    return d;
+  });
+
+  // 2. Heal floating cables and unlock hardcoded anchors
+  const allPortsMap = new Map<string, PortData>();
+  repairedDevices.forEach(d => {
+    (d.ports || []).forEach(p => allPortsMap.set(p.id, p));
+  });
+
+  const repairedCables: CableData[] = cables.map((c, idx) => {
+    let destPortId = c.destPortId;
+    let floatingDest = c.floatingDest;
+    let anchorsLocked = c.anchorsLocked;
+    let anchorPoints = c.anchorPoints;
+
+    const isDestBroken = !destPortId || !allPortsMap.has(destPortId);
+    if (isDestBroken && (floatingDest || !destPortId)) {
+      const srcPort = c.sourcePortId ? allPortsMap.get(c.sourcePortId) : null;
+      const srcDev = srcPort ? repairedDevices.find(d => d.id === srcPort.deviceId) : null;
+      const targetRackId = srcDev?.rackId;
+      const switchesInRack = repairedDevices.filter(d => 
+        (!targetRackId || d.rackId === targetRackId) && 
+        (d.templateId?.includes('switch') || (d as any).category === 'switch' || d.name?.toLowerCase().includes('switch'))
+      );
+
+      if (switchesInRack.length > 0) {
+        const isTorB = c.type === 'ceph-secondary' || c.name?.includes('TOR B') || c.name?.includes('Secondary') || (idx % 2 === 1 && c.type !== 'idrac');
+        const targetSwitch = (isTorB && switchesInRack.length > 1) ? switchesInRack[1] : switchesInRack[0];
+        
+        let targetPort: PortData | null = null;
+        if (c.type === 'ceph-primary' || c.type === 'ceph-secondary' || c.type === 'live-migration') {
+          const availSfp = (targetSwitch.ports || []).find(p => p.type === 'sfp' && !p.connected && p.id !== destPortId);
+          if (availSfp) targetPort = availSfp;
+        }
+        if (!targetPort) {
+          const availRj45 = (targetSwitch.ports || []).find(p => p.type === 'rj45' && !p.id.includes('-ear-') && !p.connected && p.id !== destPortId);
+          if (availRj45) targetPort = availRj45;
+        }
+        if (targetPort) {
+          destPortId = targetPort.id;
+          floatingDest = null;
+          targetPort.connected = true;
+          targetPort.cableId = c.id;
+          anchorsLocked = false;
+          anchorPoints = [];
+        }
+      }
+    }
+
+    return {
+      ...c,
+      destPortId,
+      floatingDest,
+      anchorsLocked,
+      anchorPoints,
+    };
+  });
+
+  return { devices: repairedDevices, cables: repairedCables };
+}
+
 
 /**
  * Trigger a file download in the browser.

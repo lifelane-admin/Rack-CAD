@@ -8,8 +8,9 @@ import { RACK_PRESETS, SPACING_STANDARDS, RackPreset, SpacingStandardInfo } from
 import { stateManager } from '../core/state';
 import { eventBus } from '../core/event-bus';
 import { RackData, RACK_CONSTANTS, DeviceData, DeviceTemplate, CableData } from '../core/types';
-import { downloadFile } from '../utils/export';
+import { downloadFile, sanitizeAndRepairDevicesAndCables } from '../utils/export';
 import { buildDeviceMesh } from '../three/device-builder';
+
 import { getTemplate } from '../library/device-catalog';
 import { DEVICE_FACE_Z } from '../three/rack-builder';
 import {
@@ -2170,7 +2171,13 @@ export class BuildFloorView {
     sourceTemplates: DeviceTemplate[],
     sourceCables: CableData[] = []
   ) {
+    // Auto-repair missing switch ports and heal floating cable endpoints
+    const repaired = sanitizeAndRepairDevicesAndCables(sourceDevices, sourceCables);
+    sourceDevices = repaired.devices;
+    sourceCables = repaired.cables;
+
     const s = stateManager.getState();
+
 
     // 1. Merge custom templates
     if (sourceTemplates && sourceTemplates.length > 0) {
