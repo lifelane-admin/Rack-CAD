@@ -7,7 +7,7 @@ import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacing
 import { RACK_PRESETS, SPACING_STANDARDS, RackPreset, SpacingStandardInfo } from './standards';
 import { stateManager } from '../core/state';
 import { eventBus } from '../core/event-bus';
-import { RackData, RACK_CONSTANTS, DeviceData, DeviceTemplate } from '../core/types';
+import { RackData, RACK_CONSTANTS, DeviceData, DeviceTemplate, CableData } from '../core/types';
 import { downloadFile } from '../utils/export';
 import { buildDeviceMesh } from '../three/device-builder';
 import { getTemplate } from '../library/device-catalog';
@@ -2086,12 +2086,13 @@ export class BuildFloorView {
           let sourceRack: any = null;
           let sourceDevices: DeviceData[] = [];
           let sourceTemplates: DeviceTemplate[] = [];
+          const sourceCables: CableData[] = Array.isArray(data.cables) ? data.cables : [];
 
           if (data.type === 'rack-config' && data.rack) {
             sourceRack = data.rack;
             sourceDevices = data.devices || [];
             sourceTemplates = data.customTemplates || [];
-            this.applyImportedRackConfig(targetDcRack, sourceRack, sourceDevices, sourceTemplates);
+            this.applyImportedRackConfig(targetDcRack, sourceRack, sourceDevices, sourceTemplates, sourceCables);
           } else if (data.racks && Array.isArray(data.racks)) {
             sourceTemplates = data.customTemplates || [];
             if (data.racks.length === 0) {
@@ -2100,14 +2101,14 @@ export class BuildFloorView {
             } else if (data.racks.length === 1) {
               sourceRack = data.racks[0];
               sourceDevices = (data.devices || []).filter((d: any) => d.rackId === sourceRack.id || !d.rackId);
-              this.applyImportedRackConfig(targetDcRack, sourceRack, sourceDevices, sourceTemplates);
+              this.applyImportedRackConfig(targetDcRack, sourceRack, sourceDevices, sourceTemplates, sourceCables);
             } else {
-              this.showRackPickerModal(targetDcRack, data.racks, data.devices || [], sourceTemplates);
+              this.showRackPickerModal(targetDcRack, data.racks, data.devices || [], sourceTemplates, sourceCables);
             }
           } else if (Array.isArray(data.devices)) {
             sourceDevices = data.devices;
             sourceTemplates = data.customTemplates || [];
-            this.applyImportedRackConfig(targetDcRack, null, sourceDevices, sourceTemplates);
+            this.applyImportedRackConfig(targetDcRack, null, sourceDevices, sourceTemplates, sourceCables);
           } else {
             throw new Error('Unrecognized rack JSON format.');
           }
@@ -2124,7 +2125,8 @@ export class BuildFloorView {
     targetDcRack: DcRack,
     racks: any[],
     allDevices: DeviceData[],
-    customTemplates: DeviceTemplate[]
+    customTemplates: DeviceTemplate[],
+    allCables: CableData[] = []
   ) {
     const listHtml = racks.map((r, idx) => {
       const devCount = allDevices.filter(d => d.rackId === r.id).length;
@@ -2153,7 +2155,7 @@ export class BuildFloorView {
         const selRack = racks[idx];
         const selDevices = allDevices.filter(d => d.rackId === selRack.id);
         modalEl.remove();
-        this.applyImportedRackConfig(targetDcRack, selRack, selDevices, customTemplates);
+        this.applyImportedRackConfig(targetDcRack, selRack, selDevices, customTemplates, allCables);
       });
     });
   }
@@ -2162,7 +2164,8 @@ export class BuildFloorView {
     targetDcRack: DcRack,
     sourceRack: any,
     sourceDevices: DeviceData[],
-    sourceTemplates: DeviceTemplate[]
+    sourceTemplates: DeviceTemplate[],
+    sourceCables: CableData[] = []
   ) {
     const s = stateManager.getState();
 
@@ -2174,19 +2177,35 @@ export class BuildFloorView {
       stateManager.setState({ customTemplates: merged });
     }
 
-    // 2. Remove previous devices in target rack
+    // 2. Remove previous devices and cables in target rack
     const otherDevices = s.devices.filter(d => d.rackId !== targetDcRack.id);
+    const oldTargetPortIds = new Set<string>();
+    s.devices.forEach(d => {
+      if (d.rackId === targetDcRack.id && d.ports) {
+        d.ports.forEach(p => oldTargetPortIds.add(p.id));
+      }
+    });
+    const otherCables = (s.cables || []).filter(c => (!c.sourcePortId || !oldTargetPortIds.has(c.sourcePortId)) && (!c.destPortId || !oldTargetPortIds.has(c.destPortId)));
 
-    // 3. Remap devices to target rack
+    // 3. Remap devices & port IDs to target rack
+    const portIdMap = new Map<string, string>(); // oldPortId -> newPortId
+    const deviceIdMap = new Map<string, string>(); // oldDevId -> newDevId
+
     const newDevices: DeviceData[] = sourceDevices.map(d => {
       const newDevId = `dev-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
-      const devPorts = (d.ports || []).map((p: any) => ({
-        ...p,
-        deviceId: newDevId,
-        id: `port-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`,
-        connected: false,
-        cableId: null,
-      }));
+      deviceIdMap.set(d.id, newDevId);
+
+      const devPorts = (d.ports || []).map((p: any) => {
+        const newPortId = `port-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
+        portIdMap.set(p.id, newPortId);
+        return {
+          ...p,
+          id: newPortId,
+          deviceId: newDevId,
+          connected: false,
+          cableId: null,
+        };
+      });
 
       return {
         ...d,
@@ -2196,7 +2215,41 @@ export class BuildFloorView {
       };
     });
 
-    // 4. Update Rack Data in stateManager.racks
+    // 4. Remap cables
+    const newCables: CableData[] = [];
+    for (const cable of sourceCables) {
+      const newSrcPortId = cable.sourcePortId ? portIdMap.get(cable.sourcePortId) : undefined;
+      const newDestPortId = cable.destPortId ? portIdMap.get(cable.destPortId) : undefined;
+
+      if (newSrcPortId) {
+        const newCableId = `cable-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
+        const remappedCable: CableData = {
+          ...cable,
+          id: newCableId,
+          sourcePortId: newSrcPortId,
+          destPortId: newDestPortId || cable.destPortId,
+        };
+        newCables.push(remappedCable);
+
+        // Update port connection states in newDevices
+        for (const dev of newDevices) {
+          if (dev.ports) {
+            for (const port of dev.ports) {
+              if (port.id === newSrcPortId || (newDestPortId && port.id === newDestPortId)) {
+                port.connected = true;
+                port.cableId = newCableId;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 5. Clean / purge foreign ghost racks, keeping ONLY the target rack and existing valid DC racks
+    const dcFloor = dcState.getActiveFloor();
+    const validDcRackIds = new Set((dcFloor?.racks || []).map(r => r.id));
+    validDcRackIds.add(targetDcRack.id);
+
     const existingRackData = s.racks.find(r => r.id === targetDcRack.id);
     const updatedRackData: RackData = {
       id: targetDcRack.id,
@@ -2206,22 +2259,21 @@ export class BuildFloorView {
       rackType: (targetDcRack.type === 'open-frame' ? 'open-frame' : targetDcRack.type === 'network' ? 'network' : targetDcRack.type === 'wall-mount' ? 'wall-mount' : 'server') as any,
       mounting: targetDcRack.mounting ?? 'floor',
       rackColor: targetDcRack.color ?? '#1e3a5f',
-      x: existingRackData ? existingRackData.x : 200,
-      y: existingRackData ? existingRackData.y : 40,
+      x: 200,
+      y: 40,
       leftCableManagerWidth: sourceRack?.leftCableManagerWidth || existingRackData?.leftCableManagerWidth,
       rightCableManagerWidth: sourceRack?.rightCableManagerWidth || existingRackData?.rightCableManagerWidth,
       leftPduId: existingRackData?.leftPduId,
       rightPduId: existingRackData?.rightPduId,
     };
 
-    const updatedRacks = [
-      ...s.racks.filter(r => r.id !== targetDcRack.id),
-      updatedRackData,
-    ];
+    const cleanRacks = s.racks.filter(r => r.id !== targetDcRack.id && validDcRackIds.has(r.id));
+    cleanRacks.push(updatedRackData);
 
     stateManager.setState({
-      racks: updatedRacks,
+      racks: cleanRacks,
       devices: [...otherDevices, ...newDevices],
+      cables: [...otherCables, ...newCables],
     });
 
     eventBus.emit('device:added' as any, newDevices[0] || ({} as any));
@@ -2234,8 +2286,9 @@ export class BuildFloorView {
     }
     this.renderPropsPanel();
 
+    const cableMsg = newCables.length > 0 ? ` and ${newCables.length} cables` : '';
     eventBus.emit('notification', {
-      message: `Successfully imported ${newDevices.length} devices into ${targetDcRack.name}!`,
+      message: `Successfully imported ${newDevices.length} devices${cableMsg} into ${targetDcRack.name}!`,
       type: 'success',
     });
   }
@@ -2248,6 +2301,15 @@ export class BuildFloorView {
     const s = stateManager.getState();
     const rackData = s.racks.find(r => r.id === rackId);
     const devices = s.devices.filter(d => d.rackId === rackId);
+
+    // Get all port IDs in this rack
+    const rackPortIds = new Set<string>();
+    devices.forEach(d => {
+      (d.ports || []).forEach(p => rackPortIds.add(p.id));
+    });
+
+    // Get cables connected to these ports
+    const cables = (s.cables || []).filter(c => (c.sourcePortId && rackPortIds.has(c.sourcePortId)) || (c.destPortId && rackPortIds.has(c.destPortId)));
 
     const templateIds = new Set(devices.map(d => d.templateId));
     const usedCustomTemplates = (s.customTemplates || []).filter(t => templateIds.has(t.id));
@@ -2270,14 +2332,16 @@ export class BuildFloorView {
         rightCableManagerWidth: rackData?.rightCableManagerWidth,
       },
       devices: devices,
+      cables: cables,
       customTemplates: usedCustomTemplates,
     };
 
     const jsonStr = JSON.stringify(exportPayload, null, 2);
     const safeName = dcRack.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     downloadFile(jsonStr, `rack-${safeName}-config.json`, 'application/json');
+    const cableMsg = cables.length > 0 ? ` and ${cables.length} cables` : '';
     eventBus.emit('notification', {
-      message: `Exported ${dcRack.name} config (${devices.length} devices) to JSON.`,
+      message: `Exported ${dcRack.name} config (${devices.length} devices${cableMsg}) to JSON.`,
       type: 'success',
     });
   }

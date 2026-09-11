@@ -119,10 +119,26 @@ export class SceneManager {
   }
 
   rebuild(state: AppState): void {
-    this.syncRacks(state.racks);
-    this.syncDevices(state.racks, state.devices, state.customTemplates ?? []);
-    // Cable routing in 3D is resumed.
-    this.syncCables(state.cables ?? [], state);
+    const racks = state.activeElevationRackId
+      ? state.racks.filter(r => r.id === state.activeElevationRackId)
+      : state.racks;
+    const devices = state.activeElevationRackId
+      ? state.devices.filter(d => d.rackId === state.activeElevationRackId)
+      : state.devices;
+    const rackIds = new Set(racks.map(r => r.id));
+    const cables = state.activeElevationRackId
+      ? (state.cables ?? []).filter(c => {
+          const sp = stateManager.getPort(c.sourcePortId);
+          const dp = c.destPortId ? stateManager.getPort(c.destPortId) : null;
+          const sDev = sp ? stateManager.getDevice(sp.deviceId) : null;
+          const dDev = dp ? stateManager.getDevice(dp.deviceId) : null;
+          return (sDev && rackIds.has(sDev.rackId)) || (dDev && rackIds.has(dDev.rackId));
+        })
+      : (state.cables ?? []);
+
+    this.syncRacks(racks);
+    this.syncDevices(racks, devices, state.customTemplates ?? []);
+    this.syncCables(cables, state);
   }
 
   private syncRacks(racks: RackData[]): void {
