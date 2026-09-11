@@ -1,7 +1,7 @@
 import { eventBus } from '../core/event-bus';
 import { stateManager } from '../core/state';
 import { buildReport, ReportMetadata } from '../export/report-builder';
-import { DeviceTemplate, RACK_CONSTANTS } from '../core/types';
+import { DeviceTemplate, RACK_CONSTANTS, RackData, DeviceData, CableData } from '../core/types';
 import canvasCss from '../styles/canvas.css?raw';
 import reportsCss from '../styles/reports.css?raw';
 import { appendExportSummaryOverlay, Rect } from '../renderers/export-summary-overlay';
@@ -866,8 +866,57 @@ export function exportJSON(): string {
 export function importJSON(jsonString: string): void {
   try {
     const project = JSON.parse(jsonString);
-    if (!project.racks || !project.devices || !project.cables) {
-      throw new Error('Invalid project format');
+
+    let racks: RackData[] = [];
+    let devices: DeviceData[] = [];
+    let cables: CableData[] = [];
+
+    if (project.type === 'rack-config' && project.rack) {
+      // Standalone single-rack config format
+      const r = project.rack;
+      const rackData: RackData = {
+        id: r.id || 'default-rack',
+        name: r.name || 'Rack 1',
+        units: r.units || r.heightU || 42,
+        depthMm: r.depthMm || 1070,
+        rackType: (r.type === 'open-frame' ? 'open-frame' : r.type === 'network' ? 'network' : r.type === 'wall-mount' ? 'wall-mount' : 'server') as any,
+        mounting: r.mounting ?? 'floor',
+        rackColor: r.color ?? r.rackColor ?? '#1e3a5f',
+        x: r.x ?? 200,
+        y: r.y ?? 40,
+        leftCableManagerWidth: r.leftCableManagerWidth,
+        rightCableManagerWidth: r.rightCableManagerWidth,
+        leftPduId: r.leftPduId,
+        rightPduId: r.rightPduId,
+      };
+      racks = [rackData];
+      devices = (project.devices || []).map((d: any) => ({
+        ...d,
+        rackId: rackData.id,
+      }));
+      cables = project.cables || [];
+    } else if (Array.isArray(project.racks)) {
+      racks = project.racks;
+      devices = project.devices || [];
+      cables = project.cables || [];
+    } else if (Array.isArray(project.devices)) {
+      // Devices-only format
+      const defaultRack: RackData = {
+        id: 'default-rack',
+        name: 'Rack 1',
+        units: 42,
+        depthMm: 1070,
+        rackType: 'server',
+        mounting: 'floor',
+        rackColor: '#1e3a5f',
+        x: 200,
+        y: 40,
+      };
+      racks = [defaultRack];
+      devices = project.devices.map((d: any) => ({ ...d, rackId: defaultRack.id }));
+      cables = project.cables || [];
+    } else {
+      throw new Error('Unrecognized project JSON format');
     }
 
     // Merge custom templates: project file wins on ID conflict
@@ -880,9 +929,9 @@ export function importJSON(jsonString: string): void {
     ];
 
     stateManager.setState({
-      racks: project.racks,
-      devices: project.devices,
-      cables: project.cables,
+      racks,
+      devices,
+      cables,
       bundles: project.bundles ?? [],
       textLabels: project.textLabels ?? [],
       imageAssets: project.imageAssets ?? [],
@@ -892,9 +941,11 @@ export function importJSON(jsonString: string): void {
       cloudConnectors: project.cloudConnectors ?? [],
       cloudHierarchies: project.cloudHierarchies ?? [],
       selection: [],
+      activeElevationRackId: null, // Clear any isolated datacenter rack filter so all loaded racks render
     });
     stateManager.markSaved();
-    eventBus.emit('notification', { message: 'Project loaded successfully', type: 'success' });
+    eventBus.emit('state:changed' as any, undefined);
+    eventBus.emit('notification', { message: `Project loaded successfully (${racks.length} rack(s), ${devices.length} device(s), ${cables.length} cable(s))`, type: 'success' });
   } catch (err) {
     eventBus.emit('notification', { message: `Failed to load project: ${err}`, type: 'error' });
   }

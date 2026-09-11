@@ -5031,7 +5031,7 @@ export class App {
     }
 
     // Render racks (isolated to activeElevationRackId if working on a datacenter rack)
-    const racksToRender = s.activeElevationRackId
+    const racksToRender = (s.activeElevationRackId && s.racks.some(r => r.id === s.activeElevationRackId))
       ? s.racks.filter(r => r.id === s.activeElevationRackId)
       : s.racks;
 
@@ -5120,12 +5120,13 @@ export class App {
       if (s.showLegends) {
         // While actively dragging, splice in the transient live offset for just that rack —
         // never written to real state, so nothing hits the undo stack until mouseup commits it.
+        const elevationMatch = !!(s.activeElevationRackId && s.racks.some(r => r.id === s.activeElevationRackId));
         const racksForPreview = (this.summaryCardDragPreview
           ? s.racks.map(r => r.id === this.summaryCardDragPreview!.rackId
               ? { ...r, summaryCardOffset: this.summaryCardDragPreview!.offset }
               : r)
-          : s.racks).filter(r => s.activeElevationRackId ? r.id === s.activeElevationRackId : true);
-        const devicesForPreview = s.activeElevationRackId
+          : s.racks).filter(r => elevationMatch ? r.id === s.activeElevationRackId : true);
+        const devicesForPreview = elevationMatch
           ? s.devices.filter(d => d.rackId === s.activeElevationRackId)
           : s.devices;
         appendExportSummaryOverlay(summaryPreviewLayer, racksForPreview, devicesForPreview, s.cables, s.customLegendItems, { draggable: true });

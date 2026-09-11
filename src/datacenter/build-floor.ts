@@ -2196,7 +2196,12 @@ export class BuildFloorView {
       deviceIdMap.set(d.id, newDevId);
 
       const devPorts = (d.ports || []).map((p: any) => {
-        const newPortId = `port-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
+        let newPortId = p.id;
+        if (p.id.includes(d.id)) {
+          newPortId = p.id.replace(d.id, newDevId);
+        } else if (p.id.startsWith('port-') || p.id.startsWith('ear-')) {
+          newPortId = `${newDevId}-${p.id}`;
+        }
         portIdMap.set(p.id, newPortId);
         return {
           ...p,
@@ -2218,8 +2223,8 @@ export class BuildFloorView {
     // 4. Remap cables
     const newCables: CableData[] = [];
     for (const cable of sourceCables) {
-      const newSrcPortId = cable.sourcePortId ? portIdMap.get(cable.sourcePortId) : undefined;
-      const newDestPortId = cable.destPortId ? portIdMap.get(cable.destPortId) : undefined;
+      const newSrcPortId = cable.sourcePortId ? (portIdMap.get(cable.sourcePortId) || cable.sourcePortId) : null;
+      const newDestPortId = cable.destPortId ? (portIdMap.get(cable.destPortId) || cable.destPortId) : null;
 
       if (newSrcPortId) {
         const newCableId = `cable-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
@@ -2227,7 +2232,12 @@ export class BuildFloorView {
           ...cable,
           id: newCableId,
           sourcePortId: newSrcPortId,
-          destPortId: newDestPortId || cable.destPortId,
+          destPortId: newDestPortId,
+          anchorPoints: [],
+          anchorsLocked: false,
+          bendPoints: [],
+          floatingSource: null,
+          floatingDest: null,
         };
         newCables.push(remappedCable);
 
@@ -2274,6 +2284,7 @@ export class BuildFloorView {
       racks: cleanRacks,
       devices: [...otherDevices, ...newDevices],
       cables: [...otherCables, ...newCables],
+      activeElevationRackId: targetDcRack.id,
     });
 
     eventBus.emit('device:added' as any, newDevices[0] || ({} as any));
