@@ -4483,30 +4483,24 @@ export class BuildFloorView {
     const colLabel = getColLabel(colIdx, 'numbers', 'compact');
     const gridAddr = `${rowLabel}-${colLabel}`;
 
-    // 2. Clean Minimalist Modern CSS-Style Card Panel (No RGB)
-    ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-    ctx.shadowBlur = 18;
-    ctx.fillStyle = 'rgba(13, 17, 23, 0.92)';
-    ctx.strokeStyle = '#30363d';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(8, 8, W - 16, H - 16, 14);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
+    // 2. Transparent Backdrop (No black card background)
+    // Clean, floating HUD with high-contrast text and sleek translucent progress bars
 
     // 3. Header Row: Rack Name & Metadata
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+    ctx.shadowBlur = 8;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 20px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText(dcRack.name.toUpperCase(), 24, 34);
+    ctx.font = 'bold 22px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(dcRack.name.toUpperCase(), 24, 32);
 
     ctx.textAlign = 'right';
-    ctx.fillStyle = '#8b949e';
-    ctx.font = '600 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText(`${dcRack.heightU}U Cabinet • Grid: ${gridAddr} • ${rackDevices.length} Devs`, W - 24, 34);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '600 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(`${dcRack.heightU}U Cabinet • Grid: ${gridAddr} • ${rackDevices.length} Devs`, W - 24, 32);
+    ctx.restore();
 
     // Subtle divider line
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
@@ -4523,25 +4517,29 @@ export class BuildFloorView {
 
     // ── 4. BAR 1: POWER CONSUMPTION ──
     const pTopY = 74;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+    ctx.shadowBlur = 6;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#38bdf8';
-    ctx.font = 'bold 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.font = 'bold 16px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillText('⚡ POWER', barX, pTopY);
 
     const pColor = powerRatio > 0.9 ? '#ef4444' : powerRatio > 0.75 ? '#f59e0b' : '#38bdf8';
     ctx.textAlign = 'right';
     ctx.fillStyle = pColor;
-    ctx.font = 'bold 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.font = 'bold 16px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillText(`${powerKw.toFixed(1)} kW / ${maxKw} kW`, W - 80, pTopY);
-    ctx.fillStyle = '#8b949e';
-    ctx.font = '600 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '600 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillText(`(${Math.round(powerRatio * 100)}%)`, W - 24, pTopY);
+    ctx.restore();
 
     // Track
     const pBarY = pTopY + 16;
-    ctx.fillStyle = '#161b22';
-    ctx.strokeStyle = '#30363d';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.roundRect(barX, pBarY, barW, barH, barR);
@@ -4559,25 +4557,29 @@ export class BuildFloorView {
 
     // ── 5. BAR 2: RACK LOAD ──
     const rTopY = 146;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+    ctx.shadowBlur = 6;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#10b981';
-    ctx.font = 'bold 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.font = 'bold 16px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillText('🖥️ RACK LOAD', barX, rTopY);
 
     const rColor = loadRatio > 0.9 ? '#ef4444' : loadRatio > 0.75 ? '#f59e0b' : '#10b981';
     ctx.textAlign = 'right';
     ctx.fillStyle = rColor;
-    ctx.font = 'bold 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.font = 'bold 16px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillText(`${occupiedU}U / ${totalU}U`, W - 80, rTopY);
-    ctx.fillStyle = '#8b949e';
-    ctx.font = '600 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '600 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillText(`(${loadPercent.toFixed(0)}%)`, W - 24, rTopY);
+    ctx.restore();
 
     // Track
     const rBarY = rTopY + 16;
-    ctx.fillStyle = '#161b22';
-    ctx.strokeStyle = '#30363d';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.roundRect(barX, rBarY, barW, barH, barR);
