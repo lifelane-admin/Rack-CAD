@@ -19,7 +19,7 @@ interface Entry {
 const cache = new Map<string, Entry>();
 
 function connHash(device: DeviceData): string {
-  const portStr = device.ports
+  const portStr = (device.ports || [])
     .filter(p => p.connected && p.cableId)
     .map(p => p.id)
     .sort()
@@ -99,7 +99,7 @@ async function renderSVGToCanvas(
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
 
     const connectedPortIds = new Set(
-      device.ports.filter(p => p.connected && p.cableId).map(p => p.id),
+      (device.ports || []).filter(p => p.connected && p.cableId).map(p => p.id),
     );
 
     const panel = renderFrontPanel(

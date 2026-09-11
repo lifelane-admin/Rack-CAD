@@ -238,8 +238,21 @@ export class SceneManager {
     }
 
     for (const device of devices) {
-      const template = getTemplate(device.templateId, customTemplates);
-      if (!template) continue;
+      let template = getTemplate(device.templateId, customTemplates);
+      if (!template) {
+        template = {
+          id: device.templateId || 'fallback-device',
+          name: (device as any).name || (device as any).model || 'Generic Device',
+          manufacturer: '',
+          model: (device as any).model || 'Generic Device',
+          category: (device as any).categoryOverride || 'server',
+          heightUnits: (device as any).heightUnits || 1,
+          color: device.color || '#1a1e24',
+          icon: '🖥️',
+          powerWatts: 150,
+          ports: device.ports || [],
+        };
+      }
       // 0U side-mount PDUs are rendered as 3D side strips directly on the rack
       if (template.mountType === 'side' || device.sideMountPosition) continue;
       const rack = racks.find(r => r.id === device.rackId);

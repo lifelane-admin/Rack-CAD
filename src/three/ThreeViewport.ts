@@ -80,7 +80,7 @@ export class ThreeViewport {
 
     // Subscribe to future state changes
     this.stateHandler = (partial?: Partial<AppState>) => {
-      if (!partial || partial.racks !== undefined || partial.devices !== undefined || partial.cables !== undefined) {
+      if (!partial || partial.racks !== undefined || partial.devices !== undefined || partial.cables !== undefined || partial.activeElevationRackId !== undefined || partial.customTemplates !== undefined) {
         this.dirtySync = true;
       }
       this.debouncedSync();
@@ -246,6 +246,7 @@ export class ThreeViewport {
    *  ResizeObserver firing on un-hide isn't guaranteed to land before the first frame. */
   resume(): void {
     this.onResize();
+    this.sceneManager.rebuild(stateManager.getState());
     if (this.animId === null) this.animate();
   }
 

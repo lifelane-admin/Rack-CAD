@@ -28,9 +28,9 @@ const LANE_Z_SPACING = 3;
 const MAX_STAGGERED_LANES = 8; // beyond this, extra cables in one channel just re-share a Z plane
 
 function findPort(portId: string | null, devices: DeviceData[]) {
-  if (!portId) return null;
+  if (!portId || !devices) return null;
   for (const device of devices) {
-    const port = device.ports.find(p => p.id === portId);
+    const port = (device.ports || []).find(p => p.id === portId);
     if (port) return { port, device };
   }
   return null;
