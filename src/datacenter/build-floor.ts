@@ -3025,6 +3025,9 @@ export class BuildFloorView {
       // Mouse picking / selection on 3D Racks
       this.threeRenderer.domElement.addEventListener('pointerdown', (e) => {
         if (e.button === 2) return; // Allow context menu
+        const currentFloor = dcState.getActiveFloor();
+        if (!currentFloor) return;
+
         const rect = this.threeRenderer!.domElement.getBoundingClientRect();
         this.threeMouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         this.threeMouse.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
@@ -3057,11 +3060,11 @@ export class BuildFloorView {
         if (clickedRackId) {
           dcState.setState({ selectedRackId: clickedRackId, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
           this.renderPropsPanel();
-          this.rebuildThreeScene(floor);
+          this.update3DSelectionHighlight();
         } else if (clickedInfraId) {
           dcState.setState({ selectedInfraId: clickedInfraId, selectedRackId: null, selectedTileId: null, selectedTileIds: [] });
           this.renderPropsPanel();
-          this.rebuildThreeScene(floor);
+          this.rebuildThreeScene(currentFloor);
         } else if (clickedTileId) {
           const isMultiKey = e.ctrlKey || e.metaKey || e.shiftKey;
           const s = dcState.getState();
@@ -3079,18 +3082,21 @@ export class BuildFloorView {
           const primaryId = newIds.length > 0 ? newIds[newIds.length - 1] : null;
           dcState.setState({ selectedTileId: primaryId, selectedTileIds: newIds, selectedRackId: null, selectedInfraId: null });
           this.renderPropsPanel();
-          this.rebuildThreeScene(floor);
+          this.rebuildThreeScene(currentFloor);
         } else {
           if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
             dcState.setState({ selectedTileId: null, selectedTileIds: [], selectedRackId: null, selectedInfraId: null });
             this.renderPropsPanel();
-            this.rebuildThreeScene(floor);
+            this.update3DSelectionHighlight();
           }
         }
       });
 
       this.threeRenderer.domElement.addEventListener('contextmenu', (e) => {
         e.preventDefault();
+        const currentFloor = dcState.getActiveFloor();
+        if (!currentFloor) return;
+
         const rect = this.threeRenderer!.domElement.getBoundingClientRect();
         this.threeMouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         this.threeMouse.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
@@ -3116,26 +3122,26 @@ export class BuildFloorView {
         }
 
         if (clickedRackId) {
-          const rack = floor.racks.find(r => r.id === clickedRackId);
+          const rack = currentFloor.racks.find(r => r.id === clickedRackId);
           if (rack) {
             dcState.setState({ selectedRackId: rack.id, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
             this.renderPropsPanel();
-            this.rebuildThreeScene(floor);
+            this.update3DSelectionHighlight();
             this.showContextMenu(e.clientX, e.clientY, rack);
           }
         } else if (clickedTileId) {
-          const tile = floor.tiles.find(t => t.id === clickedTileId);
+          const tile = currentFloor.tiles.find(t => t.id === clickedTileId);
           if (tile) {
             const s = dcState.getState();
             const curIds = Array.isArray(s.selectedTileIds) ? s.selectedTileIds : (s.selectedTileId ? [s.selectedTileId] : []);
             if (curIds.includes(tile.id) && curIds.length > 1) {
-              const selectedTiles = floor.tiles.filter(t => curIds.includes(t.id));
+              const selectedTiles = currentFloor.tiles.filter(t => curIds.includes(t.id));
               this.renderPropsPanel();
               this.showTileContextMenu(e.clientX, e.clientY, tile, selectedTiles);
             } else {
               dcState.setState({ selectedTileId: tile.id, selectedTileIds: [tile.id], selectedRackId: null, selectedInfraId: null });
               this.renderPropsPanel();
-              this.rebuildThreeScene(floor);
+              this.rebuildThreeScene(currentFloor);
               this.showTileContextMenu(e.clientX, e.clientY, tile, [tile]);
             }
           }
