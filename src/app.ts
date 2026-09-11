@@ -5732,6 +5732,9 @@ export class App {
     this.sidebar.render();
     if (isCloud || isHybrid) this.renderCloudAll();
     if (isHybrid) this.renderAll();
+    if (isDc || isCloud) {
+      document.getElementById('dc-working-banner')?.remove();
+    }
     if (isDc) this.buildFloorView?.show();
   }
 

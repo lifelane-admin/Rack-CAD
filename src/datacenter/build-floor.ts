@@ -1964,9 +1964,27 @@ export class BuildFloorView {
   }
 
   private workOnRack(rack: DcRack) {
-    const racks = stateManager.getState().racks;
+    const s = stateManager.getState();
+    const racks = s.racks;
     let existing = racks.find(r => r.id === rack.id);
-    const targetRack = existing || {
+
+    // Filter out any empty default-rack with 0 devices to prevent clutter and collision
+    const cleanRacks = racks.filter(r => {
+      if (r.id === 'default-rack' && r.id !== rack.id) {
+        const hasDevices = s.devices.some(d => d.rackId === r.id);
+        return hasDevices;
+      }
+      return true;
+    });
+
+    const otherRacks = cleanRacks.filter(r => r.id !== rack.id);
+    let posX = existing ? existing.x : 220;
+    // Ensure posX does not collide with any other rack in 2D elevation canvas
+    while (otherRacks.some(r => Math.abs(r.x - posX) < 520)) {
+      posX += 520;
+    }
+
+    const targetRack: RackData = {
       id: rack.id,
       name: rack.name,
       units: rack.heightU,
@@ -1974,22 +1992,21 @@ export class BuildFloorView {
       rackType: (rack.type === 'open-frame' ? 'open-frame' : rack.type === 'network' ? 'network' : rack.type === 'wall-mount' ? 'wall-mount' : 'server') as any,
       mounting: rack.mounting ?? 'floor',
       rackColor: rack.color ?? '#1e3a5f',
-      x: 220,
-      y: 60,
+      x: posX,
+      y: existing ? existing.y : 60,
+      leftCableManagerWidth: existing?.leftCableManagerWidth,
+      rightCableManagerWidth: existing?.rightCableManagerWidth,
+      leftPduId: existing?.leftPduId,
+      rightPduId: existing?.rightPduId,
     };
 
-    if (!existing) {
-      stateManager.setState({
-        racks: [...racks, targetRack],
-        selection: [{ type: 'rack', id: rack.id }],
-        activeElevationRackId: rack.id,
-      });
-    } else {
-      stateManager.setState({
-        selection: [{ type: 'rack', id: rack.id }],
-        activeElevationRackId: rack.id,
-      });
-    }
+    const finalRacks = [...otherRacks, targetRack];
+
+    stateManager.setState({
+      racks: finalRacks,
+      selection: [{ type: 'rack', id: rack.id }],
+      activeElevationRackId: rack.id,
+    });
 
     eventBus.emit('view:switch' as any, 'rack');
     eventBus.emit('notification', {
@@ -2004,20 +2021,23 @@ export class BuildFloorView {
     let banner = document.getElementById('dc-working-banner');
     if (banner) banner.remove();
 
-    const canvasWrap = document.getElementById('canvas-container');
-    if (!canvasWrap) return;
+    const parent = document.getElementById('canvas-viewport') || document.body;
+    if (!parent) return;
 
     banner = document.createElement('div');
     banner.id = 'dc-working-banner';
-    banner.className = 'dc-working-banner';
+    banner.className = 'dc-floating-return-badge';
     banner.innerHTML = `
-      <div class="dc-working-banner-title">
-        <span>⚡ Elevation View: <b>${rack.name}</b> (${rack.heightU}U ${rack.type.toUpperCase()}) — Data Hall Floor</span>
+      <div class="dc-floating-badge-info">
+        <span class="dc-floating-badge-icon">⚡</span>
+        <span class="dc-floating-badge-text">Rack Elevation: <b>${rack.name}</b> <span class="dc-floating-badge-meta">(${rack.heightU}U ${rack.type.toUpperCase()})</span></span>
       </div>
-      <button class="dc-btn-return-dc" id="dc-btn-return-dc">← Return to Datacenter Floor Plan</button>
+      <button class="dc-btn-floating-return" id="dc-btn-return-dc" title="Return to Datacenter 2D/3D Floor Plan">
+        <span>← Return to Datacenter</span>
+      </button>
     `;
 
-    canvasWrap.prepend(banner);
+    parent.appendChild(banner);
 
     banner.querySelector('#dc-btn-return-dc')?.addEventListener('click', () => {
       stateManager.setState({ activeElevationRackId: null });
