@@ -10,6 +10,8 @@ import { eventBus } from '../core/event-bus';
 import { RackData, RACK_CONSTANTS, DeviceData, DeviceTemplate, CableData } from '../core/types';
 import { downloadFile, sanitizeAndRepairDevicesAndCables } from '../utils/export';
 import { buildDeviceMesh } from '../three/device-builder';
+import { buildCableMesh } from '../three/cable-builder';
+
 
 import { getTemplate } from '../library/device-catalog';
 import { DEVICE_FACE_Z } from '../three/rack-builder';
@@ -4066,8 +4068,42 @@ export class BuildFloorView {
         }
       });
 
+      // 4. Mount 3D Cables into Rack Group
+      const allCables = stateManager.getState().cables || [];
+      const rackCables = allCables.filter(c => {
+        const srcPort = c.sourcePortId ? stateManager.getPort(c.sourcePortId) : null;
+        const destPort = c.destPortId ? stateManager.getPort(c.destPortId) : null;
+        const srcDev = srcPort ? stateManager.getDevice(srcPort.deviceId) : null;
+        const destDev = destPort ? stateManager.getDevice(destPort.deviceId) : null;
+        return (srcDev && srcDev.rackId === dcRack.id) || (destDev && destDev.rackId === dcRack.id);
+      });
+
+      if (rackCables.length > 0) {
+        const rackCableContainer = new THREE.Group();
+        rackCableContainer.name = `rack-cables-${dcRack.id}`;
+        const totalHeightMm = RACK_CONSTANTS.RACK_PADDING_TOP + rackData.units * RACK_CONSTANTS.RU_HEIGHT + RACK_CONSTANTS.RACK_PADDING_BOTTOM;
+        const curRackInState = stateManager.getRack(dcRack.id);
+        const refRackX = curRackInState ? curRackInState.x : 200;
+
+        rackCableContainer.position.set(-(refRackX + RACK_CONSTANTS.RACK_OUTER_WIDTH / 2), -totalHeightMm / 2, 0);
+
+        rackCables.forEach(c => {
+          try {
+            const cableMesh = buildCableMesh(c, stateManager.getState());
+            if (cableMesh) {
+              rackCableContainer.add(cableMesh);
+            }
+          } catch (err) {
+            console.warn(`Failed to build 3D cable mesh for rack ${dcRack.id}:`, err);
+          }
+        });
+
+        rackGroup.add(rackCableContainer);
+      }
+
       // Map group and all its children for raycast selection
       this.rackMeshMap.set(rackGroup, dcRack.id);
+
       rackGroup.traverse(child => {
         if (child instanceof THREE.Mesh) {
           this.rackMeshMap.set(child, dcRack.id);
