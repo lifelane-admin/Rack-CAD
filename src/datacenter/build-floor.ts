@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { MaterialManager } from '../three/MaterialManager';
 import { buildRackGroup } from '../three/rack-builder';
-import { dcState } from './dc-state';
+import { dcState, getRowLabel, getColLabel } from './dc-state';
 import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacingStandard, DcAddressFormat, DcFloorTile, DcAirflowDirection, DcInfrastructureItem, DcInfraCategory } from './types';
 import { RACK_PRESETS, SPACING_STANDARDS, RackPreset, SpacingStandardInfo } from './standards';
 import { stateManager } from '../core/state';
@@ -569,26 +569,12 @@ export class BuildFloorView {
     const newPpm = Math.min(Math.max(oldPpm * factor, 15), 2500);
     if (newPpm === oldPpm) return;
 
-    // Convert screen coordinates to world coordinates before zoom
-    const { xM, yM } = this.screenToWorld(sx, sy);
-
+    // Convert screen coordinates to world and unrotated canvas coordinates before zoom
+    const { xM, yM, px, py } = this.screenToWorld(sx, sy);
     const W = this.canvas.width || 800;
     const H = this.canvas.height || 600;
-    let px = sx;
-    let py = sy;
-    if (this.canvasRotationDeg !== 0) {
-      const cx = W / 2;
-      const cy = H / 2;
-      const rad = (-this.canvasRotationDeg * Math.PI) / 180;
-      const cos = Math.cos(rad);
-      const sin = Math.sin(rad);
-      const dx = sx - cx;
-      const dy = sy - cy;
-      px = cx + (dx * cos - dy * sin);
-      py = cy + (dx * sin + dy * cos);
-    }
 
-    // Keep world coordinate (xM, yM) anchored exactly under cursor (px, py)
+    // Keep world coordinate (xM, yM) anchored strictly under cursor (px, py)
     this.camX = xM - (px - W / 2) / newPpm;
     this.camY = yM - (py - H / 2) / newPpm;
     this.ppm = newPpm;
@@ -929,7 +915,7 @@ export class BuildFloorView {
     return { sx: xM * this.ppm + this.panX, sy: yM * this.ppm + this.panY };
   }
 
-  private screenToWorld(sx: number, sy: number): { xM: number; yM: number } {
+  private screenToWorld(sx: number, sy: number): { xM: number; yM: number; px: number; py: number } {
     let px = sx;
     let py = sy;
     if (this.canvasRotationDeg !== 0) {
@@ -945,7 +931,12 @@ export class BuildFloorView {
       px = cx + (dx * cos - dy * sin);
       py = cy + (dx * sin + dy * cos);
     }
-    return { xM: (px - this.panX) / this.ppm, yM: (py - this.panY) / this.ppm };
+    return {
+      xM: (px - this.panX) / this.ppm,
+      yM: (py - this.panY) / this.ppm,
+      px,
+      py,
+    };
   }
 
   private handleMouseDown(e: MouseEvent) {
@@ -1492,9 +1483,98 @@ export class BuildFloorView {
 
     this.ctx.restore();
 
-    // 5. CAD Architectural Dimension Lines & Leader Arrows (Outside clipped floor boundary)
+    // 5. Datacenter Layout Addressing Rulers (X-Axis Columns & Y-Axis Rows)
     const unit = floor.unit ?? 'm';
-    const dimOffset = Math.max(22, Math.min(36, 18 * (this.ppm / 100)));
+    const cols = Math.ceil(floor.lengthM / tileM);
+    const rows = Math.ceil(floor.widthM / tileM);
+    const rScheme = floor.rowScheme ?? 'letters';
+    const cScheme = floor.colScheme ?? 'numbers';
+    const addrFormat = floor.addressFormat ?? 'compact';
+
+    const rulerThick = Math.max(22, Math.min(32, Math.round(24 * (this.ppm / 100))));
+    const topRulerY = fy - rulerThick;
+    const leftRulerX = fx - rulerThick;
+
+    this.ctx.save();
+
+    // ── A. Top Ruler: X-Axis Columns (01, 02, 03... or 1, 2, 3...) ──
+    this.ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+    this.ctx.fillRect(fx, topRulerY, fw, rulerThick);
+    this.ctx.strokeStyle = '#334155';
+    this.ctx.lineWidth = 1.5;
+    this.ctx.strokeRect(fx, topRulerY, fw, rulerThick);
+
+    const colFontSize = Math.max(10, Math.min(13, Math.round(tilePx * 0.28)));
+    this.ctx.font = `bold ${colFontSize}px "SF Mono", Monaco, Menlo, Consolas, monospace`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+
+    for (let c = 0; c < cols; c++) {
+      const csx = fx + c * tilePx;
+      const csw = Math.min(tilePx, fx + fw - csx);
+      const colLabel = getColLabel(c, cScheme, addrFormat);
+
+      // Column divider line
+      this.ctx.strokeStyle = '#334155';
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.moveTo(csx, topRulerY);
+      this.ctx.lineTo(csx, fy);
+      this.ctx.stroke();
+
+      if (tilePx >= 16) {
+        this.ctx.fillStyle = '#38bdf8';
+        this.ctx.fillText(colLabel, csx + csw / 2, topRulerY + rulerThick / 2);
+      }
+    }
+
+    // ── B. Left Ruler: Y-Axis Rows (A, B, C, D...) ──
+    this.ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+    this.ctx.fillRect(leftRulerX, fy, rulerThick, fh);
+    this.ctx.strokeStyle = '#334155';
+    this.ctx.lineWidth = 1.5;
+    this.ctx.strokeRect(leftRulerX, fy, rulerThick, fh);
+
+    const rowFontSize = Math.max(10, Math.min(13, Math.round(tilePx * 0.28)));
+    this.ctx.font = `bold ${rowFontSize}px "SF Mono", Monaco, Menlo, Consolas, monospace`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+
+    for (let r = 0; r < rows; r++) {
+      const rsy = fy + r * tilePx;
+      const rsh = Math.min(tilePx, fy + fh - rsy);
+      const rowLabel = getRowLabel(r, rScheme);
+
+      // Row divider line
+      this.ctx.strokeStyle = '#334155';
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.moveTo(leftRulerX, rsy);
+      this.ctx.lineTo(fx, rsy);
+      this.ctx.stroke();
+
+      if (tilePx >= 16) {
+        this.ctx.fillStyle = '#38bdf8';
+        this.ctx.fillText(rowLabel, leftRulerX + rulerThick / 2, rsy + rsh / 2);
+      }
+    }
+
+    // ── C. Top-Left Corner Origin Block (X→ / Y↓) ──
+    this.ctx.fillStyle = 'rgba(2, 132, 199, 0.25)';
+    this.ctx.fillRect(leftRulerX, topRulerY, rulerThick, rulerThick);
+    this.ctx.strokeStyle = '#0284c7';
+    this.ctx.lineWidth = 1.5;
+    this.ctx.strokeRect(leftRulerX, topRulerY, rulerThick, rulerThick);
+
+    this.ctx.fillStyle = '#38bdf8';
+    this.ctx.font = 'bold 9px system-ui, sans-serif';
+    this.ctx.fillText('X →', leftRulerX + rulerThick / 2, topRulerY + rulerThick * 0.35);
+    this.ctx.fillText('Y ↓', leftRulerX + rulerThick / 2, topRulerY + rulerThick * 0.72);
+
+    this.ctx.restore();
+
+    // 6. CAD Architectural Dimension Lines & Leader Arrows (Outside rulers)
+    const dimOffset = rulerThick + Math.max(18, Math.min(32, Math.round(18 * (this.ppm / 100))));
     const arrowSz = 6;
     const lenLabel = formatDimensionsMeters(floor.lengthM, 0, unit).split('×')[0].trim();
     const widLabel = formatDimensionsMeters(0, floor.widthM, unit).split('×')[1]?.trim() || formatSingleDistance(floor.widthM, unit);
@@ -1756,11 +1836,19 @@ export class BuildFloorView {
           const devices = stateManager.getState().devices?.filter(d => d.rackId === rack.id) || [];
           const usedU = devices.reduce((sum, d) => sum + (getTemplate(d.templateId)?.heightUnits || 1), 0);
 
+          const tileM = (floor.tileSizeMm || 600) / 1000;
+          const colIdx = Math.floor(rack.position.x / tileM);
+          const rowIdx = Math.floor(rack.position.y / tileM);
+          const rowLabel = getRowLabel(rowIdx, floor.rowScheme ?? 'letters');
+          const colLabel = getColLabel(colIdx, floor.colScheme ?? 'numbers', floor.addressFormat ?? 'compact');
+          const gridAddr = `${rowLabel}-${colLabel}`;
+
           el.innerHTML = `
             <div class="dc-props-section">
               <div class="dc-props-title">Rack Properties ${typeBadge}</div>
               <div class="dc-info-row"><span class="dc-info-label">ID</span><span class="dc-info-val">${rack.id}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Name</span><span class="dc-info-val">${rack.name}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Grid Addr</span><span class="dc-info-val" style="color:#38bdf8;font-weight:700;">${gridAddr}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Type</span><span class="dc-info-val"><b>${rack.type.toUpperCase()}</b></span></div>
               <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(rack.widthMm, rack.depthMm, unit === 'm' ? 'mm' : unit)}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Height</span><span class="dc-info-val">${formatRackHeight(rack.heightU)}</span></div>
@@ -3986,7 +4074,7 @@ export class BuildFloorView {
     this.threeGridGroup.visible = dcState.getState().gridVisible !== false;
     this.threeScene.add(this.threeGridGroup);
 
-    // 6. Realistic Industrial Datacenter Raised Floor Anodized Aluminum Perimeter Curb Trim (Hollow 4-Edge Trim)
+    // 6. Realistic Industrial Datacenter Raised Floor Perimeter Trim with 3D Layout Addressing
     const curbThickness = 30; // 30mm trim
     const curbHeight = 14;    // 14mm proud curb
     const curbMat = new THREE.MeshStandardMaterial({
@@ -3995,12 +4083,82 @@ export class BuildFloorView {
       metalness: 0.80,
     });
 
+    // ── North Curb (X-Axis Column Numbers: 01, 02, 03...) ──
+    const nTexW = Math.max(512, cols * 64);
+    const nTexH = 64;
+    const nCanvas = document.createElement('canvas');
+    nCanvas.width = nTexW;
+    nCanvas.height = nTexH;
+    const nCtx = nCanvas.getContext('2d')!;
+    nCtx.fillStyle = '#1e293b';
+    nCtx.fillRect(0, 0, nTexW, nTexH);
+
+    const cStepPx = nTexW / cols;
+    for (let c = 0; c < cols; c++) {
+      const colLabel = getColLabel(c, floor.colScheme ?? 'numbers', floor.addressFormat ?? 'compact');
+      const cx = c * cStepPx;
+      nCtx.strokeStyle = '#475569';
+      nCtx.lineWidth = 2;
+      nCtx.beginPath();
+      nCtx.moveTo(cx, 0);
+      nCtx.lineTo(cx, nTexH);
+      nCtx.stroke();
+
+      nCtx.fillStyle = '#38bdf8';
+      nCtx.font = 'bold 26px "SF Mono", Monaco, Menlo, Consolas, monospace';
+      nCtx.textAlign = 'center';
+      nCtx.textBaseline = 'middle';
+      nCtx.fillText(colLabel, cx + cStepPx / 2, nTexH / 2);
+    }
+    const northCurbTex = new THREE.CanvasTexture(nCanvas);
+    northCurbTex.colorSpace = THREE.SRGBColorSpace;
+    const northCurbMat = new THREE.MeshStandardMaterial({
+      map: northCurbTex,
+      roughness: 0.35,
+      metalness: 0.60,
+    });
+
+    // ── West Curb (Z-Axis Row Letters: A, B, C...) ──
+    const wTexW = 64;
+    const wTexH = Math.max(512, rows * 64);
+    const wCanvas = document.createElement('canvas');
+    wCanvas.width = wTexW;
+    wCanvas.height = wTexH;
+    const wCtx = wCanvas.getContext('2d')!;
+    wCtx.fillStyle = '#1e293b';
+    wCtx.fillRect(0, 0, wTexW, wTexH);
+
+    const rStepPx = wTexH / rows;
+    for (let r = 0; r < rows; r++) {
+      const rowLabel = getRowLabel(r, floor.rowScheme ?? 'letters');
+      const ry = r * rStepPx;
+      wCtx.strokeStyle = '#475569';
+      wCtx.lineWidth = 2;
+      wCtx.beginPath();
+      wCtx.moveTo(0, ry);
+      wCtx.lineTo(wTexW, ry);
+      wCtx.stroke();
+
+      wCtx.fillStyle = '#38bdf8';
+      wCtx.font = 'bold 26px "SF Mono", Monaco, Menlo, Consolas, monospace';
+      wCtx.textAlign = 'center';
+      wCtx.textBaseline = 'middle';
+      wCtx.fillText(rowLabel, wTexW / 2, ry + rStepPx / 2);
+    }
+    const westCurbTex = new THREE.CanvasTexture(wCanvas);
+    westCurbTex.colorSpace = THREE.SRGBColorSpace;
+    const westCurbMat = new THREE.MeshStandardMaterial({
+      map: westCurbTex,
+      roughness: 0.35,
+      metalness: 0.60,
+    });
+
     const curbGroup = new THREE.Group();
     curbGroup.userData = { isDynamic: true };
 
     // North curb (z = -curbThickness / 2)
     const curbNorthGeo = new THREE.BoxGeometry(floorLenMm + curbThickness * 2, curbHeight, curbThickness);
-    const curbNorth = new THREE.Mesh(curbNorthGeo, curbMat);
+    const curbNorth = new THREE.Mesh(curbNorthGeo, northCurbMat);
     curbNorth.position.set(floorLenMm / 2, curbHeight / 2 - 2, -curbThickness / 2);
     curbGroup.add(curbNorth);
 
@@ -4012,7 +4170,7 @@ export class BuildFloorView {
 
     // West curb (x = -curbThickness / 2)
     const curbWestGeo = new THREE.BoxGeometry(curbThickness, curbHeight, floorWidMm);
-    const curbWest = new THREE.Mesh(curbWestGeo, curbMat);
+    const curbWest = new THREE.Mesh(curbWestGeo, westCurbMat);
     curbWest.position.set(-curbThickness / 2, curbHeight / 2 - 2, floorWidMm / 2);
     curbGroup.add(curbWest);
 
@@ -4251,7 +4409,13 @@ export class BuildFloorView {
     ctx.restore();
 
     // Subtitle banner with smart width fitting and dark pill backing
-    const subtext = `${dcRack.heightU}U Cabinet  •  Pos: (${dcRack.position.x.toFixed(1)}m, ${dcRack.position.y.toFixed(1)}m)  •  ${rackDevices.length} Devices Mounted`;
+    const tileM = 0.6;
+    const colIdx = Math.floor(dcRack.position.x / tileM);
+    const rowIdx = Math.floor(dcRack.position.y / tileM);
+    const rowLabel = getRowLabel(rowIdx, 'letters');
+    const colLabel = getColLabel(colIdx, 'numbers', 'compact');
+    const gridAddr = `${rowLabel}-${colLabel}`;
+    const subtext = `${dcRack.heightU}U Cabinet  •  Grid: ${gridAddr} (${dcRack.position.x.toFixed(1)}m, ${dcRack.position.y.toFixed(1)}m)  •  ${rackDevices.length} Devs`;
     let subFontSize = 22;
     ctx.font = `600 ${subFontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
     while (ctx.measureText(subtext).width > W - 100 && subFontSize > 14) {
