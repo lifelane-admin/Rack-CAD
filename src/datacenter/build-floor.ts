@@ -377,6 +377,7 @@ export class BuildFloorView {
     this.bindKeyboardEvents();
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    dcState.subscribe(() => this.refresh());
     this.refresh();
   }
 
@@ -1734,6 +1735,7 @@ export class BuildFloorView {
       if (!this.threeRenderer || this.lastRenderedFloorId !== floor.id) {
         this.render3D();
       } else {
+        this.rebuildThreeScene(floor);
         this.update3DSelectionHighlight();
       }
     } else {
