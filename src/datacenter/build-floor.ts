@@ -451,11 +451,6 @@ export class BuildFloorView {
   }
 
   private applyFloorOpacity(effOpacity: number) {
-    if (this.threeControls) {
-      const isUnderfloor = dcState.getState().xrayMode || effOpacity < 0.85;
-      this.threeControls.maxPolarAngle = isUnderfloor ? Math.PI - 0.05 : Math.PI / 2 - 0.02;
-    }
-
     if (this.threeFloorMaterials && this.threeFloorMaterials.length > 0) {
       this.threeFloorMaterials.forEach(m => {
         m.transparent = effOpacity < 0.99;
@@ -3353,9 +3348,8 @@ export class BuildFloorView {
       this.threeControls = new OrbitControls(this.threeCamera, this.threeRenderer.domElement);
       this.threeControls.enableDamping = true;
       this.threeControls.dampingFactor = 0.08;
-      this.threeControls.zoomToCursor = true;
-      const isUnderfloorView = dcState.getState().xrayMode || dcState.getState().floorOpacity < 0.85;
-      this.threeControls.maxPolarAngle = isUnderfloorView ? Math.PI - 0.05 : Math.PI / 2 - 0.02;
+      this.threeControls.minPolarAngle = 0;
+      this.threeControls.maxPolarAngle = Math.PI - 0.001; // Full vertical tilting from 0° (top-down) to 180° (underneath)
 
       // Lighting: Natural studio ambient + directional key & fill
       const hemiLight = new THREE.HemisphereLight(0xffffff, 0x334455, 1.6);
