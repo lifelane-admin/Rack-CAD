@@ -79,8 +79,8 @@ export class ThreeViewport {
     this.fitCameraToScene();
 
     // Subscribe to future state changes
-    this.stateHandler = (partial: Partial<AppState>) => {
-      if (partial.racks !== undefined || partial.devices !== undefined || partial.cables !== undefined) {
+    this.stateHandler = (partial?: Partial<AppState>) => {
+      if (!partial || partial.racks !== undefined || partial.devices !== undefined || partial.cables !== undefined) {
         this.dirtySync = true;
       }
       this.debouncedSync();

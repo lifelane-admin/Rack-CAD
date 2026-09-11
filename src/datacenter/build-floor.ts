@@ -2273,7 +2273,6 @@ export class BuildFloorView {
     });
 
     eventBus.emit('device:added' as any, newDevices[0] || ({} as any));
-    eventBus.emit('state:changed' as any, undefined);
     this.refresh();
 
     const activeFloor = dcState.getActiveFloor();
