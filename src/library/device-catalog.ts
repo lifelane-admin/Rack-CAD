@@ -1083,13 +1083,31 @@ export const deviceCatalog: DeviceTemplate[] = [
   },
 ];
 
-export function getTemplate(id: string, customTemplates: DeviceTemplate[] = []): DeviceTemplate | undefined {
-  return customTemplates.find(t => t.id === id) ?? deviceCatalog.find(t => t.id === id);
+let _customTemplatesProvider: (() => DeviceTemplate[]) | null = null;
+
+export function setCustomTemplatesProvider(provider: () => DeviceTemplate[]): void {
+  _customTemplatesProvider = provider;
+}
+
+export function getTemplate(id: string, customTemplates?: DeviceTemplate[]): DeviceTemplate | undefined {
+  if (customTemplates && customTemplates.length > 0) {
+    const found = customTemplates.find(t => t.id === id);
+    if (found) return found;
+  }
+  if (_customTemplatesProvider) {
+    const fromProvider = _customTemplatesProvider();
+    if (Array.isArray(fromProvider) && fromProvider.length > 0) {
+      const found = fromProvider.find(t => t.id === id);
+      if (found) return found;
+    }
+  }
+  return deviceCatalog.find(t => t.id === id);
 }
 
 export function getTemplatesByCategory(category: DeviceCategory): DeviceTemplate[] {
   return deviceCatalog.filter(t => t.category === category);
 }
+
 
 /** A device's real category for rendering/summary purposes — its own `categoryOverride` (set via
  *  the Properties panel's "Device Type" picker, available on every device) if present, else the

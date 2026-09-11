@@ -1,6 +1,6 @@
 import { AppState, RackData, DeviceData, PortData, CableData, CableType, SelectableItem, Transform, RACK_CONSTANTS, CableBundle, ValidationAlert, PduConfig, KvmConfig, SwitchConfig, FirewallConfig, NacConfig, AtsConfig, DeviceTemplate, CloudNode, CloudContainer, CloudConnector, CloudHierarchy } from './types';
 import { eventBus } from './event-bus';
-import { getTemplate } from '../library/device-catalog';
+import { getTemplate, setCustomTemplatesProvider } from '../library/device-catalog';
 import { runValidationAlerts } from './validation';
 import { loadCustomTemplates, saveAllCustomTemplates } from '../library/custom-catalog';
 import { computeConfiguredPduLayout, computeGenericPduLayout, computeSidePduOutletPositions, sidePduOffsetX, normalizeComposition } from '../renderers/pdu-layout';
@@ -24,7 +24,9 @@ class StateManager {
   private _hasUnsavedChanges = false;
 
   constructor() {
+    setCustomTemplatesProvider(() => this.state?.customTemplates ?? []);
     this.state = {
+
       theme: 'dark',
       tool: 'select',
       transform: { x: 0, y: 0, scale: 1 },

@@ -2240,6 +2240,13 @@ export class BuildFloorView {
       });
     }
 
+    // 4. Update DC rack height if source rack defines a different height
+    const sourceUnits = sourceRack?.units || sourceRack?.heightU;
+    if (sourceUnits && typeof sourceUnits === 'number' && sourceUnits > 0 && sourceUnits !== targetDcRack.heightU) {
+      targetDcRack.heightU = sourceUnits;
+      dcState.updateRack(targetDcRack.id, { heightU: sourceUnits });
+    }
+
     // 5. Clean / purge foreign ghost racks, keeping ONLY the target rack and existing valid DC racks
     const dcFloor = dcState.getActiveFloor();
     const validDcRackIds = new Set((dcFloor?.racks || []).map(r => r.id));
