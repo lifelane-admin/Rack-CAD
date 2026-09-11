@@ -4171,8 +4171,8 @@ export class BuildFloorView {
       labelTex.colorSpace = THREE.SRGBColorSpace;
       const spriteMat = new THREE.SpriteMaterial({ map: labelTex, depthTest: false });
       const sprite = new THREE.Sprite(spriteMat);
-      // Width 760mm in 3D world, height proportional
-      const spriteW = 760;
+      // Width 800mm in 3D world, height proportional (1024x768 -> 600mm)
+      const spriteW = 800;
       const spriteH = spriteW * (hudCanvas.height / hudCanvas.width);
       sprite.scale.set(spriteW, spriteH, 1);
       const topY = (initBox.max.y > 0 ? initBox.max.y - initBox.min.y : totalHMm) + spriteH / 2 + 60;
@@ -4199,15 +4199,15 @@ export class BuildFloorView {
     this.lastRenderedFloorId = floor.id;
   }
 
-  private createRackHUDGaugeCanvas(dcRack: DcRack, rackDevices: DeviceData[], rackData: RackData): HTMLCanvasElement {
-    const W = 560;
-    const H = 400;
+  private createRackHUDGaugeCanvas(dcRack: DcRack, rackDevices: DeviceData[], _rackData: RackData): HTMLCanvasElement {
+    const W = 1024;
+    const H = 768;
     const canvas = document.createElement('canvas');
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext('2d')!;
 
-    // 1. Calculations for Power & Load
+    // 1. Calculations for Real-time Power & Space Load
     let totalWatts = 0;
     let occupiedU = 0;
     const totalU = dcRack.heightU || 42;
@@ -4224,307 +4224,363 @@ export class BuildFloorView {
     });
 
     const powerKw = totalWatts / 1000;
-    const configuredPduCapWatts = getRackPowerCapacityWatts(rackData, stateManager.getState().devices || []);
-    let maxKw = 15;
-    if (configuredPduCapWatts > 0) {
-      maxKw = Math.max(10, Math.ceil((configuredPduCapWatts / 1000) / 5) * 5);
-    } else if (powerKw > 20) {
-      maxKw = 30;
-    } else if (powerKw > 12) {
-      maxKw = 20;
-    } else if (powerKw > 8) {
-      maxKw = 15;
-    } else {
-      maxKw = 10;
+    const loadPercent = Math.min(100, Math.round((occupiedU / totalU) * 1000) / 10);
+    // Scale for power: 0KW to 20KW (as specified in SVG design)
+    const powerRatio = Math.max(0, Math.min(1, powerKw / 20));
+    const loadRatio = Math.max(0, Math.min(1, loadPercent / 100));
+
+    // 2. Background Gradient & Subtle Grid (SVG: #bg & #network)
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+    bgGrad.addColorStop(0, '#202832');
+    bgGrad.addColorStop(1, '#101820');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle Network Pattern
+    ctx.strokeStyle = 'rgba(83, 101, 116, 0.14)';
+    ctx.fillStyle = 'rgba(145, 162, 175, 0.18)';
+    ctx.lineWidth = 1;
+    for (let py = 40; py < H; py += 90) {
+      for (let px = 0; px < W; px += 150) {
+        ctx.beginPath();
+        ctx.moveTo(px, py + 65);
+        ctx.lineTo(px + 55, py + 30);
+        ctx.lineTo(px + 105, py + 62);
+        ctx.lineTo(px + 150, py + 25);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(px + 55, py + 30, 2, 0, Math.PI * 2);
+        ctx.arc(px + 105, py + 62, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
-    const loadPercent = Math.min(100, Math.round((occupiedU / totalU) * 100));
-    const powerPercent = Math.min(100, Math.round((powerKw / maxKw) * 100));
-
-    // 2. Glassmorphism Card Background with Glow
-    ctx.clearRect(0, 0, W, H);
-    
-    // Ambient back-glow
-    ctx.save();
-    ctx.shadowColor = 'rgba(56, 189, 248, 0.45)';
-    ctx.shadowBlur = 28;
-    ctx.fillStyle = 'rgba(11, 17, 32, 0.94)';
-    ctx.beginPath();
-    ctx.roundRect(12, 12, W - 24, H - 24, 24);
-    ctx.fill();
-    ctx.restore();
-
-    // Dark Card Base
-    const cardGrad = ctx.createLinearGradient(0, 12, 0, H - 12);
-    cardGrad.addColorStop(0, 'rgba(15, 23, 42, 0.96)');
-    cardGrad.addColorStop(1, 'rgba(9, 13, 24, 0.98)');
-    ctx.fillStyle = cardGrad;
-    ctx.beginPath();
-    ctx.roundRect(12, 12, W - 24, H - 24, 24);
-    ctx.fill();
-
-    // Border with neon cyan accent
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.65)';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.roundRect(12, 12, W - 24, H - 24, 24);
-    ctx.stroke();
-
-    // Top Header Banner
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 24px system-ui, -apple-system, sans-serif';
+    // Top Header Banner with Rack Name & Info
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(dcRack.name, W / 2, 40);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 30px system-ui, -apple-system, sans-serif';
+    ctx.fillText(dcRack.name.toUpperCase(), W / 2, 48);
 
     ctx.fillStyle = '#94a3b8';
-    ctx.font = 'bold 13px monospace';
-    ctx.fillText(`${dcRack.heightU}U • (${dcRack.position.x.toFixed(1)}m, ${dcRack.position.y.toFixed(1)}m) • ${rackDevices.length} Devices`, W / 2, 64);
+    ctx.font = 'bold 15px monospace';
+    ctx.fillText(`${dcRack.heightU}U Cabinet  •  Pos: (${dcRack.position.x.toFixed(1)}m, ${dcRack.position.y.toFixed(1)}m)  •  ${rackDevices.length} Devices Mounted`, W / 2, 82);
 
-    // 3. Dual Radial Gauge Setup (Center: Cx = 280, Cy = 238)
-    const Cx = W / 2;
-    const Cy = 238;
-    const startAngle = Math.PI + 0.12; // ~187 deg
-    const endAngle = -0.12;           // ~-7 deg
-    const totalAngleRange = endAngle - startAngle;
+    // 3. Geometry Setup: Center Origin (512, 680)
+    const Cx = 512;
+    const Cy = 680;
 
-    const getAngle = (t: number) => {
-      const clamped = Math.max(0, Math.min(1, t));
-      return startAngle + clamped * totalAngleRange;
-    };
-
-    const drawArcSegment = (rInner: number, rOuter: number, a1: number, a2: number, fillStyle: string | CanvasGradient) => {
+    // Helper to draw a semi-annular arc between angle PI (180deg, Left) and 0 (0deg, Right)
+    const drawHalfArc = (rOuter: number, rInner: number, startA: number, endA: number) => {
       ctx.beginPath();
-      ctx.arc(Cx, Cy, rOuter, a1, a2, false);
-      ctx.arc(Cx, Cy, rInner, a2, a1, true);
+      ctx.arc(Cx, Cy, rOuter, startA, endA, true); // counterclockwise from startA to endA
+      ctx.lineTo(Cx + rInner * Math.cos(endA), Cy - rInner * Math.sin(endA));
+      ctx.arc(Cx, Cy, rInner, endA, startA, false); // clockwise back to startA
       ctx.closePath();
-      ctx.fillStyle = fillStyle;
-      ctx.fill();
     };
 
-    // ── A. OUTER ARC: POWER CONSUMPTION (kW) ──
-    const RoutInner = 126;
-    const RoutOuter = 146;
+    // ── A. OUTER GLASS BEZEL (R: 485 -> 438) ──
+    const bezelGrad = ctx.createLinearGradient(0, Cy - 485, 0, Cy);
+    bezelGrad.addColorStop(0, 'rgba(140, 152, 163, 0.40)');
+    bezelGrad.addColorStop(0.35, 'rgba(102, 114, 126, 0.25)');
+    bezelGrad.addColorStop(1, 'rgba(45, 57, 68, 0.25)');
 
-    // Track Background
-    drawArcSegment(RoutInner, RoutOuter, startAngle, endAngle, 'rgba(30, 41, 59, 0.7)');
-
-    // Color gradient for active power track
-    const pwrGrad = ctx.createLinearGradient(Cx - RoutOuter, Cy, Cx + RoutOuter, Cy);
-    pwrGrad.addColorStop(0.0, '#10b981'); // Emerald
-    pwrGrad.addColorStop(0.45, '#eab308'); // Yellow
-    pwrGrad.addColorStop(0.75, '#f97316'); // Orange
-    pwrGrad.addColorStop(1.0, '#ef4444'); // Red
-
-    const powerRatio = Math.max(0.01, Math.min(1, powerKw / maxKw));
-    const powerAngle = getAngle(powerRatio);
-    drawArcSegment(RoutInner, RoutOuter, startAngle, powerAngle, pwrGrad);
-
-    // Outer Arc Glow on active segment
-    ctx.save();
-    ctx.shadowColor = '#38bdf8';
-    ctx.shadowBlur = 10;
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(Cx, Cy, RoutOuter + 1, startAngle, powerAngle, false);
+    ctx.fillStyle = bezelGrad;
+    ctx.strokeStyle = '#7e8994';
+    ctx.lineWidth = 2;
+    drawHalfArc(485, 438, 0, Math.PI);
+    ctx.fill();
     ctx.stroke();
-    ctx.restore();
 
-    // Outer Scale Ticks & Labels (kW)
-    const numPwrTicks = 5;
-    ctx.font = 'bold 10px monospace';
+    // ── B. OUTER RACK LOAD ARC (R: 450 -> 380) ──
+    // Dark track background
+    ctx.fillStyle = '#29333d';
+    ctx.strokeStyle = '#48535e';
+    ctx.lineWidth = 2;
+    drawHalfArc(450, 380, 0, Math.PI);
+    ctx.fill();
+    ctx.stroke();
+
+    // Rack Load Gradient Fill (0% Green -> 50% Yellow -> 100% Red)
+    const rackGrad = ctx.createLinearGradient(Cx - 450, 0, Cx + 450, 0);
+    rackGrad.addColorStop(0.00, '#19e875');
+    rackGrad.addColorStop(0.30, '#5df05c');
+    rackGrad.addColorStop(0.50, '#ffd21a');
+    rackGrad.addColorStop(0.72, '#ff7a1a');
+    rackGrad.addColorStop(1.00, '#ff1538');
+
+    ctx.fillStyle = rackGrad;
+    drawHalfArc(450, 380, 0, Math.PI);
+    ctx.fill();
+
+    // Inner edge of Rack arc (R: 380 -> 350)
+    ctx.fillStyle = '#252f39';
+    ctx.strokeStyle = '#52606b';
+    ctx.lineWidth = 2;
+    drawHalfArc(380, 350, 0, Math.PI);
+    ctx.fill();
+    ctx.stroke();
+
+    // ── C. INNER POWER ARC (R: 330 -> 282) ──
+    // Dark track background
+    ctx.fillStyle = '#111b24';
+    ctx.strokeStyle = '#303e4b';
+    ctx.lineWidth = 2;
+    drawHalfArc(330, 282, 0, Math.PI);
+    ctx.fill();
+    ctx.stroke();
+
+    // Power Gradient Fill (0KW Green -> 10KW Yellow -> 20KW Red)
+    const powerGrad = ctx.createLinearGradient(Cx - 330, 0, Cx + 330, 0);
+    powerGrad.addColorStop(0.00, '#18e85f');
+    powerGrad.addColorStop(0.30, '#8bf21e');
+    powerGrad.addColorStop(0.50, '#ffd21a');
+    powerGrad.addColorStop(0.75, '#ff7419');
+    powerGrad.addColorStop(1.00, '#ff1739');
+
+    ctx.fillStyle = powerGrad;
+    drawHalfArc(330, 282, 0, Math.PI);
+    ctx.fill();
+
+    // Inner glass edge of power arc (R: 282 -> 265)
+    ctx.fillStyle = 'rgba(18, 29, 38, 0.65)';
+    drawHalfArc(282, 265, 0, Math.PI);
+    ctx.fill();
+
+    // ── D. SCALE TICKS & LABELS ──
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    for (let i = 0; i <= numPwrTicks; i++) {
-      const frac = i / numPwrTicks;
-      const angle = getAngle(frac);
-      const val = Math.round(frac * maxKw);
-      
-      const tx1 = Cx + (RoutOuter + 3) * Math.cos(angle);
-      const ty1 = Cy + (RoutOuter + 3) * Math.sin(angle);
-      const tx2 = Cx + (RoutOuter + 8) * Math.cos(angle);
-      const ty2 = Cy + (RoutOuter + 8) * Math.sin(angle);
-      
-      ctx.strokeStyle = '#64748b';
-      ctx.lineWidth = 1.5;
+
+    // 1. Rack Load Ticks (0% to 100%, 11 steps of 10%)
+    ctx.font = 'bold 18px Arial, Helvetica, sans-serif';
+    for (let i = 0; i <= 10; i++) {
+      const frac = i / 10;
+      const angle = Math.PI * (1 - frac);
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+
+      // Tick mark line (R=450 to R=424)
+      const x1 = Cx + 450 * cosA;
+      const y1 = Cy - 450 * sinA;
+      const x2 = Cx + 424 * cosA;
+      const y2 = Cy - 424 * sinA;
+
+      ctx.strokeStyle = '#f5f7fa';
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(tx1, ty1);
-      ctx.lineTo(tx2, ty2);
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
       ctx.stroke();
 
-      const lx = Cx + (RoutOuter + 20) * Math.cos(angle);
-      const ly = Cy + (RoutOuter + 20) * Math.sin(angle);
-      ctx.fillStyle = frac <= powerRatio ? '#38bdf8' : '#64748b';
-      ctx.fillText(`${val}K`, lx, ly);
+      // Label at R = 475
+      const lx = Cx + 475 * cosA;
+      const ly = Cy - 475 * sinA + (i === 0 || i === 10 ? 9 : 0);
+      ctx.fillStyle = '#f1f4f7';
+      ctx.fillText(`${i * 10}%`, lx, ly);
     }
 
-    // ── B. INNER ARC: RACK LOAD / SPACE UTILIZATION (%) ──
-    const RinInner = 88;
-    const RinOuter = 108;
+    // 2. Power Ticks (0KW to 20KW, 11 steps of 2KW)
+    ctx.font = 'bold 15px Arial, Helvetica, sans-serif';
+    for (let i = 0; i <= 10; i++) {
+      const frac = i / 10;
+      const angle = Math.PI * (1 - frac);
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
 
-    // Track Background
-    drawArcSegment(RinInner, RinOuter, startAngle, endAngle, 'rgba(30, 41, 59, 0.7)');
+      // Tick mark line (R=330 to R=307)
+      const x1 = Cx + 330 * cosA;
+      const y1 = Cy - 330 * sinA;
+      const x2 = Cx + 307 * cosA;
+      const y2 = Cy - 307 * sinA;
 
-    // Color gradient for active load track
-    const loadGrad = ctx.createLinearGradient(Cx - RinOuter, Cy, Cx + RinOuter, Cy);
-    loadGrad.addColorStop(0.0, '#3b82f6');
-    loadGrad.addColorStop(0.4, '#10b981');
-    loadGrad.addColorStop(0.7, '#f59e0b');
-    loadGrad.addColorStop(1.0, '#ec4899');
-
-    const loadRatio = Math.max(0.01, Math.min(1, loadPercent / 100));
-    const loadAngle = getAngle(loadRatio);
-    drawArcSegment(RinInner, RinOuter, startAngle, loadAngle, loadGrad);
-
-    // Inner Scale Ticks & Labels (%)
-    const numLoadTicks = 4;
-    ctx.font = 'bold 9px monospace';
-    for (let i = 0; i <= numLoadTicks; i++) {
-      const frac = i / numLoadTicks;
-      const angle = getAngle(frac);
-      const val = Math.round(frac * 100);
-
-      const tx1 = Cx + (RinInner - 2) * Math.cos(angle);
-      const ty1 = Cy + (RinInner - 2) * Math.sin(angle);
-      const tx2 = Cx + (RinInner - 6) * Math.cos(angle);
-      const ty2 = Cy + (RinInner - 6) * Math.sin(angle);
-
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = '#f5f7fa';
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(tx1, ty1);
-      ctx.lineTo(tx2, ty2);
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
       ctx.stroke();
 
-      const lx = Cx + (RinInner - 16) * Math.cos(angle);
-      const ly = Cy + (RinInner - 16) * Math.sin(angle);
-      ctx.fillStyle = frac <= loadRatio ? '#c084fc' : '#475569';
-      ctx.fillText(`${val}%`, lx, ly);
+      // Label at R = 350
+      const lx = Cx + 350 * cosA;
+      const ly = Cy - 350 * sinA + (i === 0 || i === 10 ? 7 : 0);
+      ctx.fillStyle = '#f1f4f7';
+      ctx.fillText(`${i * 2}KW`, lx, ly);
     }
 
-    // ── C. ACCURATE NEEDLES (Exact Geometric Pointers) ──
+    // ── E. SECTION TITLES ──
+    ctx.fillStyle = '#d3dce3';
+    ctx.font = 'bold 20px Arial, Helvetica, sans-serif';
+    ctx.fillText('RACK LOAD', Cx, 245);
 
-    // 1. Power Needle (Cyan Pointer reaching Outer Arc)
+    ctx.font = 'bold 19px Arial, Helvetica, sans-serif';
+    ctx.fillText('POWER (kW)', Cx, 355);
+
+    // Decorative Rack Icon at (Cx, 399)
     ctx.save();
-    ctx.shadowColor = 'rgba(56, 189, 248, 0.95)';
-    ctx.shadowBlur = 12;
-
-    const pTipX = Cx + (RoutOuter + 4) * Math.cos(powerAngle);
-    const pTipY = Cy + (RoutOuter + 4) * Math.sin(powerAngle);
-    const pBaseL_X = Cx + 8 * Math.cos(powerAngle + Math.PI / 2);
-    const pBaseL_Y = Cy + 8 * Math.sin(powerAngle + Math.PI / 2);
-    const pBaseR_X = Cx + 8 * Math.cos(powerAngle - Math.PI / 2);
-    const pBaseR_Y = Cy + 8 * Math.sin(powerAngle - Math.PI / 2);
-    const pTailX = Cx - 16 * Math.cos(powerAngle);
-    const pTailY = Cy - 16 * Math.sin(powerAngle);
-
-    ctx.fillStyle = '#38bdf8';
+    ctx.strokeStyle = '#d5dde4';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = 'transparent';
     ctx.beginPath();
-    ctx.moveTo(pTipX, pTipY);
-    ctx.lineTo(pBaseL_X, pBaseL_Y);
-    ctx.lineTo(pTailX, pTailY);
-    ctx.lineTo(pBaseR_X, pBaseR_Y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
+    ctx.roundRect(Cx - 13, 399, 26, 30, 2);
     ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(Cx - 8, 407);
+    ctx.lineTo(Cx + 7, 407);
+    ctx.moveTo(Cx - 8, 413);
+    ctx.lineTo(Cx + 7, 413);
+    ctx.moveTo(Cx - 8, 419);
+    ctx.lineTo(Cx + 3, 419);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(Cx + 7, 423, 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#d5dde4';
+    ctx.fill();
     ctx.restore();
 
-    // 2. Load Needle (Magenta / Purple Pointer reaching Inner Arc)
+    // ── F. MATHEMATICALLY ACCURATE NEEDLES ──
+
+    // 1. Rack Load Needle (Purple / Violet glowing pointer pointing to Outer Arc)
+    const thetaLoad = Math.PI * (1 - loadRatio);
+    const loadNeedleLen = 430;
+    const lTipX = Cx + loadNeedleLen * Math.cos(thetaLoad);
+    const lTipY = Cy - loadNeedleLen * Math.sin(thetaLoad);
+
     ctx.save();
-    ctx.shadowColor = 'rgba(232, 121, 249, 0.95)';
-    ctx.shadowBlur = 12;
-
-    const lTipX = Cx + (RinOuter + 4) * Math.cos(loadAngle);
-    const lTipY = Cy + (RinOuter + 4) * Math.sin(loadAngle);
-    const lBaseL_X = Cx + 6 * Math.cos(loadAngle + Math.PI / 2);
-    const lBaseL_Y = Cy + 6 * Math.sin(loadAngle + Math.PI / 2);
-    const lBaseR_X = Cx + 6 * Math.cos(loadAngle - Math.PI / 2);
-    const lBaseR_Y = Cy + 6 * Math.sin(loadAngle - Math.PI / 2);
-    const lTailX = Cx - 12 * Math.cos(loadAngle);
-    const lTailY = Cy - 12 * Math.sin(loadAngle);
-
-    ctx.fillStyle = '#c084fc';
+    ctx.shadowColor = '#c58cff';
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = '#c58cff';
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(lTipX, lTipY);
-    ctx.lineTo(lBaseL_X, lBaseL_Y);
-    ctx.lineTo(lTailX, lTailY);
-    ctx.lineTo(lBaseR_X, lBaseR_Y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
+    ctx.moveTo(Cx, Cy);
+    ctx.lineTo(lTipX, lTipY);
     ctx.stroke();
-    ctx.restore();
 
-    // Center Needle Pivot Hub
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath();
-    ctx.arc(Cx, Cy, 12, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#38bdf8';
+    ctx.strokeStyle = '#e0bdff';
     ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(Cx, Cy);
+    ctx.lineTo(lTipX, lTipY);
+    ctx.stroke();
+    ctx.restore();
+
+    // 2. Power Needle (Metallic Silver/White pointer pointing to Inner Arc)
+    const thetaPower = Math.PI * (1 - powerRatio);
+    const pwrNeedleLen = 315;
+    const pTipX = Cx + pwrNeedleLen * Math.cos(thetaPower);
+    const pTipY = Cy - pwrNeedleLen * Math.sin(thetaPower);
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(219, 229, 238, 0.7)';
+    ctx.shadowBlur = 10;
+    ctx.strokeStyle = '#dbe5ee';
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(Cx, Cy);
+    ctx.lineTo(pTipX, pTipY);
+    ctx.stroke();
+    ctx.restore();
+
+    // Center Hub Pointer Diamond
+    ctx.fillStyle = '#e7eef4';
+    ctx.beginPath();
+    ctx.moveTo(Cx, Cy - 25);
+    ctx.lineTo(Cx + 8, Cy);
+    ctx.lineTo(Cx, Cy + 20);
+    ctx.lineTo(Cx - 8, Cy);
+    ctx.closePath();
+    ctx.fill();
+
+    // Center Pivot Hub Circle (R = 19)
+    ctx.fillStyle = '#17212b';
+    ctx.strokeStyle = '#aebbc8';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(Cx, Cy, 19, 0, Math.PI * 2);
+    ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = '#38bdf8';
+    // Center Hub Dot
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.arc(Cx, Cy, 4, 0, Math.PI * 2);
     ctx.fill();
 
-    // ── D. DIGITAL READOUT DISPLAY PANEL (Bottom Pill) ──
-    const rx = 32;
-    const ry = 276;
-    const rw = W - 64;
-    const rh = 96;
+    // ── G. CENTER DIGITAL INFORMATION PANEL ──
+    const px = 345;
+    const py = 485;
+    const pw = 334;
+    const ph = 142;
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+    ctx.fillStyle = 'rgba(11, 20, 29, 0.88)';
+    ctx.strokeStyle = '#2b3945';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(rx, ry, rw, rh, 14);
+    ctx.roundRect(px, py, pw, ph, 18);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(rx, ry, rw, rh, 14);
     ctx.stroke();
 
-    // Vertical Divider
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.8)';
+    // Divider line at Y = 556
+    ctx.strokeStyle = '#52606b';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(Cx, ry + 10);
-    ctx.lineTo(Cx, ry + rh - 10);
+    ctx.moveTo(px + 30, py + 71);
+    ctx.lineTo(px + pw - 30, py + 71);
     ctx.stroke();
 
-    // Left Column: Power
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = 'bold 12px system-ui, sans-serif';
-    ctx.fillText('⚡ POWER USAGE', (rx + Cx) / 2, ry + 12);
+    // Upper Section: Power
+    ctx.fillStyle = '#b9c5cf';
+    ctx.font = 'bold 15px Arial, Helvetica, sans-serif';
+    ctx.fillText('POWER', Cx, py + 33);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 22px system-ui, sans-serif';
-    ctx.fillText(`${powerKw.toFixed(2)} kW`, (rx + Cx) / 2, ry + 32);
+    ctx.font = 'bold 29px Arial, Helvetica, sans-serif';
+    ctx.fillText(`${powerKw.toFixed(1)}KW`, Cx, py + 62);
 
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '11px monospace';
-    ctx.fillText(`${powerPercent}% of ${maxKw} kW max`, (rx + Cx) / 2, ry + 64);
-
-    // Right Column: Rack Load
-    ctx.fillStyle = '#c084fc';
-    ctx.font = 'bold 12px system-ui, sans-serif';
-    ctx.fillText('🖥️ RACK SPACE LOAD', (Cx + rx + rw) / 2, ry + 12);
+    // Lower Section: Rack Load
+    ctx.fillStyle = '#b9c5cf';
+    ctx.font = 'bold 15px Arial, Helvetica, sans-serif';
+    ctx.fillText('RACK LOAD', Cx, py + 100);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 22px system-ui, sans-serif';
-    ctx.fillText(`${loadPercent}%`, (Cx + rx + rw) / 2, ry + 32);
+    ctx.font = 'bold 29px Arial, Helvetica, sans-serif';
+    ctx.fillText(`${loadPercent.toFixed(1)}%`, Cx, py + 128);
 
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '11px monospace';
-    ctx.fillText(`${occupiedU} of ${totalU} RU used`, (Cx + rx + rw) / 2, ry + 64);
+    // ── H. STATUS READOUT (Bottom Center) ──
+    let statusText = 'OK / OPTIMAL';
+    let statusColor = '#63ee55';
+    if (loadPercent >= 90 || powerKw >= 18) {
+      statusText = 'CRITICAL / OVERLOAD';
+      statusColor = '#ff1538';
+    } else if (loadPercent >= 75 || powerKw >= 15) {
+      statusText = 'WARNING / HIGH LOAD';
+      statusColor = '#ffd21a';
+    }
+
+    // Status circular badge at (395, 705)
+    ctx.save();
+    ctx.strokeStyle = statusColor === '#63ee55' ? '#f6bf16' : statusColor;
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.arc(395, 705, 18, -Math.PI * 0.7, Math.PI * 0.8);
+    ctx.stroke();
+
+    ctx.fillStyle = statusColor;
+    ctx.beginPath();
+    ctx.arc(395, 705, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#c6d0d8';
+    ctx.font = '15px Arial, Helvetica, sans-serif';
+    ctx.fillText('Total Rack Status', 428, 695);
+
+    ctx.fillStyle = statusColor;
+    ctx.font = 'bold 19px Arial, Helvetica, sans-serif';
+    ctx.fillText(statusText, 428, 719);
 
     return canvas;
   }
