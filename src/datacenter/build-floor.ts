@@ -7,7 +7,8 @@ import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacing
 import { RACK_PRESETS, SPACING_STANDARDS, RackPreset, SpacingStandardInfo } from './standards';
 import { stateManager } from '../core/state';
 import { eventBus } from '../core/event-bus';
-import { RackData, RACK_CONSTANTS } from '../core/types';
+import { RackData, RACK_CONSTANTS, DeviceData, DeviceTemplate } from '../core/types';
+import { downloadFile } from '../utils/export';
 import { buildDeviceMesh } from '../three/device-builder';
 import { getTemplate } from '../library/device-catalog';
 import { DEVICE_FACE_Z } from '../three/rack-builder';
@@ -1785,6 +1786,8 @@ export class BuildFloorView {
             </div>
             <div class="dc-props-actions">
               <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="${isGlobal ? 'g-dc-rack-work' : 'dc-rack-work'}" title="Mount devices, servers & switches in this rack">⚙ Work on this Rack (Mount Devices)</button>
+              <button class="dc-btn dc-btn-sm dc-btn-secondary dc-btn-full" id="${isGlobal ? 'g-dc-rack-import-json' : 'dc-rack-import-json'}" title="Import servers & equipment from a previously saved Rack JSON file into this rack">📥 Import Rack JSON</button>
+              <button class="dc-btn dc-btn-sm dc-btn-secondary dc-btn-full" id="${isGlobal ? 'g-dc-rack-export-json' : 'dc-rack-export-json'}" title="Export this rack's equipment configuration to a reusable JSON file">📤 Export Rack JSON</button>
               <button class="dc-btn dc-btn-sm" id="${isGlobal ? 'g-dc-rack-zoom' : 'dc-rack-zoom'}" title="Zoom and center view directly onto this rack (Hotkey: Z)">🔍 Zoom to Rack (Hotkey: Z)</button>
               <button class="dc-btn dc-btn-sm" id="${isGlobal ? 'g-dc-rack-move' : 'dc-rack-move'}" title="Move and reposition rack on floor grid (Hotkey: M)">✋ Move Rack</button>
               <button class="dc-btn dc-btn-sm" id="${isGlobal ? 'g-dc-rack-rotate' : 'dc-rack-rotate'}" title="Rotate 90° (Hotkey: R)">↻ Rotate 90° (R)</button>
@@ -1802,6 +1805,8 @@ export class BuildFloorView {
           el.querySelector(`${prefix}dc-nudge-right`)?.addEventListener('click', () => this.nudgeRack(rack.id, stepM, 0));
 
           el.querySelector(`${prefix}dc-rack-work`)?.addEventListener('click', () => this.workOnRack(rack));
+          el.querySelector(`${prefix}dc-rack-import-json`)?.addEventListener('click', () => this.importRackJSON(rack.id));
+          el.querySelector(`${prefix}dc-rack-export-json`)?.addEventListener('click', () => this.exportRackJSON(rack.id));
           el.querySelector(`${prefix}dc-rack-zoom`)?.addEventListener('click', () => this.zoomToSelectedRack());
           el.querySelector(`${prefix}dc-rack-move`)?.addEventListener('click', () => this.startMovingRack(rack.id));
           el.querySelector(`${prefix}dc-rack-rotate`)?.addEventListener('click', () => {
@@ -2033,17 +2038,247 @@ export class BuildFloorView {
         <span class="dc-floating-badge-icon">⚡</span>
         <span class="dc-floating-badge-text">Rack Elevation: <b>${rack.name}</b> <span class="dc-floating-badge-meta">(${rack.heightU}U ${rack.type.toUpperCase()})</span></span>
       </div>
-      <button class="dc-btn-floating-return" id="dc-btn-return-dc" title="Return to Datacenter 2D/3D Floor Plan">
-        <span>← Return to Datacenter</span>
-      </button>
+      <div class="dc-floating-badge-actions">
+        <button class="dc-btn-floating-action" id="dc-btn-elevation-import" title="Import servers & equipment from a previously saved Rack JSON file into this rack">📥 Import JSON</button>
+        <button class="dc-btn-floating-action" id="dc-btn-elevation-export" title="Export this rack configuration to a reusable JSON file">📤 Export JSON</button>
+        <button class="dc-btn-floating-return" id="dc-btn-return-dc" title="Return to Datacenter 2D/3D Floor Plan">
+          <span>← Return to Datacenter</span>
+        </button>
+      </div>
     `;
 
     parent.appendChild(banner);
+
+    banner.querySelector('#dc-btn-elevation-import')?.addEventListener('click', () => {
+      this.importRackJSON(rack.id);
+    });
+
+    banner.querySelector('#dc-btn-elevation-export')?.addEventListener('click', () => {
+      this.exportRackJSON(rack.id);
+    });
 
     banner.querySelector('#dc-btn-return-dc')?.addEventListener('click', () => {
       stateManager.setState({ activeElevationRackId: null });
       eventBus.emit('view:switch' as any, 'datacenter');
       banner?.remove();
+    });
+  }
+
+  public importRackJSON(targetRackId: string) {
+    const floor = dcState.getActiveFloor();
+    if (!floor) return;
+    const targetDcRack = floor.racks.find(r => r.id === targetRackId);
+    if (!targetDcRack) return;
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e: any) => {
+      const file: File | undefined = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const rawText = reader.result as string;
+          const data = JSON.parse(rawText);
+
+          let sourceRack: any = null;
+          let sourceDevices: DeviceData[] = [];
+          let sourceTemplates: DeviceTemplate[] = [];
+
+          if (data.type === 'rack-config' && data.rack) {
+            sourceRack = data.rack;
+            sourceDevices = data.devices || [];
+            sourceTemplates = data.customTemplates || [];
+            this.applyImportedRackConfig(targetDcRack, sourceRack, sourceDevices, sourceTemplates);
+          } else if (data.racks && Array.isArray(data.racks)) {
+            sourceTemplates = data.customTemplates || [];
+            if (data.racks.length === 0) {
+              eventBus.emit('notification', { message: 'No racks found in this JSON file.', type: 'warning' });
+              return;
+            } else if (data.racks.length === 1) {
+              sourceRack = data.racks[0];
+              sourceDevices = (data.devices || []).filter((d: any) => d.rackId === sourceRack.id || !d.rackId);
+              this.applyImportedRackConfig(targetDcRack, sourceRack, sourceDevices, sourceTemplates);
+            } else {
+              this.showRackPickerModal(targetDcRack, data.racks, data.devices || [], sourceTemplates);
+            }
+          } else if (Array.isArray(data.devices)) {
+            sourceDevices = data.devices;
+            sourceTemplates = data.customTemplates || [];
+            this.applyImportedRackConfig(targetDcRack, null, sourceDevices, sourceTemplates);
+          } else {
+            throw new Error('Unrecognized rack JSON format.');
+          }
+        } catch (err: any) {
+          eventBus.emit('notification', { message: `Import failed: ${err.message || err}`, type: 'error' });
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+
+  private showRackPickerModal(
+    targetDcRack: DcRack,
+    racks: any[],
+    allDevices: DeviceData[],
+    customTemplates: DeviceTemplate[]
+  ) {
+    const listHtml = racks.map((r, idx) => {
+      const devCount = allDevices.filter(d => d.rackId === r.id).length;
+      return `
+        <div class="dc-rack-picker-item" data-rack-idx="${idx}" style="padding:10px 14px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;margin-bottom:8px;cursor:pointer;background:rgba(255,255,255,0.02);display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-weight:700;color:#f0f6fc;font-size:13px;">${r.name || r.id}</div>
+            <div style="font-size:11px;color:#94a3b8;">${r.units || r.heightU || 42}U • ${r.rackType || 'Server Rack'}</div>
+          </div>
+          <div style="text-align:right;">
+            <span style="font-size:12px;color:#38bdf8;font-weight:600;background:rgba(56,189,248,0.12);padding:2px 8px;border-radius:12px;">${devCount} devices</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    this.showModal(`Import Rack Configuration into ${targetDcRack.name}`, `
+      <p style="font-size:12px;color:#94a3b8;margin-bottom:12px;">Select which rack configuration to load into <b>${targetDcRack.name}</b>:</p>
+      <div style="max-height:260px;overflow-y:auto;margin-bottom:10px;">${listHtml}</div>
+    `, 'Cancel', () => true, false);
+
+    const modalEl = document.getElementById('dc-modal-overlay');
+    modalEl?.querySelectorAll('.dc-rack-picker-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const idx = parseInt(item.getAttribute('data-rack-idx') || '0', 10);
+        const selRack = racks[idx];
+        const selDevices = allDevices.filter(d => d.rackId === selRack.id);
+        modalEl.remove();
+        this.applyImportedRackConfig(targetDcRack, selRack, selDevices, customTemplates);
+      });
+    });
+  }
+
+  private applyImportedRackConfig(
+    targetDcRack: DcRack,
+    sourceRack: any,
+    sourceDevices: DeviceData[],
+    sourceTemplates: DeviceTemplate[]
+  ) {
+    const s = stateManager.getState();
+
+    // 1. Merge custom templates
+    if (sourceTemplates && sourceTemplates.length > 0) {
+      const existing = s.customTemplates || [];
+      const existIds = new Set(existing.map(t => t.id));
+      const merged = [...existing, ...sourceTemplates.filter(t => !existIds.has(t.id))];
+      stateManager.setState({ customTemplates: merged });
+    }
+
+    // 2. Remove previous devices in target rack
+    const otherDevices = s.devices.filter(d => d.rackId !== targetDcRack.id);
+
+    // 3. Remap devices to target rack
+    const newDevices: DeviceData[] = sourceDevices.map(d => {
+      const newDevId = `dev-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
+      const devPorts = (d.ports || []).map((p: any) => ({
+        ...p,
+        deviceId: newDevId,
+        id: `port-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`,
+        connected: false,
+        cableId: null,
+      }));
+
+      return {
+        ...d,
+        id: newDevId,
+        rackId: targetDcRack.id,
+        ports: devPorts,
+      };
+    });
+
+    // 4. Update Rack Data in stateManager.racks
+    const existingRackData = s.racks.find(r => r.id === targetDcRack.id);
+    const updatedRackData: RackData = {
+      id: targetDcRack.id,
+      name: targetDcRack.name,
+      units: targetDcRack.heightU,
+      depthMm: targetDcRack.depthMm,
+      rackType: (targetDcRack.type === 'open-frame' ? 'open-frame' : targetDcRack.type === 'network' ? 'network' : targetDcRack.type === 'wall-mount' ? 'wall-mount' : 'server') as any,
+      mounting: targetDcRack.mounting ?? 'floor',
+      rackColor: targetDcRack.color ?? '#1e3a5f',
+      x: existingRackData ? existingRackData.x : 200,
+      y: existingRackData ? existingRackData.y : 40,
+      leftCableManagerWidth: sourceRack?.leftCableManagerWidth || existingRackData?.leftCableManagerWidth,
+      rightCableManagerWidth: sourceRack?.rightCableManagerWidth || existingRackData?.rightCableManagerWidth,
+      leftPduId: existingRackData?.leftPduId,
+      rightPduId: existingRackData?.rightPduId,
+    };
+
+    const updatedRacks = [
+      ...s.racks.filter(r => r.id !== targetDcRack.id),
+      updatedRackData,
+    ];
+
+    stateManager.setState({
+      racks: updatedRacks,
+      devices: [...otherDevices, ...newDevices],
+    });
+
+    eventBus.emit('device:added' as any, newDevices[0] || ({} as any));
+    eventBus.emit('state:changed' as any, undefined);
+    this.refresh();
+
+    const activeFloor = dcState.getActiveFloor();
+    if (activeFloor) {
+      this.rebuildThreeScene(activeFloor);
+    }
+    this.renderPropsPanel();
+
+    eventBus.emit('notification', {
+      message: `Successfully imported ${newDevices.length} devices into ${targetDcRack.name}!`,
+      type: 'success',
+    });
+  }
+
+  public exportRackJSON(rackId: string) {
+    const floor = dcState.getActiveFloor();
+    const dcRack = floor?.racks.find(r => r.id === rackId);
+    if (!dcRack) return;
+
+    const s = stateManager.getState();
+    const rackData = s.racks.find(r => r.id === rackId);
+    const devices = s.devices.filter(d => d.rackId === rackId);
+
+    const templateIds = new Set(devices.map(d => d.templateId));
+    const usedCustomTemplates = (s.customTemplates || []).filter(t => templateIds.has(t.id));
+
+    const exportPayload = {
+      version: '1.0.0',
+      type: 'rack-config',
+      exportedAt: new Date().toISOString(),
+      rack: {
+        id: dcRack.id,
+        name: dcRack.name,
+        heightU: dcRack.heightU,
+        widthMm: dcRack.widthMm,
+        depthMm: dcRack.depthMm,
+        type: dcRack.type,
+        mounting: dcRack.mounting,
+        color: dcRack.color,
+        doorStyle: dcRack.doorStyle,
+        leftCableManagerWidth: rackData?.leftCableManagerWidth,
+        rightCableManagerWidth: rackData?.rightCableManagerWidth,
+      },
+      devices: devices,
+      customTemplates: usedCustomTemplates,
+    };
+
+    const jsonStr = JSON.stringify(exportPayload, null, 2);
+    const safeName = dcRack.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    downloadFile(jsonStr, `rack-${safeName}-config.json`, 'application/json');
+    eventBus.emit('notification', {
+      message: `Exported ${dcRack.name} config (${devices.length} devices) to JSON.`,
+      type: 'success',
     });
   }
 
@@ -2060,6 +2295,8 @@ export class BuildFloorView {
     menu.innerHTML = `
       <div class="dc-menu-header">${rack.name} (${rack.heightU}U ${rack.type.toUpperCase()})</div>
       <div class="dc-menu-item primary" id="cm-work">⚙ Work on this Rack (Mount Devices)</div>
+      <div class="dc-menu-item" id="cm-import-json">📥 Import Rack Config (.json)</div>
+      <div class="dc-menu-item" id="cm-export-json">📤 Export Rack Config (.json)</div>
       <div class="dc-menu-item" id="cm-zoom">🔍 Zoom to Rack (Hotkey: Z)</div>
       <div class="dc-menu-item" id="cm-move">✋ Move Rack (Place on Floor)</div>
       <div class="dc-menu-item" id="cm-rotate">↻ Rotate 90° (R)</div>
@@ -2073,6 +2310,8 @@ export class BuildFloorView {
     const close = () => menu.remove();
 
     menu.querySelector('#cm-work')?.addEventListener('click', () => { close(); this.workOnRack(rack); });
+    menu.querySelector('#cm-import-json')?.addEventListener('click', () => { close(); this.importRackJSON(rack.id); });
+    menu.querySelector('#cm-export-json')?.addEventListener('click', () => { close(); this.exportRackJSON(rack.id); });
     menu.querySelector('#cm-zoom')?.addEventListener('click', () => { close(); this.zoomToSelectedRack(); });
     menu.querySelector('#cm-move')?.addEventListener('click', () => { close(); this.startMovingRack(rack.id); });
     menu.querySelector('#cm-rotate')?.addEventListener('click', () => {

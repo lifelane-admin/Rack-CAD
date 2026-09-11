@@ -706,6 +706,40 @@
   margin-left: 2px;
 }
 
+.dc-floating-badge-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dc-btn-floating-action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(30, 41, 59, 0.85);
+  color: #e2e8f0;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.dc-btn-floating-action:hover {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border-color: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+.dc-rack-picker-item:hover {
+  background: rgba(56, 189, 248, 0.1) !important;
+  border-color: rgba(56, 189, 248, 0.4) !important;
+}
+
 .dc-btn-floating-return {
   display: flex;
   align-items: center;
