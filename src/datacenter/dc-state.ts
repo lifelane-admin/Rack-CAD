@@ -78,6 +78,7 @@ const defaultState: DcState = {
   floorOpacity: 1.0,
   xrayMode: false,
   selectedTileId: null,
+  selectedTileIds: [],
   selectedRackId: null,
   selectedInfraId: null,
   zoom: 1,
@@ -93,6 +94,9 @@ class DcStateManager {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       this.state = saved ? { ...defaultState, ...JSON.parse(saved) } : { ...defaultState };
+      if (!Array.isArray(this.state.selectedTileIds)) {
+        this.state.selectedTileIds = this.state.selectedTileId ? [this.state.selectedTileId] : [];
+      }
     } catch {
       this.state = { ...defaultState };
     }
@@ -250,10 +254,15 @@ class DcStateManager {
   }
 
   setFloorTileType(tileId: string, type: DcTileType, airflowDir?: DcAirflowDirection): void {
+    this.setFloorTilesType([tileId], type, airflowDir);
+  }
+
+  setFloorTilesType(tileIds: string[], type: DcTileType, airflowDir?: DcAirflowDirection): void {
     const floor = this.getActiveFloor();
-    if (!floor) return;
+    if (!floor || !tileIds.length) return;
+    const idSet = new Set(tileIds);
     const tiles = floor.tiles.map(t => {
-      if (t.id === tileId) {
+      if (idSet.has(t.id)) {
         return {
           ...t,
           type,

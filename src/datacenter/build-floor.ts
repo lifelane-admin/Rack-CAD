@@ -816,10 +816,21 @@ export class BuildFloorView {
         const row = Math.floor(yM / tileM);
         const targetTile = floor.tiles.find(t => t.row === row && t.col === col);
         if (targetTile) {
-          dcState.setState({ selectedTileId: targetTile.id, selectedRackId: null });
-          this.renderPropsPanel();
-          this.draw();
-          this.showTileContextMenu(e.clientX, e.clientY, targetTile);
+          const s = dcState.getState();
+          const currentTileIds = Array.isArray(s.selectedTileIds) ? s.selectedTileIds : (s.selectedTileId ? [s.selectedTileId] : []);
+          if (currentTileIds.includes(targetTile.id) && currentTileIds.length > 1) {
+            // Right-clicked on one of the already multi-selected tiles: keep multi-selection
+            const selectedTiles = floor.tiles.filter(t => currentTileIds.includes(t.id));
+            this.renderPropsPanel();
+            this.draw();
+            this.showTileContextMenu(e.clientX, e.clientY, targetTile, selectedTiles);
+          } else {
+            // Single tile select
+            dcState.setState({ selectedTileId: targetTile.id, selectedTileIds: [targetTile.id], selectedRackId: null });
+            this.renderPropsPanel();
+            this.draw();
+            this.showTileContextMenu(e.clientX, e.clientY, targetTile, [targetTile]);
+          }
           return;
         }
       }
@@ -966,7 +977,7 @@ export class BuildFloorView {
 
     for (const rack of floor.racks) {
       if (this.hitTestRack(rack, xM, yM)) {
-        dcState.setState({ selectedRackId: rack.id, selectedTileId: null });
+        dcState.setState({ selectedRackId: rack.id, selectedTileId: null, selectedTileIds: [] });
         this.pendingDragRack = true;
         this.isDraggingRack = false;
         this.draggingRackId = rack.id;
@@ -982,10 +993,28 @@ export class BuildFloorView {
     const col = Math.floor(xM / tileM);
     const row = Math.floor(yM / tileM);
     if (xM >= 0 && yM >= 0 && xM < floor.lengthM && yM < floor.widthM) {
+      const targetTile = floor.tiles.find(t => t.row === row && t.col === col);
       const rowLabel = String.fromCharCode(65 + (row % 26));
       const colLabel = String(col + 1).padStart(2, '0');
-      const tileId = `${rowLabel}-${colLabel}`;
-      dcState.setState({ selectedTileId: tileId, selectedRackId: null });
+      const tileId = targetTile ? targetTile.id : `${rowLabel}-${colLabel}`;
+
+      const isMultiKey = e.ctrlKey || e.metaKey || e.shiftKey;
+      let newSelectedIds: string[] = [];
+      const s = dcState.getState();
+      const currentIds = Array.isArray(s.selectedTileIds) ? [...s.selectedTileIds] : (s.selectedTileId ? [s.selectedTileId] : []);
+
+      if (isMultiKey) {
+        if (currentIds.includes(tileId)) {
+          newSelectedIds = currentIds.filter(id => id !== tileId);
+        } else {
+          newSelectedIds = [...currentIds, tileId];
+        }
+      } else {
+        newSelectedIds = [tileId];
+      }
+
+      const primaryTileId = newSelectedIds.length > 0 ? newSelectedIds[newSelectedIds.length - 1] : null;
+      dcState.setState({ selectedTileId: primaryTileId, selectedTileIds: newSelectedIds, selectedRackId: null });
       this.renderPropsPanel();
     } else {
       if (this.toolMode === 'pan' || e.altKey) {
@@ -993,8 +1022,10 @@ export class BuildFloorView {
         this.isPanning = false;
         this.panStartCam = { camX: this.camX, camY: this.camY, mouseX: e.clientX, mouseY: e.clientY };
       }
-      dcState.setState({ selectedTileId: null, selectedRackId: null });
-      this.renderPropsPanel();
+      if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        dcState.setState({ selectedTileId: null, selectedTileIds: [], selectedRackId: null });
+        this.renderPropsPanel();
+      }
     }
     this.draw();
   }
@@ -1189,12 +1220,15 @@ export class BuildFloorView {
       const th = tilePx;
 
       const isPartial = tile.type === 'partial';
-      const isSelected = tile.id === s.selectedTileId;
+      const isSelected = (s.selectedTileIds && s.selectedTileIds.includes(tile.id)) || tile.id === s.selectedTileId;
       const isChecker = (tile.row + tile.col) % 2 === 0;
 
       if (isSelected) {
-        // Cyan-blue tech selection glow over white ESD tile
+        // Cyan-blue tech selection glow over ESD tile
         this.ctx.fillStyle = '#bae6fd';
+      } else if (tile.type === 'ventilated') {
+        // Heavy-duty steel bar-grate ventilated plenum tile (dark plenum background)
+        this.ctx.fillStyle = '#0f172a';
       } else if (tile.type === 'perforated') {
         // High-airflow perforated cold-aisle vented tile (metallic tint)
         this.ctx.fillStyle = '#e2e8f0';
@@ -1209,6 +1243,34 @@ export class BuildFloorView {
         this.ctx.fillStyle = isChecker ? '#f8fafc' : '#f1f5f9';
       }
       this.ctx.fillRect(sx, sy, tw, th);
+
+      // Render Ventilated ESD Steel Bar Grate / Grille in 2D
+      if (tile.type === 'ventilated' && tw >= 14) {
+        this.ctx.save();
+        // 1. Steel outer border frame
+        this.ctx.strokeStyle = '#64748b';
+        this.ctx.lineWidth = Math.max(1.5, tw * 0.04);
+        this.ctx.strokeRect(sx + 1, sy + 1, tw - 2, th - 2);
+
+        // 2. Main vertical load-bearing steel bars (dense parallel bars)
+        const barSpacing = Math.max(4, Math.min(10, tw / 14));
+        const barCount = Math.floor((tw - 6) / barSpacing);
+        this.ctx.fillStyle = '#cbd5e1';
+        for (let i = 1; i <= barCount; i++) {
+          const bx = sx + 3 + i * ((tw - 6) / (barCount + 1));
+          this.ctx.fillRect(bx, sy + 2, 1.2, th - 4);
+        }
+
+        // 3. Transverse horizontal cross-tie rods (spaced further apart)
+        const tieSpacing = Math.max(8, Math.min(18, th / 7));
+        const tieCount = Math.floor((th - 6) / tieSpacing);
+        this.ctx.fillStyle = '#94a3b8';
+        for (let j = 1; j <= tieCount; j++) {
+          const by = sy + 3 + j * ((th - 6) / (tieCount + 1));
+          this.ctx.fillRect(sx + 2, by, tw - 4, 1.0);
+        }
+        this.ctx.restore();
+      }
 
       // Render Perforated Tile Dot Grille in 2D
       if (tile.type === 'perforated' && tw >= 18) {
@@ -1316,7 +1378,9 @@ export class BuildFloorView {
 
       // High-contrast Tile Coordinate ID Label (e.g. A1, A2 or A-01)
       if (s.labelsVisible && tilePx >= 20) {
-        this.ctx.fillStyle = isSelected ? '#0369a1' : (tile.type === 'air-channel' ? '#0369a1' : '#1e293b');
+        this.ctx.fillStyle = isSelected
+          ? '#0369a1'
+          : (tile.type === 'ventilated' ? '#94a3b8' : tile.type === 'air-channel' ? '#0369a1' : '#1e293b');
         const fontSize = Math.max(9, Math.min(13, Math.round(tilePx * 0.22)));
         this.ctx.font = `bold ${fontSize}px "SF Mono", Monaco, Menlo, Consolas, monospace`;
         this.ctx.textAlign = 'center';
@@ -1758,10 +1822,53 @@ export class BuildFloorView {
         }
       }
 
+      const selectedTileIds = Array.isArray(s.selectedTileIds) ? s.selectedTileIds : (s.selectedTileId ? [s.selectedTileId] : []);
+      if (selectedTileIds.length > 1 && floor) {
+        const selectedTiles = floor.tiles.filter(t => selectedTileIds.includes(t.id));
+        const addressSummary = selectedTiles.map(t => t.id).slice(0, 10).join(', ') + (selectedTiles.length > 10 ? ` +${selectedTiles.length - 10} more` : '');
+        el.innerHTML = `
+          <div class="dc-props-section">
+            <div class="dc-props-title">Multi-Tile Selection</div>
+            <div class="dc-info-row"><span class="dc-info-label">Selected</span><span class="dc-info-val" style="color:#38bdf8;font-weight:700;">${selectedTiles.length} Tiles</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">Tiles</span><span class="dc-info-val" style="font-size:11px;">${addressSummary}</span></div>
+            <div class="dc-info-row"><span class="dc-info-label">Plenum</span><span class="dc-info-val">${floor.raisedFloorHeightMm || 450} mm</span></div>
+          </div>
+          <div class="dc-props-actions">
+            <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-tiles-btn-vent">🔲 Convert to Ventilated Grille</button>
+            <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-tiles-btn-perf">▦ Convert to Perforated / Vented</button>
+            <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-tiles-btn-ac">💨 Convert to Air Channel</button>
+            <button class="dc-btn dc-btn-sm dc-btn-secondary dc-btn-full" id="dc-tiles-btn-std">↺ Convert to Standard Floor</button>
+          </div>
+        `;
+        el.querySelector('#dc-tiles-btn-vent')?.addEventListener('click', () => {
+          dcState.setFloorTilesType(selectedTileIds, 'ventilated');
+          this.refresh();
+          eventBus.emit('notification', { message: `Converted ${selectedTileIds.length} tiles to Ventilated ESD Grille (Steel Bar Grate).`, type: 'info' });
+        });
+        el.querySelector('#dc-tiles-btn-perf')?.addEventListener('click', () => {
+          dcState.setFloorTilesType(selectedTileIds, 'perforated');
+          this.refresh();
+          eventBus.emit('notification', { message: `Converted ${selectedTileIds.length} tiles to Perforated / Vented Panel.`, type: 'info' });
+        });
+        el.querySelector('#dc-tiles-btn-ac')?.addEventListener('click', () => {
+          dcState.setFloorTilesType(selectedTileIds, 'air-channel', 'north');
+          this.refresh();
+          eventBus.emit('notification', { message: `Converted ${selectedTileIds.length} tiles to Under-Floor Air Channel (Airflow North).`, type: 'info' });
+        });
+        el.querySelector('#dc-tiles-btn-std')?.addEventListener('click', () => {
+          dcState.setFloorTilesType(selectedTileIds, 'standard');
+          this.refresh();
+          eventBus.emit('notification', { message: `Reset ${selectedTileIds.length} tiles to Standard Floor.`, type: 'info' });
+        });
+        return;
+      }
+
       if (s.selectedTileId && floor) {
         const tile = floor.tiles.find(t => t.id === s.selectedTileId);
         if (tile) {
-          const typeDesc = tile.type === 'air-channel'
+          const typeDesc = tile.type === 'ventilated'
+            ? 'Ventilated ESD Grille (Steel Bar Grate)'
+            : tile.type === 'air-channel'
             ? `Air Channel (${tile.airflowDir?.toUpperCase() || 'NORTH'})`
             : tile.type === 'perforated'
             ? 'Perforated / Vented Panel'
@@ -1782,6 +1889,7 @@ export class BuildFloorView {
               <div class="dc-info-row"><span class="dc-info-label">Plenum</span><span class="dc-info-val">${floor.raisedFloorHeightMm || 450} mm</span></div>
             </div>
             <div class="dc-props-actions">
+              <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-tile-btn-vent">🔲 Set to Ventilated Grille</button>
               <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-tile-btn-perf">▦ Set to Perforated / Vented</button>
               <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-tile-btn-ac">💨 Under-Floor Air Channel</button>
               <button class="dc-btn dc-btn-sm dc-btn-full" id="dc-tile-btn-addinfra">⚡ Add Cable Tray / Duct</button>
@@ -1789,6 +1897,11 @@ export class BuildFloorView {
             </div>
           `;
 
+          el.querySelector('#dc-tile-btn-vent')?.addEventListener('click', () => {
+            dcState.setFloorTileType(tile.id, 'ventilated');
+            this.refresh();
+            eventBus.emit('notification', { message: `Tile ${tile.id} converted to Ventilated ESD Grille (Steel Bar Grate).`, type: 'info' });
+          });
           el.querySelector('#dc-tile-btn-perf')?.addEventListener('click', () => {
             dcState.setFloorTileType(tile.id, 'perforated');
             this.refresh();
@@ -1970,17 +2083,23 @@ export class BuildFloorView {
     }, 20);
   }
 
-  private showTileContextMenu(clientX: number, clientY: number, tile: DcFloorTile) {
+  private showTileContextMenu(clientX: number, clientY: number, tile: DcFloorTile, selectedTiles?: DcFloorTile[]) {
     let existing = document.getElementById('dc-context-menu');
     existing?.remove();
 
     const menu = document.createElement('div');
     menu.id = 'dc-context-menu';
     menu.className = 'dc-context-menu';
-    menu.style.left = `${Math.min(clientX, window.innerWidth - 260)}px`;
-    menu.style.top = `${Math.min(clientY, window.innerHeight - 280)}px`;
+    menu.style.left = `${Math.min(clientX, window.innerWidth - 280)}px`;
+    menu.style.top = `${Math.min(clientY, window.innerHeight - 340)}px`;
 
-    const typeDesc = tile.type === 'air-channel'
+    const tilesToUpdate = selectedTiles && selectedTiles.length > 0 ? selectedTiles : [tile];
+    const isMulti = tilesToUpdate.length > 1;
+    const tileIds = tilesToUpdate.map(t => t.id);
+
+    const typeDesc = tile.type === 'ventilated'
+      ? 'Ventilated ESD Grille (Bar Grate)'
+      : tile.type === 'air-channel'
       ? `Air Channel (${tile.airflowDir?.toUpperCase() || 'NORTH'})`
       : tile.type === 'perforated'
       ? 'Perforated / Vented'
@@ -1988,10 +2107,15 @@ export class BuildFloorView {
       ? 'Partial Tile'
       : 'Standard Tile';
 
+    const headerText = isMulti
+      ? `⚡ ${tilesToUpdate.length} Tiles Selected • Bulk Conversion`
+      : `Tile ${tile.id} • ${typeDesc}`;
+
     menu.innerHTML = `
-      <div class="dc-menu-header">Tile ${tile.id} • ${typeDesc}</div>
-      <div class="dc-menu-item primary" id="cm-tile-standard">⬛ Standard Floor Panel</div>
-      <div class="dc-menu-item" id="cm-tile-perf">▦ Perforated / Vented Panel</div>
+      <div class="dc-menu-header">${headerText}</div>
+      <div class="dc-menu-item primary" id="cm-tile-vent">🔲 Convert to Ventilated ESD Grille</div>
+      <div class="dc-menu-item" id="cm-tile-perf">▦ Convert to Perforated / Vented Panel</div>
+      <div class="dc-menu-item" id="cm-tile-standard">⬛ Convert to Standard ESD Floor Panel</div>
       <div class="dc-menu-separator"></div>
       <div class="dc-menu-section-title">💨 Under-Floor Air Channel</div>
       <div class="dc-menu-item" id="cm-tile-ac-north">⬆ Airflow North</div>
@@ -1999,61 +2123,108 @@ export class BuildFloorView {
       <div class="dc-menu-item" id="cm-tile-ac-east">➡ Airflow East</div>
       <div class="dc-menu-item" id="cm-tile-ac-west">⬅ Airflow West</div>
       <div class="dc-menu-separator"></div>
-      <div class="dc-menu-item" id="cm-tile-add-infra">⚡ Add Under-Floor Cable Tray / Duct</div>
-      <div class="dc-menu-item danger" id="cm-tile-reset">↺ Convert to Standard Floor</div>
+      ${!isMulti ? `<div class="dc-menu-item" id="cm-tile-add-infra">⚡ Add Under-Floor Cable Tray / Duct</div>` : ''}
+      <div class="dc-menu-item danger" id="cm-tile-reset">↺ Reset to Standard Floor</div>
     `;
 
     document.body.appendChild(menu);
 
     const close = () => menu.remove();
 
-    menu.querySelector('#cm-tile-standard')?.addEventListener('click', () => {
+    menu.querySelector('#cm-tile-vent')?.addEventListener('click', () => {
       close();
-      dcState.setFloorTileType(tile.id, 'standard');
+      dcState.setFloorTilesType(tileIds, 'ventilated');
       this.refresh();
-      eventBus.emit('notification', { message: `Tile ${tile.id} set to Standard Raised Floor Panel.`, type: 'info' });
+      eventBus.emit('notification', {
+        message: isMulti
+          ? `Converted ${tilesToUpdate.length} tiles to Ventilated ESD Grille (Steel Bar Grate).`
+          : `Tile ${tile.id} converted to Ventilated ESD Grille (Steel Bar Grate).`,
+        type: 'info'
+      });
     });
 
     menu.querySelector('#cm-tile-perf')?.addEventListener('click', () => {
       close();
-      dcState.setFloorTileType(tile.id, 'perforated');
+      dcState.setFloorTilesType(tileIds, 'perforated');
       this.refresh();
-      eventBus.emit('notification', { message: `Tile ${tile.id} converted to Perforated / Vented Floor Panel.`, type: 'info' });
+      eventBus.emit('notification', {
+        message: isMulti
+          ? `Converted ${tilesToUpdate.length} tiles to Perforated / Vented Floor Panel.`
+          : `Tile ${tile.id} converted to Perforated / Vented Floor Panel.`,
+        type: 'info'
+      });
+    });
+
+    menu.querySelector('#cm-tile-standard')?.addEventListener('click', () => {
+      close();
+      dcState.setFloorTilesType(tileIds, 'standard');
+      this.refresh();
+      eventBus.emit('notification', {
+        message: isMulti
+          ? `Converted ${tilesToUpdate.length} tiles to Standard Raised Floor Panel.`
+          : `Tile ${tile.id} set to Standard Raised Floor Panel.`,
+        type: 'info'
+      });
     });
 
     menu.querySelector('#cm-tile-ac-north')?.addEventListener('click', () => {
       close();
-      dcState.setFloorTileType(tile.id, 'air-channel', 'north');
+      dcState.setFloorTilesType(tileIds, 'air-channel', 'north');
       this.refresh();
-      eventBus.emit('notification', { message: `Tile ${tile.id} converted to Under-Floor Air Channel (Airflow North).`, type: 'info' });
+      eventBus.emit('notification', {
+        message: isMulti
+          ? `Converted ${tilesToUpdate.length} tiles to Under-Floor Air Channel (Airflow North).`
+          : `Tile ${tile.id} converted to Under-Floor Air Channel (Airflow North).`,
+        type: 'info'
+      });
     });
 
     menu.querySelector('#cm-tile-ac-south')?.addEventListener('click', () => {
       close();
-      dcState.setFloorTileType(tile.id, 'air-channel', 'south');
+      dcState.setFloorTilesType(tileIds, 'air-channel', 'south');
       this.refresh();
-      eventBus.emit('notification', { message: `Tile ${tile.id} converted to Under-Floor Air Channel (Airflow South).`, type: 'info' });
+      eventBus.emit('notification', {
+        message: isMulti
+          ? `Converted ${tilesToUpdate.length} tiles to Under-Floor Air Channel (Airflow South).`
+          : `Tile ${tile.id} converted to Under-Floor Air Channel (Airflow South).`,
+        type: 'info'
+      });
     });
 
     menu.querySelector('#cm-tile-ac-east')?.addEventListener('click', () => {
       close();
-      dcState.setFloorTileType(tile.id, 'air-channel', 'east');
+      dcState.setFloorTilesType(tileIds, 'air-channel', 'east');
       this.refresh();
-      eventBus.emit('notification', { message: `Tile ${tile.id} converted to Under-Floor Air Channel (Airflow East).`, type: 'info' });
+      eventBus.emit('notification', {
+        message: isMulti
+          ? `Converted ${tilesToUpdate.length} tiles to Under-Floor Air Channel (Airflow East).`
+          : `Tile ${tile.id} converted to Under-Floor Air Channel (Airflow East).`,
+        type: 'info'
+      });
     });
 
     menu.querySelector('#cm-tile-ac-west')?.addEventListener('click', () => {
       close();
-      dcState.setFloorTileType(tile.id, 'air-channel', 'west');
+      dcState.setFloorTilesType(tileIds, 'air-channel', 'west');
       this.refresh();
-      eventBus.emit('notification', { message: `Tile ${tile.id} converted to Under-Floor Air Channel (Airflow West).`, type: 'info' });
+      eventBus.emit('notification', {
+        message: isMulti
+          ? `Converted ${tilesToUpdate.length} tiles to Under-Floor Air Channel (Airflow West).`
+          : `Tile ${tile.id} converted to Under-Floor Air Channel (Airflow West).`,
+        type: 'info'
+      });
     });
 
     menu.querySelector('#cm-tile-reset')?.addEventListener('click', () => {
       close();
-      dcState.setFloorTileType(tile.id, 'standard');
+      dcState.setFloorTilesType(tileIds, 'standard');
       this.refresh();
-      eventBus.emit('notification', { message: `Tile ${tile.id} reset to Standard Floor.`, type: 'info' });
+      eventBus.emit('notification', {
+        message: isMulti
+          ? `Reset ${tilesToUpdate.length} tiles to Standard Floor.`
+          : `Tile ${tile.id} reset to Standard Floor.`,
+        type: 'info'
+      });
     });
 
     menu.querySelector('#cm-tile-add-infra')?.addEventListener('click', () => {
@@ -2864,17 +3035,37 @@ export class BuildFloorView {
         }
 
         if (clickedRackId) {
-          dcState.setState({ selectedRackId: clickedRackId, selectedTileId: null, selectedInfraId: null });
+          dcState.setState({ selectedRackId: clickedRackId, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
           this.renderPropsPanel();
-          this.update3DSelectionHighlight();
+          this.rebuildThreeScene(floor);
         } else if (clickedInfraId) {
-          dcState.setState({ selectedInfraId: clickedInfraId, selectedRackId: null, selectedTileId: null });
+          dcState.setState({ selectedInfraId: clickedInfraId, selectedRackId: null, selectedTileId: null, selectedTileIds: [] });
           this.renderPropsPanel();
-          this.update3DSelectionHighlight();
+          this.rebuildThreeScene(floor);
         } else if (clickedTileId) {
-          dcState.setState({ selectedTileId: clickedTileId, selectedRackId: null, selectedInfraId: null });
+          const isMultiKey = e.ctrlKey || e.metaKey || e.shiftKey;
+          const s = dcState.getState();
+          const curIds = Array.isArray(s.selectedTileIds) ? [...s.selectedTileIds] : (s.selectedTileId ? [s.selectedTileId] : []);
+          let newIds: string[] = [];
+          if (isMultiKey) {
+            if (curIds.includes(clickedTileId)) {
+              newIds = curIds.filter(id => id !== clickedTileId);
+            } else {
+              newIds = [...curIds, clickedTileId];
+            }
+          } else {
+            newIds = [clickedTileId];
+          }
+          const primaryId = newIds.length > 0 ? newIds[newIds.length - 1] : null;
+          dcState.setState({ selectedTileId: primaryId, selectedTileIds: newIds, selectedRackId: null, selectedInfraId: null });
           this.renderPropsPanel();
-          this.update3DSelectionHighlight();
+          this.rebuildThreeScene(floor);
+        } else {
+          if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+            dcState.setState({ selectedTileId: null, selectedTileIds: [], selectedRackId: null, selectedInfraId: null });
+            this.renderPropsPanel();
+            this.rebuildThreeScene(floor);
+          }
         }
       });
 
@@ -2907,18 +3098,26 @@ export class BuildFloorView {
         if (clickedRackId) {
           const rack = floor.racks.find(r => r.id === clickedRackId);
           if (rack) {
-            dcState.setState({ selectedRackId: rack.id, selectedTileId: null, selectedInfraId: null });
+            dcState.setState({ selectedRackId: rack.id, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
             this.renderPropsPanel();
-            this.update3DSelectionHighlight();
+            this.rebuildThreeScene(floor);
             this.showContextMenu(e.clientX, e.clientY, rack);
           }
         } else if (clickedTileId) {
           const tile = floor.tiles.find(t => t.id === clickedTileId);
           if (tile) {
-            dcState.setState({ selectedTileId: tile.id, selectedRackId: null, selectedInfraId: null });
-            this.renderPropsPanel();
-            this.update3DSelectionHighlight();
-            this.showTileContextMenu(e.clientX, e.clientY, tile);
+            const s = dcState.getState();
+            const curIds = Array.isArray(s.selectedTileIds) ? s.selectedTileIds : (s.selectedTileId ? [s.selectedTileId] : []);
+            if (curIds.includes(tile.id) && curIds.length > 1) {
+              const selectedTiles = floor.tiles.filter(t => curIds.includes(t.id));
+              this.renderPropsPanel();
+              this.showTileContextMenu(e.clientX, e.clientY, tile, selectedTiles);
+            } else {
+              dcState.setState({ selectedTileId: tile.id, selectedTileIds: [tile.id], selectedRackId: null, selectedInfraId: null });
+              this.renderPropsPanel();
+              this.rebuildThreeScene(floor);
+              this.showTileContextMenu(e.clientX, e.clientY, tile, [tile]);
+            }
           }
         }
       });
@@ -2965,6 +3164,7 @@ export class BuildFloorView {
     });
     this.rackMeshMap.clear();
 
+    const s = dcState.getState();
     const floorLenMm = floor.lengthM * 1000;
     const floorWidMm = floor.widthM * 1000;
     const tileMm = floor.tileSizeMm;
@@ -3168,10 +3368,13 @@ export class BuildFloorView {
     const tilesGroup = new THREE.Group();
     tilesGroup.userData = { isDynamic: true };
 
-    // Group standard tiles onto a single optimized plane or individual panels if specialized
-    const hasSpecialTiles = floor.tiles.some(t => t.type === 'perforated' || t.type === 'air-channel');
-    if (!hasSpecialTiles && effectiveFloorOpacity >= 0.99) {
-      // Fast single plane if all standard
+    // Group standard tiles onto a single optimized plane or individual panels if specialized or selected
+    const hasSpecialTiles = floor.tiles.some(t => t.type === 'perforated' || t.type === 'air-channel' || t.type === 'ventilated');
+    const selectedTileIds = Array.isArray(s.selectedTileIds) ? s.selectedTileIds : (s.selectedTileId ? [s.selectedTileId] : []);
+    const hasSelection = selectedTileIds.length > 0;
+
+    if (!hasSpecialTiles && !hasSelection && effectiveFloorOpacity >= 0.99) {
+      // Fast single plane if all standard and none selected
       const floorGeo = new THREE.PlaneGeometry(floorLenMm, floorWidMm);
       const floorMesh = new THREE.Mesh(floorGeo, stdFloorMat);
       floorMesh.rotation.x = -Math.PI / 2;
@@ -3186,7 +3389,87 @@ export class BuildFloorView {
         const txMm = t.x * 1000 + panelSize / 2;
         const tzMm = t.y * 1000 + panelSize / 2;
 
-        if (t.type === 'perforated') {
+        if (t.type === 'ventilated') {
+          // Authentic Heavy-Duty Steel Bar Grate / Grille Tile (Open Plenum Floor)
+          const ventTileGroup = new THREE.Group();
+          ventTileGroup.position.set(txMm, 0, tzMm);
+          ventTileGroup.userData = { isDynamic: true, tileId: t.id };
+
+          const steelMat = new THREE.MeshStandardMaterial({
+            color: 0x94a3b8, // Architectural galvanized / brushed steel
+            roughness: 0.30,
+            metalness: 0.85,
+          });
+
+          // 1. Steel Perimeter Rim Frame (Outer square rim, 14mm wide, 25mm deep)
+          const rimWidth = 14;
+          const rimDepth = 25;
+          const rimLength = panelSize;
+
+          // North & South rims
+          const rimNSGeo = new THREE.BoxGeometry(rimLength, rimDepth, rimWidth);
+          const rimN = new THREE.Mesh(rimNSGeo, steelMat);
+          rimN.position.set(0, -rimDepth / 2, -panelSize / 2 + rimWidth / 2);
+          rimN.userData = { isDynamic: true, tileId: t.id };
+          ventTileGroup.add(rimN);
+
+          const rimS = new THREE.Mesh(rimNSGeo, steelMat);
+          rimS.position.set(0, -rimDepth / 2, panelSize / 2 - rimWidth / 2);
+          rimS.userData = { isDynamic: true, tileId: t.id };
+          ventTileGroup.add(rimS);
+
+          // East & West rims
+          const rimEWGeo = new THREE.BoxGeometry(rimWidth, rimDepth, rimLength - rimWidth * 2);
+          const rimW = new THREE.Mesh(rimEWGeo, steelMat);
+          rimW.position.set(-panelSize / 2 + rimWidth / 2, -rimDepth / 2, 0);
+          rimW.userData = { isDynamic: true, tileId: t.id };
+          ventTileGroup.add(rimW);
+
+          const rimE = new THREE.Mesh(rimEWGeo, steelMat);
+          rimE.position.set(panelSize / 2 - rimWidth / 2, -rimDepth / 2, 0);
+          rimE.userData = { isDynamic: true, tileId: t.id };
+          ventTileGroup.add(rimE);
+
+          // 2. Longitudinal Load-Bearing Steel Bars (dense vertical flat bars)
+          const innerSize = panelSize - rimWidth * 2;
+          const numLoadBars = 12;
+          const barThickness = 3.5;
+          const barDepth = 22;
+          const loadBarGeo = new THREE.BoxGeometry(barThickness, barDepth, innerSize);
+          const stepX = innerSize / (numLoadBars + 1);
+
+          for (let bi = 1; bi <= numLoadBars; bi++) {
+            const barMesh = new THREE.Mesh(loadBarGeo, steelMat);
+            barMesh.position.set(-innerSize / 2 + bi * stepX, -barDepth / 2 - 1, 0);
+            barMesh.userData = { isDynamic: true, tileId: t.id };
+            ventTileGroup.add(barMesh);
+          }
+
+          // 3. Transverse Cross-Tie Tie Rods (horizontal cross rods)
+          const numCrossRods = 6;
+          const rodThickness = 3;
+          const rodDepth = 6;
+          const crossRodGeo = new THREE.BoxGeometry(innerSize, rodDepth, rodThickness);
+          const stepZ = innerSize / (numCrossRods + 1);
+
+          for (let ri = 1; ri <= numCrossRods; ri++) {
+            const rodMesh = new THREE.Mesh(crossRodGeo, steelMat);
+            rodMesh.position.set(0, -rodDepth / 2 - 0.5, -innerSize / 2 + ri * stepZ);
+            rodMesh.userData = { isDynamic: true, tileId: t.id };
+            ventTileGroup.add(rodMesh);
+          }
+
+          // 4. Invisible / raycastable surface plane for clicking and raycasting
+          const hitPlaneGeo = new THREE.PlaneGeometry(panelSize, panelSize);
+          const hitPlaneMat = new THREE.MeshBasicMaterial({ visible: false });
+          const hitPlane = new THREE.Mesh(hitPlaneGeo, hitPlaneMat);
+          hitPlane.rotation.x = -Math.PI / 2;
+          hitPlane.position.set(0, 0.1, 0);
+          hitPlane.userData = { isDynamic: true, tileId: t.id };
+          ventTileGroup.add(hitPlane);
+
+          tilesGroup.add(ventTileGroup);
+        } else if (t.type === 'perforated') {
           const perfMesh = new THREE.Mesh(tilePanelGeo, perfTileMat);
           perfMesh.rotation.x = -Math.PI / 2;
           perfMesh.position.set(txMm, 0.2, tzMm);
@@ -3230,6 +3513,54 @@ export class BuildFloorView {
           tilesGroup.add(stdMesh);
         }
       });
+
+      // 3D Tile Selection Highlights (for all multi-selected tiles)
+      if (selectedTileIds.length > 0) {
+        const selMat = new THREE.MeshBasicMaterial({
+          color: 0x38bdf8,
+          transparent: true,
+          opacity: 0.35,
+          side: THREE.DoubleSide,
+        });
+        const selBorderMat = new THREE.LineBasicMaterial({
+          color: 0x0284c7,
+          linewidth: 2,
+        });
+        const selPlaneGeo = new THREE.PlaneGeometry(panelSize, panelSize);
+
+        selectedTileIds.forEach(id => {
+          const tile = floor.tiles.find(t => t.id === id);
+          if (!tile) return;
+          const txMm = tile.x * 1000 + panelSize / 2;
+          const tzMm = tile.y * 1000 + panelSize / 2;
+
+          const selMesh = new THREE.Mesh(selPlaneGeo, selMat);
+          selMesh.rotation.x = -Math.PI / 2;
+          selMesh.position.set(txMm, 0.8, tzMm);
+          selMesh.userData = { isDynamic: true };
+          tilesGroup.add(selMesh);
+
+          // Selection border lines
+          const bPositions = [
+            -panelSize / 2, 0, -panelSize / 2,
+             panelSize / 2, 0, -panelSize / 2,
+             panelSize / 2, 0, -panelSize / 2,
+             panelSize / 2, 0,  panelSize / 2,
+             panelSize / 2, 0,  panelSize / 2,
+            -panelSize / 2, 0,  panelSize / 2,
+            -panelSize / 2, 0,  panelSize / 2,
+            -panelSize / 2, 0, -panelSize / 2,
+          ];
+          const bGeo = new THREE.BufferGeometry();
+          bGeo.setAttribute('position', new THREE.Float32BufferAttribute(bPositions, 3));
+          const bLines = new THREE.LineSegments(bGeo, selBorderMat);
+          bLines.rotation.x = -Math.PI / 2;
+          bLines.position.set(txMm, 0.9, tzMm);
+          bLines.userData = { isDynamic: true };
+          tilesGroup.add(bLines);
+        });
+      }
+
       this.threeScene.add(tilesGroup);
       this.threeScene.add(airChannelGroup);
     }
@@ -3383,7 +3714,6 @@ export class BuildFloorView {
     this.threeScene.add(curbGroup);
 
     // 4. Real 3D Racks using buildRackGroup
-    const s = dcState.getState();
     floor.racks.forEach(dcRack => {
       const rackData: RackData = {
         id: dcRack.id,

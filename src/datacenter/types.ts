@@ -1,4 +1,4 @@
-export type DcTileType = 'standard' | 'cutout' | 'partial' | 'air-channel' | 'perforated';
+export type DcTileType = 'standard' | 'cutout' | 'partial' | 'air-channel' | 'perforated' | 'ventilated';
 export type DcAirflowDirection = 'north' | 'south' | 'east' | 'west';
 
 export interface DcFloorTile {
@@ -96,6 +96,7 @@ export interface DcState {
   floorOpacity: number; // 0.0 to 1.0 (default 1.0)
   xrayMode: boolean;    // default false
   selectedTileId: string | null;
+  selectedTileIds: string[]; // multi-tile selection (e.g. Ctrl+Select)
   selectedRackId: string | null;
   selectedInfraId: string | null;
   zoom: number;       // canvas zoom factor
