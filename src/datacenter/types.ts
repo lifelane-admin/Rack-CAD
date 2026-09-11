@@ -59,7 +59,14 @@ export interface DcRack {
   position: { x: number; y: number; z: number }; // real-world meters
   rotation: 0 | 90 | 180 | 270;  // degrees
   color?: string;
+  leftCableManagerWidth?: 'none' | '4-inch' | '6-inch' | '8-inch';
+  rightCableManagerWidth?: 'none' | '4-inch' | '6-inch' | '8-inch';
+  leftCableManagerColor?: string;
+  rightCableManagerColor?: string;
+  leftPduId?: string;
+  rightPduId?: string;
 }
+
 
 export type DcUnit = 'm' | 'mm' | 'ft' | 'in';
 

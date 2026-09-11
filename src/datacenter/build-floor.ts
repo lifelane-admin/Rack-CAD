@@ -2259,9 +2259,30 @@ export class BuildFloorView {
     // 5. Clean / purge foreign ghost racks, keeping ONLY the target rack and existing valid DC racks
     const dcFloor = dcState.getActiveFloor();
     const validDcRackIds = new Set((dcFloor?.racks || []).map(r => r.id));
-    validDcRackIds.add(targetDcRack.id);
-
     const existingRackData = s.racks.find(r => r.id === targetDcRack.id);
+    let mappedLeftPduId = sourceRack?.leftPduId || existingRackData?.leftPduId;
+    let mappedRightPduId = sourceRack?.rightPduId || existingRackData?.rightPduId;
+
+    if (isCollision) {
+      if (mappedLeftPduId && sourceDevices.some(d => d.id === mappedLeftPduId)) {
+        mappedLeftPduId = `${targetDcRack.id}-${mappedLeftPduId}`;
+      }
+      if (mappedRightPduId && sourceDevices.some(d => d.id === mappedRightPduId)) {
+        mappedRightPduId = `${targetDcRack.id}-${mappedRightPduId}`;
+      }
+    }
+
+    targetDcRack.leftCableManagerWidth = sourceRack?.leftCableManagerWidth || existingRackData?.leftCableManagerWidth || 'none';
+    targetDcRack.rightCableManagerWidth = sourceRack?.rightCableManagerWidth || existingRackData?.rightCableManagerWidth || 'none';
+    targetDcRack.leftPduId = mappedLeftPduId;
+    targetDcRack.rightPduId = mappedRightPduId;
+    dcState.updateRack(targetDcRack.id, {
+      leftCableManagerWidth: targetDcRack.leftCableManagerWidth,
+      rightCableManagerWidth: targetDcRack.rightCableManagerWidth,
+      leftPduId: mappedLeftPduId,
+      rightPduId: mappedRightPduId,
+    });
+
     const updatedRackData: RackData = {
       id: targetDcRack.id,
       name: targetDcRack.name,
@@ -2272,10 +2293,10 @@ export class BuildFloorView {
       rackColor: targetDcRack.color ?? '#1e3a5f',
       x: 200,
       y: 40,
-      leftCableManagerWidth: sourceRack?.leftCableManagerWidth || existingRackData?.leftCableManagerWidth,
-      rightCableManagerWidth: sourceRack?.rightCableManagerWidth || existingRackData?.rightCableManagerWidth,
-      leftPduId: existingRackData?.leftPduId,
-      rightPduId: existingRackData?.rightPduId,
+      leftCableManagerWidth: targetDcRack.leftCableManagerWidth,
+      rightCableManagerWidth: targetDcRack.rightCableManagerWidth,
+      leftPduId: mappedLeftPduId,
+      rightPduId: mappedRightPduId,
     };
 
     const cleanRacks = s.racks.filter(r => r.id !== targetDcRack.id && validDcRackIds.has(r.id));
@@ -2339,13 +2360,16 @@ export class BuildFloorView {
         mounting: dcRack.mounting,
         color: dcRack.color,
         doorStyle: dcRack.doorStyle,
-        leftCableManagerWidth: rackData?.leftCableManagerWidth,
-        rightCableManagerWidth: rackData?.rightCableManagerWidth,
+        leftCableManagerWidth: rackData?.leftCableManagerWidth || dcRack.leftCableManagerWidth,
+        rightCableManagerWidth: rackData?.rightCableManagerWidth || dcRack.rightCableManagerWidth,
+        leftPduId: rackData?.leftPduId || dcRack.leftPduId,
+        rightPduId: rackData?.rightPduId || dcRack.rightPduId,
       },
       devices: devices,
       cables: cables,
       customTemplates: usedCustomTemplates,
     };
+
 
     const jsonStr = JSON.stringify(exportPayload, null, 2);
     const safeName = dcRack.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -3997,6 +4021,7 @@ export class BuildFloorView {
 
     // 4. Real 3D Racks using buildRackGroup
     floor.racks.forEach(dcRack => {
+      const stateRack = stateManager.getRack(dcRack.id);
       const rackData: RackData = {
         id: dcRack.id,
         name: dcRack.name,
@@ -4007,9 +4032,16 @@ export class BuildFloorView {
         rackColor: dcRack.color ?? '#0c0e12',
         frontDoor: dcRack.doorStyle ?? 'perforated',
         sidePanels: dcRack.type !== 'open-frame',
+        leftCableManagerWidth: dcRack.leftCableManagerWidth || stateRack?.leftCableManagerWidth || 'none',
+        rightCableManagerWidth: dcRack.rightCableManagerWidth || stateRack?.rightCableManagerWidth || 'none',
+        leftPduId: dcRack.leftPduId || stateRack?.leftPduId,
+        rightPduId: dcRack.rightPduId || stateRack?.rightPduId,
+        leftCableManagerColor: dcRack.leftCableManagerColor || stateRack?.leftCableManagerColor,
+        rightCableManagerColor: dcRack.rightCableManagerColor || stateRack?.rightCableManagerColor,
         x: 0,
         y: 0,
       };
+
 
       const rackColorKey = (dcRack.color && !dcRack.color.startsWith('#') ? dcRack.color : 'black') as any;
       const rackGroup = buildRackGroup(rackData, this.threeMaterials!, rackColorKey);
