@@ -1858,7 +1858,7 @@ export class BuildFloorView {
                 <span class="dc-info-label" style="display:flex;align-items:center;gap:4px;">HUD Style</span>
                 <select id="${isGlobal ? 'g-dc-rack-gauge-style' : 'dc-rack-gauge-style'}" class="dc-input" style="width:138px;padding:2px 4px;font-size:11px;height:24px;background:#0d1520;color:#38bdf8;border:1px solid #304560;border-radius:4px;font-weight:600;">
                   <option value="radial" ${(rack.gaugeStyle ?? 'radial') === 'radial' ? 'selected' : ''}>Radial Dial (Classic)</option>
-                  <option value="linear" ${rack.gaugeStyle === 'linear' ? 'selected' : ''}>Linear Dashboard</option>
+                  <option value="linear" ${rack.gaugeStyle === 'linear' ? 'selected' : ''}>2 Horizontal Bars (CSS)</option>
                 </select>
               </div>
               <div class="dc-info-row"><span class="dc-info-label">Pos X</span><span class="dc-info-val">${posX}</span></div>
@@ -2502,13 +2502,13 @@ export class BuildFloorView {
         ${(rack.gaugeStyle ?? 'radial') === 'radial' ? '● ' : '○ '}Radial Dual Arc Dial (Classic)
       </div>
       <div class="dc-menu-item ${rack.gaugeStyle === 'linear' ? 'primary' : ''}" id="cm-gauge-linear">
-        ${rack.gaugeStyle === 'linear' ? '● ' : '○ '}Linear Telemetry Dashboard (New)
+        ${rack.gaugeStyle === 'linear' ? '● ' : '○ '}2 Horizontal Bars (CSS Style)
       </div>
       <div class="dc-menu-item" id="cm-gauge-all-radial">
         ⚡ Apply Radial Dial to All Racks
       </div>
       <div class="dc-menu-item" id="cm-gauge-all-linear">
-        ⚡ Apply Linear Dashboard to All Racks
+        ⚡ Apply 2 Horizontal Bars to All Racks
       </div>
 
       <div class="dc-menu-separator"></div>
@@ -2541,7 +2541,7 @@ export class BuildFloorView {
       this.renderPropsPanel();
       const currentFloor = dcState.getActiveFloor();
       if (currentFloor) this.rebuildThreeScene(currentFloor);
-      eventBus.emit('notification', { message: `Set ${rack.name} HUD to Linear Telemetry Dashboard`, type: 'success' });
+      eventBus.emit('notification', { message: `Set ${rack.name} HUD to 2 Horizontal Bars (CSS Style)`, type: 'success' });
     });
     menu.querySelector('#cm-gauge-all-radial')?.addEventListener('click', () => {
       close();
@@ -2559,7 +2559,7 @@ export class BuildFloorView {
       currentFloor.racks.forEach(r => dcState.updateRack(r.id, { gaugeStyle: 'linear' }));
       this.renderPropsPanel();
       this.rebuildThreeScene(currentFloor);
-      eventBus.emit('notification', { message: `Applied Linear Dashboard gauge style to all ${currentFloor.racks.length} racks`, type: 'success' });
+      eventBus.emit('notification', { message: `Applied 2 Horizontal Bars gauge style to all ${currentFloor.racks.length} racks`, type: 'success' });
     });
     menu.querySelector('#cm-import-json')?.addEventListener('click', () => { close(); this.importRackJSON(rack.id); });
     menu.querySelector('#cm-export-json')?.addEventListener('click', () => { close(); this.exportRackJSON(rack.id); });
@@ -3236,7 +3236,7 @@ export class BuildFloorView {
         <label>3D HUD Gauge Design
           <select id="dr-gauge-style" class="dc-input">
             <option value="radial"${(rack.gaugeStyle ?? 'radial') === 'radial' ? ' selected' : ''}>Radial Dual Arc Dial (Classic)</option>
-            <option value="linear"${rack.gaugeStyle === 'linear' ? ' selected' : ''}>Linear Telemetry Dashboard (Modern)</option>
+            <option value="linear"${rack.gaugeStyle === 'linear' ? ' selected' : ''}>2 Horizontal Bars (CSS Style)</option>
           </select>
         </label>
         <label>Cabinet Color<input id="dr-color" type="color" value="${rack.color || '#1e3a5f'}" class="dc-input" style="height:36px;padding:2px;"/></label>
@@ -4413,8 +4413,8 @@ export class BuildFloorView {
       labelTex.magFilter = THREE.LinearFilter;
       const spriteMat = new THREE.SpriteMaterial({ map: labelTex, depthTest: false, transparent: true });
       const sprite = new THREE.Sprite(spriteMat);
-      // Width in 3D world: 520mm for linear dashboard or 490mm for radial dial, height proportional
-      const spriteW = gaugeStyle === 'linear' ? 520 : 490;
+      // Width in 3D world: 460mm for 2 horizontal bars or 490mm for radial dial, height proportional
+      const spriteW = gaugeStyle === 'linear' ? 460 : 490;
       const spriteH = spriteW * (hudCanvas.height / hudCanvas.width);
       sprite.scale.set(spriteW, spriteH, 1);
       
@@ -4446,14 +4446,14 @@ export class BuildFloorView {
   }
 
   private createRackHUDLinearDashboardCanvas(dcRack: DcRack, rackDevices: DeviceData[], _rackData: RackData): HTMLCanvasElement {
-    const W = 1024;
-    const H = 600;
+    const W = 640;
+    const H = 230;
     const canvas = document.createElement('canvas');
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext('2d')!;
 
-    // 1. Calculations for Real-time Power & Space Load
+    // 1. Calculations for Power & Rack Load
     let totalWatts = 0;
     let occupiedU = 0;
     const totalU = dcRack.heightU || 42;
@@ -4475,507 +4475,123 @@ export class BuildFloorView {
     const powerRatio = Math.max(0, Math.min(1, powerKw / maxKw));
     const loadRatio = Math.max(0, Math.min(1, loadPercent / 100));
 
-    const powerHeadroomKw = Math.max(0, maxKw - powerKw);
-    const powerHeadroomPct = Math.max(0, Math.min(100, Math.round((powerHeadroomKw / maxKw) * 100)));
-    const freeU = Math.max(0, totalU - occupiedU);
-    const rackHeadroomPct = Math.max(0, 100 - Math.round(loadPercent));
+    // Address & Grid info
+    const tileM = 0.6;
+    const colIdx = Math.floor(dcRack.position.x / tileM);
+    const rowIdx = Math.floor(dcRack.position.y / tileM);
+    const rowLabel = getRowLabel(rowIdx, 'letters');
+    const colLabel = getColLabel(colIdx, 'numbers', 'compact');
+    const gridAddr = `${rowLabel}-${colLabel}`;
 
-    // Status evaluation
-    let statusText = 'OK / OPTIMAL';
-    let statusColor = '#00e676';
-    if (loadPercent >= 90 || powerRatio >= 0.9) {
-      statusText = 'CRITICAL';
-      statusColor = '#ff1744';
-    } else if (loadPercent >= 70 || powerRatio >= 0.7) {
-      statusText = 'HIGH LOAD';
-      statusColor = '#ff9100';
-    } else if (loadPercent >= 50 || powerRatio >= 0.5) {
-      statusText = 'MODERATE';
-      statusColor = '#ffea00';
-    }
-
-    // 2. Outer Card Backdrop (Glassmorphism dark navy panel with rounded corners and glowing border)
-    const cardRadius = 22;
+    // 2. Clean Minimalist Modern CSS-Style Card Panel (No RGB)
     ctx.save();
     ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-    ctx.shadowBlur = 24;
-    ctx.fillStyle = 'rgba(10, 18, 30, 0.94)';
-    ctx.strokeStyle = '#1e3048';
-    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = 'rgba(13, 17, 23, 0.92)';
+    ctx.strokeStyle = '#30363d';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(8, 8, W - 16, H - 16, cardRadius);
+    ctx.roundRect(8, 8, W - 16, H - 16, 14);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
 
-    // Inner subtle card gradient glow
-    const bgGrad = ctx.createLinearGradient(0, 8, 0, H - 8);
-    bgGrad.addColorStop(0, 'rgba(30, 58, 90, 0.25)');
-    bgGrad.addColorStop(0.3, 'rgba(15, 28, 45, 0.1)');
-    bgGrad.addColorStop(1, 'rgba(6, 12, 22, 0.4)');
-    ctx.fillStyle = bgGrad;
-    ctx.beginPath();
-    ctx.roundRect(10, 10, W - 20, H - 20, cardRadius - 2);
-    ctx.fill();
-
-    // Helper icon renderers
-    const drawLightning = (cx: number, cy: number, size: number, color: string) => {
-      ctx.save();
-      ctx.fillStyle = color;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      ctx.moveTo(cx + size * 0.1, cy - size * 0.45);
-      ctx.lineTo(cx - size * 0.35, cy + size * 0.05);
-      ctx.lineTo(cx - size * 0.05, cy + size * 0.05);
-      ctx.lineTo(cx - size * 0.15, cy + size * 0.48);
-      ctx.lineTo(cx + size * 0.38, cy - size * 0.05);
-      ctx.lineTo(cx + size * 0.05, cy - size * 0.05);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    };
-
-    const drawServerIcon = (cx: number, cy: number, size: number, color: string) => {
-      ctx.save();
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
-      ctx.lineWidth = 2;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 6;
-      const w = size * 0.78;
-      const h = size * 0.30;
-      // Top unit
-      ctx.beginPath();
-      ctx.roundRect(cx - w / 2, cy - size * 0.38, w, h, 3);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(cx - w / 2 + 5, cy - size * 0.38 + h / 2, 1.8, 0, Math.PI * 2);
-      ctx.arc(cx - w / 2 + 11, cy - size * 0.38 + h / 2, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-      // Bottom unit
-      ctx.beginPath();
-      ctx.roundRect(cx - w / 2, cy + size * 0.08, w, h, 3);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(cx - w / 2 + 5, cy + size * 0.08 + h / 2, 1.8, 0, Math.PI * 2);
-      ctx.arc(cx - w / 2 + 11, cy + size * 0.08 + h / 2, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    };
-
-    const drawGaugeIcon = (cx: number, cy: number, size: number, color: string) => {
-      ctx.save();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 3.5;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      ctx.arc(cx, cy + 3, size * 0.38, -Math.PI * 0.8, Math.PI * -0.2, false);
-      ctx.stroke();
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy + 3);
-      ctx.lineTo(cx + size * 0.22, cy - size * 0.16);
-      ctx.stroke();
-      ctx.restore();
-    };
-
-    // Shared Meter Bar Multi-stop gradient
-    const createMeterGradient = (x1: number, x2: number) => {
-      const grad = ctx.createLinearGradient(x1, 0, x2, 0);
-      grad.addColorStop(0.00, '#00e676'); // Vivid Green
-      grad.addColorStop(0.25, '#76ff03'); // Lime
-      grad.addColorStop(0.50, '#ffea00'); // Yellow
-      grad.addColorStop(0.70, '#ff9100'); // Orange
-      grad.addColorStop(1.00, '#ff1744'); // Red
-      return grad;
-    };
-
-    // ── SECTION 1: POWER CONSUMPTION (Upper Card) ──
-    const sec1X = 24;
-    const sec1Y = 24;
-    const sec1W = W - 48;
-    const sec1H = 172;
-
-    ctx.fillStyle = 'rgba(13, 24, 38, 0.75)';
-    ctx.strokeStyle = '#1e3048';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(sec1X, sec1Y, sec1W, sec1H, 16);
-    ctx.fill();
-    ctx.stroke();
-
-    // Power Icon Circle
-    const pIconX = sec1X + 42;
-    const pIconY = sec1Y + 44;
-    ctx.fillStyle = 'rgba(0, 230, 118, 0.12)';
-    ctx.strokeStyle = '#00e676';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(pIconX, pIconY, 24, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    drawLightning(pIconX, pIconY, 28, '#00ff88');
-
-    // Title & Subtitle
+    // 3. Header Row: Rack Name & Metadata
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 22px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText('POWER CONSUMPTION', sec1X + 80, sec1Y + 34);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '500 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText('Total IT Load', sec1X + 80, sec1Y + 58);
-
-    // Digital Power Readout (Right aligned)
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#ffd600';
-    ctx.font = 'bold 42px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText(powerKw.toFixed(1), sec1X + sec1W - 74, sec1Y + 44);
-
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '600 20px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText('KW', sec1X + sec1W - 64, sec1Y + 44);
-
-    // Power Meter Bar
-    const pBarX = sec1X + 28;
-    const pBarY = sec1Y + 98;
-    const pBarW = sec1W - 56;
-    const pBarH = 22;
-    const pBarR = 11;
-
-    // Outer glow under bar
-    ctx.save();
-    ctx.shadowColor = powerRatio > 0.7 ? 'rgba(255, 23, 68, 0.35)' : powerRatio > 0.4 ? 'rgba(255, 234, 0, 0.35)' : 'rgba(0, 230, 118, 0.35)';
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = createMeterGradient(pBarX, pBarX + pBarW);
-    ctx.beginPath();
-    ctx.roundRect(pBarX, pBarY, pBarW, pBarH, pBarR);
-    ctx.fill();
-    ctx.restore();
-
-    // Dark track border & inner highlight
-    ctx.strokeStyle = '#223852';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(pBarX, pBarY, pBarW, pBarH, pBarR);
-    ctx.stroke();
-
-    // Scale Ticks & Labels for Power (0 to maxKw, 8 intervals)
-    const pTicks = 8;
-    for (let i = 0; i <= pTicks; i++) {
-      const frac = i / pTicks;
-      const tx = pBarX + frac * pBarW;
-      
-      // Divider line through bar
-      if (i > 0 && i < pTicks) {
-        ctx.strokeStyle = 'rgba(10, 18, 30, 0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(tx, pBarY);
-        ctx.lineTo(tx, pBarY + pBarH);
-        ctx.stroke();
-      }
-
-      // Tick mark below bar
-      ctx.strokeStyle = '#64748b';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(tx, pBarY + pBarH + 2);
-      ctx.lineTo(tx, pBarY + pBarH + 8);
-      ctx.stroke();
-
-      // Tick label
-      const val = (frac * maxKw);
-      const labelStr = val % 1 === 0 ? String(val) : val.toFixed(1);
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '600 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(i === pTicks ? `${labelStr} KW` : labelStr, tx + (i === pTicks ? 8 : 0), pBarY + pBarH + 12);
-    }
-
-    // Power Indicator Cursor (Downward Triangle + Vertical Line)
-    const pCurX = Math.max(pBarX + 6, Math.min(pBarX + pBarW - 6, pBarX + powerRatio * pBarW));
-    ctx.save();
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = '#ffffff';
-    ctx.shadowBlur = 8;
-    // Triangle pointing down
-    ctx.beginPath();
-    ctx.moveTo(pCurX - 8, pBarY - 14);
-    ctx.lineTo(pCurX + 8, pBarY - 14);
-    ctx.lineTo(pCurX, pBarY - 2);
-    ctx.closePath();
-    ctx.fill();
-
-    // Vertical indicator line through bar
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.moveTo(pCurX, pBarY - 2);
-    ctx.lineTo(pCurX, pBarY + pBarH + 2);
-    ctx.stroke();
-    ctx.restore();
-
-    // ── SECTION 2: RACK LOAD (Middle Card) ──
-    const sec2X = 24;
-    const sec2Y = 212;
-    const sec2W = W - 48;
-    const sec2H = 172;
-
-    ctx.fillStyle = 'rgba(13, 24, 38, 0.75)';
-    ctx.strokeStyle = '#1e3048';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(sec2X, sec2Y, sec2W, sec2H, 16);
-    ctx.fill();
-    ctx.stroke();
-
-    // Rack Load Icon Circle
-    const rIconX = sec2X + 42;
-    const rIconY = sec2Y + 44;
-    ctx.fillStyle = 'rgba(0, 229, 255, 0.12)';
-    ctx.strokeStyle = '#00e5ff';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(rIconX, rIconY, 24, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    drawServerIcon(rIconX, rIconY, 28, '#00e5ff');
-
-    // Title & Subtitle
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 22px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText('RACK LOAD', sec2X + 80, sec2Y + 34);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '500 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText('Used Rack Capacity', sec2X + 80, sec2Y + 58);
-
-    // Digital Load Readout (Right aligned)
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#ffd600';
-    ctx.font = 'bold 42px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText(`${Math.round(loadPercent)}`, sec2X + sec2W - 60, sec2Y + 44);
-
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '600 20px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText('%', sec2X + sec2W - 52, sec2Y + 44);
-
-    // Rack Load Meter Bar
-    const rBarX = sec2X + 28;
-    const rBarY = sec2Y + 98;
-    const rBarW = sec2W - 56;
-    const rBarH = 22;
-    const rBarR = 11;
-
-    // Outer glow under bar
-    ctx.save();
-    ctx.shadowColor = loadRatio > 0.7 ? 'rgba(255, 23, 68, 0.35)' : loadRatio > 0.4 ? 'rgba(255, 234, 0, 0.35)' : 'rgba(0, 230, 118, 0.35)';
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = createMeterGradient(rBarX, rBarX + rBarW);
-    ctx.beginPath();
-    ctx.roundRect(rBarX, rBarY, rBarW, rBarH, rBarR);
-    ctx.fill();
-    ctx.restore();
-
-    // Dark track border & inner highlight
-    ctx.strokeStyle = '#223852';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(rBarX, rBarY, rBarW, rBarH, rBarR);
-    ctx.stroke();
-
-    // Scale Ticks & Labels for Rack Load (0 to 100%, 10 intervals of 10%)
-    const rTicks = 10;
-    for (let i = 0; i <= rTicks; i++) {
-      const frac = i / rTicks;
-      const tx = rBarX + frac * rBarW;
-      
-      // Divider line through bar
-      if (i > 0 && i < rTicks) {
-        ctx.strokeStyle = 'rgba(10, 18, 30, 0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(tx, rBarY);
-        ctx.lineTo(tx, rBarY + rBarH);
-        ctx.stroke();
-      }
-
-      // Tick mark below bar
-      ctx.strokeStyle = '#64748b';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(tx, rBarY + rBarH + 2);
-      ctx.lineTo(tx, rBarY + rBarH + 8);
-      ctx.stroke();
-
-      // Tick label
-      const val = i * 10;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '600 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(i === rTicks ? `${val} %` : String(val), tx + (i === rTicks ? 6 : 0), rBarY + rBarH + 12);
-    }
-
-    // Rack Load Indicator Cursor (Downward Triangle + Vertical Line)
-    const rCurX = Math.max(rBarX + 6, Math.min(rBarX + rBarW - 6, rBarX + loadRatio * rBarW));
-    ctx.save();
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = '#ffffff';
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.moveTo(rCurX - 8, rBarY - 14);
-    ctx.lineTo(rCurX + 8, rBarY - 14);
-    ctx.lineTo(rCurX, rBarY - 2);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.moveTo(rCurX, rBarY - 2);
-    ctx.lineTo(rCurX, rBarY + rBarH + 2);
-    ctx.stroke();
-    ctx.restore();
-
-    // ── SECTION 3: BOTTOM SUMMARY CARDS (4 Cards Row) ──
-    const row3Y = 400;
-    const row3H = 176;
-    const gap = 16;
-    const totalAvailW = W - 48; // 976
-    const cardW1 = 224;
-    const cardW2 = 224;
-    const cardW3 = 228;
-    const cardW4 = totalAvailW - (cardW1 + cardW2 + cardW3 + gap * 3); // 252
-
-    const c1X = 24;
-    const c2X = c1X + cardW1 + gap;
-    const c3X = c2X + cardW2 + gap;
-    const c4X = c3X + cardW3 + gap;
-
-    // ── Card 1: Power Headroom ──
-    ctx.fillStyle = 'rgba(13, 24, 38, 0.85)';
-    ctx.strokeStyle = '#1e3048';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(c1X, row3Y, cardW1, row3H, 14);
-    ctx.fill();
-    ctx.stroke();
-
-    drawLightning(c1X + 34, row3Y + 84, 32, '#00e676');
-
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = 'bold 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText('POWER HEADROOM', c1X + 62, row3Y + 40);
-
-    ctx.fillStyle = '#00e676';
-    ctx.font = 'bold 26px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText(`${powerHeadroomKw.toFixed(1)} KW`, c1X + 62, row3Y + 82);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '500 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText(`(${powerHeadroomPct}% available)`, c1X + 62, row3Y + 124);
-
-    // ── Card 2: Rack Headroom ──
-    ctx.fillStyle = 'rgba(13, 24, 38, 0.85)';
-    ctx.strokeStyle = '#1e3048';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(c2X, row3Y, cardW2, row3H, 14);
-    ctx.fill();
-    ctx.stroke();
-
-    drawServerIcon(c2X + 34, row3Y + 84, 32, '#00e5ff');
-
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = 'bold 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText('RACK HEADROOM', c2X + 62, row3Y + 40);
-
-    ctx.fillStyle = '#00e676';
-    ctx.font = 'bold 26px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText(`${rackHeadroomPct} %`, c2X + 62, row3Y + 82);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '500 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText(`(${freeU}U available)`, c2X + 62, row3Y + 124);
-
-    // ── Card 3: Overall Status ──
-    ctx.fillStyle = 'rgba(13, 24, 38, 0.85)';
-    ctx.strokeStyle = '#1e3048';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(c3X, row3Y, cardW3, row3H, 14);
-    ctx.fill();
-    ctx.stroke();
-
-    drawGaugeIcon(c3X + 36, row3Y + 84, 34, '#ffd600');
-
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = 'bold 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText('OVERALL STATUS', c3X + 68, row3Y + 48);
-
-    ctx.fillStyle = statusColor;
     ctx.font = 'bold 20px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText(statusText, c3X + 68, row3Y + 98);
+    ctx.fillText(dcRack.name.toUpperCase(), 24, 34);
 
-    // ── Card 4: Legend Table ──
-    ctx.fillStyle = 'rgba(13, 24, 38, 0.85)';
-    ctx.strokeStyle = '#1e3048';
-    ctx.lineWidth = 1.5;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '600 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(`${dcRack.heightU}U Cabinet • Grid: ${gridAddr} • ${rackDevices.length} Devs`, W - 24, 34);
+
+    // Subtle divider line
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(c4X, row3Y, cardW4, row3H, 14);
+    ctx.moveTo(24, 52);
+    ctx.lineTo(W - 24, 52);
+    ctx.stroke();
+
+    const barX = 24;
+    const barW = W - 48;
+    const barH = 16;
+    const barR = 8;
+
+    // ── 4. BAR 1: POWER CONSUMPTION ──
+    const pTopY = 74;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('⚡ POWER', barX, pTopY);
+
+    const pColor = powerRatio > 0.9 ? '#ef4444' : powerRatio > 0.75 ? '#f59e0b' : '#38bdf8';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = pColor;
+    ctx.font = 'bold 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(`${powerKw.toFixed(1)} kW / ${maxKw} kW`, W - 80, pTopY);
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '600 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(`(${Math.round(powerRatio * 100)}%)`, W - 24, pTopY);
+
+    // Track
+    const pBarY = pTopY + 16;
+    ctx.fillStyle = '#161b22';
+    ctx.strokeStyle = '#30363d';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(barX, pBarY, barW, barH, barR);
     ctx.fill();
     ctx.stroke();
 
-    const legendItems = [
-      { color: '#00e676', name: 'Normal', range: `0 – 50% / 0 – ${(maxKw * 0.5).toFixed(0)} KW` },
-      { color: '#ffea00', name: 'Moderate', range: `50 – 70% / ${(maxKw * 0.5).toFixed(0)} – ${(maxKw * 0.7).toFixed(0)} KW` },
-      { color: '#ff9100', name: 'High', range: `70 – 90% / ${(maxKw * 0.7).toFixed(0)} – ${(maxKw * 0.9).toFixed(0)} KW` },
-      { color: '#ff1744', name: 'Critical', range: `90 – 100% / ${(maxKw * 0.9).toFixed(0)} – ${maxKw.toFixed(0)} KW` },
-    ];
-
-    const lStartY = row3Y + 28;
-    const lRowGap = 34;
-
-    legendItems.forEach((item, idx) => {
-      const ly = lStartY + idx * lRowGap;
-      // Dot
-      ctx.fillStyle = item.color;
-      ctx.shadowColor = item.color;
-      ctx.shadowBlur = 6;
+    // Fill
+    const pFillW = Math.max(powerRatio > 0 ? 10 : 0, Math.min(barW, powerRatio * barW));
+    if (pFillW > 0) {
+      ctx.fillStyle = pColor;
       ctx.beginPath();
-      ctx.arc(c4X + 20, ly, 5.5, 0, Math.PI * 2);
+      ctx.roundRect(barX, pBarY, pFillW, barH, barR);
       ctx.fill();
-      ctx.shadowBlur = 0;
+    }
 
-      // Label
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#e2e8f0';
-      ctx.font = '600 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(item.name, c4X + 34, ly);
+    // ── 5. BAR 2: RACK LOAD ──
+    const rTopY = 146;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#10b981';
+    ctx.font = 'bold 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('🖥️ RACK LOAD', barX, rTopY);
 
-      // Range
-      ctx.textAlign = 'right';
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '500 12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(item.range, c4X + cardW4 - 14, ly);
-    });
+    const rColor = loadRatio > 0.9 ? '#ef4444' : loadRatio > 0.75 ? '#f59e0b' : '#10b981';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = rColor;
+    ctx.font = 'bold 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(`${occupiedU}U / ${totalU}U`, W - 80, rTopY);
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '600 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(`(${loadPercent.toFixed(0)}%)`, W - 24, rTopY);
+
+    // Track
+    const rBarY = rTopY + 16;
+    ctx.fillStyle = '#161b22';
+    ctx.strokeStyle = '#30363d';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(barX, rBarY, barW, barH, barR);
+    ctx.fill();
+    ctx.stroke();
+
+    // Fill
+    const rFillW = Math.max(loadRatio > 0 ? 10 : 0, Math.min(barW, loadRatio * barW));
+    if (rFillW > 0) {
+      ctx.fillStyle = rColor;
+      ctx.beginPath();
+      ctx.roundRect(barX, rBarY, rFillW, barH, barR);
+      ctx.fill();
+    }
 
     return canvas;
   }
