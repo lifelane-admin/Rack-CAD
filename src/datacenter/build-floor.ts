@@ -3188,87 +3188,38 @@ export class BuildFloorView {
     const floorLenMm = floor.lengthM * 1000;
     const floorWidMm = floor.widthM * 1000;
     const tileMm = floor.tileSizeMm;
+    const cols = Math.ceil(floorLenMm / tileMm);
+    const rows = Math.ceil(floorWidMm / tileMm);
 
-    // 1. Authentic White ESD Raised Access Floor with Conductive Seams & Subtle Static-Dissipative Mottling
-    const cols = Math.max(1, Math.round(floorLenMm / tileMm));
-    const rows = Math.max(1, Math.round(floorWidMm / tileMm));
-
-    // Generate procedural White ESD tile texture with chamfered joints and conductive vinyl trim
-    const canvasW = 1024;
-    const canvasH = 1024;
+    // 1. Authentic Clean White ESD Raised Access Floor Texture (Clean, uniform surface with static-dissipative micro-speckles)
+    const canvasW = 512;
+    const canvasH = 512;
     const esdCanvas = document.createElement('canvas');
     esdCanvas.width = canvasW;
     esdCanvas.height = canvasH;
     const esdCtx = esdCanvas.getContext('2d')!;
 
-    // Base White ESD tile tone
+    // Clean off-white ESD laminate base tone
     esdCtx.fillStyle = '#f8fafc';
     esdCtx.fillRect(0, 0, canvasW, canvasH);
 
-    // Subtle 2x2 tile pattern variation across the floor
-    const halfW = canvasW / 2;
-    const halfH = canvasH / 2;
-    const subTiles = [
-      { x: 0, y: 0, w: halfW, h: halfH, bg: '#ffffff', specks: '#cbd5e1' },
-      { x: halfW, y: 0, w: halfW, h: halfH, bg: '#f1f5f9', specks: '#94a3b8' },
-      { x: 0, y: halfH, w: halfW, h: halfH, bg: '#f8fafc', specks: '#cbd5e1' },
-      { x: halfW, y: halfH, w: halfW, h: halfH, bg: '#f1f5f9', specks: '#94a3b8' },
-    ];
-
-    for (const t of subTiles) {
-      esdCtx.fillStyle = t.bg;
-      esdCtx.fillRect(t.x, t.y, t.w, t.h);
-
-      // Fine ESD static-dissipative carbon micro-speckles & conductive veins
-      esdCtx.fillStyle = t.specks;
-      for (let i = 0; i < 350; i++) {
-        const sx = t.x + 3 + (Math.sin(i * 19.3) * 0.5 + 0.5) * (t.w - 6);
-        const sy = t.y + 3 + (Math.cos(i * 37.7) * 0.5 + 0.5) * (t.h - 6);
-        esdCtx.fillRect(sx, sy, 1.2, 1.2);
-      }
-
-      // Tile surface chamfer / bevel highlight (top and left edge)
-      esdCtx.fillStyle = 'rgba(255, 255, 255, 0.90)';
-      esdCtx.fillRect(t.x + 1.5, t.y + 1.5, t.w - 3, 2);
-      esdCtx.fillRect(t.x + 1.5, t.y + 1.5, 2, t.h - 3);
-
-      // Tile surface shadow (bottom and right edge)
-      esdCtx.fillStyle = 'rgba(100, 116, 139, 0.28)';
-      esdCtx.fillRect(t.x + 1.5, t.y + t.h - 3.5, t.w - 3, 2);
-      esdCtx.fillRect(t.x + t.w - 3.5, t.y + 1.5, 2, t.h - 3);
-
-      // Conductive border gasket (recessed dark gray conductive vinyl trim)
-      esdCtx.strokeStyle = '#475569';
-      esdCtx.lineWidth = 2.5;
-      esdCtx.strokeRect(t.x + 1.5, t.y + 1.5, t.w - 3, t.h - 3);
+    // Fine ESD static-dissipative carbon micro-speckles across surface
+    esdCtx.fillStyle = '#cbd5e1';
+    for (let i = 0; i < 400; i++) {
+      const sx = (Math.sin(i * 19.3) * 0.5 + 0.5) * canvasW;
+      const sy = (Math.cos(i * 37.7) * 0.5 + 0.5) * canvasH;
+      esdCtx.fillRect(sx, sy, 1.2, 1.2);
+    }
+    esdCtx.fillStyle = '#94a3b8';
+    for (let i = 0; i < 200; i++) {
+      const sx = (Math.sin(i * 29.7) * 0.5 + 0.5) * canvasW;
+      const sy = (Math.cos(i * 43.1) * 0.5 + 0.5) * canvasH;
+      esdCtx.fillRect(sx, sy, 1.0, 1.0);
     }
 
     const esdTexture = new THREE.CanvasTexture(esdCanvas);
-    esdTexture.wrapS = THREE.RepeatWrapping;
-    esdTexture.wrapT = THREE.RepeatWrapping;
-    esdTexture.repeat.set(cols / 2, rows / 2);
-    esdTexture.anisotropy = 16;
     esdTexture.colorSpace = THREE.SRGBColorSpace;
-
-    // Create realistic bump map for tile seam depth
-    const bumpCanvas = document.createElement('canvas');
-    bumpCanvas.width = canvasW;
-    bumpCanvas.height = canvasH;
-    const bumpCtx = bumpCanvas.getContext('2d')!;
-    bumpCtx.fillStyle = '#808080';
-    bumpCtx.fillRect(0, 0, canvasW, canvasH);
-    for (const t of subTiles) {
-      bumpCtx.fillStyle = '#999999';
-      bumpCtx.fillRect(t.x + 3, t.y + 3, t.w - 6, t.h - 6);
-      bumpCtx.strokeStyle = '#333333';
-      bumpCtx.lineWidth = 3;
-      bumpCtx.strokeRect(t.x + 2, t.y + 2, t.w - 4, t.h - 4);
-    }
-    const esdBump = new THREE.CanvasTexture(bumpCanvas);
-    esdBump.wrapS = THREE.RepeatWrapping;
-    esdBump.wrapT = THREE.RepeatWrapping;
-    esdBump.repeat.set(cols / 2, rows / 2);
-    esdBump.anisotropy = 16;
+    esdTexture.anisotropy = 16;
 
     // 1. Concrete Subfloor Base Slab (at y = -plenumDepthMm)
     const plenumDepthMm = floor.raisedFloorHeightMm || 450;
@@ -3323,9 +3274,7 @@ export class BuildFloorView {
 
     const stdFloorMat = new THREE.MeshStandardMaterial({
       map: esdTexture,
-      bumpMap: esdBump,
-      bumpScale: 1.0,
-      roughness: 0.50,
+      roughness: 0.45,
       metalness: 0.08,
       transparent: effectiveFloorOpacity < 1.0,
       opacity: effectiveFloorOpacity,
@@ -3403,11 +3352,11 @@ export class BuildFloorView {
       this.threeScene.add(floorMesh);
     } else {
       // Individual panels for realistic tile-by-tile appearance
-      const panelSize = tileMm - 2;
+      const panelSize = tileMm;
       const tilePanelGeo = new THREE.PlaneGeometry(panelSize, panelSize);
       floor.tiles.forEach(t => {
-        const txMm = t.x * 1000 + panelSize / 2;
-        const tzMm = t.y * 1000 + panelSize / 2;
+        const txMm = t.x * 1000 + tileMm / 2;
+        const tzMm = t.y * 1000 + tileMm / 2;
 
         if (t.type === 'ventilated') {
           // Authentic Heavy-Duty Steel Bar Grate / Grille Tile (Open Plenum Floor)
@@ -3651,9 +3600,7 @@ export class BuildFloorView {
     });
     this.threeScene.add(infraGroup);
 
-    // 5. Physical 3D Conductive Grounding Seam Grid — Per-Tile Edge Borders
-    // Each ESD tile gets its own 4-edge rectangular seam border (conductive vinyl gasket),
-    // matching the 2D per-tile strokeRect rendering exactly.
+    // 5. Clean, Exact ESD Grid Lines running directly through pedestal pillar centers
     this.threeGridGroup = new THREE.Group();
     this.threeGridGroup.userData = { isDynamic: true };
 
@@ -3661,29 +3608,23 @@ export class BuildFloorView {
 
     const lineMat = new THREE.LineBasicMaterial({
       color: 0x334155, // Dark industrial slate — matches 2D strokeStyle '#334155'
-      linewidth: 1,
+      linewidth: 1.5,
       depthTest: true,
       depthWrite: false,
     });
 
-    // Build one shared BufferGeometry from all per-tile edge segments
     const linePositions: number[] = [];
-    for (const tile of floor.tiles) {
-      // Tile world-space bounds in mm (tile.x / tile.y are in metres)
-      const x0 = tile.x * 1000;
-      const z0 = tile.y * 1000;
-      const x1 = x0 + tileMm;
-      const z1 = z0 + tileMm;
 
-      // 4 edges of this tile (each edge = 2 vertices = 6 floats)
-      // Top edge (north)
-      linePositions.push(x0, seamsY, z0, x1, seamsY, z0);
-      // Bottom edge (south)
-      linePositions.push(x0, seamsY, z1, x1, seamsY, z1);
-      // Left edge (west)
-      linePositions.push(x0, seamsY, z0, x0, seamsY, z1);
-      // Right edge (east)
-      linePositions.push(x1, seamsY, z0, x1, seamsY, z1);
+    // Horizontal grid lines along X axis through pillar centers (r = 0..rows)
+    for (let r = 0; r <= rows; r++) {
+      const z = Math.min(floorWidMm, r * tileMm);
+      linePositions.push(0, seamsY, z, floorLenMm, seamsY, z);
+    }
+
+    // Vertical grid lines along Z axis through pillar centers (c = 0..cols)
+    for (let c = 0; c <= cols; c++) {
+      const x = Math.min(floorLenMm, c * tileMm);
+      linePositions.push(x, seamsY, 0, x, seamsY, floorWidMm);
     }
 
     const lineGeo = new THREE.BufferGeometry();
