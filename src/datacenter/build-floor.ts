@@ -1768,6 +1768,7 @@ export class BuildFloorView {
               <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(rack.widthMm, rack.depthMm, unit === 'm' ? 'mm' : unit)}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Height</span><span class="dc-info-val">${formatRackHeight(rack.heightU)}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Capacity</span><span class="dc-info-val" style="color:#38bdf8;font-weight:600;">${devices.length} dev • ${usedU}/${rack.heightU}U</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Max Power</span><span class="dc-info-val" style="color:#ffd21a;font-weight:600;">${rack.maxPowerKw ?? 20} kW</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Pos X</span><span class="dc-info-val">${posX}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Pos Y</span><span class="dc-info-val">${posY}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Rotation</span><span class="dc-info-val">${rack.rotation}°</span></div>
@@ -2985,6 +2986,7 @@ export class BuildFloorView {
         </label>
         <label>Manufacturer<input id="dr-mfr" type="text" value="APC Schneider" class="dc-input"/></label>
         <label>Model Number<input id="dr-model" type="text" value="AR3100" class="dc-input"/></label>
+        <label>Max Power Load (kW)<input id="dr-power" type="number" value="20" min="1" max="200" step="1" class="dc-input"/></label>
         <label>Cabinet Color<input id="dr-color" type="color" value="#1e3a5f" class="dc-input" style="height:36px;padding:2px;"/></label>
       </div>
     `, 'Add Rack to Floor', () => {
@@ -2998,6 +3000,7 @@ export class BuildFloorView {
       const mounting = (document.getElementById('dr-mounting') as HTMLSelectElement).value as DcMounting;
       const mfr = (document.getElementById('dr-mfr') as HTMLInputElement).value.trim();
       const model = (document.getElementById('dr-model') as HTMLInputElement).value.trim();
+      const maxPowerKw = parseFloat((document.getElementById('dr-power') as HTMLInputElement).value) || 20;
       const color = (document.getElementById('dr-color') as HTMLInputElement).value || '#1e3a5f';
 
       if (w <= 0 || d <= 0 || h <= 0) { alert('Invalid dimensions.'); return false; }
@@ -3017,6 +3020,7 @@ export class BuildFloorView {
         position: { x: tileM * 2, y: tileM * 2, z: 0 },
         rotation: 0,
         color,
+        maxPowerKw,
       };
       dcState.addRack(rack);
       dcState.setState({ selectedRackId: id });
@@ -3078,6 +3082,7 @@ export class BuildFloorView {
         </label>
         <label>Manufacturer<input id="dr-mfr" type="text" value="${rack.manufacturer || ''}" class="dc-input"/></label>
         <label>Model Number<input id="dr-model" type="text" value="${rack.model || ''}" class="dc-input"/></label>
+        <label>Max Power Load (kW)<input id="dr-power" type="number" value="${rack.maxPowerKw ?? 20}" min="1" max="200" step="1" class="dc-input"/></label>
         <label>Cabinet Color<input id="dr-color" type="color" value="${rack.color || '#1e3a5f'}" class="dc-input" style="height:36px;padding:2px;"/></label>
       </div>
     `, 'Save Rack Properties', () => {
@@ -3090,6 +3095,7 @@ export class BuildFloorView {
       const mounting = (document.getElementById('dr-mounting') as HTMLSelectElement).value as DcMounting;
       const mfr = (document.getElementById('dr-mfr') as HTMLInputElement).value.trim();
       const model = (document.getElementById('dr-model') as HTMLInputElement).value.trim();
+      const maxPowerKw = parseFloat((document.getElementById('dr-power') as HTMLInputElement).value) || (rack.maxPowerKw ?? 20);
       const color = (document.getElementById('dr-color') as HTMLInputElement).value || rack.color;
 
       dcState.updateRack(rack.id, {
@@ -3103,7 +3109,9 @@ export class BuildFloorView {
         manufacturer: mfr || undefined,
         model: model || undefined,
         color,
+        maxPowerKw,
       });
+      this.refresh();
       return true;
     });
   }
@@ -4226,10 +4234,11 @@ export class BuildFloorView {
       }
     });
 
+    const maxKw = dcRack.maxPowerKw && dcRack.maxPowerKw > 0 ? dcRack.maxPowerKw : 20;
     const powerKw = totalWatts / 1000;
     const loadPercent = Math.min(100, Math.round((occupiedU / totalU) * 1000) / 10);
-    // Scale for power: 0KW to 20KW (as specified in SVG design)
-    const powerRatio = Math.max(0, Math.min(1, powerKw / 20));
+    // Scale for power: 0KW to maxKw (user-defined max power load, default 20kW)
+    const powerRatio = Math.max(0, Math.min(1, powerKw / maxKw));
     const loadRatio = Math.max(0, Math.min(1, loadPercent / 100));
 
     // 2. Background Gradient & Subtle Grid (SVG: #bg & #network)
@@ -4383,7 +4392,7 @@ export class BuildFloorView {
       ctx.fillText(`${i * 10}%`, lx, ly);
     }
 
-    // 2. Power Ticks (0KW to 20KW, 11 steps of 2KW - font size 22px)
+    // 2. Power Ticks (0 to maxKw, 11 steps - font size 22px)
     ctx.font = 'bold 22px Arial, Helvetica, sans-serif';
     for (let i = 0; i <= 10; i++) {
       const frac = i / 10;
@@ -4408,7 +4417,9 @@ export class BuildFloorView {
       const lx = Cx + 352 * cosA;
       const ly = Cy - 352 * sinA + (i === 0 || i === 10 ? 9 : 0);
       ctx.fillStyle = '#f1f4f7';
-      ctx.fillText(`${i * 2}K`, lx, ly);
+      const tickVal = Math.round(frac * maxKw * 10) / 10;
+      const tickLabel = tickVal % 1 === 0 ? `${tickVal}K` : `${tickVal.toFixed(1)}K`;
+      ctx.fillText(tickLabel, lx, ly);
     }
 
     // ── E. SECTION TITLES (+50% font size) ──
@@ -4417,7 +4428,7 @@ export class BuildFloorView {
     ctx.fillText('RACK LOAD', Cx, 240);
 
     ctx.font = 'bold 28px Arial, Helvetica, sans-serif';
-    ctx.fillText('POWER (kW)', Cx, 355);
+    ctx.fillText(`POWER (${maxKw}kW max)`, Cx, 355);
 
     // Decorative Rack Icon at (Cx, 399)
     ctx.save();
@@ -4554,10 +4565,10 @@ export class BuildFloorView {
     // ── H. STATUS READOUT (Bottom Center) (+50% font size) ──
     let statusText = 'OK / OPTIMAL';
     let statusColor = '#63ee55';
-    if (loadPercent >= 90 || powerKw >= 18) {
+    if (loadPercent >= 90 || powerKw >= maxKw * 0.9) {
       statusText = 'CRITICAL / OVERLOAD';
       statusColor = '#ff1538';
-    } else if (loadPercent >= 75 || powerKw >= 15) {
+    } else if (loadPercent >= 75 || powerKw >= maxKw * 0.75) {
       statusText = 'WARNING / HIGH LOAD';
       statusColor = '#ffd21a';
     }

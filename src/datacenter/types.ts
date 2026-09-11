@@ -65,6 +65,7 @@ export interface DcRack {
   rightCableManagerColor?: string;
   leftPduId?: string;
   rightPduId?: string;
+  maxPowerKw?: number; // User-defined maximum power capacity in kW (default 20)
 }
 
 
