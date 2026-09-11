@@ -4171,11 +4171,14 @@ export class BuildFloorView {
       labelTex.colorSpace = THREE.SRGBColorSpace;
       const spriteMat = new THREE.SpriteMaterial({ map: labelTex, depthTest: false });
       const sprite = new THREE.Sprite(spriteMat);
-      // Width 800mm in 3D world, height proportional (1024x768 -> 600mm)
-      const spriteW = 800;
+      // Width 650mm in 3D world, height proportional (1024x768 -> 487.5mm)
+      const spriteW = 650;
       const spriteH = spriteW * (hudCanvas.height / hudCanvas.width);
       sprite.scale.set(spriteW, spriteH, 1);
-      const topY = (initBox.max.y > 0 ? initBox.max.y - initBox.min.y : totalHMm) + spriteH / 2 + 60;
+      
+      // Anchor sprite at bottom center (0.5, 0) so the bottom sits flush just above the rack top
+      sprite.center.set(0.5, 0);
+      const topY = (isFinite(initBox.max.y) ? initBox.max.y : totalHMm / 2) + 20;
       sprite.position.set(0, topY, 0);
       sprite.userData = { isDynamic: true, rackId: dcRack.id };
       rackGroup.add(sprite);
