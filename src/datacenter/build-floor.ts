@@ -5,6 +5,7 @@ import { buildRackGroup } from '../three/rack-builder';
 import { dcState, getRowLabel, getColLabel } from './dc-state';
 import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacingStandard, DcAddressFormat, DcFloorTile, DcAirflowDirection, DcInfrastructureItem, DcInfraCategory, DcGaugeStyle } from './types';
 import { RACK_PRESETS, SPACING_STANDARDS, RackPreset, SpacingStandardInfo } from './standards';
+import { DATACENTER_CATALOG, CATEGORY_DEFINITIONS, CatalogItemPreset } from './catalog';
 import { stateManager } from '../core/state';
 import { eventBus } from '../core/event-bus';
 import { RackData, RACK_CONSTANTS, DeviceData, DeviceTemplate, CableData } from '../core/types';
@@ -74,6 +75,8 @@ export class BuildFloorView {
   private resizeObserver: ResizeObserver | null = null;
   private resizeDebounceId = 0;  // RAF handle for debounced resize
   private isLeftPanelCollapsed = false;
+  private activeLeftTab: 'catalog' | 'info' = 'catalog';
+  private catalogSearchQuery: string = '';
 
   // Drag threshold to prevent unintended pan/drag resets on simple clicks
   private pendingPan = false;
@@ -329,19 +332,23 @@ export class BuildFloorView {
         <div class="dc-body">
           <div class="dc-info-panel" id="dc-info-panel">
             <div class="dc-panel-header">
-              <div class="dc-panel-title">DATACENTER FLOOR</div>
-              <button class="dc-btn-toggle-panel" id="dc-toggle-left-panel" title="Collapse Left Panel (more room space)">◀</button>
+              <div class="dc-tabs-nav">
+                <button class="dc-tab-nav-btn active" id="dc-tab-btn-catalog" title="Equipment Catalog Palette">📦 Equipment</button>
+                <button class="dc-tab-nav-btn" id="dc-tab-btn-info" title="Datacenter Floor Statistics & Settings">📊 Floor Info</button>
+              </div>
+              <button class="dc-btn-toggle-panel" id="dc-toggle-left-panel" title="Collapse Left Panel">◀</button>
             </div>
-            <div id="dc-info-content"><div class="dc-no-floor">No floor loaded.<br>Click <b>+ New Floor</b> to start.</div></div>
+            <div id="dc-catalog-content" class="dc-panel-tab-content"></div>
+            <div id="dc-info-content" class="dc-panel-tab-content hidden"><div class="dc-no-floor">No floor loaded.<br>Click <b>+ New Floor</b> to start.</div></div>
           </div>
           <div class="dc-canvas-wrap" id="dc-canvas-wrap">
-            <button class="dc-expand-panel-btn hidden" id="dc-expand-left-panel" title="Expand Floor Info Panel">▶ Floor Info</button>
+            <button class="dc-expand-panel-btn hidden" id="dc-expand-left-panel" title="Expand Equipment & Floor Panel">▶ Equipment & Floor</button>
             <canvas id="dc-canvas"></canvas>
             <div class="dc-3d-container hidden" id="dc-3d-container"></div>
           </div>
           <div class="dc-props-panel" id="dc-props-panel">
             <div class="dc-panel-title">PROPERTIES</div>
-            <div id="dc-props-content"><p class="dc-muted">Select a tile or rack.</p></div>
+            <div id="dc-props-content"><p class="dc-muted">Select an equipment item or floor tile.</p></div>
           </div>
         </div>
         <div class="dc-statusbar" id="dc-statusbar">Point-to-Zoom: Wheel | [Z] Zoom to Selected Rack / Fit Floor | [S] Select | [M] Move | [R] Rotate</div>
@@ -498,6 +505,26 @@ export class BuildFloorView {
     on('dc-btn-labels', () => { dcState.setState({ labelsVisible: !dcState.getState().labelsVisible }); });
     on('dc-toggle-left-panel', () => this.toggleLeftPanel(true));
     on('dc-expand-left-panel', () => this.toggleLeftPanel(false));
+
+    const btnTabCatalog = this.container.querySelector('#dc-tab-btn-catalog');
+    const btnTabInfo = this.container.querySelector('#dc-tab-btn-info');
+    btnTabCatalog?.addEventListener('click', () => {
+      this.activeLeftTab = 'catalog';
+      btnTabCatalog.classList.add('active');
+      btnTabInfo?.classList.remove('active');
+      this.container.querySelector('#dc-catalog-content')?.classList.remove('hidden');
+      this.container.querySelector('#dc-info-content')?.classList.add('hidden');
+      this.renderCatalogPanel();
+    });
+    btnTabInfo?.addEventListener('click', () => {
+      this.activeLeftTab = 'info';
+      btnTabInfo.classList.add('active');
+      btnTabCatalog?.classList.remove('active');
+      this.container.querySelector('#dc-info-content')?.classList.remove('hidden');
+      this.container.querySelector('#dc-catalog-content')?.classList.add('hidden');
+      const floor = dcState.getActiveFloor();
+      if (floor) this.updateInfoPanel(floor);
+    });
     
     this.container.querySelector('#dc-topbar-unit')?.addEventListener('change', (e) => {
       const selectedUnit = (e.target as HTMLSelectElement).value as DcUnit;
@@ -1672,10 +1699,39 @@ export class BuildFloorView {
     this.ctx.fillRect(sx, sy, pw, ph);
     this.ctx.shadowBlur = 0;
 
-    // Outer Stroke with Rack Type distinction
-    this.ctx.strokeStyle = invalid ? '#ef4444' : isSelected ? '#38bdf8' : rack.type === 'network' ? '#10b981' : rack.type === 'open-frame' ? '#f59e0b' : rack.type === 'wall-mount' ? '#a855f7' : '#4a9eff';
+    // Outer Stroke with Category & Type distinction
+    const strokeColor = invalid ? '#ef4444' : isSelected ? '#38bdf8' :
+      rack.equipmentCategory === 'cooling' || rack.type === 'inrow-cooling' ? '#0284c7' :
+      rack.equipmentCategory === 'micro-dc' || rack.type === 'micro-dc' ? '#c084fc' :
+      rack.equipmentCategory === 'structured-cabling' || rack.type === 'odf-fiber' ? '#facc15' :
+      rack.equipmentCategory === 'power-distribution' || rack.type === 'power-rpp' ? '#fbbf24' :
+      rack.equipmentCategory === 'ups' || rack.type === 'ups-cabinet' || rack.type === 'battery-cabinet' ? '#4ade80' :
+      rack.equipmentCategory === 'busbars-transformers' || rack.type === 'transformer' ? '#f59e0b' :
+      rack.equipmentCategory === 'facility-plant' || rack.spaceType === 'grey-space' ? '#f87171' :
+      rack.type === 'network' ? '#10b981' :
+      rack.type === 'open-frame' ? '#f59e0b' :
+      rack.type === 'wall-mount' ? '#a855f7' : '#4a9eff';
+
+    this.ctx.strokeStyle = strokeColor;
     this.ctx.lineWidth = isSelected ? 2.5 : 1.5;
     this.ctx.strokeRect(sx, sy, pw, ph);
+
+    // Category-specific internal iconography & hatching
+    if (pw >= 16 && ph >= 16) {
+      if (rack.equipmentCategory === 'cooling' || rack.type === 'inrow-cooling') {
+        this.ctx.fillStyle = 'rgba(2, 132, 199, 0.4)';
+        this.ctx.beginPath();
+        this.ctx.arc(sx + pw / 2, sy + ph / 2, Math.min(pw, ph) * 0.28, 0, Math.PI * 2);
+        this.ctx.fill();
+      } else if (rack.equipmentCategory === 'micro-dc' || rack.type === 'micro-dc') {
+        this.ctx.fillStyle = 'rgba(168, 85, 247, 0.35)';
+        this.ctx.fillRect(sx + 4, sy + 3, pw - 8, Math.min(ph * 0.22, 12));
+      } else if (rack.spaceType === 'grey-space') {
+        this.ctx.fillStyle = '#f59e0b';
+        this.ctx.fillRect(sx, sy, Math.min(6, pw), Math.min(6, ph));
+        this.ctx.fillRect(sx + pw - Math.min(6, pw), sy + ph - Math.min(6, ph), Math.min(6, pw), Math.min(6, ph));
+      }
+    }
 
     // Draw rack doors or open frame indicators
     if (rack.doorStyle === 'perforated' && pw >= 20) {
@@ -1700,7 +1756,8 @@ export class BuildFloorView {
       if (ph >= 24) {
         this.ctx.font = `${Math.max(8, Math.min(10, pw * 0.12))}px system-ui`;
         this.ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        this.ctx.fillText(`${rack.heightU}U ${rack.type.toUpperCase()}`, sx + pw / 2, sy + ph / 2 + 5);
+        const labelText = rack.equipmentCategory ? rack.equipmentCategory.toUpperCase() : `${rack.heightU}U ${rack.type.toUpperCase()}`;
+        this.ctx.fillText(labelText, sx + pw / 2, sy + ph / 2 + 5);
       }
       if (devices.length > 0 && ph >= 38) {
         this.ctx.font = `600 ${Math.max(7.5, Math.min(9.5, pw * 0.10))}px system-ui`;
@@ -1726,6 +1783,196 @@ export class BuildFloorView {
     this.draw();
   }
 
+  public addEquipmentFromCatalog(presetId: string) {
+    const floor = dcState.getActiveFloor();
+    if (!floor) {
+      eventBus.emit('notification', { message: 'Please create or load a datacenter floor first.', type: 'warning' });
+      return;
+    }
+    const preset = DATACENTER_CATALOG.find(p => p.id === presetId);
+    if (!preset) return;
+
+    const tileM = floor.tileSizeMm / 1000;
+    let targetX = tileM * 2;
+    let targetY = tileM * 2;
+    const count = (floor.racks.length || 0) + 1;
+    const prefix = preset.shortLabel.replace(/[^a-zA-Z0-9]/g, '-').toUpperCase();
+    const id = `${prefix}-${String(count).padStart(3, '0')}`;
+
+    const rack: DcRack = {
+      id,
+      name: id,
+      type: preset.type,
+      spaceType: preset.spaceType,
+      equipmentCategory: preset.category,
+      widthMm: preset.widthMm,
+      depthMm: preset.depthMm,
+      heightU: preset.heightU,
+      doorStyle: preset.doorStyle,
+      mounting: preset.mounting,
+      manufacturer: preset.manufacturer,
+      model: preset.model,
+      position: { x: parseFloat(targetX.toFixed(3)), y: parseFloat(targetY.toFixed(3)), z: 0 },
+      rotation: 0,
+      color: preset.color,
+      maxPowerKw: preset.maxPowerKw,
+      coolingCapacityKw: preset.coolingCapacityKw,
+      upsCapacityKva: preset.upsCapacityKva,
+      pduVoltage: preset.pduVoltage,
+      pduPhases: preset.pduPhases,
+      pduAmperage: preset.pduAmperage,
+      pduOutletCount: preset.pduOutletCount,
+      busbarAmps: preset.busbarAmps,
+      transformerKva: preset.transformerKva,
+      securityLock: preset.securityLock,
+    };
+
+    // Find non-overlapping grid location
+    const rWM = preset.widthMm / 1000;
+    const rDM = preset.depthMm / 1000;
+    while (dcState.isOverlapping(rack) && targetX < floor.lengthM - rWM) {
+      targetX += rWM + 0.3;
+      if (targetX + rWM > floor.lengthM) {
+        targetX = tileM * 2;
+        targetY += rDM + 1.2;
+      }
+      rack.position = { x: parseFloat(targetX.toFixed(3)), y: parseFloat(targetY.toFixed(3)), z: 0 };
+    }
+
+    dcState.addRack(rack);
+    dcState.setState({ selectedRackId: rack.id, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
+    this.refresh();
+    eventBus.emit('notification', {
+      message: `Added ${preset.name} to ${preset.spaceType === 'grey-space' ? 'Grey Space' : 'White Space'} at (${rack.position.x.toFixed(1)}m, ${rack.position.y.toFixed(1)}m).`,
+      type: 'success',
+    });
+  }
+
+  private renderCatalogPanel() {
+    const el = this.container.querySelector('#dc-catalog-content');
+    if (!el) return;
+    const s = dcState.getState();
+    const curSpace = s.activeSpaceTab || 'white-space';
+    const curCat = s.activeCatalogCategory || 'all';
+
+    // Filter presets
+    const filtered = DATACENTER_CATALOG.filter(p => {
+      if (curSpace !== 'all' && p.spaceType !== curSpace) return false;
+      if (curCat !== 'all' && p.category !== curCat) return false;
+      if (this.catalogSearchQuery.trim()) {
+        const q = this.catalogSearchQuery.toLowerCase();
+        const match = p.name.toLowerCase().includes(q) ||
+                      p.manufacturer.toLowerCase().includes(q) ||
+                      p.model.toLowerCase().includes(q) ||
+                      p.category.toLowerCase().includes(q) ||
+                      p.description.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+
+    const categoriesForSpace = CATEGORY_DEFINITIONS.filter(c => c.space === 'all' || c.space === curSpace || curSpace === 'all');
+
+    el.innerHTML = `
+      <div class="dc-space-toggle">
+        <button class="dc-space-toggle-btn ${curSpace === 'white-space' ? 'active' : ''}" id="dc-space-white" title="White Space: IT Equipment, Racks, In-Row Cooling, Cabling & PDUs">🌐 White Space</button>
+        <button class="dc-space-toggle-btn grey ${curSpace === 'grey-space' ? 'active' : ''}" id="dc-space-grey" title="Grey Space: Facility Plant, Switchgear, Central UPS, Transformers & Chillers">🏭 Grey Space</button>
+        <button class="dc-space-toggle-btn ${curSpace === 'all' ? 'active' : ''}" id="dc-space-all" title="View all equipment domains">All</button>
+      </div>
+
+      <div class="dc-category-scroll">
+        ${categoriesForSpace.map(c => `
+          <button class="dc-cat-pill ${curCat === c.id ? 'active' : ''}" data-cat="${c.id}" title="${(c as any).desc || c.label}">
+            <span>${c.icon}</span> <span>${c.label}</span>
+          </button>
+        `).join('')}
+      </div>
+
+      <div class="dc-catalog-search-wrap">
+        <span class="dc-catalog-search-icon">🔍</span>
+        <input type="text" class="dc-catalog-search-input" id="dc-catalog-search" placeholder="Search equipment, mfr, cooling kW, power..." value="${this.catalogSearchQuery}"/>
+      </div>
+
+      <div class="dc-catalog-list">
+        ${filtered.length === 0 ? '<div class="dc-muted" style="text-align:center;padding:20px 0;">No matching equipment found.</div>' : ''}
+        ${filtered.map(p => {
+          const specBadges: string[] = [];
+          specBadges.push(`${p.widthMm}×${p.depthMm}mm`);
+          if (p.heightU) specBadges.push(`${p.heightU}U`);
+          if (p.coolingCapacityKw) specBadges.push(`❄️ ${p.coolingCapacityKw}kW`);
+          if (p.upsCapacityKva) specBadges.push(`🔋 ${p.upsCapacityKva}kVA`);
+          if (p.maxPowerKw && !p.upsCapacityKva && !p.coolingCapacityKw) specBadges.push(`⚡ ${p.maxPowerKw}kW`);
+          if (p.pduVoltage) specBadges.push(`⚡ ${p.pduVoltage}`);
+          if (p.busbarAmps) specBadges.push(`⚡ ${p.busbarAmps}A`);
+          if (p.transformerKva) specBadges.push(`🎛️ ${p.transformerKva}kVA`);
+          if (p.securityLock && p.securityLock !== 'none') specBadges.push(`🔒 ${p.securityLock}`);
+
+          return `
+            <div class="dc-catalog-card" data-preset="${p.id}">
+              <div class="dc-card-top">
+                <div class="dc-card-title-wrap">
+                  <span class="dc-card-icon">${p.icon}</span>
+                  <span class="dc-card-name">${p.name}</span>
+                </div>
+                <span class="dc-card-tag ${p.category}">${p.category}</span>
+              </div>
+              <div class="dc-card-desc">${p.description}</div>
+              <div class="dc-card-specs">
+                ${specBadges.map(b => `<span class="dc-spec-badge">${b}</span>`).join('')}
+              </div>
+              <button class="dc-card-btn-add" data-add="${p.id}">＋ Add to Floor</button>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    // Bind Space toggle
+    el.querySelector('#dc-space-white')?.addEventListener('click', () => {
+      dcState.setState({ activeSpaceTab: 'white-space' });
+      this.renderCatalogPanel();
+    });
+    el.querySelector('#dc-space-grey')?.addEventListener('click', () => {
+      dcState.setState({ activeSpaceTab: 'grey-space' });
+      this.renderCatalogPanel();
+    });
+    el.querySelector('#dc-space-all')?.addEventListener('click', () => {
+      dcState.setState({ activeSpaceTab: 'all' });
+      this.renderCatalogPanel();
+    });
+
+    // Bind Category pills
+    el.querySelectorAll('.dc-cat-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cat = btn.getAttribute('data-cat') as any;
+        dcState.setState({ activeCatalogCategory: cat });
+        this.renderCatalogPanel();
+      });
+    });
+
+    // Bind Search input
+    const searchInput = el.querySelector('#dc-catalog-search') as HTMLInputElement;
+    searchInput?.addEventListener('input', (e: any) => {
+      this.catalogSearchQuery = e.target.value;
+      this.renderCatalogPanel();
+      // Keep focus
+      const updatedInput = this.container.querySelector('#dc-catalog-search') as HTMLInputElement;
+      if (updatedInput) {
+        updatedInput.focus();
+        updatedInput.setSelectionRange(updatedInput.value.length, updatedInput.value.length);
+      }
+    });
+
+    // Bind Add buttons
+    el.querySelectorAll('[data-add]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const presetId = btn.getAttribute('data-add');
+        if (presetId) this.addEquipmentFromCatalog(presetId);
+      });
+    });
+  }
+
   private updateInfoPanel(floor: DcFloor) {
     const el = this.container.querySelector('#dc-info-content');
     if (!el) return;
@@ -1742,12 +1989,17 @@ export class BuildFloorView {
       <div class="dc-info-row"><span class="dc-info-label">Tiles</span><span class="dc-info-val">${floor.tiles.length.toLocaleString()}</span></div>
       <div class="dc-info-row"><span class="dc-info-label">Total Racks</span><span class="dc-info-val">${floor.racks.length}</span></div>
       <div class="dc-divider-h"></div>
-      <button class="dc-btn dc-btn-sm dc-btn-full" id="dc-btn-addrack">＋ Add Single Rack</button>
+      <button class="dc-btn dc-btn-sm dc-btn-full dc-btn-primary" id="dc-btn-switch-catalog">📦 Open Equipment Catalog</button>
+      <button class="dc-btn dc-btn-sm dc-btn-full" id="dc-btn-addrack">＋ Custom Rack</button>
       <button class="dc-btn dc-btn-sm dc-btn-full" id="dc-btn-addrow-info">▤ Add Row (Standards)</button>
       <button class="dc-btn dc-btn-sm dc-btn-full dc-btn-secondary" id="dc-btn-editfloor">✎ Edit Floor</button>
       <button class="dc-btn dc-btn-sm dc-btn-full dc-btn-secondary" id="dc-btn-clearfloor">↺ Reset to Empty Floor</button>
       <button class="dc-btn dc-btn-sm dc-btn-full dc-btn-danger" id="dc-btn-deletefloor">🗑 Delete Floor</button>
     `;
+    el.querySelector('#dc-btn-switch-catalog')?.addEventListener('click', () => {
+      const btnTabCatalog = this.container.querySelector('#dc-tab-btn-catalog') as HTMLElement;
+      btnTabCatalog?.click();
+    });
     el.querySelector('#dc-btn-addrack')?.addEventListener('click', () => this.showAddRackDialog());
     el.querySelector('#dc-btn-addrow-info')?.addEventListener('click', () => this.showAddRowDialog());
     el.querySelector('#dc-btn-editfloor')?.addEventListener('click', () => this.showEditFloorDialog(floor));
@@ -1816,6 +2068,10 @@ export class BuildFloorView {
     } else {
       this.draw();
     }
+    if (floor) {
+      this.updateInfoPanel(floor);
+    }
+    this.renderCatalogPanel();
     this.renderPropsPanel();
   }
 
@@ -1833,6 +2089,9 @@ export class BuildFloorView {
           const posX = formatSingleDistance(rack.position.x, unit);
           const posY = formatSingleDistance(rack.position.y, unit);
           const typeBadge = `<span class="dc-type-badge ${rack.type}">${rack.type}</span>`;
+          const spaceBadge = rack.spaceType === 'grey-space' 
+            ? '<span class="dc-space-badge grey-space">🏭 Grey Space</span>' 
+            : '<span class="dc-space-badge white-space">🏢 White Space</span>';
           const devices = stateManager.getState().devices?.filter(d => d.rackId === rack.id) || [];
           const usedU = devices.reduce((sum, d) => sum + (getTemplate(d.templateId)?.heightUnits || 1), 0);
 
@@ -1845,15 +2104,23 @@ export class BuildFloorView {
 
           el.innerHTML = `
             <div class="dc-props-section">
-              <div class="dc-props-title">Rack Properties ${typeBadge}</div>
+              <div class="dc-props-title">Properties ${spaceBadge} ${typeBadge}</div>
               <div class="dc-info-row"><span class="dc-info-label">ID</span><span class="dc-info-val">${rack.id}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Name</span><span class="dc-info-val">${rack.name}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Grid Addr</span><span class="dc-info-val" style="color:#38bdf8;font-weight:700;">${gridAddr}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Type</span><span class="dc-info-val"><b>${rack.type.toUpperCase()}</b></span></div>
+              ${rack.equipmentCategory ? `<div class="dc-info-row"><span class="dc-info-label">Category</span><span class="dc-info-val" style="color:#cbd5e1;font-weight:600;">${rack.equipmentCategory.replace('-', ' ').toUpperCase()}</span></div>` : ''}
               <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(rack.widthMm, rack.depthMm, unit === 'm' ? 'mm' : unit)}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Height</span><span class="dc-info-val">${formatRackHeight(rack.heightU)}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Capacity</span><span class="dc-info-val" style="color:#38bdf8;font-weight:600;">${devices.length} dev • ${usedU}/${rack.heightU}U</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Max Power</span><span class="dc-info-val" style="color:#ffd21a;font-weight:600;">${rack.maxPowerKw ?? 20} kW</span></div>
+              ${rack.coolingCapacityKw ? `<div class="dc-info-row"><span class="dc-info-label">Cooling</span><span class="dc-info-val" style="color:#38bdf8;font-weight:700;">❄ ${rack.coolingCapacityKw} kW</span></div>` : ''}
+              ${rack.upsCapacityKva ? `<div class="dc-info-row"><span class="dc-info-label">UPS Rating</span><span class="dc-info-val" style="color:#10b981;font-weight:700;">⚡ ${rack.upsCapacityKva} kVA</span></div>` : ''}
+              ${rack.pduVoltage ? `<div class="dc-info-row"><span class="dc-info-label">PDU Spec</span><span class="dc-info-val" style="color:#f59e0b;font-weight:600;">${rack.pduVoltage} • ${rack.pduPhases ?? 3}P • ${rack.pduAmperage ?? 32}A (${rack.pduOutletCount ?? 24} Outlets)</span></div>` : ''}
+              ${rack.busbarAmps ? `<div class="dc-info-row"><span class="dc-info-label">Busbar</span><span class="dc-info-val" style="color:#eab308;font-weight:700;">⚡ ${rack.busbarAmps} A Busway</span></div>` : ''}
+              ${rack.transformerKva ? `<div class="dc-info-row"><span class="dc-info-label">Transformer</span><span class="dc-info-val" style="color:#f97316;font-weight:700;">⚡ ${rack.transformerKva} kVA Step-Down</span></div>` : ''}
+              ${rack.securityLock ? `<div class="dc-info-row"><span class="dc-info-label">Security</span><span class="dc-info-val" style="color:#a855f7;font-weight:600;">🔒 ${rack.securityLock.toUpperCase()} Access</span></div>` : ''}
+              ${rack.containmentType && rack.containmentType !== 'none' ? `<div class="dc-info-row"><span class="dc-info-label">Containment</span><span class="dc-info-val" style="color:#38bdf8;font-weight:600;">🛡 ${rack.containmentType.toUpperCase()}</span></div>` : ''}
               <div class="dc-info-row">
                 <span class="dc-info-label" style="display:flex;align-items:center;gap:4px;">HUD Style</span>
                 <select id="${isGlobal ? 'g-dc-rack-gauge-style' : 'dc-rack-gauge-style'}" class="dc-input" style="width:138px;padding:2px 4px;font-size:11px;height:24px;background:#0d1520;color:#38bdf8;border:1px solid #304560;border-radius:4px;font-weight:600;">
@@ -2096,7 +2363,7 @@ export class BuildFloorView {
       units: rack.heightU,
       depthMm: rack.depthMm,
       rackType: (rack.type === 'open-frame' ? 'open-frame' : rack.type === 'network' ? 'network' : rack.type === 'wall-mount' ? 'wall-mount' : 'server') as any,
-      mounting: rack.mounting ?? 'floor',
+      mounting: rack.mounting === 'wall-mount' ? 'wall-mount' : 'floor',
       rackColor: rack.color ?? '#1e3a5f',
       x: posX,
       y: posY,
@@ -2390,7 +2657,7 @@ export class BuildFloorView {
       units: targetDcRack.heightU,
       depthMm: targetDcRack.depthMm,
       rackType: (targetDcRack.type === 'open-frame' ? 'open-frame' : targetDcRack.type === 'network' ? 'network' : targetDcRack.type === 'wall-mount' ? 'wall-mount' : 'server') as any,
-      mounting: targetDcRack.mounting ?? 'floor',
+      mounting: targetDcRack.mounting === 'wall-mount' ? 'wall-mount' : 'floor',
       rackColor: targetDcRack.color ?? '#1e3a5f',
       x: 200,
       y: 40,
@@ -4264,9 +4531,9 @@ export class BuildFloorView {
         units: dcRack.heightU,
         depthMm: dcRack.depthMm,
         rackType: dcRack.type === 'open-frame' ? 'open-frame' : dcRack.type === 'network' ? 'network' : dcRack.type === 'wall-mount' ? 'wall-mount' : 'server',
-        mounting: dcRack.mounting ?? 'floor',
+        mounting: dcRack.mounting === 'wall-mount' ? 'wall-mount' : 'floor',
         rackColor: dcRack.color ?? '#0c0e12',
-        frontDoor: dcRack.doorStyle ?? 'perforated',
+        frontDoor: (['perforated', 'glass', 'solid', 'none'].includes(dcRack.doorStyle || '') ? dcRack.doorStyle : 'perforated') as any,
         sidePanels: dcRack.type !== 'open-frame',
         leftCableManagerWidth: dcRack.leftCableManagerWidth || stateRack?.leftCableManagerWidth || 'none',
         rightCableManagerWidth: dcRack.rightCableManagerWidth || stateRack?.rightCableManagerWidth || 'none',
@@ -4335,6 +4602,11 @@ export class BuildFloorView {
           console.warn('Failed to build 3D device mesh for DC rack:', err);
         }
       });
+
+      // If no discrete elevation devices are mounted, render procedural equipment detailing for special types
+      if (rackDevices.length === 0) {
+        this.buildSpecialEquipmentInterior(dcRack, rackData, rackGroup);
+      }
 
       // 4. Mount 3D Cables into Rack Group
       const allCables = stateManager.getState().cables || [];
@@ -4443,6 +4715,287 @@ export class BuildFloorView {
     }
 
     this.lastRenderedFloorId = floor.id;
+  }
+
+  private buildSpecialEquipmentInterior(dcRack: DcRack, _rackData: RackData, rackGroup: THREE.Group) {
+    const rType = dcRack.type;
+    const cat = dcRack.equipmentCategory;
+    const totalHMm = 65 + dcRack.heightU * 44.45 + 65;
+    const depthMm = dcRack.depthMm;
+    const widthMm = dcRack.widthMm;
+
+    // 1. IN-ROW PRECISION COOLING UNIT
+    if (rType === 'inrow-cooling' || cat === 'cooling') {
+      const coolingGroup = new THREE.Group();
+      coolingGroup.name = `cooling-interior-${dcRack.id}`;
+
+      // 3 High-performance EC axial fans
+      const fanRadius = Math.min(widthMm * 0.38, 120);
+      const fanPositions = [totalHMm * 0.25, totalHMm * 0.5, totalHMm * 0.75];
+      const fanMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.7 });
+      const blueLedMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+
+      fanPositions.forEach(yPos => {
+        const fanGeo = new THREE.CylinderGeometry(fanRadius, fanRadius, 35, 24);
+        fanGeo.rotateX(Math.PI / 2);
+        const fanMesh = new THREE.Mesh(fanGeo, fanMat);
+        fanMesh.position.set(0, yPos - totalHMm / 2, depthMm * 0.25);
+        coolingGroup.add(fanMesh);
+
+        const ringGeo = new THREE.TorusGeometry(fanRadius - 6, 3, 8, 24);
+        const ringMesh = new THREE.Mesh(ringGeo, blueLedMat);
+        ringMesh.position.set(0, yPos - totalHMm / 2, depthMm * 0.25 + 18);
+        coolingGroup.add(ringMesh);
+      });
+
+      // Digital airflow / temp LCD at 60% height
+      const lcdGeo = new THREE.BoxGeometry(Math.min(110, widthMm * 0.7), 50, 8);
+      const lcdMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.2, metalness: 0.8, emissive: 0x0284c7, emissiveIntensity: 0.6 });
+      const lcdMesh = new THREE.Mesh(lcdGeo, lcdMat);
+      lcdMesh.position.set(0, totalHMm * 0.62 - totalHMm / 2, depthMm / 2 - 10);
+      coolingGroup.add(lcdMesh);
+
+      rackGroup.add(coolingGroup);
+    }
+    // 2. MICRO DATA CENTER (All-in-One)
+    else if (rType === 'micro-dc' || cat === 'micro-dc') {
+      const mdcGroup = new THREE.Group();
+      mdcGroup.name = `microdc-interior-${dcRack.id}`;
+
+      // Top Alert Beacon Light
+      const beaconGeo = new THREE.CylinderGeometry(20, 24, 30, 16);
+      const beaconMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4 });
+      const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
+      beaconMesh.position.set(0, totalHMm / 2 + 15, 0);
+      mdcGroup.add(beaconMesh);
+
+      // Front Smart LCD Touch Panel (emissive cyan screen)
+      const lcdGeo = new THREE.BoxGeometry(Math.min(180, widthMm * 0.6), 100, 10);
+      const lcdMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.1, metalness: 0.9, emissive: 0x06b6d4, emissiveIntensity: 0.4 });
+      const lcdMesh = new THREE.Mesh(lcdGeo, lcdMat);
+      lcdMesh.position.set(0, totalHMm * 0.6 - totalHMm / 2, depthMm / 2 - 5);
+      mdcGroup.add(lcdMesh);
+
+      // 4 Internal rack devices (compact server + mini UPS + smart PDU)
+      const devColors = [0x334155, 0x1e293b, 0x0f172a, 0x1e3a5f];
+      const devYs = [totalHMm * 0.15, totalHMm * 0.28, totalHMm * 0.40, totalHMm * 0.75];
+      devYs.forEach((yPos, i) => {
+        const dGeo = new THREE.BoxGeometry(widthMm * 0.82, 44, depthMm * 0.75);
+        const dMat = new THREE.MeshStandardMaterial({ color: devColors[i % devColors.length], roughness: 0.5, metalness: 0.6 });
+        const dMesh = new THREE.Mesh(dGeo, dMat);
+        dMesh.position.set(0, yPos - totalHMm / 2, 0);
+        mdcGroup.add(dMesh);
+
+        const ledGeo = new THREE.BoxGeometry(12, 6, 2);
+        const ledMat = new THREE.MeshBasicMaterial({ color: i === 0 ? 0x10b981 : 0x38bdf8 });
+        const ledMesh = new THREE.Mesh(ledGeo, ledMat);
+        ledMesh.position.set(widthMm * 0.35, yPos - totalHMm / 2, depthMm * 0.375 + 1);
+        mdcGroup.add(ledMesh);
+      });
+
+      rackGroup.add(mdcGroup);
+    }
+    // 3. MODULAR UPS / BATTERY CABINET
+    else if (rType === 'ups-cabinet' || rType === 'battery-cabinet' || cat === 'ups') {
+      const upsGroup = new THREE.Group();
+      upsGroup.name = `ups-interior-${dcRack.id}`;
+
+      const drawerCount = 6;
+      const drawerH = (totalHMm * 0.75) / drawerCount;
+      const startY = totalHMm * 0.12;
+
+      for (let i = 0; i < drawerCount; i++) {
+        const yPos = startY + i * drawerH;
+        const dGeo = new THREE.BoxGeometry(widthMm * 0.85, drawerH - 12, depthMm * 0.8);
+        const dMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.7 });
+        const dMesh = new THREE.Mesh(dGeo, dMat);
+        dMesh.position.set(0, yPos - totalHMm / 2, 0);
+        upsGroup.add(dMesh);
+
+        // Front battery charge status bar (segmented green LEDs)
+        const ledGeo = new THREE.BoxGeometry(Math.min(40, widthMm * 0.15), 8, 2);
+        const ledMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+        const ledMesh = new THREE.Mesh(ledGeo, ledMat);
+        ledMesh.position.set(-widthMm * 0.25, yPos - totalHMm / 2, depthMm * 0.4 + 1);
+        upsGroup.add(ledMesh);
+
+        // DC breaker handle
+        const brkGeo = new THREE.BoxGeometry(10, 18, 12);
+        const brkMat = new THREE.MeshStandardMaterial({ color: 0xef4444 });
+        const brkMesh = new THREE.Mesh(brkGeo, brkMat);
+        brkMesh.position.set(widthMm * 0.30, yPos - totalHMm / 2, depthMm * 0.4 + 6);
+        upsGroup.add(brkMesh);
+      }
+
+      // Master Rotary Isolator on top section
+      const isoGeo = new THREE.CylinderGeometry(25, 25, 20, 16);
+      isoGeo.rotateX(Math.PI / 2);
+      const isoMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.3, metalness: 0.5 });
+      const isoMesh = new THREE.Mesh(isoGeo, isoMat);
+      isoMesh.position.set(0, totalHMm * 0.88 - totalHMm / 2, depthMm * 0.4 + 10);
+      upsGroup.add(isoMesh);
+
+      rackGroup.add(upsGroup);
+    }
+    // 4. POWER RPP / MAIN SWITCHGEAR (MDB) / ATS
+    else if (rType === 'power-rpp' || rType === 'switchgear' || cat === 'power-distribution' || cat === 'facility-plant') {
+      const pwrGroup = new THREE.Group();
+      pwrGroup.name = `pwr-interior-${dcRack.id}`;
+
+      // Multi-meter LCD Display
+      const meterGeo = new THREE.BoxGeometry(Math.min(160, widthMm * 0.6), 70, 10);
+      const meterMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.2, metalness: 0.8, emissive: 0x0284c7, emissiveIntensity: 0.5 });
+      const meterMesh = new THREE.Mesh(meterGeo, meterMat);
+      meterMesh.position.set(0, totalHMm * 0.78 - totalHMm / 2, depthMm / 2 - 5);
+      pwrGroup.add(meterMesh);
+
+      // 4 Rows of Miniature Circuit Breakers (MCBs)
+      const rowCount = 4;
+      for (let r = 0; r < rowCount; r++) {
+        const rowY = totalHMm * 0.25 + r * (totalHMm * 0.12);
+        const rowGeo = new THREE.BoxGeometry(widthMm * 0.82, 35, 20);
+        const rowMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5, metalness: 0.5 });
+        const rowMesh = new THREE.Mesh(rowGeo, rowMat);
+        rowMesh.position.set(0, rowY - totalHMm / 2, depthMm * 0.35);
+        pwrGroup.add(rowMesh);
+
+        const bCount = Math.floor((widthMm * 0.7) / 22);
+        for (let b = -Math.floor(bCount / 2); b <= Math.floor(bCount / 2); b++) {
+          const bGeo = new THREE.BoxGeometry(6, 14, 8);
+          const bMat = new THREE.MeshStandardMaterial({ color: b % 2 === 0 ? 0x0f172a : 0xe2e8f0 });
+          const bMesh = new THREE.Mesh(bGeo, bMat);
+          bMesh.position.set(b * 22, rowY - totalHMm / 2, depthMm * 0.35 + 12);
+          pwrGroup.add(bMesh);
+        }
+      }
+
+      // Yellow / Black Hazard Caution Stripe Decal Plate at bottom
+      const hazardGeo = new THREE.BoxGeometry(widthMm * 0.85, 28, 4);
+      const hazardMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3, metalness: 0.4 });
+      const hazardMesh = new THREE.Mesh(hazardGeo, hazardMat);
+      hazardMesh.position.set(0, totalHMm * 0.08 - totalHMm / 2, depthMm / 2 - 2);
+      pwrGroup.add(hazardMesh);
+
+      rackGroup.add(pwrGroup);
+    }
+    // 5. ISOLATION STEP-DOWN TRANSFORMER
+    else if (rType === 'transformer' || cat === 'busbars-transformers') {
+      const xfmrGroup = new THREE.Group();
+      xfmrGroup.name = `xfmr-interior-${dcRack.id}`;
+
+      // 3 Heavy-duty Copper Winding Coils
+      const coilRadius = Math.min(widthMm * 0.22, 90);
+      const coilHeight = totalHMm * 0.55;
+      const coilMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.3, metalness: 0.85 });
+
+      [-widthMm * 0.28, 0, widthMm * 0.28].forEach(xOff => {
+        const coilGeo = new THREE.CylinderGeometry(coilRadius, coilRadius, coilHeight, 20);
+        const coilMesh = new THREE.Mesh(coilGeo, coilMat);
+        coilMesh.position.set(xOff, totalHMm * 0.45 - totalHMm / 2, 0);
+        xfmrGroup.add(coilMesh);
+
+        const coreGeo = new THREE.BoxGeometry(coilRadius * 1.5, coilHeight + 30, coilRadius * 1.5);
+        const coreMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6, metalness: 0.6 });
+        const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+        coreMesh.position.set(xOff, totalHMm * 0.45 - totalHMm / 2, 0);
+        xfmrGroup.add(coreMesh);
+      });
+
+      // Warning High Voltage Triangle on front
+      const warnGeo = new THREE.BoxGeometry(80, 70, 4);
+      const warnMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.2, metalness: 0.5 });
+      const warnMesh = new THREE.Mesh(warnGeo, warnMat);
+      warnMesh.position.set(0, totalHMm * 0.8 - totalHMm / 2, depthMm / 2 - 2);
+      xfmrGroup.add(warnMesh);
+
+      rackGroup.add(xfmrGroup);
+    }
+    // 6. HIGH DENSITY OPTICAL DISTRIBUTION FRAME (ODF)
+    else if (rType === 'odf-fiber' || cat === 'structured-cabling') {
+      const odfGroup = new THREE.Group();
+      odfGroup.name = `odf-interior-${dcRack.id}`;
+
+      const trayCount = 8;
+      const trayH = (totalHMm * 0.78) / trayCount;
+      const startY = totalHMm * 0.12;
+
+      for (let i = 0; i < trayCount; i++) {
+        const yPos = startY + i * trayH;
+        const trayGeo = new THREE.BoxGeometry(widthMm * 0.85, trayH - 8, depthMm * 0.75);
+        const trayMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.3, metalness: 0.8 });
+        const trayMesh = new THREE.Mesh(trayGeo, trayMat);
+        trayMesh.position.set(0, yPos - totalHMm / 2, 0);
+        odfGroup.add(trayMesh);
+
+        const isAqua = i % 2 === 0;
+        const portMat = new THREE.MeshBasicMaterial({ color: isAqua ? 0x06b6d4 : 0xeab308 });
+        const pCount = Math.floor((widthMm * 0.6) / 28);
+        for (let p = -Math.floor(pCount / 2); p <= Math.floor(pCount / 2); p++) {
+          const pGeo = new THREE.BoxGeometry(18, 8, 4);
+          const pMesh = new THREE.Mesh(pGeo, portMat);
+          pMesh.position.set(p * 28, yPos - totalHMm / 2, depthMm * 0.375 + 2);
+          odfGroup.add(pMesh);
+        }
+      }
+
+      const spoolGeo = new THREE.CylinderGeometry(15, 15, totalHMm * 0.8, 16);
+      const spoolMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4, metalness: 0.4 });
+      const spoolL = new THREE.Mesh(spoolGeo, spoolMat);
+      spoolL.position.set(-widthMm * 0.44, 0, depthMm * 0.2);
+      odfGroup.add(spoolL);
+
+      const spoolR = new THREE.Mesh(spoolGeo, spoolMat);
+      spoolR.position.set(widthMm * 0.44, 0, depthMm * 0.2);
+      odfGroup.add(spoolR);
+
+      rackGroup.add(odfGroup);
+    }
+    // 7. STANDBY DIESEL GENERATOR / CENTRAL CHILLER PLANT
+    else if (rType === 'generator' || rType === 'chiller-plant') {
+      const plantGroup = new THREE.Group();
+      plantGroup.name = `plant-interior-${dcRack.id}`;
+
+      if (rType === 'generator') {
+        const engGeo = new THREE.BoxGeometry(widthMm * 0.75, totalHMm * 0.55, depthMm * 0.7);
+        const engMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.4, metalness: 0.8 });
+        const engMesh = new THREE.Mesh(engGeo, engMat);
+        engMesh.position.set(0, totalHMm * 0.35 - totalHMm / 2, 0);
+        plantGroup.add(engMesh);
+
+        const exhGeo = new THREE.CylinderGeometry(35, 35, widthMm * 0.7, 16);
+        exhGeo.rotateZ(Math.PI / 2);
+        const exhMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.2, metalness: 0.9 });
+        const exhMesh = new THREE.Mesh(exhGeo, exhMat);
+        exhMesh.position.set(0, totalHMm * 0.8 - totalHMm / 2, 0);
+        plantGroup.add(exhMesh);
+
+        const esGeo = new THREE.CylinderGeometry(15, 15, 12, 16);
+        esGeo.rotateX(Math.PI / 2);
+        const esMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.2, metalness: 0.3 });
+        const esMesh = new THREE.Mesh(esGeo, esMat);
+        esMesh.position.set(widthMm * 0.35, totalHMm * 0.6 - totalHMm / 2, depthMm / 2 - 2);
+        plantGroup.add(esMesh);
+      } else {
+        const fanGeo = new THREE.CylinderGeometry(widthMm * 0.35, widthMm * 0.35, 20, 20);
+        const fanMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3, metalness: 0.7 });
+        const fan1 = new THREE.Mesh(fanGeo, fanMat);
+        fan1.position.set(0, totalHMm / 2 - 10, -depthMm * 0.22);
+        plantGroup.add(fan1);
+
+        const fan2 = new THREE.Mesh(fanGeo, fanMat);
+        fan2.position.set(0, totalHMm / 2 - 10, depthMm * 0.22);
+        plantGroup.add(fan2);
+
+        const barrelGeo = new THREE.CylinderGeometry(widthMm * 0.3, widthMm * 0.3, depthMm * 0.8, 20);
+        barrelGeo.rotateX(Math.PI / 2);
+        const barrelMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5, metalness: 0.8 });
+        const barrelMesh = new THREE.Mesh(barrelGeo, barrelMat);
+        barrelMesh.position.set(0, totalHMm * 0.35 - totalHMm / 2, 0);
+        plantGroup.add(barrelMesh);
+      }
+
+      rackGroup.add(plantGroup);
+    }
   }
 
   private createRackHUDLinearDashboardCanvas(dcRack: DcRack, rackDevices: DeviceData[], _rackData: RackData): HTMLCanvasElement {

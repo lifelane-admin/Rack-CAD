@@ -81,6 +81,8 @@ const defaultState: DcState = {
   selectedTileIds: [],
   selectedRackId: null,
   selectedInfraId: null,
+  activeCatalogCategory: 'all',
+  activeSpaceTab: 'white-space',
   zoom: 1,
   panX: 40,
   panY: 40,

@@ -15,27 +15,58 @@ export interface DcFloorTile {
   plenumDepthMm?: number;
 }
 
-export type DcInfraCategory = 'cable-tray' | 'cable-duct' | 'power-cable' | 'data-cable' | 'conduit' | 'riser';
-export type DcInfraLayer = 'underfloor' | 'ceiling';
+export type DcSpaceType = 'white-space' | 'grey-space';
+
+export type DcEquipmentCategory =
+  | 'housing'
+  | 'cooling'
+  | 'micro-dc'
+  | 'structured-cabling'
+  | 'power-distribution'
+  | 'security'
+  | 'ups'
+  | 'busbars-transformers'
+  | 'cable-management'
+  | 'facility-plant';
+
+export type DcInfraCategory = 'cable-tray' | 'cable-duct' | 'power-cable' | 'data-cable' | 'conduit' | 'riser' | 'busway' | 'fiber-raceway' | 'containment';
+export type DcInfraLayer = 'underfloor' | 'ceiling' | 'overhead';
 
 export interface DcInfrastructureItem {
   id: string;
   name: string;
   category: DcInfraCategory;
   layer: DcInfraLayer;
-  subtype: string; // e.g. 'basket-tray', 'ladder-tray', 'pvc-duct', 'solid-duct', 'power-busway', 'fiber-optics', 'riser-pillar'
+  subtype: string; // e.g. 'basket-tray', 'ladder-tray', 'pvc-duct', 'solid-duct', 'power-busway', 'fiber-optics', 'riser-pillar', 'containment-roof', 'containment-door'
   start: { x: number; y: number; z: number }; // meters
   end: { x: number; y: number; z: number };   // meters
   widthMm: number;
   heightMm: number;
-  elevationMm: number; // depth below raised floor (e.g. -200mm)
+  elevationMm: number; // depth below raised floor (e.g. -200mm) or height overhead (e.g. 2400mm)
   color?: string;
   notes?: string;
+  amperage?: number;
+  capacityKw?: number;
 }
 
-export type DcRackType = 'server' | 'network' | 'open-frame' | 'wall-mount';
-export type DcDoorStyle = 'perforated' | 'glass' | 'solid' | 'none' | 'split-perforated' | 'multi-compartment-2' | 'multi-compartment-4';
-export type DcMounting = 'floor' | 'wall-mount';
+export type DcRackType =
+  | 'server'
+  | 'network'
+  | 'open-frame'
+  | 'wall-mount'
+  | 'inrow-cooling'
+  | 'micro-dc'
+  | 'odf-fiber'
+  | 'power-rpp'
+  | 'ups-cabinet'
+  | 'battery-cabinet'
+  | 'transformer'
+  | 'switchgear'
+  | 'chiller-plant'
+  | 'generator';
+
+export type DcDoorStyle = 'perforated' | 'glass' | 'solid' | 'none' | 'split-perforated' | 'multi-compartment-2' | 'multi-compartment-4' | 'smart-lcd' | 'containment-sliding' | 'louvred';
+export type DcMounting = 'floor' | 'wall-mount' | 'pad-mount';
 export type DcSpacingStandard =
   | 'bayed-0mm'
   | 'cold-aisle-1.2m'
@@ -50,7 +81,9 @@ export type DcGaugeStyle = 'radial' | 'linear';
 export interface DcRack {
   id: string;       // e.g. "RACK-001"
   name: string;
-  type: DcRackType; // server, network, open-frame, wall-mount
+  type: DcRackType; // server, network, open-frame, wall-mount, inrow-cooling, etc.
+  spaceType?: DcSpaceType; // 'white-space' | 'grey-space'
+  equipmentCategory?: DcEquipmentCategory;
   widthMm: number;
   depthMm: number;
   heightU: number;
@@ -69,8 +102,20 @@ export interface DcRack {
   rightPduId?: string;
   maxPowerKw?: number; // User-defined maximum power capacity in kW (default 20)
   gaugeStyle?: DcGaugeStyle; // 'radial' | 'linear'
+  
+  // Advanced Telemetry & Capabilities
+  coolingCapacityKw?: number;   // for in-row cooling & micro-dc
+  upsCapacityKva?: number;      // for UPS cabinets & micro-dc
+  pduVoltage?: '230V' | '415V' | '208V' | '120V';
+  pduPhases?: 1 | 3;
+  pduAmperage?: number;
+  pduOutletCount?: number;
+  securityLock?: 'biometric' | 'rfid' | 'keypad' | 'keyed' | 'none';
+  busbarAmps?: number;
+  transformerKva?: number;
+  containmentType?: 'cold-aisle' | 'hot-aisle' | 'none';
+  status?: 'normal' | 'warning' | 'critical' | 'offline';
 }
-
 
 export type DcUnit = 'm' | 'mm' | 'ft' | 'in';
 
@@ -110,6 +155,8 @@ export interface DcState {
   selectedTileIds: string[]; // multi-tile selection (e.g. Ctrl+Select)
   selectedRackId: string | null;
   selectedInfraId: string | null;
+  activeCatalogCategory: DcEquipmentCategory | 'all';
+  activeSpaceTab: DcSpaceType | 'all';
   zoom: number;       // canvas zoom factor
   panX: number;
   panY: number;
