@@ -4573,7 +4573,7 @@ export class BuildFloorView {
         rackType: dcRack.type === 'open-frame' ? 'open-frame' : dcRack.type === 'network' ? 'network' : dcRack.type === 'wall-mount' ? 'wall-mount' : 'server',
         mounting: dcRack.mounting === 'wall-mount' ? 'wall-mount' : 'floor',
         rackColor: dcRack.color ?? '#0c0e12',
-        frontDoor: (['perforated', 'glass', 'solid', 'none'].includes(dcRack.doorStyle || '') ? dcRack.doorStyle : 'perforated') as any,
+        frontDoor: (dcRack.doorStyle || 'perforated') as any,
         sidePanels: dcRack.type !== 'open-frame',
         leftCableManagerWidth: dcRack.leftCableManagerWidth || stateRack?.leftCableManagerWidth || 'none',
         rightCableManagerWidth: dcRack.rightCableManagerWidth || stateRack?.rightCableManagerWidth || 'none',

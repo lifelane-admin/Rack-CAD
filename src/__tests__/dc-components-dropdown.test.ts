@@ -105,20 +105,40 @@ describe('Datacenter Components & Ducts Dropdown', () => {
     expect(perimeterTitles).toContain('CRAH Unit (Chilled Water CW)');
   });
 
-  it('includes 15 high-fidelity rack types categorized across 5 rack subcategories', () => {
+  it('includes 25 photorealistic 3D rack models categorized across 8 rack subcategories', () => {
     const rackCat = DC_COMPONENT_CATEGORIES.find(c => c.id === 'racks');
     expect(rackCat).toBeDefined();
-    expect(rackCat?.items.length).toBe(15); // 15 distinct rack models
+    expect(rackCat?.items.length).toBe(25);
 
     const subCatIds = rackCat?.subCategories?.map(s => s.id);
-    expect(subCatIds).toEqual(['all', 'server', 'network', 'colo', 'enclosure', 'battery']);
+    expect(subCatIds).toEqual([
+      'all',
+      'server',
+      'twin_doors',
+      'honeycomb',
+      'glass_solid',
+      'network',
+      'colo',
+      'enclosure',
+      'battery'
+    ]);
 
     const rackCodes = rackCat?.items.map(i => i.code);
     expect(rackCodes).toContain('SR-42U');
-    expect(rackCodes).toContain('SR-DUAL');
-    expect(rackCodes).toContain('SR-HNYCMB');
-    expect(rackCodes).toContain('SR-GLASS');
+    expect(rackCodes).toContain('SR-1070');
+    expect(rackCodes).toContain('SR-48U-HD');
     expect(rackCodes).toContain('HD-CHIMNEY');
+    expect(rackCodes).toContain('SR-24U');
+    expect(rackCodes).toContain('SR-DUAL');
+    expect(rackCodes).toContain('SR-SPLIT-HD');
+    expect(rackCodes).toContain('SR-SPLIT-LOUV');
+    expect(rackCodes).toContain('SR-SPLIT-SOLID');
+    expect(rackCodes).toContain('SR-HNYCMB');
+    expect(rackCodes).toContain('SR-HNY-DUAL');
+    expect(rackCodes).toContain('SR-HNY-MICRO');
+    expect(rackCodes).toContain('SR-GLASS');
+    expect(rackCodes).toContain('SR-SPLIT-GLASS');
+    expect(rackCodes).toContain('SR-SOLID-42U');
     expect(rackCodes).toContain('NR-2POST');
     expect(rackCodes).toContain('NR-4POST');
     expect(rackCodes).toContain('NR-SW800');

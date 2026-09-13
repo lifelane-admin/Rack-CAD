@@ -534,11 +534,13 @@ export class DcFloatingToolbar {
                 ` : filteredComponents.map(item => `
                   <div class="dc-comp-card ${item.id === this.selectedComponentId ? 'selected' : ''}" data-comp-id="${item.id}" title="${item.name} (${item.code}) — ${item.description}">
                     <div class="dc-comp-card-badge">${item.code}</div>
+                    ${item.depthMm ? `<div class="dc-comp-card-depth">${item.depthMm}mm D</div>` : ''}
                     <div class="dc-comp-card-graphic">
-                      ${getDcComponentGraphicSvg(item.id, 130, 56)}
+                      ${getDcComponentGraphicSvg(item.id, item.category === 'racks' ? 70 : 130, item.category === 'racks' ? 110 : 56)}
                     </div>
                     <div class="dc-comp-card-body">
                       <div class="dc-comp-card-title">${item.name}</div>
+                      ${item.depthMm && item.heightU ? `<div class="dc-comp-card-dims">${item.widthMm}×${item.depthMm}mm • ${item.heightU}U</div>` : ''}
                     </div>
                   </div>
                 `).join('')}

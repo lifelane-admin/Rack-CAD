@@ -61,13 +61,28 @@ export const DC_SVG_DEFS_RAW = `
       <stop offset="100%" stop-color="#1E3A8A" />
     </linearGradient>
 
+    <!-- 3D Isometric Cabinet Shading -->
+    <linearGradient id="dc-3d-side" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1E293B" />
+      <stop offset="100%" stop-color="#0B0F17" />
+    </linearGradient>
+    <linearGradient id="dc-3d-top" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#475569" />
+      <stop offset="100%" stop-color="#1E293B" />
+    </linearGradient>
+    <linearGradient id="dc-rail-silver" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#475569" />
+      <stop offset="50%" stop-color="#94A3B8" />
+      <stop offset="100%" stop-color="#334155" />
+    </linearGradient>
+
     <!-- Procedural Patterns -->
     <pattern id="dc-wire-mesh" width="6" height="6" patternUnits="userSpaceOnUse">
       <path d="M 0 3 L 6 3 M 3 0 L 3 6" stroke="#475569" stroke-width="0.8" />
     </pattern>
     <pattern id="dc-rack-perf" width="4" height="4" patternUnits="userSpaceOnUse">
-      <rect width="4" height="4" fill="#0F172A" />
-      <circle cx="2" cy="2" r="0.7" fill="#64748B" opacity="0.6" />
+      <rect width="4" height="4" fill="#0B0F17" />
+      <circle cx="2" cy="2" r="0.75" fill="#64748B" opacity="0.65" />
     </pattern>
     <pattern id="dc-rack-honeycomb" width="8" height="14" patternUnits="userSpaceOnUse">
       <path d="M 4 0 L 8 2.3 L 8 6.9 L 4 9.2 L 0 6.9 L 0 2.3 Z M 4 13.8 L 8 11.5 L 8 6.9 L 4 4.6 L 0 6.9 L 0 11.5 Z" fill="#090D16" stroke="#38BDF8" stroke-width="0.75" opacity="0.85" />
@@ -136,11 +151,12 @@ export interface DcComponentCategoryGroup {
 }
 
 export const ALL_DC_COMPONENTS: DcComponentItem[] = [
-  // ── 1. RACKS & CABINETS ──────────────────────────────────────────
+  // ── 1. RACKS & ENCLOSURES (REAL 3D GRAPHICS, ALL DOOR STYLES & DEPTHS) ──
+  // ── 1.1 Single Door Server Cabinets ──
   {
     id: 'rack-server-42u',
     code: 'SR-42U',
-    name: 'Standard Perforated Door Rack (42U/48U)',
+    name: 'Standard Perforated Door Rack (42U - 1000mm D)',
     category: 'racks',
     subCategory: 'server',
     badgeType: 'rack',
@@ -148,90 +164,103 @@ export const ALL_DC_COMPONENTS: DcComponentItem[] = [
     widthMm: 600,
     depthMm: 1000,
     heightU: 42,
-    description: 'Standard 42U/48U perforated door server cabinet with 80% open curved mesh and cable channels.',
-    viewBox: '0 0 60 32',
+    description: 'Enterprise 42U server cabinet with 80% open curved perforation door, 19" vertical rails with RU markings.',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="15" y="3" width="30" height="26" rx="2" fill="url(#dc-chassis-dark)" stroke="#475569" stroke-width="1" />
-      <rect x="18" y="5.5" width="24" height="21" fill="url(#dc-rack-perf)" stroke="#334155" stroke-width="0.5" />
-      <line x1="21" y1="3" x2="21" y2="29" stroke="#64748B" stroke-width="0.8" />
-      <line x1="39" y1="3" x2="39" y2="29" stroke="#64748B" stroke-width="0.8" />
-      <rect x="40" y="13" width="2" height="6" rx="0.5" fill="#CBD5E1" />
-      <circle cx="41" cy="9" r="1" fill="#38BDF8" />
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#475569" stroke-width="0.8" />
+      <ellipse cx="38" cy="5.5" rx="7" ry="2" fill="#0B0F17" stroke="#38BDF8" stroke-width="0.5" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#334155" stroke-width="1" />
+      <rect x="10" y="10" width="40" height="4" rx="0.5" fill="#0B0F17" />
+      <line x1="12" y1="12" x2="48" y2="12" stroke="#38BDF8" stroke-width="0.8" stroke-dasharray="2 2" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <rect x="8" y="124" width="6" height="2" fill="#64748B" /><rect x="42" y="124" width="6" height="2" fill="#64748B" />
+      <rect x="10" y="15" width="40" height="103" fill="#080C14" />
+      <rect x="10" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="12" y1="18" x2="12" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <rect x="46" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="48" y1="18" x2="48" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <line x1="16" y1="15" x2="16" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <line x1="44" y1="15" x2="44" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <rect x="8" y="14" width="44" height="106" rx="1.5" fill="none" stroke="#475569" stroke-width="1.2" />
+      <rect x="11" y="16" width="38" height="102" fill="url(#dc-rack-perf)" opacity="0.88" />
+      <rect x="48" y="60" width="2" height="16" rx="0.6" fill="#CBD5E1" stroke="#475569" stroke-width="0.5" />
+      <circle cx="49" cy="56" r="1.2" fill="#38BDF8" />
     `
   },
   {
-    id: 'rack-server-dualdoor',
-    code: 'SR-DUAL',
-    name: 'Twin Split-Door Server Rack (42U/48U)',
+    id: 'rack-server-42u-1070',
+    code: 'SR-1070',
+    name: 'APC NetShelter Perforated Rack (42U - 1070mm D)',
     category: 'racks',
     subCategory: 'server',
     badgeType: 'rack',
-    presetId: 'apc-42u-split-mesh',
+    presetId: 'apc-42u-server',
     widthMm: 600,
-    depthMm: 1000,
+    depthMm: 1070,
     heightU: 42,
-    description: 'Dual split perforated doors for tight cold/hot aisle clearance with dual center swing-handles.',
-    viewBox: '0 0 60 32',
+    description: 'Industry-standard APC NetShelter SX 1070mm deep server cabinet with 80% curved mesh door & cable channels.',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="15" y="3" width="30" height="26" rx="2" fill="url(#dc-chassis-dark)" stroke="#38BDF8" stroke-width="1" />
-      <rect x="18" y="5.5" width="11" height="21" fill="url(#dc-rack-perf)" />
-      <rect x="31" y="5.5" width="11" height="21" fill="url(#dc-rack-perf)" />
-      <line x1="30" y1="3" x2="30" y2="29" stroke="#38BDF8" stroke-width="1" />
-      <rect x="28.5" y="13" width="1.2" height="6" rx="0.3" fill="#E2E8F0" />
-      <rect x="30.3" y="13" width="1.2" height="6" rx="0.3" fill="#E2E8F0" />
-      <circle cx="21" cy="5" r="0.8" fill="#38BDF8" /><circle cx="39" cy="5" r="0.8" fill="#38BDF8" />
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#38BDF8" stroke-width="0.8" />
+      <ellipse cx="38" cy="5.5" rx="7" ry="2" fill="#0B0F17" stroke="#38BDF8" stroke-width="0.5" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#38BDF8" stroke-width="1" />
+      <rect x="10" y="10" width="40" height="4" rx="0.5" fill="#0B0F17" />
+      <line x1="12" y1="12" x2="48" y2="12" stroke="#38BDF8" stroke-width="0.8" stroke-dasharray="2 2" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <rect x="10" y="15" width="40" height="103" fill="#080C14" />
+      <rect x="10" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="12" y1="18" x2="12" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <rect x="46" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="48" y1="18" x2="48" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <line x1="16" y1="15" x2="16" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <line x1="44" y1="15" x2="44" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <rect x="8" y="14" width="44" height="106" rx="1.5" fill="none" stroke="#38BDF8" stroke-width="1.2" />
+      <rect x="11" y="16" width="38" height="102" fill="url(#dc-rack-perf)" opacity="0.88" />
+      <rect x="22" y="14" width="16" height="2" fill="#38BDF8" />
+      <rect x="48" y="60" width="2.2" height="16" rx="0.6" fill="#E2E8F0" stroke="#0284C7" stroke-width="0.5" />
+      <circle cx="49" cy="56" r="1.2" fill="#22C55E" />
     `
   },
   {
-    id: 'rack-server-honeycomb',
-    code: 'SR-HNYCMB',
-    name: 'Honeycomb High-Airflow HD Rack (48U)',
+    id: 'rack-server-48u-1200',
+    code: 'SR-48U-HD',
+    name: 'Deep Enterprise Server Rack (48U - 1200mm D)',
     category: 'racks',
     subCategory: 'server',
     badgeType: 'rack',
     presetId: 'apc-48u-deep-server',
-    widthMm: 750,
+    widthMm: 600,
     depthMm: 1200,
     heightU: 48,
-    description: 'High-density compute rack with 83% hexagonal honeycomb mesh door for extreme CFM server airflow.',
-    viewBox: '0 0 60 32',
+    description: 'Extra-tall 48U and deep 1200mm high-density blade compute rack with enlarged rear cable zone.',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="14" y="3" width="32" height="26" rx="2" fill="url(#dc-chassis-dark)" stroke="#F59E0B" stroke-width="1.2" />
-      <rect x="17" y="5.5" width="26" height="21" fill="url(#dc-rack-honeycomb)" />
-      <line x1="20" y1="3" x2="20" y2="29" stroke="#F59E0B" stroke-width="0.8" opacity="0.6" />
-      <line x1="40" y1="3" x2="40" y2="29" stroke="#F59E0B" stroke-width="0.8" opacity="0.6" />
-      <rect x="41" y="13" width="2.2" height="6" rx="0.5" fill="#F59E0B" />
-      <circle cx="42" cy="8" r="1.2" fill="#22C55E" />
-    `
-  },
-  {
-    id: 'rack-server-glass',
-    code: 'SR-GLASS',
-    name: 'Acoustic Soundproof Glass Rack (24U/42U)',
-    category: 'racks',
-    subCategory: 'server',
-    badgeType: 'rack',
-    presetId: '24u-mid-tower',
-    widthMm: 600,
-    depthMm: 900,
-    heightU: 24,
-    description: 'Acoustic-dampened quiet cabinet with tempered glass viewing window and sound absorption foam.',
-    viewBox: '0 0 60 32',
-    svgInner: `
-      <rect x="15" y="3" width="30" height="26" rx="2" fill="url(#dc-chassis-dark)" stroke="#94A3B8" stroke-width="1" />
-      <rect x="19" y="6" width="22" height="20" rx="1.5" fill="url(#dc-glass-gradient)" stroke="#38BDF8" stroke-width="0.8" />
-      <rect x="22" y="9" width="16" height="3" rx="0.5" fill="#1E293B" opacity="0.7" />
-      <rect x="22" y="14" width="16" height="3" rx="0.5" fill="#1E293B" opacity="0.7" />
-      <rect x="22" y="19" width="16" height="3" rx="0.5" fill="#1E293B" opacity="0.7" />
-      <circle cx="24" cy="10.5" r="0.6" fill="#22C55E" /><circle cx="26" cy="10.5" r="0.6" fill="#38BDF8" />
-      <circle cx="24" cy="15.5" r="0.6" fill="#22C55E" />
-      <circle cx="38" cy="16" r="1.2" fill="#E2E8F0" />
+      <polygon points="6,6 15,2 65,2 56,6" fill="url(#dc-3d-top)" stroke="#F59E0B" stroke-width="0.8" />
+      <ellipse cx="40" cy="4" rx="8" ry="2" fill="#0B0F17" stroke="#F59E0B" stroke-width="0.5" />
+      <polygon points="56,6 65,2 65,121 56,124" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="6" width="50" height="118" rx="2" fill="url(#dc-chassis-dark)" stroke="#F59E0B" stroke-width="1.2" />
+      <rect x="10" y="8" width="42" height="4" rx="0.5" fill="#0B0F17" />
+      <line x1="12" y1="10" x2="50" y2="10" stroke="#F59E0B" stroke-width="0.8" stroke-dasharray="2 2" />
+      <rect x="4" y="124" width="54" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <rect x="10" y="13" width="42" height="108" fill="#080C14" />
+      <rect x="10" y="13" width="4" height="108" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="12" y1="16" x2="12" y2="118" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2" />
+      <rect x="48" y="13" width="4" height="108" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="50" y1="16" x2="50" y2="118" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2" />
+      <line x1="16" y1="13" x2="16" y2="120" stroke="#EF4444" stroke-width="0.8" opacity="0.9" />
+      <line x1="46" y1="13" x2="46" y2="120" stroke="#EF4444" stroke-width="0.8" opacity="0.9" />
+      <rect x="8" y="12" width="46" height="110" rx="1.5" fill="none" stroke="#F59E0B" stroke-width="1.2" />
+      <rect x="11" y="14" width="40" height="106" fill="url(#dc-rack-perf)" opacity="0.9" />
+      <rect x="50" y="60" width="2.2" height="18" rx="0.6" fill="#F59E0B" />
+      <circle cx="51" cy="55" r="1.2" fill="#22C55E" />
     `
   },
   {
     id: 'rack-hd-contained',
     code: 'HD-CHIMNEY',
-    name: 'High-Density Contained Chimney Rack (48U)',
+    name: 'High-Density Chimney Exhaust Rack (48U - 1200mm D)',
     category: 'racks',
     subCategory: 'server',
     badgeType: 'rack',
@@ -240,20 +269,415 @@ export const ALL_DC_COMPONENTS: DcComponentItem[] = [
     depthMm: 1200,
     heightU: 48,
     description: 'High-density 48U compute rack with integrated top vertical exhaust chimney duct and air seals.',
-    viewBox: '0 0 60 32',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="14" y="5" width="32" height="24" rx="2" fill="url(#dc-chassis-dark)" stroke="#F59E0B" stroke-width="1.2" />
-      <polygon points="20,1 40,1 38,5 22,5" fill="#1E293B" stroke="#F59E0B" stroke-width="0.8" />
-      <line x1="25" y1="1" x2="25" y2="5" stroke="#F59E0B" stroke-width="0.8" />
-      <line x1="35" y1="1" x2="35" y2="5" stroke="#F59E0B" stroke-width="0.8" />
-      <rect x="18" y="8" width="24" height="18" fill="url(#dc-rack-perf)" />
-      <polygon points="30,12 34,17 26,17" fill="#EF4444" opacity="0.85" />
+      <!-- Top Chimney Exhaust Duct -->
+      <polygon points="18,1 42,1 38,8 22,8" fill="#1E293B" stroke="#F59E0B" stroke-width="1" />
+      <line x1="24" y1="1" x2="24" y2="8" stroke="#F59E0B" stroke-width="0.6" />
+      <line x1="36" y1="1" x2="36" y2="8" stroke="#F59E0B" stroke-width="0.6" />
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#F59E0B" stroke-width="0.8" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#F59E0B" stroke-width="1.2" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <rect x="10" y="15" width="40" height="103" fill="#080C14" />
+      <rect x="10" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="12" y1="18" x2="12" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <rect x="46" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="48" y1="18" x2="48" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <line x1="16" y1="15" x2="16" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <line x1="44" y1="15" x2="44" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <rect x="8" y="14" width="44" height="106" rx="1.5" fill="none" stroke="#F59E0B" stroke-width="1.2" />
+      <rect x="11" y="16" width="38" height="102" fill="url(#dc-rack-perf)" opacity="0.9" />
+      <polygon points="30,22 34,28 26,28" fill="#EF4444" opacity="0.9" />
+      <rect x="48" y="60" width="2" height="16" rx="0.6" fill="#F59E0B" />
     `
   },
   {
+    id: 'rack-server-24u-800',
+    code: 'SR-24U',
+    name: 'Shallow Telecom Server Cabinet (24U - 800mm D)',
+    category: 'racks',
+    subCategory: 'server',
+    badgeType: 'rack',
+    presetId: '24u-mid-tower',
+    widthMm: 600,
+    depthMm: 800,
+    heightU: 24,
+    description: 'Compact 24U shallow depth cabinet (800mm) for edge closets, audio-video, and telecom rooms.',
+    viewBox: '0 0 76 130',
+    svgInner: `
+      <polygon points="8,28 16,23 60,23 52,28" fill="url(#dc-3d-top)" stroke="#64748B" stroke-width="0.8" />
+      <polygon points="52,28 60,23 60,119 52,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="8" y="28" width="44" height="94" rx="2" fill="url(#dc-chassis-dark)" stroke="#64748B" stroke-width="1" />
+      <rect x="6" y="122" width="48" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <rect x="12" y="32" width="36" height="86" fill="#080C14" />
+      <rect x="12" y="32" width="3.5" height="86" fill="url(#dc-rail-silver)" />
+      <line x1="14" y1="35" x2="14" y2="114" stroke="#38BDF8" stroke-width="1" stroke-dasharray="1.5 3" />
+      <rect x="44.5" y="32" width="3.5" height="86" fill="url(#dc-rail-silver)" />
+      <line x1="46" y1="35" x2="46" y2="114" stroke="#38BDF8" stroke-width="1" stroke-dasharray="1.5 3" />
+      <rect x="10" y="30" width="40" height="90" rx="1.5" fill="none" stroke="#64748B" stroke-width="1" />
+      <rect x="12" y="32" width="36" height="86" fill="url(#dc-rack-perf)" opacity="0.85" />
+      <rect x="45" y="68" width="2" height="14" rx="0.5" fill="#E2E8F0" />
+    `
+  },
+
+  // ── 1.2 Twin / Split Wardrobe Doors ──
+  {
+    id: 'rack-server-dualdoor',
+    code: 'SR-DUAL',
+    name: 'Twin Split-Door Server Rack (42U - 1070mm D)',
+    category: 'racks',
+    subCategory: 'twin_doors',
+    badgeType: 'rack',
+    presetId: 'apc-42u-split-mesh',
+    widthMm: 600,
+    depthMm: 1070,
+    heightU: 42,
+    description: 'Dual split wardrobe perforated doors for tight cold/hot aisle clearances with center dual swing-handles.',
+    viewBox: '0 0 76 130',
+    svgInner: `
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#38BDF8" stroke-width="0.8" />
+      <ellipse cx="38" cy="5.5" rx="7" ry="2" fill="#0B0F17" stroke="#38BDF8" stroke-width="0.5" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#38BDF8" stroke-width="1" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <rect x="10" y="15" width="40" height="103" fill="#080C14" />
+      <rect x="10" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="12" y1="18" x2="12" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <rect x="46" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="48" y1="18" x2="48" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <line x1="16" y1="15" x2="16" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <line x1="44" y1="15" x2="44" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <!-- Left Split Leaf -->
+      <rect x="8" y="14" width="21" height="106" rx="1" fill="none" stroke="#475569" stroke-width="1" />
+      <rect x="10" y="16" width="18" height="102" fill="url(#dc-rack-perf)" opacity="0.88" />
+      <rect x="26.5" y="60" width="1.5" height="14" rx="0.4" fill="#38BDF8" />
+      <!-- Right Split Leaf -->
+      <rect x="31" y="14" width="21" height="106" rx="1" fill="none" stroke="#475569" stroke-width="1" />
+      <rect x="32" y="16" width="18" height="102" fill="url(#dc-rack-perf)" opacity="0.88" />
+      <rect x="32" y="60" width="1.5" height="14" rx="0.4" fill="#38BDF8" />
+      <!-- Center Split Seam -->
+      <line x1="30" y1="14" x2="30" y2="120" stroke="#0F172A" stroke-width="1.5" />
+    `
+  },
+  {
+    id: 'rack-split-perf-48u',
+    code: 'SR-SPLIT-HD',
+    name: 'Twin Split Perforated HD Rack (48U - 1200mm D)',
+    category: 'racks',
+    subCategory: 'twin_doors',
+    badgeType: 'rack',
+    presetId: 'apc-48u-deep-server',
+    widthMm: 750,
+    depthMm: 1200,
+    heightU: 48,
+    description: 'Deep 1200mm high-density blade compute rack with dual split perforated wardrobe doors.',
+    viewBox: '0 0 76 130',
+    svgInner: `
+      <polygon points="6,6 15,2 65,2 56,6" fill="url(#dc-3d-top)" stroke="#F59E0B" stroke-width="0.8" />
+      <polygon points="56,6 65,2 65,121 56,124" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="6" width="50" height="118" rx="2" fill="url(#dc-chassis-dark)" stroke="#F59E0B" stroke-width="1.2" />
+      <rect x="4" y="124" width="54" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <rect x="10" y="13" width="42" height="108" fill="#080C14" />
+      <rect x="10" y="13" width="4" height="108" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="12" y1="16" x2="12" y2="118" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2" />
+      <rect x="48" y="13" width="4" height="108" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="50" y1="16" x2="50" y2="118" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2" />
+      <line x1="16" y1="13" x2="16" y2="120" stroke="#EF4444" stroke-width="0.8" opacity="0.9" />
+      <line x1="46" y1="13" x2="46" y2="120" stroke="#EF4444" stroke-width="0.8" opacity="0.9" />
+      <!-- Left Split Leaf -->
+      <rect x="8" y="12" width="22" height="110" rx="1" fill="none" stroke="#F59E0B" stroke-width="1" />
+      <rect x="10" y="14" width="19" height="106" fill="url(#dc-rack-perf)" opacity="0.9" />
+      <rect x="27.5" y="62" width="1.5" height="16" rx="0.4" fill="#F59E0B" />
+      <!-- Right Split Leaf -->
+      <rect x="32" y="12" width="22" height="110" rx="1" fill="none" stroke="#F59E0B" stroke-width="1" />
+      <rect x="33" y="14" width="19" height="106" fill="url(#dc-rack-perf)" opacity="0.9" />
+      <rect x="33" y="62" width="1.5" height="16" rx="0.4" fill="#F59E0B" />
+      <line x1="31" y1="12" x2="31" y2="122" stroke="#0F172A" stroke-width="1.5" />
+    `
+  },
+  {
+    id: 'rack-split-louv-42u',
+    code: 'SR-SPLIT-LOUV',
+    name: 'Twin Split Louvered Vented Door Rack (42U - 1000mm D)',
+    category: 'racks',
+    subCategory: 'twin_doors',
+    badgeType: 'rack',
+    presetId: 'apc-42u-split-mesh',
+    widthMm: 600,
+    depthMm: 1000,
+    heightU: 42,
+    description: 'Dual split louvered steel doors with angled airflow vents for directed floor cooling intake.',
+    viewBox: '0 0 76 130',
+    svgInner: `
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#64748B" stroke-width="0.8" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#64748B" stroke-width="1" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <!-- Left Split Louver Leaf -->
+      <rect x="8" y="14" width="21" height="106" rx="1" fill="#1E293B" stroke="#475569" stroke-width="1" />
+      <line x1="11" y1="22" x2="26" y2="22" stroke="#38BDF8" stroke-width="1" />
+      <line x1="11" y1="32" x2="26" y2="32" stroke="#38BDF8" stroke-width="1" />
+      <line x1="11" y1="42" x2="26" y2="42" stroke="#38BDF8" stroke-width="1" />
+      <line x1="11" y1="52" x2="26" y2="52" stroke="#38BDF8" stroke-width="1" />
+      <line x1="11" y1="72" x2="26" y2="72" stroke="#38BDF8" stroke-width="1" />
+      <line x1="11" y1="82" x2="26" y2="82" stroke="#38BDF8" stroke-width="1" />
+      <line x1="11" y1="92" x2="26" y2="92" stroke="#38BDF8" stroke-width="1" />
+      <line x1="11" y1="102" x2="26" y2="102" stroke="#38BDF8" stroke-width="1" />
+      <rect x="26.5" y="60" width="1.5" height="14" rx="0.4" fill="#E2E8F0" />
+      <!-- Right Split Louver Leaf -->
+      <rect x="31" y="14" width="21" height="106" rx="1" fill="#1E293B" stroke="#475569" stroke-width="1" />
+      <line x1="34" y1="22" x2="49" y2="22" stroke="#38BDF8" stroke-width="1" />
+      <line x1="34" y1="32" x2="49" y2="32" stroke="#38BDF8" stroke-width="1" />
+      <line x1="34" y1="42" x2="49" y2="42" stroke="#38BDF8" stroke-width="1" />
+      <line x1="34" y1="52" x2="49" y2="52" stroke="#38BDF8" stroke-width="1" />
+      <line x1="34" y1="72" x2="49" y2="72" stroke="#38BDF8" stroke-width="1" />
+      <line x1="34" y1="82" x2="49" y2="82" stroke="#38BDF8" stroke-width="1" />
+      <line x1="34" y1="92" x2="49" y2="92" stroke="#38BDF8" stroke-width="1" />
+      <line x1="34" y1="102" x2="49" y2="102" stroke="#38BDF8" stroke-width="1" />
+      <rect x="32" y="60" width="1.5" height="14" rx="0.4" fill="#E2E8F0" />
+      <line x1="30" y1="14" x2="30" y2="120" stroke="#0F172A" stroke-width="1.5" />
+    `
+  },
+  {
+    id: 'rack-split-solid-42u',
+    code: 'SR-SPLIT-SOLID',
+    name: 'Twin Split Solid Steel Door Rack (42U - 1000mm D)',
+    category: 'racks',
+    subCategory: 'twin_doors',
+    badgeType: 'rack',
+    presetId: 'apc-42u-split-mesh',
+    widthMm: 600,
+    depthMm: 1000,
+    heightU: 42,
+    description: 'Heavy gauge twin split solid steel doors with perimeter gasket for contained / sealed airflow zones.',
+    viewBox: '0 0 76 130',
+    svgInner: `
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#64748B" stroke-width="0.8" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#64748B" stroke-width="1" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <!-- Left Solid Leaf -->
+      <rect x="8" y="14" width="21" height="106" rx="1" fill="url(#dc-chassis-dark)" stroke="#475569" stroke-width="1" />
+      <rect x="11" y="20" width="15" height="40" rx="1" fill="#1E293B" stroke="#334155" stroke-width="0.6" />
+      <rect x="11" y="70" width="15" height="40" rx="1" fill="#1E293B" stroke="#334155" stroke-width="0.6" />
+      <rect x="26.5" y="60" width="1.5" height="14" rx="0.4" fill="#CBD5E1" />
+      <!-- Right Solid Leaf -->
+      <rect x="31" y="14" width="21" height="106" rx="1" fill="url(#dc-chassis-dark)" stroke="#475569" stroke-width="1" />
+      <rect x="34" y="20" width="15" height="40" rx="1" fill="#1E293B" stroke="#334155" stroke-width="0.6" />
+      <rect x="34" y="70" width="15" height="40" rx="1" fill="#1E293B" stroke="#334155" stroke-width="0.6" />
+      <rect x="32" y="60" width="1.5" height="14" rx="0.4" fill="#CBD5E1" />
+      <line x1="30" y1="14" x2="30" y2="120" stroke="#0F172A" stroke-width="1.5" />
+    `
+  },
+
+  // ── 1.3 Honeycomb High-Airflow Mesh Doors ──
+  {
+    id: 'rack-server-honeycomb',
+    code: 'SR-HNYCMB',
+    name: 'Single Honeycomb High-Airflow Rack (42U - 1070mm D)',
+    category: 'racks',
+    subCategory: 'honeycomb',
+    badgeType: 'rack',
+    presetId: 'apc-48u-deep-server',
+    widthMm: 600,
+    depthMm: 1070,
+    heightU: 42,
+    description: 'High-density compute rack with 83% hexagonal honeycomb mesh door for maximum CFM server airflow.',
+    viewBox: '0 0 76 130',
+    svgInner: `
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#F59E0B" stroke-width="0.8" />
+      <ellipse cx="38" cy="5.5" rx="7" ry="2" fill="#0B0F17" stroke="#F59E0B" stroke-width="0.5" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#F59E0B" stroke-width="1.2" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <rect x="10" y="15" width="40" height="103" fill="#080C14" />
+      <rect x="10" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="12" y1="18" x2="12" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <rect x="46" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="48" y1="18" x2="48" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <line x1="16" y1="15" x2="16" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <line x1="44" y1="15" x2="44" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <rect x="8" y="14" width="44" height="106" rx="1.5" fill="none" stroke="#F59E0B" stroke-width="1.2" />
+      <rect x="11" y="16" width="38" height="102" fill="url(#dc-rack-honeycomb)" />
+      <rect x="48" y="60" width="2.2" height="16" rx="0.6" fill="#F59E0B" />
+      <circle cx="49" cy="56" r="1.2" fill="#22C55E" />
+    `
+  },
+  {
+    id: 'rack-split-honeycomb-48u',
+    code: 'SR-HNY-DUAL',
+    name: 'Twin Split Honeycomb HD Rack (48U - 1200mm D)',
+    category: 'racks',
+    subCategory: 'honeycomb',
+    badgeType: 'rack',
+    presetId: 'apc-48u-deep-server',
+    widthMm: 750,
+    depthMm: 1200,
+    heightU: 48,
+    description: 'Deep 1200mm extreme CFM compute rack with dual split hexagonal honeycomb doors.',
+    viewBox: '0 0 76 130',
+    svgInner: `
+      <polygon points="6,6 15,2 65,2 56,6" fill="url(#dc-3d-top)" stroke="#F59E0B" stroke-width="0.8" />
+      <polygon points="56,6 65,2 65,121 56,124" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="6" width="50" height="118" rx="2" fill="url(#dc-chassis-dark)" stroke="#F59E0B" stroke-width="1.2" />
+      <rect x="4" y="124" width="54" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <rect x="10" y="13" width="42" height="108" fill="#080C14" />
+      <rect x="10" y="13" width="4" height="108" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="12" y1="16" x2="12" y2="118" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2" />
+      <rect x="48" y="13" width="4" height="108" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="50" y1="16" x2="50" y2="118" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2" />
+      <line x1="16" y1="13" x2="16" y2="120" stroke="#EF4444" stroke-width="0.8" opacity="0.9" />
+      <line x1="46" y1="13" x2="46" y2="120" stroke="#EF4444" stroke-width="0.8" opacity="0.9" />
+      <!-- Left Split Honeycomb Leaf -->
+      <rect x="8" y="12" width="22" height="110" rx="1" fill="none" stroke="#F59E0B" stroke-width="1" />
+      <rect x="10" y="14" width="19" height="106" fill="url(#dc-rack-honeycomb)" />
+      <rect x="27.5" y="62" width="1.5" height="16" rx="0.4" fill="#F59E0B" />
+      <!-- Right Split Honeycomb Leaf -->
+      <rect x="32" y="12" width="22" height="110" rx="1" fill="none" stroke="#F59E0B" stroke-width="1" />
+      <rect x="33" y="14" width="19" height="106" fill="url(#dc-rack-honeycomb)" />
+      <rect x="33" y="62" width="1.5" height="16" rx="0.4" fill="#F59E0B" />
+      <line x1="31" y1="12" x2="31" y2="122" stroke="#0F172A" stroke-width="1.5" />
+    `
+  },
+  {
+    id: 'rack-microhex-42u',
+    code: 'SR-HNY-MICRO',
+    name: 'Micro-Hex High-Density Filter Rack (42U - 1000mm D)',
+    category: 'racks',
+    subCategory: 'honeycomb',
+    badgeType: 'rack',
+    presetId: 'apc-42u-server',
+    widthMm: 600,
+    depthMm: 1000,
+    heightU: 42,
+    description: 'Fine micro-hex honeycomb mesh door combining particle filtration with high air throughput.',
+    viewBox: '0 0 76 130',
+    svgInner: `
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#06B6D4" stroke-width="0.8" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#06B6D4" stroke-width="1" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <rect x="10" y="15" width="40" height="103" fill="#080C14" />
+      <rect x="10" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="12" y1="18" x2="12" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <rect x="46" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="48" y1="18" x2="48" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <line x1="16" y1="15" x2="16" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <line x1="44" y1="15" x2="44" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <rect x="8" y="14" width="44" height="106" rx="1.5" fill="none" stroke="#06B6D4" stroke-width="1" />
+      <rect x="11" y="16" width="38" height="102" fill="url(#dc-rack-perf)" opacity="0.95" />
+      <rect x="48" y="60" width="2" height="16" rx="0.6" fill="#00E5FF" />
+      <circle cx="49" cy="56" r="1.2" fill="#00E5FF" />
+    `
+  },
+
+  // ── 1.4 Glass & Solid Acoustic Cabinets ──
+  {
+    id: 'rack-server-glass',
+    code: 'SR-GLASS',
+    name: 'Acoustic Tempered Glass Viewing Rack (42U - 1000mm D)',
+    category: 'racks',
+    subCategory: 'glass_solid',
+    badgeType: 'rack',
+    presetId: '24u-mid-tower',
+    widthMm: 600,
+    depthMm: 1000,
+    heightU: 42,
+    description: 'Acoustic-dampened quiet cabinet with tempered safety glass viewing door, illuminated rack rails visible.',
+    viewBox: '0 0 76 130',
+    svgInner: `
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#94A3B8" stroke-width="0.8" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#94A3B8" stroke-width="1" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <!-- Interior Mounted Equipment Glowing behind Glass -->
+      <rect x="10" y="15" width="40" height="103" fill="#060A10" />
+      <rect x="10" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="12" y1="18" x2="12" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <rect x="46" y="15" width="4" height="103" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.5" />
+      <line x1="48" y1="18" x2="48" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <line x1="16" y1="15" x2="16" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <line x1="44" y1="15" x2="44" y2="118" stroke="#EF4444" stroke-width="0.8" opacity="0.85" />
+      <rect x="15" y="24" width="30" height="8" rx="0.5" fill="#1E293B" />
+      <circle cx="18" cy="28" r="1" fill="#22C55E" /><circle cx="21" cy="28" r="1" fill="#38BDF8" />
+      <rect x="15" y="44" width="30" height="12" rx="0.5" fill="#1E293B" />
+      <circle cx="18" cy="50" r="1" fill="#22C55E" />
+      <rect x="15" y="70" width="30" height="16" rx="0.5" fill="#1E293B" />
+      <circle cx="18" cy="78" r="1" fill="#22C55E" /><circle cx="21" cy="78" r="1" fill="#22C55E" />
+      <!-- Tempered Glass Door & Diagonal Specular Reflections -->
+      <rect x="8" y="14" width="44" height="106" rx="1.5" fill="url(#dc-glass-gradient)" stroke="#38BDF8" stroke-width="1.2" />
+      <polygon points="10,14 26,14 14,120 10,120" fill="#FFFFFF" opacity="0.22" />
+      <polygon points="30,14 38,14 24,120 18,120" fill="#FFFFFF" opacity="0.12" />
+      <rect x="48" y="60" width="2" height="16" rx="0.6" fill="#E2E8F0" />
+    `
+  },
+  {
+    id: 'rack-split-glass-42u',
+    code: 'SR-SPLIT-GLASS',
+    name: 'Twin Split Glass Door Cabinet (42U - 1000mm D)',
+    category: 'racks',
+    subCategory: 'glass_solid',
+    badgeType: 'rack',
+    presetId: 'apc-42u-split-mesh',
+    widthMm: 600,
+    depthMm: 1000,
+    heightU: 42,
+    description: 'Dual split wardrobe tempered glass doors for high-visibility observation in tight aisle clearances.',
+    viewBox: '0 0 76 130',
+    svgInner: `
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#38BDF8" stroke-width="0.8" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#38BDF8" stroke-width="1" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <rect x="10" y="15" width="40" height="103" fill="#060A10" />
+      <rect x="10" y="15" width="4" height="103" fill="url(#dc-rail-silver)" />
+      <line x1="12" y1="18" x2="12" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <rect x="46" y="15" width="4" height="103" fill="url(#dc-rail-silver)" />
+      <line x1="48" y1="18" x2="48" y2="114" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <!-- Left Split Glass Leaf -->
+      <rect x="8" y="14" width="21" height="106" rx="1" fill="url(#dc-glass-gradient)" stroke="#38BDF8" stroke-width="1" />
+      <polygon points="10,14 18,14 12,120 10,120" fill="#FFFFFF" opacity="0.25" />
+      <rect x="26.5" y="60" width="1.5" height="14" rx="0.4" fill="#E2E8F0" />
+      <!-- Right Split Glass Leaf -->
+      <rect x="31" y="14" width="21" height="106" rx="1" fill="url(#dc-glass-gradient)" stroke="#38BDF8" stroke-width="1" />
+      <polygon points="34,14 42,14 36,120 32,120" fill="#FFFFFF" opacity="0.25" />
+      <rect x="32" y="60" width="1.5" height="14" rx="0.4" fill="#E2E8F0" />
+      <line x1="30" y1="14" x2="30" y2="120" stroke="#0F172A" stroke-width="1.5" />
+    `
+  },
+  {
+    id: 'rack-solid-42u',
+    code: 'SR-SOLID-42U',
+    name: 'Industrial Solid Steel Cabinet (42U - 1000mm D)',
+    category: 'racks',
+    subCategory: 'glass_solid',
+    badgeType: 'rack',
+    presetId: 'apc-42u-server',
+    widthMm: 600,
+    depthMm: 1000,
+    heightU: 42,
+    description: 'NEMA-rated sealed industrial solid steel cabinet with flush swing handle and keyed lock.',
+    viewBox: '0 0 76 130',
+    svgInner: `
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#64748B" stroke-width="0.8" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#64748B" stroke-width="1" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <rect x="8" y="14" width="44" height="106" rx="1.5" fill="url(#dc-chassis-dark)" stroke="#475569" stroke-width="1.2" />
+      <!-- Embossed Stiffener Panels -->
+      <rect x="12" y="20" width="36" height="42" rx="1.5" fill="#1E293B" stroke="#334155" stroke-width="0.8" />
+      <rect x="12" y="70" width="36" height="42" rx="1.5" fill="#1E293B" stroke="#334155" stroke-width="0.8" />
+      <rect x="48" y="60" width="2.2" height="16" rx="0.6" fill="#CBD5E1" stroke="#475569" stroke-width="0.5" />
+      <circle cx="49" cy="56" r="1.2" fill="#EAB308" />
+    `
+  },
+
+  // ── 1.5 Network & Open Frame Racks ──
+  {
     id: 'rack-network-2post',
     code: 'NR-2POST',
-    name: '2-Post Open Frame Relay Rack (45U)',
+    name: '2-Post Open Frame Relay Rack (45U - 800mm Base)',
     category: 'racks',
     subCategory: 'network',
     badgeType: 'rack',
@@ -261,22 +685,31 @@ export const ALL_DC_COMPONENTS: DcComponentItem[] = [
     widthMm: 800,
     depthMm: 800,
     heightU: 45,
-    description: 'Open frame 2-post distribution relay rack optimized for high-density copper/fiber patching.',
-    viewBox: '0 0 60 32',
+    description: 'Open frame 2-post distribution relay rack with aluminum vertical channels and side cable rings.',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="15" y="4" width="30" height="24" rx="1.5" fill="url(#dc-chassis-dark)" stroke="#38BDF8" stroke-width="1" />
-      <line x1="15" y1="9" x2="45" y2="9" stroke="#64748B" stroke-width="0.8" />
-      <line x1="15" y1="15" x2="45" y2="15" stroke="#64748B" stroke-width="0.8" />
-      <line x1="15" y1="21" x2="45" y2="21" stroke="#64748B" stroke-width="0.8" />
-      <rect x="10" y="6" width="5" height="20" rx="1" fill="#0284C7" />
-      <rect x="45" y="6" width="5" height="20" rx="1" fill="#0284C7" />
-      <rect x="12" y="27" width="36" height="3" rx="0.5" fill="#475569" />
+      <!-- Heavy Base Footplate -->
+      <rect x="4" y="120" width="54" height="6" rx="1.5" fill="#0F172A" stroke="#38BDF8" stroke-width="1" />
+      <rect x="8" y="122" width="8" height="3" fill="#64748B" /><rect x="46" y="122" width="8" height="3" fill="#64748B" />
+      <!-- Left & Right Vertical Channel Posts -->
+      <rect x="16" y="10" width="6" height="110" rx="1" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.8" />
+      <line x1="19" y1="12" x2="19" y2="118" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <rect x="40" y="10" width="6" height="110" rx="1" fill="url(#dc-rail-silver)" stroke="#475569" stroke-width="0.8" />
+      <line x1="43" y1="12" x2="43" y2="118" stroke="#38BDF8" stroke-width="1.2" stroke-dasharray="1.5 2.5" />
+      <!-- Top Crossbar & Side Cable Manager Fingers -->
+      <rect x="14" y="8" width="34" height="4" rx="0.5" fill="#334155" stroke="#475569" stroke-width="0.8" />
+      <rect x="8" y="24" width="6" height="14" rx="1" fill="#0284C7" stroke="#38BDF8" stroke-width="0.5" />
+      <rect x="8" y="54" width="6" height="14" rx="1" fill="#0284C7" stroke="#38BDF8" stroke-width="0.5" />
+      <rect x="8" y="84" width="6" height="14" rx="1" fill="#0284C7" stroke="#38BDF8" stroke-width="0.5" />
+      <rect x="48" y="24" width="6" height="14" rx="1" fill="#0284C7" stroke="#38BDF8" stroke-width="0.5" />
+      <rect x="48" y="54" width="6" height="14" rx="1" fill="#0284C7" stroke="#38BDF8" stroke-width="0.5" />
+      <rect x="48" y="84" width="6" height="14" rx="1" fill="#0284C7" stroke="#38BDF8" stroke-width="0.5" />
     `
   },
   {
     id: 'rack-network-4post',
     code: 'NR-4POST',
-    name: '4-Post Open Frame Lab Rack (42U)',
+    name: '4-Post Open Frame Lab Staging Rack (42U - 1000mm D)',
     category: 'racks',
     subCategory: 'network',
     badgeType: 'rack',
@@ -284,22 +717,32 @@ export const ALL_DC_COMPONENTS: DcComponentItem[] = [
     widthMm: 600,
     depthMm: 1000,
     heightU: 42,
-    description: 'Heavy-duty 4-post open frame steel rack for staging, testing and high-airflow lab environments.',
-    viewBox: '0 0 60 32',
+    description: 'Heavy-duty 4-post open steel frame for lab staging, testing, and maximum unobstructed airflow.',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="13" y="4" width="34" height="24" rx="1.5" fill="none" stroke="#64748B" stroke-width="1.2" />
-      <line x1="18" y1="4" x2="18" y2="28" stroke="#38BDF8" stroke-width="1.5" />
-      <line x1="42" y1="4" x2="42" y2="28" stroke="#38BDF8" stroke-width="1.5" />
-      <line x1="13" y1="10" x2="47" y2="10" stroke="#475569" stroke-width="1" />
-      <line x1="13" y1="16" x2="47" y2="16" stroke="#475569" stroke-width="1" />
-      <line x1="13" y1="22" x2="47" y2="22" stroke="#475569" stroke-width="1" />
-      <rect x="10" y="27" width="40" height="3" fill="#334155" />
+      <!-- Top Depth Crossbars -->
+      <polygon points="12,12 20,6 56,6 48,12" fill="none" stroke="#64748B" stroke-width="1.2" />
+      <!-- Rear Uprights -->
+      <line x1="20" y1="6" x2="20" y2="118" stroke="#475569" stroke-width="2" />
+      <line x1="56" y1="6" x2="56" y2="118" stroke="#475569" stroke-width="2" />
+      <!-- Bottom Depth Crossbars -->
+      <polygon points="12,120 20,114 56,114 48,120" fill="none" stroke="#64748B" stroke-width="1.2" />
+      <!-- Front Uprights & RU Markers -->
+      <rect x="10" y="10" width="5" height="112" rx="0.5" fill="url(#dc-rail-silver)" stroke="#38BDF8" stroke-width="0.8" />
+      <line x1="12.5" y1="12" x2="12.5" y2="120" stroke="#38BDF8" stroke-width="1" stroke-dasharray="1.5 2.5" />
+      <rect x="47" y="10" width="5" height="112" rx="0.5" fill="url(#dc-rail-silver)" stroke="#38BDF8" stroke-width="0.8" />
+      <line x1="49.5" y1="12" x2="49.5" y2="120" stroke="#38BDF8" stroke-width="1" stroke-dasharray="1.5 2.5" />
+      <!-- Middle Staging Crossbars -->
+      <line x1="12" y1="46" x2="20" y2="40" stroke="#64748B" stroke-width="1.2" />
+      <line x1="48" y1="46" x2="56" y2="40" stroke="#64748B" stroke-width="1.2" />
+      <line x1="12" y1="86" x2="20" y2="80" stroke="#64748B" stroke-width="1.2" />
+      <line x1="48" y1="86" x2="56" y2="80" stroke="#64748B" stroke-width="1.2" />
     `
   },
   {
     id: 'rack-network-cabinet',
     code: 'NR-SW800',
-    name: 'Network Core Switch Cabinet (800mm Wide)',
+    name: 'Network Core Switch Cabinet (800mm Wide - 1000mm D)',
     category: 'racks',
     subCategory: 'network',
     badgeType: 'rack',
@@ -307,25 +750,42 @@ export const ALL_DC_COMPONENTS: DcComponentItem[] = [
     widthMm: 800,
     depthMm: 1000,
     heightU: 48,
-    description: 'Extra-wide 800mm switching cabinet with oversized side vertical cable managers and high-capacity ducts.',
-    viewBox: '0 0 60 32',
+    description: 'Extra-wide 800mm switching cabinet with oversized vertical cable manager bays and waterfall fingers.',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="11" y="3" width="38" height="26" rx="2" fill="url(#dc-chassis-dark)" stroke="#0284C7" stroke-width="1" />
-      <rect x="19" y="5.5" width="22" height="21" fill="url(#dc-rack-perf)" />
-      <rect x="13" y="6" width="4" height="20" rx="0.5" fill="#082F49" stroke="#38BDF8" stroke-width="0.5" />
-      <rect x="43" y="6" width="4" height="20" rx="0.5" fill="#082F49" stroke="#38BDF8" stroke-width="0.5" />
-      <line x1="13" y1="11" x2="17" y2="11" stroke="#38BDF8" stroke-width="0.8" />
-      <line x1="13" y1="16" x2="17" y2="16" stroke="#38BDF8" stroke-width="0.8" />
-      <line x1="13" y1="21" x2="17" y2="21" stroke="#38BDF8" stroke-width="0.8" />
-      <line x1="43" y1="11" x2="47" y2="11" stroke="#38BDF8" stroke-width="0.8" />
-      <line x1="43" y1="16" x2="47" y2="16" stroke="#38BDF8" stroke-width="0.8" />
-      <line x1="43" y1="21" x2="47" y2="21" stroke="#38BDF8" stroke-width="0.8" />
+      <polygon points="4,8 14,3 64,3 54,8" fill="url(#dc-3d-top)" stroke="#0284C7" stroke-width="0.8" />
+      <polygon points="54,8 64,3 64,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="4" y="8" width="50" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#0284C7" stroke-width="1.2" />
+      <rect x="2" y="122" width="54" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <!-- Left Side Vertical Cable Duct Bay -->
+      <rect x="6" y="14" width="7" height="104" rx="1" fill="#082F49" stroke="#38BDF8" stroke-width="0.6" />
+      <line x1="6" y1="26" x2="13" y2="26" stroke="#FDE047" stroke-width="1.2" />
+      <line x1="6" y1="46" x2="13" y2="46" stroke="#38BDF8" stroke-width="1.2" />
+      <line x1="6" y1="66" x2="13" y2="66" stroke="#FDE047" stroke-width="1.2" />
+      <line x1="6" y1="86" x2="13" y2="86" stroke="#38BDF8" stroke-width="1.2" />
+      <line x1="6" y1="106" x2="13" y2="106" stroke="#38BDF8" stroke-width="1.2" />
+      <!-- Center 19-inch Rail Bay -->
+      <rect x="15" y="14" width="28" height="104" fill="#060A10" />
+      <rect x="15" y="14" width="3.5" height="104" fill="url(#dc-rail-silver)" />
+      <line x1="16.5" y1="16" x2="16.5" y2="116" stroke="#38BDF8" stroke-width="1" stroke-dasharray="1.5 2.5" />
+      <rect x="39.5" y="14" width="3.5" height="104" fill="url(#dc-rail-silver)" />
+      <line x1="41" y1="16" x2="41" y2="116" stroke="#38BDF8" stroke-width="1" stroke-dasharray="1.5 2.5" />
+      <rect x="15" y="14" width="28" height="104" fill="url(#dc-rack-perf)" opacity="0.8" />
+      <!-- Right Side Vertical Cable Duct Bay -->
+      <rect x="45" y="14" width="7" height="104" rx="1" fill="#082F49" stroke="#38BDF8" stroke-width="0.6" />
+      <line x1="45" y1="26" x2="52" y2="26" stroke="#38BDF8" stroke-width="1.2" />
+      <line x1="45" y1="46" x2="52" y2="46" stroke="#FDE047" stroke-width="1.2" />
+      <line x1="45" y1="66" x2="52" y2="66" stroke="#38BDF8" stroke-width="1.2" />
+      <line x1="45" y1="86" x2="52" y2="86" stroke="#FDE047" stroke-width="1.2" />
+      <line x1="45" y1="106" x2="52" y2="106" stroke="#38BDF8" stroke-width="1.2" />
     `
   },
+
+  // ── 1.6 Colocation Multi-Bay Compartment Cabinets ──
   {
     id: 'rack-colo-2bay',
     code: 'COLO-2BAY',
-    name: 'Colocation 2-Compartment Cabinet (2×20U)',
+    name: 'Colocation 2-Compartment Cabinet (2×20U - 1000mm D)',
     category: 'racks',
     subCategory: 'colo',
     badgeType: 'rack',
@@ -334,21 +794,30 @@ export const ALL_DC_COMPONENTS: DcComponentItem[] = [
     depthMm: 1000,
     heightU: 42,
     description: 'Multi-tenant colocation cabinet with 2 secure independent 20U compartments with dedicated locks.',
-    viewBox: '0 0 60 32',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="15" y="3" width="30" height="26" rx="2" fill="url(#dc-chassis-dark)" stroke="#A855F7" stroke-width="1.2" />
-      <rect x="18" y="5" width="24" height="10" fill="url(#dc-rack-perf)" />
-      <rect x="18" y="17" width="24" height="10" fill="url(#dc-rack-perf)" />
-      <rect x="15" y="15" width="30" height="2" fill="#A855F7" />
-      <rect x="38" y="8" width="2.5" height="4" rx="0.5" fill="#E2E8F0" />
-      <rect x="38" y="20" width="2.5" height="4" rx="0.5" fill="#E2E8F0" />
-      <circle cx="21" cy="7" r="0.8" fill="#A855F7" /><circle cx="21" cy="19" r="0.8" fill="#A855F7" />
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#A855F7" stroke-width="0.8" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#A855F7" stroke-width="1.2" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <!-- Top 20U Compartment -->
+      <rect x="8" y="14" width="44" height="48" rx="1" fill="#0B0F17" stroke="#A855F7" stroke-width="1" />
+      <rect x="10" y="16" width="40" height="44" fill="url(#dc-rack-perf)" opacity="0.85" />
+      <rect x="47" y="32" width="2.2" height="10" rx="0.5" fill="#E2E8F0" />
+      <circle cx="48" cy="28" r="1.2" fill="#A855F7" />
+      <!-- Center Solid Security Divider -->
+      <rect x="6" y="63" width="48" height="4" fill="#A855F7" stroke="#6B21A8" stroke-width="0.5" />
+      <!-- Bottom 20U Compartment -->
+      <rect x="8" y="68" width="44" height="48" rx="1" fill="#0B0F17" stroke="#A855F7" stroke-width="1" />
+      <rect x="10" y="70" width="40" height="44" fill="url(#dc-rack-perf)" opacity="0.85" />
+      <rect x="47" y="86" width="2.2" height="10" rx="0.5" fill="#E2E8F0" />
+      <circle cx="48" cy="82" r="1.2" fill="#A855F7" />
     `
   },
   {
     id: 'rack-colo-4bay',
     code: 'COLO-4BAY',
-    name: 'Colocation 4-Compartment Cabinet (4×10U)',
+    name: 'Colocation 4-Compartment Cabinet (4×10U - 1000mm D)',
     category: 'racks',
     subCategory: 'colo',
     badgeType: 'rack',
@@ -357,24 +826,32 @@ export const ALL_DC_COMPONENTS: DcComponentItem[] = [
     depthMm: 1000,
     heightU: 42,
     description: 'Multi-tenant colocation cabinet with 4 secure isolated 10U compartments with separate keyless access.',
-    viewBox: '0 0 60 32',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="15" y="3" width="30" height="26" rx="2" fill="url(#dc-chassis-dark)" stroke="#A855F7" stroke-width="1.2" />
-      <rect x="18" y="5" width="24" height="4.5" fill="url(#dc-rack-perf)" />
-      <rect x="18" y="11" width="24" height="4.5" fill="url(#dc-rack-perf)" />
-      <rect x="18" y="17" width="24" height="4.5" fill="url(#dc-rack-perf)" />
-      <rect x="18" y="23" width="24" height="4.5" fill="url(#dc-rack-perf)" />
-      <line x1="15" y1="10" x2="45" y2="10" stroke="#A855F7" stroke-width="1" />
-      <line x1="15" y1="16" x2="45" y2="16" stroke="#A855F7" stroke-width="1" />
-      <line x1="15" y1="22" x2="45" y2="22" stroke="#A855F7" stroke-width="1" />
-      <circle cx="40" cy="7" r="0.7" fill="#E2E8F0" /><circle cx="40" cy="13" r="0.7" fill="#E2E8F0" />
-      <circle cx="40" cy="19" r="0.7" fill="#E2E8F0" /><circle cx="40" cy="25" r="0.7" fill="#E2E8F0" />
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#A855F7" stroke-width="0.8" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#A855F7" stroke-width="1.2" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <!-- 4 Independent 10U Compartments -->
+      <rect x="8" y="13" width="44" height="22" rx="0.5" fill="url(#dc-rack-perf)" stroke="#A855F7" stroke-width="0.8" />
+      <rect x="47" y="20" width="2" height="6" fill="#E2E8F0" /><circle cx="48" cy="17" r="1" fill="#A855F7" />
+      <line x1="6" y1="38" x2="54" y2="38" stroke="#A855F7" stroke-width="2" />
+      <rect x="8" y="41" width="44" height="22" rx="0.5" fill="url(#dc-rack-perf)" stroke="#A855F7" stroke-width="0.8" />
+      <rect x="47" y="48" width="2" height="6" fill="#E2E8F0" /><circle cx="48" cy="45" r="1" fill="#A855F7" />
+      <line x1="6" y1="66" x2="54" y2="66" stroke="#A855F7" stroke-width="2" />
+      <rect x="8" y="69" width="44" height="22" rx="0.5" fill="url(#dc-rack-perf)" stroke="#A855F7" stroke-width="0.8" />
+      <rect x="47" y="76" width="2" height="6" fill="#E2E8F0" /><circle cx="48" cy="73" r="1" fill="#A855F7" />
+      <line x1="6" y1="94" x2="54" y2="94" stroke="#A855F7" stroke-width="2" />
+      <rect x="8" y="97" width="44" height="22" rx="0.5" fill="url(#dc-rack-perf)" stroke="#A855F7" stroke-width="0.8" />
+      <rect x="47" y="104" width="2" height="6" fill="#E2E8F0" /><circle cx="48" cy="101" r="1" fill="#A855F7" />
     `
   },
+
+  // ── 1.7 Wall Mount & Micro-DC Enclosures ──
   {
     id: 'rack-wallmount',
     code: 'WM-GLASS',
-    name: 'Wall-Mount Glass Enclosure (6U-12U)',
+    name: 'Wall-Mount Glass Enclosure (12U - 500mm D)',
     category: 'racks',
     subCategory: 'enclosure',
     badgeType: 'rack',
@@ -382,20 +859,25 @@ export const ALL_DC_COMPONENTS: DcComponentItem[] = [
     widthMm: 600,
     depthMm: 500,
     heightU: 12,
-    description: 'Compact wall-mount communications and edge computing enclosure with glass viewing door.',
-    viewBox: '0 0 60 32',
+    description: 'Compact 12U wall-mount communications and edge computing enclosure with glass viewing door.',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="16" y="5" width="28" height="22" rx="2" fill="url(#dc-chassis-dark)" stroke="#94A3B8" stroke-width="1" />
-      <rect x="20" y="8" width="20" height="16" rx="1" fill="url(#dc-glass-gradient)" stroke="#38BDF8" stroke-width="0.8" />
-      <line x1="12" y1="8" x2="16" y2="8" stroke="#64748B" stroke-width="2" />
-      <line x1="12" y1="24" x2="16" y2="24" stroke="#64748B" stroke-width="2" />
-      <circle cx="38" cy="16" r="1" fill="#94A3B8" />
+      <!-- Wall Brackets -->
+      <rect x="2" y="36" width="6" height="8" rx="1" fill="#475569" />
+      <rect x="2" y="96" width="6" height="8" rx="1" fill="#475569" />
+      <polygon points="8,40 16,35 58,35 50,40" fill="url(#dc-3d-top)" stroke="#94A3B8" stroke-width="0.8" />
+      <polygon points="50,40 58,35 58,102 50,105" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="8" y="40" width="42" height="65" rx="2" fill="url(#dc-chassis-dark)" stroke="#94A3B8" stroke-width="1" />
+      <!-- Glass Window -->
+      <rect x="12" y="45" width="34" height="55" rx="1.5" fill="url(#dc-glass-gradient)" stroke="#38BDF8" stroke-width="0.8" />
+      <polygon points="14,45 24,45 16,100 14,100" fill="#FFFFFF" opacity="0.25" />
+      <circle cx="43" cy="72" r="1.5" fill="#E2E8F0" />
     `
   },
   {
     id: 'rack-wallmount-swing',
     code: 'WM-SWING',
-    name: 'Swing-Out Wall Cabinet (18U)',
+    name: 'Double-Hinge Swing-Out Wall Cabinet (18U - 600mm D)',
     category: 'racks',
     subCategory: 'enclosure',
     badgeType: 'rack',
@@ -404,19 +886,22 @@ export const ALL_DC_COMPONENTS: DcComponentItem[] = [
     depthMm: 600,
     heightU: 18,
     description: 'Double-hinged swing-out wall cabinet allowing fast rear equipment servicing and cable management.',
-    viewBox: '0 0 60 32',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="12" y="4" width="8" height="24" rx="1" fill="#1E293B" stroke="#64748B" stroke-width="0.8" />
-      <circle cx="16" cy="8" r="1.5" fill="#F59E0B" /><circle cx="16" cy="24" r="1.5" fill="#F59E0B" />
-      <rect x="20" y="4" width="26" height="24" rx="2" fill="url(#dc-chassis-dark)" stroke="#38BDF8" stroke-width="1" />
-      <rect x="24" y="7" width="18" height="18" fill="url(#dc-rack-perf)" />
-      <circle cx="43" cy="16" r="1.2" fill="#E2E8F0" />
+      <!-- Rear Swing Pivot Frame -->
+      <rect x="4" y="32" width="8" height="76" rx="1" fill="#1E293B" stroke="#64748B" stroke-width="0.8" />
+      <circle cx="8" cy="40" r="2" fill="#F59E0B" /><circle cx="8" cy="100" r="2" fill="#F59E0B" />
+      <polygon points="12,32 20,27 60,27 52,32" fill="url(#dc-3d-top)" stroke="#38BDF8" stroke-width="0.8" />
+      <polygon points="52,32 60,27 60,105 52,108" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="12" y="32" width="40" height="76" rx="2" fill="url(#dc-chassis-dark)" stroke="#38BDF8" stroke-width="1" />
+      <rect x="15" y="36" width="34" height="68" fill="url(#dc-rack-perf)" opacity="0.88" />
+      <circle cx="48" cy="70" r="1.8" fill="#E2E8F0" />
     `
   },
   {
     id: 'rack-micro-datacenter',
     code: 'MICRO-DC',
-    name: 'Edge Micro Data Center Pod (All-in-One)',
+    name: 'Edge Micro Data Center Pod (All-in-One - 1200mm D)',
     category: 'racks',
     subCategory: 'enclosure',
     badgeType: 'rack',
@@ -424,24 +909,32 @@ export const ALL_DC_COMPONENTS: DcComponentItem[] = [
     widthMm: 800,
     depthMm: 1200,
     heightU: 42,
-    description: 'Self-contained all-in-one micro data center enclosure with integrated DX cooling, UPS and smart LCD door.',
-    viewBox: '0 0 60 32',
+    description: 'Self-contained all-in-one micro data center enclosure with integrated DX cooling, UPS, and front status LCD.',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="11" y="3" width="38" height="26" rx="2" fill="url(#dc-chassis-dark)" stroke="#06B6D4" stroke-width="1.2" />
-      <rect x="14" y="6" width="22" height="20" rx="1" fill="#0B132B" stroke="#00E5FF" stroke-width="0.6" />
-      <rect x="17" y="8" width="16" height="6" rx="0.5" fill="#000000" stroke="#06B6D4" stroke-width="0.5" />
-      <text x="25" y="13" fill="#00E5FF" font-family="monospace" font-size="4" font-weight="700" text-anchor="middle">21.4°C | 4.2kW</text>
-      <rect x="17" y="16" width="16" height="8" fill="url(#dc-rack-perf)" />
-      <rect x="38" y="6" width="8" height="20" rx="1" fill="#0C4A6E" stroke="#06B6D4" stroke-width="0.8" />
-      <circle cx="42" cy="12" r="2.5" fill="#082F49" stroke="#38BDF8" stroke-width="0.5" />
-      <path d="M 42 9.5 L 42 14.5 M 39.5 12 L 44.5 12" stroke="#38BDF8" stroke-width="0.5" />
-      <polygon points="40,20 44,20 42,23" fill="#00E5FF" />
+      <polygon points="4,8 14,3 64,3 54,8" fill="url(#dc-3d-top)" stroke="#06B6D4" stroke-width="0.8" />
+      <polygon points="54,8 64,3 64,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="4" y="8" width="50" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#06B6D4" stroke-width="1.2" />
+      <rect x="2" y="122" width="54" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <!-- Left Rack Bay with Smart LCD Front Door -->
+      <rect x="7" y="14" width="32" height="104" rx="1" fill="#080C14" stroke="#00E5FF" stroke-width="0.6" />
+      <rect x="10" y="18" width="26" height="12" rx="1" fill="#000000" stroke="#06B6D4" stroke-width="0.6" />
+      <text x="23" y="26" fill="#00E5FF" font-family="monospace" font-size="4.5" font-weight="700" text-anchor="middle">21.4°C</text>
+      <text x="23" y="32" fill="#22C55E" font-family="monospace" font-size="3.5" font-weight="600" text-anchor="middle">4.2 kW</text>
+      <rect x="10" y="34" width="26" height="80" fill="url(#dc-rack-perf)" opacity="0.85" />
+      <!-- Right Integrated DX Cooling Bay -->
+      <rect x="41" y="14" width="11" height="104" rx="1" fill="#0C4A6E" stroke="#06B6D4" stroke-width="0.8" />
+      <circle cx="46.5" cy="30" r="3.5" fill="#082F49" stroke="#38BDF8" stroke-width="0.6" />
+      <circle cx="46.5" cy="70" r="3.5" fill="#082F49" stroke="#38BDF8" stroke-width="0.6" />
+      <polygon points="44.5,100 48.5,100 46.5,105" fill="#00E5FF" />
     `
   },
+
+  // ── 1.8 Battery & Power Storage Racks ──
   {
     id: 'rack-battery-open',
     code: 'BATT-OPEN',
-    name: 'Seismic Open Battery Rack (VRLA/Lithium)',
+    name: 'Seismic Multi-Tier Open Battery Rack (42U - 800mm D)',
     category: 'racks',
     subCategory: 'battery',
     badgeType: 'power',
@@ -449,23 +942,30 @@ export const ALL_DC_COMPONENTS: DcComponentItem[] = [
     widthMm: 800,
     depthMm: 800,
     heightU: 42,
-    description: 'Multi-tier seismic-rated open steel battery rack with VRLA / Lithium battery strings.',
-    viewBox: '0 0 60 32',
+    description: 'Multi-tier seismic-rated open steel battery rack with VRLA / Lithium modular battery strings.',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="14" y="4" width="32" height="24" rx="1.5" fill="none" stroke="#64748B" stroke-width="1.2" />
-      <rect x="17" y="6" width="11" height="8" rx="1" fill="#334155" stroke="#E2E8F0" stroke-width="0.5" />
-      <rect x="30" y="6" width="11" height="8" rx="1" fill="#334155" stroke="#E2E8F0" stroke-width="0.5" />
-      <rect x="17" y="17" width="11" height="8" rx="1" fill="#334155" stroke="#E2E8F0" stroke-width="0.5" />
-      <rect x="30" y="17" width="11" height="8" rx="1" fill="#334155" stroke="#E2E8F0" stroke-width="0.5" />
-      <circle cx="20" cy="8" r="0.6" fill="#EF4444" /><circle cx="25" cy="8" r="0.6" fill="#3B82F6" />
-      <circle cx="33" cy="8" r="0.6" fill="#EF4444" /><circle cx="38" cy="8" r="0.6" fill="#3B82F6" />
-      <line x1="25" y1="8" x2="33" y2="8" stroke="#F97316" stroke-width="1" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="none" stroke="#64748B" stroke-width="1.2" />
+      <!-- 4 Heavy Battery Shelves -->
+      <rect x="10" y="18" width="40" height="18" rx="1" fill="#1E293B" stroke="#475569" stroke-width="0.8" />
+      <circle cx="16" cy="24" r="1.5" fill="#EF4444" /><circle cx="26" cy="24" r="1.5" fill="#3B82F6" />
+      <circle cx="34" cy="24" r="1.5" fill="#EF4444" /><circle cx="44" cy="24" r="1.5" fill="#3B82F6" />
+      <rect x="10" y="44" width="40" height="18" rx="1" fill="#1E293B" stroke="#475569" stroke-width="0.8" />
+      <circle cx="16" cy="50" r="1.5" fill="#EF4444" /><circle cx="26" cy="50" r="1.5" fill="#3B82F6" />
+      <circle cx="34" cy="50" r="1.5" fill="#EF4444" /><circle cx="44" cy="50" r="1.5" fill="#3B82F6" />
+      <rect x="10" y="70" width="40" height="18" rx="1" fill="#1E293B" stroke="#475569" stroke-width="0.8" />
+      <circle cx="16" cy="76" r="1.5" fill="#EF4444" /><circle cx="26" cy="76" r="1.5" fill="#3B82F6" />
+      <circle cx="34" cy="76" r="1.5" fill="#EF4444" /><circle cx="44" cy="76" r="1.5" fill="#3B82F6" />
+      <rect x="10" y="96" width="40" height="18" rx="1" fill="#1E293B" stroke="#475569" stroke-width="0.8" />
+      <circle cx="16" cy="102" r="1.5" fill="#EF4444" /><circle cx="26" cy="102" r="1.5" fill="#3B82F6" />
+      <circle cx="34" cy="102" r="1.5" fill="#EF4444" /><circle cx="44" cy="102" r="1.5" fill="#3B82F6" />
+      <rect x="4" y="122" width="52" height="4" fill="#334155" />
     `
   },
   {
     id: 'rack-battery-enclosed',
     code: 'BATT-ENC',
-    name: 'Enclosed Li-Ion Battery Cabinet with BMS',
+    name: 'Enclosed Li-Ion Battery Cabinet with BMS (42U - 800mm D)',
     category: 'racks',
     subCategory: 'battery',
     badgeType: 'power',
@@ -473,17 +973,24 @@ export const ALL_DC_COMPONENTS: DcComponentItem[] = [
     widthMm: 800,
     depthMm: 800,
     heightU: 42,
-    description: 'Heavy-gauge steel enclosed LiFePO4 battery cabinet with integrated BMS status indicators.',
-    viewBox: '0 0 60 32',
+    description: 'Heavy-gauge steel enclosed LiFePO4 battery cabinet with integrated BMS status LEDs.',
+    viewBox: '0 0 76 130',
     svgInner: `
-      <rect x="14" y="3" width="32" height="26" rx="2" fill="url(#dc-chassis-dark)" stroke="#EAB308" stroke-width="1" />
-      <rect x="18" y="6" width="24" height="20" rx="1" fill="#1E293B" />
-      <line x1="18" y1="11" x2="42" y2="11" stroke="#475569" stroke-width="0.8" />
-      <line x1="18" y1="16" x2="42" y2="16" stroke="#475569" stroke-width="0.8" />
-      <line x1="18" y1="21" x2="42" y2="21" stroke="#475569" stroke-width="0.8" />
-      <circle cx="22" cy="8.5" r="0.9" fill="#22C55E" /><circle cx="26" cy="8.5" r="0.9" fill="#22C55E" />
-      <circle cx="22" cy="13.5" r="0.9" fill="#22C55E" /><circle cx="26" cy="13.5" r="0.9" fill="#22C55E" />
-      <polygon points="36,7 39,7 37.5,10" fill="#EAB308" />
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#EAB308" stroke-width="0.8" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#1E293B" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="url(#dc-chassis-dark)" stroke="#EAB308" stroke-width="1" />
+      <rect x="4" y="122" width="52" height="4" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <rect x="10" y="14" width="40" height="104" rx="1" fill="#1E293B" stroke="#475569" stroke-width="0.8" />
+      <!-- Battery Pack Drawers & BMS LEDs -->
+      <line x1="10" y1="38" x2="50" y2="38" stroke="#475569" stroke-width="1" />
+      <circle cx="16" cy="26" r="1.5" fill="#22C55E" /><circle cx="22" cy="26" r="1.5" fill="#22C55E" />
+      <polygon points="40,24 45,24 42.5,29" fill="#EAB308" />
+      <line x1="10" y1="64" x2="50" y2="64" stroke="#475569" stroke-width="1" />
+      <circle cx="16" cy="52" r="1.5" fill="#22C55E" /><circle cx="22" cy="52" r="1.5" fill="#22C55E" />
+      <line x1="10" y1="90" x2="50" y2="90" stroke="#475569" stroke-width="1" />
+      <circle cx="16" cy="78" r="1.5" fill="#22C55E" /><circle cx="22" cy="78" r="1.5" fill="#22C55E" />
+      <circle cx="16" cy="104" r="1.5" fill="#22C55E" /><circle cx="22" cy="104" r="1.5" fill="#22C55E" />
+      <rect x="48" y="60" width="2" height="14" rx="0.5" fill="#E2E8F0" />
     `
   },
 
@@ -1431,11 +1938,14 @@ export const DC_COMPONENT_CATEGORIES: DcComponentCategoryGroup[] = [
     icon: '🖥️',
     subCategories: [
       { id: 'all', label: 'All Cabinets' },
-      { id: 'server', label: 'Server & HD Racks' },
+      { id: 'server', label: 'Single Door Server Racks' },
+      { id: 'twin_doors', label: 'Twin / Split Wardrobe Doors' },
+      { id: 'honeycomb', label: 'Honeycomb High-Airflow' },
+      { id: 'glass_solid', label: 'Glass & Solid Acoustic' },
       { id: 'network', label: 'Network & Open Frame' },
       { id: 'colo', label: 'Colocation Multi-Bay' },
-      { id: 'enclosure', label: 'Wall Mount & Edge' },
-      { id: 'battery', label: 'Battery & Power Racks' }
+      { id: 'enclosure', label: 'Wall Mount & Micro-DC' },
+      { id: 'battery', label: 'Battery & Power Storage' }
     ],
     items: ALL_DC_COMPONENTS.filter(c => c.category === 'racks')
   },
@@ -1523,11 +2033,15 @@ export const DC_COMPONENT_CATEGORIES: DcComponentCategoryGroup[] = [
   }
 ];
 
-export function getDcComponentGraphicSvg(componentId: string, width = 75, height = 24): string {
+export function getDcComponentGraphicSvg(componentId: string, width?: number, height?: number): string {
   const item = ALL_DC_COMPONENTS.find(c => c.id === componentId) || ALL_DC_COMPONENTS[0];
   const vb = item.viewBox || '0 0 60 32';
+  const defaultW = item.category === 'racks' ? 70 : 75;
+  const defaultH = item.category === 'racks' ? 115 : 24;
+  const w = width ?? defaultW;
+  const h = height ?? defaultH;
   return `
-    <svg viewBox="${vb}" width="${width}" height="${height}" fill="none" xmlns="http://www.w3.org/2000/svg" style="overflow:visible; display:block;">
+    <svg viewBox="${vb}" width="${w}" height="${h}" fill="none" xmlns="http://www.w3.org/2000/svg" style="overflow:visible; display:block;">
       <g filter="url(#dc-hw-drop-shadow)">
         ${item.svgInner}
       </g>
