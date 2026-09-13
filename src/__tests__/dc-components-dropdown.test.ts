@@ -45,7 +45,7 @@ describe('Datacenter Components & Ducts Dropdown', () => {
 
     const selectorPill = toolbarEl?.querySelector('#dc-ft-component-selector-btn');
     expect(selectorPill).not.toBeNull();
-    expect(selectorPill?.textContent).toContain('Standard Server Rack');
+    expect(selectorPill?.textContent).toContain('Standard Perforated Door Rack');
     expect(selectorPill?.textContent).toContain('SR-42U');
   });
 
@@ -104,4 +104,31 @@ describe('Datacenter Components & Ducts Dropdown', () => {
     expect(perimeterTitles).toContain('CRAC Unit (Direct Expansion DX)');
     expect(perimeterTitles).toContain('CRAH Unit (Chilled Water CW)');
   });
+
+  it('includes 15 high-fidelity rack types categorized across 5 rack subcategories', () => {
+    const rackCat = DC_COMPONENT_CATEGORIES.find(c => c.id === 'racks');
+    expect(rackCat).toBeDefined();
+    expect(rackCat?.items.length).toBe(15); // 15 distinct rack models
+
+    const subCatIds = rackCat?.subCategories?.map(s => s.id);
+    expect(subCatIds).toEqual(['all', 'server', 'network', 'colo', 'enclosure', 'battery']);
+
+    const rackCodes = rackCat?.items.map(i => i.code);
+    expect(rackCodes).toContain('SR-42U');
+    expect(rackCodes).toContain('SR-DUAL');
+    expect(rackCodes).toContain('SR-HNYCMB');
+    expect(rackCodes).toContain('SR-GLASS');
+    expect(rackCodes).toContain('HD-CHIMNEY');
+    expect(rackCodes).toContain('NR-2POST');
+    expect(rackCodes).toContain('NR-4POST');
+    expect(rackCodes).toContain('NR-SW800');
+    expect(rackCodes).toContain('COLO-2BAY');
+    expect(rackCodes).toContain('COLO-4BAY');
+    expect(rackCodes).toContain('WM-GLASS');
+    expect(rackCodes).toContain('WM-SWING');
+    expect(rackCodes).toContain('MICRO-DC');
+    expect(rackCodes).toContain('BATT-OPEN');
+    expect(rackCodes).toContain('BATT-ENC');
+  });
 });
+
