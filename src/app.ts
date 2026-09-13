@@ -21,6 +21,7 @@ import { ReportsPanel } from './components/reports-panel';
 import { FloatingToolbar } from './components/floating-toolbar';
 import { ReportsFloat } from './components/reports-float';
 import { CloudFloatingToolbar } from './components/cloud-floating-toolbar';
+import { DcFloatingToolbar } from './components/dc-floating-toolbar';
 import { NotificationCenter } from './components/notifications';
 import { ensureSvgDefs } from './components/cable-graphics';
 import { TextToolPanel } from './components/text-tool-panel';
@@ -98,6 +99,7 @@ export class App {
   private contextMenu!: ContextMenu;
   private floatingToolbar!: FloatingToolbar;
   private cloudFloatingToolbar!: CloudFloatingToolbar;
+  private dcFloatingToolbar!: DcFloatingToolbar;
   /** Guards the Hybrid "Merged" sub-mode's pan/zoom mirror (see setHybridTransformSync) against
    *  re-entrant ping-pong — setTransform() on either manager re-emits that manager's own
    *  *:transformed event, which would otherwise bounce back into the other manager's
@@ -412,11 +414,12 @@ export class App {
     // hidden/shown alongside the rest of that view (see setActiveView()'s .hidden toggling).
     this.cloudFloatingToolbar = new CloudFloatingToolbar();
 
-    // Initialize Datacenter Build Floor view
+    // Initialize Datacenter Build Floor view & Floating Toolbar
     const dcViewportEl = document.getElementById('dc-viewport');
     if (dcViewportEl) {
       this.buildFloorView = new BuildFloorView(dcViewportEl);
     }
+    this.dcFloatingToolbar = new DcFloatingToolbar();
 
     // Initialize the draggable Reports float panel (Cable Types + Rack Load Summary).
     // Mounted inside #canvas-viewport so it sits over the rack canvas only.

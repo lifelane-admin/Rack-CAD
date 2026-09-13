@@ -867,6 +867,22 @@ export interface AppEvents {
   'image:insert': void;
   'imageasset:update': { id: string; data: Partial<ImageAsset> };
   'view:switch': 'rack' | 'cloud' | 'hybrid' | 'datacenter';
+  'dc:set-tool': 'select' | 'pan';
+  'dc:set-view': '2d' | '3d';
+  'dc:rotate-2d': void;
+  'dc:toggle-xray': void;
+  'dc:toggle-grid': void;
+  'dc:toggle-snap': void;
+  'dc:toggle-grid-lock': void;
+  'dc:toggle-labels': void;
+  'dc:fit': void;
+  'dc:zoom-in': void;
+  'dc:zoom-out': void;
+  'dc:work-rack': string;
+  'dc:add-preset': string;
+  'dc:add-row': void;
+  'dc:new-floor': void;
+  'dc:toggle-left-panel': void;
   /** Primes the cloud-container draw tool with a specific boundary kind (Region/AZ/VPC/Subnet/
    *  Resource Group/Account) — the dedicated toolbar shape buttons, as opposed to dropping a
    *  boundary-type palette icon (which also primes the same tool, see isBoundaryIcon()). */

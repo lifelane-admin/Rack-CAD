@@ -237,11 +237,21 @@ export class FloatingToolbar {
     ];
 
     this.element.innerHTML = `
-      <!-- Row 1: Drag handle, Select, Rotate, Move, Undo, Redo, Delete, Anchors, Inserts, 2D/3D -->
+      <!-- Row 1: Drag handle, Swap to Datacenter, Select, Rotate, Move, Undo, Redo, Delete, Anchors, Inserts, 2D/3D -->
       <div class="ft-row" id="ft-row-1">
         <div class="ft-drag-handle" title="Drag to reposition toolbar">
           <span class="ft-drag-dots">⋮⋮</span>
         </div>
+
+        <div class="ft-separator"></div>
+
+        <!-- Swap to Datacenter View Button -->
+        <button class="dc-ft-swap-btn" id="ft-swap-datacenter" title="Swap View: Switch directly to Datacenter Floor Plan (2D/3D Data Hall)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+            <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4"/>
+          </svg>
+          <span>⇄ Datacenter Floor</span>
+        </button>
 
         <div class="ft-separator"></div>
 
@@ -447,6 +457,10 @@ export class FloatingToolbar {
 
   private bindEvents() {
     if (!this.element) return;
+
+    this.element.querySelector('#ft-swap-datacenter')?.addEventListener('click', () => {
+      EventBus.emit('view:switch', 'datacenter');
+    });
 
     this.element.querySelector('#ft-tool-select')?.addEventListener('click', () => {
       EventBus.emit('tool:changed', 'select');

@@ -382,10 +382,50 @@ export class BuildFloorView {
     this.bindButtons();
     this.bindCanvasEvents();
     this.bindKeyboardEvents();
+    this.bindEventBusEvents();
     this.resize();
     window.addEventListener('resize', () => this.resize());
     dcState.subscribe(() => this.refresh());
     this.refresh();
+  }
+
+  private bindEventBusEvents() {
+    eventBus.on('dc:set-tool', (mode) => this.setToolMode(mode));
+    eventBus.on('dc:set-view', (mode) => this.setViewMode(mode));
+    eventBus.on('dc:rotate-2d', () => this.rotate2DView());
+    eventBus.on('dc:toggle-xray', () => this.toggleXrayMode());
+    eventBus.on('dc:toggle-grid', () => { dcState.setState({ gridVisible: !dcState.getState().gridVisible }); });
+    eventBus.on('dc:toggle-snap', () => { dcState.setState({ snapEnabled: !dcState.getState().snapEnabled }); });
+    eventBus.on('dc:toggle-grid-lock', () => {
+      this.strictGridOnly = !this.strictGridOnly;
+      if (this.strictGridOnly) dcState.setState({ snapEnabled: true });
+      this.updateButtonStates();
+      this.draw();
+    });
+    eventBus.on('dc:toggle-labels', () => { dcState.setState({ labelsVisible: !dcState.getState().labelsVisible }); });
+    eventBus.on('dc:fit', () => {
+      const s = dcState.getState();
+      if (s.selectedRackId) this.zoomToSelectedRack();
+      else if (s.viewMode === '3d') this.set3DCameraPreset('iso');
+      else this.fitToFloor();
+    });
+    eventBus.on('dc:zoom-in', () => {
+      if (dcState.getState().viewMode === '3d') this.zoom3D(0.8);
+      else this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 1.25);
+    });
+    eventBus.on('dc:zoom-out', () => {
+      if (dcState.getState().viewMode === '3d') this.zoom3D(1.25);
+      else this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 0.8);
+    });
+    eventBus.on('dc:work-rack', (rackId) => {
+      const floor = dcState.getActiveFloor();
+      const rack = floor?.racks.find(r => r.id === rackId);
+      if (rack) this.workOnRack(rack);
+    });
+    eventBus.on('dc:add-preset', (presetId) => this.addEquipmentFromCatalog(presetId));
+    eventBus.on('dc:add-row', () => this.showAddRowDialog());
+    eventBus.on('dc:new-floor', () => this.showCreateFloorDialog());
+    eventBus.on('dc:toggle-left-panel', () => this.toggleLeftPanel());
   }
 
   private setToolMode(mode: 'select' | 'pan') {
