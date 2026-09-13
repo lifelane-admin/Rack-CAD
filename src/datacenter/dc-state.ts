@@ -255,11 +255,11 @@ class DcStateManager {
     this.updateFloor(floor.id, { tiles });
   }
 
-  setFloorTileType(tileId: string, type: DcTileType, airflowDir?: DcAirflowDirection): void {
-    this.setFloorTilesType([tileId], type, airflowDir);
+  setFloorTileType(tileId: string, type: DcTileType, airflowDir?: DcAirflowDirection, airChannelHeightMm?: number): void {
+    this.setFloorTilesType([tileId], type, airflowDir, airChannelHeightMm);
   }
 
-  setFloorTilesType(tileIds: string[], type: DcTileType, airflowDir?: DcAirflowDirection): void {
+  setFloorTilesType(tileIds: string[], type: DcTileType, airflowDir?: DcAirflowDirection, airChannelHeightMm?: number): void {
     const floor = this.getActiveFloor();
     if (!floor || !tileIds.length) return;
     const idSet = new Set(tileIds);
@@ -268,7 +268,8 @@ class DcStateManager {
         return {
           ...t,
           type,
-          airflowDir: type === 'air-channel' ? (airflowDir || 'north') : undefined,
+          airflowDir: type === 'air-channel' ? (airflowDir || t.airflowDir || 'north') : undefined,
+          airChannelHeightMm: type === 'air-channel' ? (airChannelHeightMm || t.airChannelHeightMm || 300) : undefined,
         };
       }
       return t;
@@ -286,16 +287,20 @@ class DcStateManager {
   updateInfrastructureItem(itemId: string, partial: Partial<DcInfrastructureItem>): void {
     const floor = this.getActiveFloor();
     if (!floor || !floor.infrastructure) return;
-    const infrastructure = floor.infrastructure.map(i => i.id === itemId ? { ...i, ...partial } : i);
+    const baseId = itemId.includes('_sub') ? itemId.split('_sub')[0] : itemId;
+    const infrastructure = floor.infrastructure.map(i => (i.id === itemId || i.id === baseId) ? { ...i, ...partial } : i);
     this.updateFloor(floor.id, { infrastructure });
   }
 
   deleteInfrastructureItem(itemId: string): void {
     const floor = this.getActiveFloor();
     if (!floor || !floor.infrastructure) return;
-    const infrastructure = floor.infrastructure.filter(i => i.id !== itemId);
+    const baseId = itemId.includes('_sub') ? itemId.split('_sub')[0] : itemId;
+    const infrastructure = floor.infrastructure.filter(i => i.id !== itemId && i.id !== baseId);
     this.updateFloor(floor.id, { infrastructure });
-    if (this.state.selectedInfraId === itemId) this.setState({ selectedInfraId: null });
+    if (this.state.selectedInfraId === itemId || this.state.selectedInfraId === baseId) {
+      this.setState({ selectedInfraId: null });
+    }
   }
 
   rebuildTiles(): void {

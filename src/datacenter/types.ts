@@ -13,6 +13,7 @@ export interface DcFloorTile {
   type: DcTileType;
   airflowDir?: DcAirflowDirection;
   plenumDepthMm?: number;
+  airChannelHeightMm?: number; // default 300mm to prevent obstruction of underfloor raceways
 }
 
 export type DcSpaceType = 'white-space' | 'grey-space';
@@ -32,6 +33,39 @@ export type DcEquipmentCategory =
 export type DcInfraCategory = 'cable-tray' | 'cable-duct' | 'power-cable' | 'data-cable' | 'conduit' | 'riser' | 'busway' | 'fiber-raceway' | 'containment';
 export type DcInfraLayer = 'underfloor' | 'ceiling' | 'overhead';
 
+export type DcRacewayFittingType =
+  | 'straight'
+  | 'coupling'
+  | 'elbow-90'
+  | 'elbow-45'
+  | 'tee-joint'
+  | 'cross-joint'
+  | 'reducing-coupling'
+  | 'waterfall-outlet'
+  | 'upper-bend-45'
+  | 'down-bend-45'
+  | 'end-cap';
+
+export interface DcRacewayJunctionNode {
+  id: string;
+  x: number; // meters
+  y: number; // meters
+  elevationMm: number;
+  layer: DcInfraLayer;
+  fittingType: DcRacewayFittingType;
+  category: DcInfraCategory;
+  subtype: string;
+  widthMm: number;
+  heightMm: number;
+  angles: number[]; // Direction angles of connected branches in radians (0 to 2PI)
+  connectedInfraIds: string[];
+  rackId?: string; // Associated rack for waterfall drops
+  color?: string;
+  rotationY?: number;
+  branchAngle?: number;
+  branchVectors?: Array<{ x: number; z: number }>;
+}
+
 export interface DcInfrastructureItem {
   id: string;
   name: string;
@@ -42,8 +76,10 @@ export interface DcInfrastructureItem {
   end: { x: number; y: number; z: number };   // meters
   widthMm: number;
   heightMm: number;
-  elevationMm: number; // depth below raised floor (e.g. -200mm) or height overhead (e.g. 2400mm)
+  elevationMm: number; // depth below raised floor (e.g. -400mm on slab) or height overhead (e.g. 2600mm)
+  mountType?: 'slab-resting' | 'bracket' | 'trapeze';
   color?: string;
+  parentItemId?: string;
   notes?: string;
   amperage?: number;
   capacityKw?: number;

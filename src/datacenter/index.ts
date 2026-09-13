@@ -14,6 +14,10 @@ export type {
   DcInfrastructureItem,
   DcInfraCategory,
   DcInfraLayer,
+  DcRacewayFittingType,
+  DcRacewayJunctionNode,
 } from './types';
 export { RACK_PRESETS, SPACING_STANDARDS } from './standards';
 export { DATACENTER_CATALOG, CATEGORY_DEFINITIONS, type CatalogItemPreset } from './catalog';
+export { solveRacewayTopology, getRacewayTheme } from './raceway-topology';
+

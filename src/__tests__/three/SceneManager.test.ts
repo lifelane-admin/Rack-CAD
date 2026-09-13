@@ -99,6 +99,7 @@ vi.mock('../../three/cable-builder', () => ({
 
 vi.mock('../../library/device-catalog', () => ({
   getTemplate: vi.fn().mockReturnValue({ id: 'tmpl', heightUnits: 2, color: '#ccc', category: 'server' }),
+  setCustomTemplatesProvider: vi.fn(),
 }));
 
 import { SceneManager } from '../../three/SceneManager';

@@ -47,7 +47,7 @@ describe('Startup modal', () => {
     });
   });
 
-  it('appears automatically on app.init() with all five choices', async () => {
+  it('appears automatically on app.init() with all choices', async () => {
     mountAppSkeleton();
     const { App } = await import('../app');
     const app = new App();
@@ -56,7 +56,7 @@ describe('Startup modal', () => {
     const modal = document.getElementById('startup-modal');
     expect(modal).not.toBeNull();
     const choices = [...modal!.querySelectorAll('.startup-card')].map(el => (el as HTMLElement).dataset.choice);
-    expect(choices).toEqual(['rack', 'aws', 'azure', 'gcp', 'hybrid']);
+    expect(choices).toEqual(['rack', 'datacenter', 'aws', 'azure', 'gcp', 'hybrid']);
   });
 
   it('picking "Rack Design" closes the modal and switches to the rack view', async () => {

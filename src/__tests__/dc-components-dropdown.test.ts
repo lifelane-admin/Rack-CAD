@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { ALL_DC_COMPONENTS, DC_COMPONENT_CATEGORIES, getDcComponentGraphicSvg, getDcComponentBadgeSvg } from '../components/dc-component-graphics';
 import { dcState } from '../datacenter/dc-state';
 import { DcFloatingToolbar } from '../components/dc-floating-toolbar';
+import EventBus from '../core/event-bus';
 
 describe('Datacenter Components & Ducts Dropdown', () => {
   beforeEach(() => {
@@ -150,5 +151,159 @@ describe('Datacenter Components & Ducts Dropdown', () => {
     expect(rackCodes).toContain('BATT-OPEN');
     expect(rackCodes).toContain('BATT-ENC');
   });
+
+  it('triggers pathway laying mode when a duct or pathway component is selected', () => {
+    const toolbar = new DcFloatingToolbar();
+    let pathwayEventDetail: any = null;
+    EventBus.on('dc:start-lay-pathway', (detail: any) => {
+      pathwayEventDetail = detail;
+    });
+
+    const ufDuctItem = ALL_DC_COMPONENTS.find(c => c.id === 'duct-uf-cable')!;
+    expect(ufDuctItem).toBeDefined();
+
+    (toolbar as any).handlePathwaySelection(ufDuctItem);
+
+    expect(pathwayEventDetail).not.toBeNull();
+    expect(pathwayEventDetail.comp.id).toBe('duct-uf-cable');
+    expect(pathwayEventDetail.layer).toBe('underfloor');
+    expect(pathwayEventDetail.widthMm).toBe(400);
+
+    // Simulate tool-started event emitted by BuildFloorView
+    EventBus.emit('dc:tool-started' as any, {
+      mode: 'lay-pathway',
+      compName: ufDuctItem.name,
+      icon: '⚡',
+      layer: 'underfloor',
+      elevMm: -250,
+    });
+
+    // Check that active tool banner is rendered in toolbar
+    const banner = document.querySelector('.dc-active-tool-banner');
+    expect(banner).not.toBeNull();
+    expect(banner?.textContent).toContain('LAYING PATHWAY CHANNEL');
+    expect(banner?.textContent).toContain('Underfloor Cable Duct');
+    expect(banner?.textContent).toContain('Cancel (Esc)');
+  });
+
+  it('triggers equipment placement stamping mode when a rack or cooling unit is selected', () => {
+    const toolbar = new DcFloatingToolbar();
+    let placementEventDetail: any = null;
+    EventBus.on('dc:start-place-equipment', (detail: any) => {
+      placementEventDetail = detail;
+    });
+
+    const rackItem = ALL_DC_COMPONENTS.find(c => c.id === 'rack-server-42u')!;
+    expect(rackItem).toBeDefined();
+
+    (toolbar as any).handleGenericEquipmentPlacement(rackItem);
+
+    expect(placementEventDetail).not.toBeNull();
+    expect(placementEventDetail.comp.id).toBe('rack-server-42u');
+    expect(placementEventDetail.comp.widthMm).toBe(600);
+    expect(placementEventDetail.comp.depthMm).toBe(1000);
+
+    // Simulate tool-started event emitted by BuildFloorView
+    EventBus.emit('dc:tool-started' as any, {
+      mode: 'place-equipment',
+      compName: rackItem.name,
+      icon: '📦',
+    });
+
+    const banner = document.querySelector('.dc-active-tool-banner');
+    expect(banner).not.toBeNull();
+    expect(banner?.textContent).toContain('PLACING EQUIPMENT');
+    expect(banner?.textContent).toContain('Standard Perforated Door Rack');
+    expect(banner?.textContent).toContain('Cancel (Esc)');
+  });
+
+  it('clears active tool mode when cancelling or finishing', () => {
+    const toolbar = new DcFloatingToolbar();
+    const rackItem = ALL_DC_COMPONENTS.find(c => c.id === 'rack-server-42u')!;
+    
+    EventBus.emit('dc:tool-started' as any, {
+      mode: 'place-equipment',
+      compName: rackItem.name,
+      icon: '📦',
+    });
+
+    expect(document.querySelector('.dc-active-tool-banner')).not.toBeNull();
+
+    // Trigger tool ended / cancel
+    EventBus.emit('dc:tool-ended' as any, undefined);
+    expect((toolbar as any).activeToolInfo).toBeNull();
+    expect(document.querySelector('.dc-active-tool-banner')).toBeNull();
+  });
+
+  it('allows selecting an infrastructure raceway and switching type to PVC or Wire Mesh', () => {
+    const floor = dcState.getActiveFloor()!;
+    const infraId = 'INFRA-TEST-001';
+    dcState.addInfrastructureItem({
+      id: infraId,
+      name: 'Main Cable Duct',
+      category: 'cable-duct',
+      layer: 'underfloor',
+      subtype: 'solid-duct',
+      start: { x: 1, y: 1, z: -0.4 },
+      end: { x: 5, y: 1, z: -0.4 },
+      widthMm: 400,
+      heightMm: 80,
+      elevationMm: -410,
+    });
+
+    dcState.setState({ selectedInfraId: infraId, selectedRackId: null, selectedTileId: null });
+
+    const toolbar = new DcFloatingToolbar();
+    const pvcBtn = document.querySelector('#dc-ft-infra-pvc') as HTMLButtonElement;
+    expect(pvcBtn).not.toBeNull();
+
+    pvcBtn.click();
+
+    const updated = dcState.getActiveFloor()?.infrastructure?.find(i => i.id === infraId);
+    expect(updated?.subtype).toBe('pvc-duct');
+    expect(updated?.name).toBe('PVC Cable Duct');
+  });
+
+  it('sticks underfloor raceways to concrete subfloor slab', () => {
+    const floor = dcState.getActiveFloor()!;
+    const infraId = 'INFRA-TEST-002';
+    dcState.addInfrastructureItem({
+      id: infraId,
+      name: 'Server Row Tray',
+      category: 'cable-tray',
+      layer: 'underfloor',
+      subtype: 'basket-tray',
+      start: { x: 2, y: 2, z: -0.2 },
+      end: { x: 8, y: 2, z: -0.2 },
+      widthMm: 300,
+      heightMm: 80,
+      elevationMm: -220,
+    });
+
+    dcState.setState({ selectedInfraId: infraId });
+
+    const toolbar = new DcFloatingToolbar();
+    const stickBtn = document.querySelector('#dc-ft-infra-stick') as HTMLButtonElement;
+    expect(stickBtn).not.toBeNull();
+
+    stickBtn.click();
+
+    const updated = dcState.getActiveFloor()?.infrastructure?.find(i => i.id === infraId);
+    expect(updated?.mountType).toBe('slab-resting');
+    const plenumDepth = floor.raisedFloorHeightMm || 450;
+    expect(updated?.elevationMm).toBe(-(plenumDepth - 40));
+  });
+
+  it('sets air channel tiles to 300mm default height to prevent raceway obstruction', () => {
+    const floor = dcState.getActiveFloor()!;
+    const tile = floor.tiles[0];
+    dcState.setFloorTileType(tile.id, 'air-channel', 'north');
+
+    const updatedTile = dcState.getActiveFloor()?.tiles.find(t => t.id === tile.id);
+    expect(updatedTile?.type).toBe('air-channel');
+    expect(updatedTile?.airflowDir).toBe('north');
+    expect(updatedTile?.airChannelHeightMm).toBe(300);
+  });
 });
+
 

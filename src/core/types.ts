@@ -883,6 +883,11 @@ export interface AppEvents {
   'dc:add-row': void;
   'dc:new-floor': void;
   'dc:toggle-left-panel': void;
+  'dc:start-lay-pathway': any;
+  'dc:start-place-equipment': any;
+  'dc:cancel-tool': void;
+  'dc:tool-started': any;
+  'dc:tool-ended': void;
   /** Primes the cloud-container draw tool with a specific boundary kind (Region/AZ/VPC/Subnet/
    *  Resource Group/Account) — the dedicated toolbar shape buttons, as opposed to dropping a
    *  boundary-type palette icon (which also primes the same tool, see isBoundaryIcon()). */

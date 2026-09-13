@@ -27,6 +27,7 @@ vi.mock('../library/device-catalog', () => ({
   getTemplate: vi.fn((id: string) =>
     id === 'pdu-1u' ? { heightUnits: 1, category: 'pdu', powerWatts: 0 } : { heightUnits: 2, category: 'server' }
   ),
+  setCustomTemplatesProvider: vi.fn(),
 }));
 
 const makeState = (overrides: Partial<any> = {}): any => ({

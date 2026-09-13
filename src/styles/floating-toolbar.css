@@ -1427,3 +1427,107 @@ body.hybrid-merged #cloud-floating-toolbar {
   color: #ffffff;
   box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
 }
+
+/* ── Active Drawing / Placement Tool Banner in Toolbar Row 2 ── */
+.dc-active-tool-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(90deg, rgba(2, 132, 199, 0.22) 0%, rgba(14, 165, 233, 0.12) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: 12px;
+  padding: 4px 10px;
+  animation: dcPulseBorder 2s infinite ease-in-out;
+}
+
+@keyframes dcPulseBorder {
+  0%, 100% { border-color: rgba(56, 189, 248, 0.45); box-shadow: 0 0 12px rgba(56, 189, 248, 0.15); }
+  50% { border-color: rgba(56, 189, 248, 0.85); box-shadow: 0 0 20px rgba(56, 189, 248, 0.35); }
+}
+
+.dc-active-tool-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-active-tool-icon {
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: dcSpinSlow 3s linear infinite;
+}
+
+.dc-active-tool-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dc-active-tool-title {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: #38bdf8;
+  text-transform: uppercase;
+}
+
+.dc-active-tool-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.dc-ft-layer-capsule {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.dc-ft-layer-btn {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dc-ft-layer-btn:hover {
+  color: #ffffff;
+}
+
+.dc-ft-layer-btn.active {
+  background: #0284c7;
+  color: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.dc-ft-cancel-btn {
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.dc-ft-cancel-btn:hover {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+}

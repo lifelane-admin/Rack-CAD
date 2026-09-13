@@ -47,6 +47,13 @@ export class DcFloatingToolbar {
   private activeSubCategoryTab = 'all';
   private componentSearchQuery = '';
   private selectedComponentId = 'rack-server-42u';
+  private activeToolInfo: {
+    mode: 'lay-pathway' | 'place-equipment';
+    compName: string;
+    icon: string;
+    layer?: 'underfloor' | 'overhead';
+    elevMm?: number;
+  } | null = null;
 
   constructor() {
     const savedX = localStorage.getItem(DC_FT_STORAGE_X);
@@ -87,6 +94,16 @@ export class DcFloatingToolbar {
     });
 
     EventBus.on('view:changed', () => {
+      this.render();
+    });
+
+    EventBus.on('dc:tool-started' as any, (info: any) => {
+      this.activeToolInfo = info;
+      this.render();
+    });
+
+    EventBus.on('dc:tool-ended' as any, () => {
+      this.activeToolInfo = null;
       this.render();
     });
 
@@ -213,6 +230,9 @@ export class DcFloatingToolbar {
 
     // Build Row 2 HTML dynamically based on selection context
     let row2Html = '';
+    const selectedInfra = (s.selectedInfraId && floor?.infrastructure)
+      ? floor.infrastructure.find(i => i.id === s.selectedInfraId)
+      : null;
 
     if (selectedRack) {
       const tileM = (floor?.tileSizeMm || 600) / 1000;
@@ -266,6 +286,55 @@ export class DcFloatingToolbar {
           </button>
 
           <button class="ft-btn ft-btn-danger" id="dc-ft-rack-delete" title="Delete Rack">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
+      `;
+    } else if (this.activeToolInfo) {
+      const isLaying = this.activeToolInfo.mode === 'lay-pathway';
+      row2Html = `
+        <div class="dc-ft-context-group dc-active-tool-banner">
+          <div class="dc-active-tool-pill">
+            <span class="dc-active-tool-icon">${this.activeToolInfo.icon || '⚡'}</span>
+            <div class="dc-active-tool-texts">
+              <span class="dc-active-tool-title">${isLaying ? 'LAYING PATHWAY CHANNEL' : 'PLACING EQUIPMENT'}</span>
+              <span class="dc-active-tool-name">${this.activeToolInfo.compName}</span>
+            </div>
+          </div>
+          ${isLaying ? `
+            <div class="dc-ft-layer-capsule">
+              <button class="dc-ft-layer-btn ${this.activeToolInfo.layer === 'underfloor' ? 'active' : ''}" id="dc-ft-tool-uf" title="Switch to Underfloor Pathway Level (-250mm)">Underfloor</button>
+              <button class="dc-ft-layer-btn ${this.activeToolInfo.layer === 'overhead' ? 'active' : ''}" id="dc-ft-tool-oh" title="Switch to Overhead Pathway Level (+2600mm)">Overhead</button>
+            </div>
+          ` : ''}
+          <div class="ft-separator"></div>
+          <button class="dc-ft-cancel-btn" id="dc-ft-cancel-tool" title="Cancel drawing/placement mode (Esc)">
+            ✕ Done / Cancel (Esc)
+          </button>
+        </div>
+      `;
+    } else if (selectedInfra) {
+      const isUF = selectedInfra.layer === 'underfloor';
+      const sub = selectedInfra.subtype || (selectedInfra.category === 'cable-duct' ? 'pvc-duct' : 'basket-tray');
+      row2Html = `
+        <div class="dc-ft-context-group">
+          <div class="dc-ft-item-badge">
+            <span class="dc-ft-badge-dot" style="background:${selectedInfra.color || (isUF ? '#94a3b8' : '#eab308')};"></span>
+            <span class="dc-ft-badge-title">⚡ ${selectedInfra.name}</span>
+            <span class="dc-ft-badge-sub">${selectedInfra.widthMm}mm W • ${selectedInfra.layer.toUpperCase()}</span>
+          </div>
+
+          <div class="ft-separator"></div>
+
+          <button class="dc-ft-pill-btn ${sub === 'pvc-duct' ? 'active' : ''}" id="dc-ft-infra-pvc" title="Switch to PVC Solid Duct">⚡ PVC Duct</button>
+          <button class="dc-ft-pill-btn ${sub === 'basket-tray' ? 'active' : ''}" id="dc-ft-infra-mesh" title="Switch to Wire Basket Tray">⚡ Wire Mesh</button>
+          <button class="dc-ft-pill-btn ${sub === 'solid-duct' ? 'active' : ''}" id="dc-ft-infra-solid" title="Switch to Galvanized Solid Duct">⚡ Solid Steel</button>
+          <button class="dc-ft-pill-btn ${sub === 'fiber-raceway' ? 'active' : ''}" id="dc-ft-infra-fiber" title="Switch to Yellow Fiber Optic Raceway">⚡ Fiber Raceway</button>
+          <button class="dc-ft-pill-btn" id="dc-ft-infra-stick" title="Stick firmly to concrete slab subfloor">⚓ Stick to Slab</button>
+
+          <button class="ft-btn ft-btn-danger" id="dc-ft-infra-delete" title="Delete Raceway">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
             </svg>
@@ -799,6 +868,48 @@ export class DcFloatingToolbar {
       }
     }
 
+    // Row 2 Infrastructure Actions
+    if (s.selectedInfraId && floor?.infrastructure) {
+      const item = floor.infrastructure.find(i => i.id === s.selectedInfraId);
+      if (item) {
+        this.element.querySelector('#dc-ft-infra-pvc')?.addEventListener('click', () => {
+          dcState.updateInfrastructureItem(item.id, { subtype: 'pvc-duct', category: 'cable-duct', name: 'PVC Cable Duct' });
+          EventBus.emit('notification', { message: 'Swapped pathway to PVC Solid Duct.', type: 'success' });
+        });
+
+        this.element.querySelector('#dc-ft-infra-mesh')?.addEventListener('click', () => {
+          dcState.updateInfrastructureItem(item.id, { subtype: 'basket-tray', category: 'cable-tray', name: 'Wire Basket Tray' });
+          EventBus.emit('notification', { message: 'Swapped pathway to Wire Basket Tray.', type: 'success' });
+        });
+
+        this.element.querySelector('#dc-ft-infra-solid')?.addEventListener('click', () => {
+          dcState.updateInfrastructureItem(item.id, { subtype: 'solid-duct', category: 'cable-duct', name: 'Galvanized Solid Duct' });
+          EventBus.emit('notification', { message: 'Swapped pathway to Solid Steel Duct.', type: 'success' });
+        });
+
+        this.element.querySelector('#dc-ft-infra-fiber')?.addEventListener('click', () => {
+          dcState.updateInfrastructureItem(item.id, { subtype: 'fiber-raceway', category: 'fiber-raceway', name: 'Yellow Fiber Optic Raceway' });
+          EventBus.emit('notification', { message: 'Swapped pathway to Yellow Fiber Raceway.', type: 'success' });
+        });
+
+        this.element.querySelector('#dc-ft-infra-stick')?.addEventListener('click', () => {
+          const plenumDepthMm = floor.raisedFloorHeightMm || 450;
+          dcState.updateInfrastructureItem(item.id, {
+            layer: 'underfloor',
+            mountType: 'slab-resting',
+            elevationMm: -(plenumDepthMm - (item.heightMm || 80) / 2),
+          });
+          EventBus.emit('notification', { message: 'Anchored raceway directly to concrete slab subfloor.', type: 'success' });
+        });
+
+        this.element.querySelector('#dc-ft-infra-delete')?.addEventListener('click', () => {
+          if (confirm(`Delete raceway "${item.name}"?`)) {
+            dcState.deleteInfrastructureItem(item.id);
+          }
+        });
+      }
+    }
+
     // Row 2 Tile Actions
     const selectedTileIds = Array.isArray(s.selectedTileIds) ? s.selectedTileIds : (s.selectedTileId ? [s.selectedTileId] : []);
     if (selectedTileIds.length > 0 && !s.selectedRackId) {
@@ -827,16 +938,54 @@ export class DcFloatingToolbar {
       });
     }
 
+    // Active Tool Controls (Cancel and Layer switches)
+    if (this.activeToolInfo) {
+      this.element.querySelector('#dc-ft-cancel-tool')?.addEventListener('click', () => {
+        EventBus.emit('dc:cancel-tool', undefined);
+      });
+
+      this.element.querySelector('#dc-ft-tool-uf')?.addEventListener('click', () => {
+        if (this.activeToolInfo) {
+          const curComp = ALL_DC_COMPONENTS.find(c => c.name === this.activeToolInfo?.compName);
+          EventBus.emit('dc:start-lay-pathway', {
+            comp: curComp,
+            name: this.activeToolInfo.compName,
+            layer: 'underfloor',
+            elevationMm: -250,
+            widthMm: 400,
+          });
+        }
+      });
+
+      this.element.querySelector('#dc-ft-tool-oh')?.addEventListener('click', () => {
+        if (this.activeToolInfo) {
+          const curComp = ALL_DC_COMPONENTS.find(c => c.name === this.activeToolInfo?.compName);
+          EventBus.emit('dc:start-lay-pathway', {
+            comp: curComp,
+            name: this.activeToolInfo.compName,
+            layer: 'overhead',
+            elevationMm: 2600,
+            widthMm: 400,
+          });
+        }
+      });
+    }
+
     // Row 2 Quick Add Presets
     this.element.querySelectorAll('.dc-ft-quick-btn[data-preset]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const presetId = (e.currentTarget as HTMLElement).getAttribute('data-preset');
         if (presetId) {
-          if (presetId.startsWith('duct-')) {
+          if (presetId.startsWith('duct-') || presetId.startsWith('tray-')) {
             const comp = ALL_DC_COMPONENTS.find(c => c.id === presetId);
             if (comp) this.handlePathwaySelection(comp);
           } else {
-            EventBus.emit('dc:add-preset', presetId);
+            const comp = ALL_DC_COMPONENTS.find(c => c.id === presetId || c.presetId === presetId);
+            if (comp) {
+              this.handleGenericEquipmentPlacement(comp);
+            } else {
+              EventBus.emit('dc:start-place-equipment', { presetId });
+            }
           }
         }
       });
@@ -937,69 +1086,25 @@ export class DcFloatingToolbar {
   }
 
   private handlePathwaySelection(comp: DcComponentItem) {
-    const floor = dcState.getActiveFloor();
-    if (!floor) return;
-
     const isUF = comp.pathwayLevel === 'underfloor';
     const layer = isUF ? 'underfloor' : 'overhead';
     const elevationMm = isUF ? -250 : 2600;
+    const widthMm = comp.widthMm || 400;
 
-    // Create a new pathway infrastructure item spanning across the center aisle
-    const tileM = floor.tileSizeMm / 1000;
-    const startX = tileM * 2;
-    const endX = Math.max(startX + tileM * 4, floor.lengthM - tileM * 2);
-    const yCenter = Math.floor(floor.widthM / 2);
-
-    dcState.addInfrastructureItem({
-      id: 'INFRA-' + Date.now().toString(36),
+    EventBus.emit('dc:start-lay-pathway', {
+      comp,
       name: comp.name,
-      category: comp.badgeType === 'fiber' ? 'fiber-raceway' : (comp.id.includes('bus') ? 'busway' : 'cable-tray'),
       layer,
-      subtype: comp.code,
-      start: { x: startX, y: yCenter, z: 0 },
-      end: { x: endX, y: yCenter, z: 0 },
-      widthMm: 400,
-      heightMm: 100,
       elevationMm,
-      color: comp.badgeType === 'fiber' ? '#eab308' : (isUF ? '#64748b' : '#38bdf8')
-    });
-
-    EventBus.emit('notification', {
-      message: `Placed ${comp.name} (${isUF ? 'Underfloor' : 'Overhead'} @ ${elevationMm}mm)`,
-      type: 'success'
+      widthMm,
+      heightMm: 100,
+      category: comp.badgeType === 'fiber' ? 'fiber-raceway' : (comp.id.includes('bus') ? 'busway' : (comp.id.includes('duct') ? 'cable-duct' : 'cable-tray')),
+      color: comp.badgeType === 'fiber' ? '#eab308' : (isUF ? '#64748b' : '#38bdf8'),
     });
   }
 
   private handleGenericEquipmentPlacement(comp: DcComponentItem) {
-    const floor = dcState.getActiveFloor();
-    if (!floor) return;
-
-    const tileM = floor.tileSizeMm / 1000;
-    const wMm = comp.widthMm || 600;
-    const dMm = comp.depthMm || 1000;
-    const hU = comp.heightU || 42;
-
-    const newRackId = dcState.generateRackId();
-    dcState.addRack({
-      id: newRackId,
-      name: `${comp.name.split('(')[0].trim()}`,
-      type: (comp.category === 'power' ? 'power-rpp' : (comp.category === 'cooling' ? 'inrow-cooling' : 'server')) as any,
-      widthMm: wMm,
-      depthMm: dMm,
-      heightU: hU,
-      manufacturer: 'Antigravity Data Center Systems',
-      model: comp.code,
-      position: { x: tileM * 2, y: tileM * 2, z: 0 },
-      rotation: 0,
-      color: comp.category === 'power' ? '#eab308' : (comp.category === 'cooling' ? '#06b6d4' : '#1e293b'),
-      maxPowerKw: 20
-    });
-
-    dcState.setState({ selectedRackId: newRackId });
-    EventBus.emit('notification', {
-      message: `Placed ${comp.name} on Floor Grid`,
-      type: 'success'
-    });
+    EventBus.emit('dc:start-place-equipment', { comp, presetId: comp.presetId });
   }
 
   private addUnderfloorDuctAlongTiles(tileIds: string[]) {

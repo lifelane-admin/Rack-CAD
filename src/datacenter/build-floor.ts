@@ -3,9 +3,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { MaterialManager } from '../three/MaterialManager';
 import { buildRackGroup } from '../three/rack-builder';
 import { dcState, getRowLabel, getColLabel } from './dc-state';
-import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacingStandard, DcAddressFormat, DcFloorTile, DcAirflowDirection, DcInfrastructureItem, DcInfraCategory, DcGaugeStyle } from './types';
+import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacingStandard, DcAddressFormat, DcFloorTile, DcAirflowDirection, DcInfrastructureItem, DcInfraCategory, DcGaugeStyle, DcSpaceType, DcEquipmentCategory, DcRacewayFittingType, DcRacewayJunctionNode } from './types';
 import { RACK_PRESETS, SPACING_STANDARDS, RackPreset, SpacingStandardInfo } from './standards';
 import { DATACENTER_CATALOG, CATEGORY_DEFINITIONS, CatalogItemPreset } from './catalog';
+import { solveRacewayTopology, getRacewayTheme, getTruncatedInfraSegments } from './raceway-topology';
+import { createElbowMesh, createTeeMesh, createCrossMesh, createCouplingMesh } from './raceway-geometry';
 import { stateManager } from '../core/state';
 import { eventBus } from '../core/event-bus';
 import { RackData, RACK_CONSTANTS, DeviceData, DeviceTemplate, CableData } from '../core/types';
@@ -15,6 +17,7 @@ import { buildCableMesh } from '../three/cable-builder';
 import { getDevicePowerWatts, getRackPowerCapacityWatts } from '../utils/power';
 
 import { getTemplate } from '../library/device-catalog';
+import { ALL_DC_COMPONENTS, DcComponentItem } from '../components/dc-component-graphics';
 
 import { DEVICE_FACE_Z } from '../three/rack-builder';
 import {
@@ -88,6 +91,318 @@ export class BuildFloorView {
   private snapGapInfo: { x1: number; y1: number; x2: number; y2: number; label: string } | null = null;
   private strictGridOnly = false; // When true, movements lock strictly to whole tile boundaries only
   private isMovingPlacementMode = false; // Active move mode from context menu, props, or hotkey
+
+  // Interactive Pathway Drawing Tool Mode (Ducts, Trays, Fiber Raceways, Busways)
+  private activePathwayTool: {
+    comp?: DcComponentItem;
+    name: string;
+    layer: 'underfloor' | 'overhead';
+    elevationMm: number;
+    widthMm: number;
+    heightMm: number;
+    category: DcInfraCategory;
+    color: string;
+    subtype: string;
+    startPoint: { x: number; y: number } | null;
+    currentPoint: { x: number; y: number } | null;
+  } | null = null;
+
+  // Interactive Equipment Placement Mode (Racks, PDUs, CRACs, UPS, Cameras, Sensors)
+  private activePlacementTool: {
+    comp?: DcComponentItem;
+    presetId?: string;
+    name: string;
+    type: DcRackType;
+    spaceType?: DcSpaceType;
+    equipmentCategory?: DcEquipmentCategory;
+    widthMm: number;
+    depthMm: number;
+    heightU: number;
+    doorStyle: DcDoorStyle;
+    mounting: DcMounting;
+    color: string;
+    maxPowerKw?: number;
+    coolingCapacityKw?: number;
+    upsCapacityKva?: number;
+    pduVoltage?: '230V' | '415V' | '208V' | '120V';
+    pduPhases?: 1 | 3;
+    pduAmperage?: number;
+    pduOutletCount?: number;
+    busbarAmps?: number;
+    transformerKva?: number;
+    securityLock?: 'biometric' | 'rfid' | 'keypad' | 'keyed' | 'none';
+    rotation: 0 | 90 | 180 | 270;
+    previewPos: { x: number; y: number } | null;
+  } | null = null;
+
+  public startLayingPathway(data: {
+    comp?: DcComponentItem;
+    name?: string;
+    layer?: 'underfloor' | 'overhead';
+    elevationMm?: number;
+    widthMm?: number;
+    heightMm?: number;
+    category?: DcInfraCategory;
+    color?: string;
+    subtype?: string;
+  }) {
+    if (dcState.getState().viewMode === '3d') {
+      this.setViewMode('2d');
+    }
+
+    const floor = dcState.getActiveFloor();
+    const plenumDepthMm = floor?.raisedFloorHeightMm || 450;
+    const isUF = (data.layer || data.comp?.pathwayLevel || 'underfloor') === 'underfloor';
+    const layer = isUF ? 'underfloor' : 'overhead';
+    const widthMm = data.widthMm || data.comp?.widthMm || 400;
+    const heightMm = data.heightMm || 100;
+    const defaultElev = isUF ? -(plenumDepthMm - heightMm / 2) : 2600;
+    const elev = data.elevationMm !== undefined ? data.elevationMm : defaultElev;
+    const cat: DcInfraCategory = data.category || (data.comp?.badgeType === 'fiber' ? 'fiber-raceway' : (data.comp?.id?.includes('bus') ? 'busway' : (data.comp?.id?.includes('duct') ? 'cable-duct' : 'cable-tray')));
+    const color = data.color || (data.comp?.badgeType === 'fiber' ? '#eab308' : (isUF ? '#64748b' : '#38bdf8'));
+    const name = data.name || data.comp?.name || 'Cable Duct Runway';
+    const subtype = data.subtype || data.comp?.code || 'DUCT';
+
+    this.activePlacementTool = null;
+    this.activePathwayTool = {
+      comp: data.comp,
+      name,
+      layer,
+      elevationMm: elev,
+      widthMm,
+      heightMm,
+      category: cat,
+      color,
+      subtype,
+      startPoint: null,
+      currentPoint: null,
+    };
+
+    this.canvas.style.cursor = 'crosshair';
+    this.draw();
+
+    eventBus.emit('dc:tool-started', {
+      mode: 'lay-pathway',
+      compName: name,
+      icon: '⚡',
+      layer,
+      elevMm: elev,
+    });
+
+    eventBus.emit('notification', {
+      message: `⚡ Laying Pathway: Click start tile, drag across floor to draw duct channel. [Esc] to exit.`,
+      type: 'info',
+    });
+  }
+
+  public startPlacingEquipment(data: { comp?: DcComponentItem; presetId?: string }) {
+    if (dcState.getState().viewMode === '3d') {
+      this.setViewMode('2d');
+    }
+
+    const comp = data.comp;
+    const preset = data.presetId ? DATACENTER_CATALOG.find(p => p.id === data.presetId) : null;
+
+    const name = preset?.name || comp?.name || 'Cabinet';
+    const type: DcRackType = preset?.type || (comp?.category === 'power' ? 'power-rpp' : (comp?.category === 'cooling' ? 'inrow-cooling' : ((comp?.category as any) === 'ups' ? 'ups-cabinet' : 'server')));
+    const widthMm = preset?.widthMm || comp?.widthMm || 600;
+    const depthMm = preset?.depthMm || comp?.depthMm || 1000;
+    const heightU = preset?.heightU || comp?.heightU || 42;
+    const doorStyle: DcDoorStyle = preset?.doorStyle || (comp?.subCategory === 'twin_door' ? 'split-perforated' : (comp?.subCategory === 'glass_door' ? 'glass' : (comp?.subCategory === 'solid_door' ? 'solid' : 'perforated')));
+    const mounting: DcMounting = preset?.mounting || 'floor';
+    const color = preset?.color || (comp?.category === 'power' ? '#eab308' : (comp?.category === 'cooling' ? '#06b6d4' : '#1e293b'));
+
+    this.activePathwayTool = null;
+    this.activePlacementTool = {
+      comp,
+      presetId: data.presetId,
+      name,
+      type,
+      spaceType: preset?.spaceType || (comp?.category === 'power' || comp?.category === 'cooling' ? 'grey-space' : 'white-space'),
+      equipmentCategory: preset?.category,
+      widthMm,
+      depthMm,
+      heightU,
+      doorStyle,
+      mounting,
+      color,
+      maxPowerKw: preset?.maxPowerKw || 20,
+      coolingCapacityKw: preset?.coolingCapacityKw,
+      upsCapacityKva: preset?.upsCapacityKva,
+      pduVoltage: preset?.pduVoltage,
+      pduPhases: preset?.pduPhases,
+      pduAmperage: preset?.pduAmperage,
+      pduOutletCount: preset?.pduOutletCount,
+      busbarAmps: preset?.busbarAmps,
+      transformerKva: preset?.transformerKva,
+      securityLock: preset?.securityLock,
+      rotation: 0,
+      previewPos: null,
+    };
+
+    this.canvas.style.cursor = 'crosshair';
+    this.draw();
+
+    eventBus.emit('dc:tool-started', {
+      mode: 'place-equipment',
+      compName: name,
+      icon: '📦',
+    });
+
+    eventBus.emit('notification', {
+      message: `📦 Placing ${name}: Move cursor on floor grid, [R] to rotate 90°, Click to place. [Esc] to exit.`,
+      type: 'info',
+    });
+  }
+
+  public cancelActiveTools() {
+    const hadTool = this.activePathwayTool !== null || this.activePlacementTool !== null;
+    this.activePathwayTool = null;
+    this.activePlacementTool = null;
+    this.canvas.style.cursor = this.toolMode === 'pan' ? 'grab' : 'crosshair';
+    this.draw();
+    if (hadTool) {
+      eventBus.emit('dc:tool-ended', undefined);
+      eventBus.emit('notification', { message: 'Placement / Drawing mode exited.', type: 'info' });
+    }
+  }
+
+  private createPathwaySegment(start: { x: number; y: number }, end: { x: number; y: number }): string | null {
+    if (!this.activePathwayTool) return null;
+    const tool = this.activePathwayTool;
+    const lenM = Math.hypot(end.x - start.x, end.y - start.y);
+    if (lenM < 0.08) return null;
+
+    const id = 'INFRA-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6);
+    const item: DcInfrastructureItem = {
+      id,
+      name: tool.name,
+      category: tool.category,
+      layer: tool.layer,
+      subtype: tool.subtype,
+      start: { x: parseFloat(start.x.toFixed(3)), y: parseFloat(start.y.toFixed(3)), z: tool.elevationMm / 1000 },
+      end: { x: parseFloat(end.x.toFixed(3)), y: parseFloat(end.y.toFixed(3)), z: tool.elevationMm / 1000 },
+      widthMm: tool.widthMm,
+      heightMm: tool.heightMm || 100,
+      elevationMm: tool.elevationMm,
+      color: tool.color,
+    };
+    dcState.addInfrastructureItem(item);
+    return id;
+  }
+
+  private commitPathway(start: { x: number; y: number }, end: { x: number; y: number }) {
+    if (!this.activePathwayTool) return;
+    const tool = this.activePathwayTool;
+    const dx = Math.abs(end.x - start.x);
+    const dy = Math.abs(end.y - start.y);
+    const floor = dcState.getActiveFloor();
+    const tileM = floor ? floor.tileSizeMm / 1000 : 0.6;
+    const minLegM = Math.max(0.15, tileM / 4);
+
+    let lastId: string | null = null;
+    let totalLenM = 0;
+
+    if (dx >= minLegM && dy >= minLegM) {
+      // Orthogonal L-Route with automatic 90° corner fitting: Leg 1 along X, Leg 2 along Y
+      const corner = { x: end.x, y: start.y };
+      const id1 = this.createPathwaySegment(start, corner);
+      const id2 = this.createPathwaySegment(corner, end);
+      lastId = id2 || id1;
+      totalLenM = dx + dy;
+    } else if (dx >= minLegM) {
+      // Pure horizontal X-axis segment
+      const straightEnd = { x: end.x, y: start.y };
+      lastId = this.createPathwaySegment(start, straightEnd);
+      totalLenM = dx;
+    } else if (dy >= minLegM) {
+      // Pure vertical Y-axis segment
+      const straightEnd = { x: start.x, y: end.y };
+      lastId = this.createPathwaySegment(start, straightEnd);
+      totalLenM = dy;
+    } else {
+      lastId = this.createPathwaySegment(start, end);
+      totalLenM = Math.hypot(end.x - start.x, end.y - start.y);
+    }
+
+    if (lastId) {
+      dcState.setState({ selectedInfraId: lastId, selectedRackId: null, selectedTileId: null, selectedTileIds: [] });
+      this.refresh();
+      eventBus.emit('notification', {
+        message: `⚡ Routed ${tool.name} (${totalLenM.toFixed(2)}m) with automatic fitting assembly. Continuous routing active.`,
+        type: 'success',
+      });
+    }
+  }
+
+  private commitPlacement() {
+    if (!this.activePlacementTool || !this.activePlacementTool.previewPos) return;
+    const floor = dcState.getActiveFloor();
+    if (!floor) return;
+    const tool = this.activePlacementTool;
+    const pos = tool.previewPos;
+    if (!pos) return;
+    const rot = tool.rotation;
+
+    const count = (floor.racks.length || 0) + 1;
+    const prefix = (tool.comp?.code || tool.name.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 8)).toUpperCase();
+    const newRackId = `${prefix}-${String(count).padStart(3, '0')}`;
+
+    const newRack: DcRack = {
+      id: newRackId,
+      name: `${tool.name.split('(')[0].trim()} ${count}`,
+      type: tool.type,
+      spaceType: tool.spaceType,
+      equipmentCategory: tool.equipmentCategory,
+      widthMm: tool.widthMm,
+      depthMm: tool.depthMm,
+      heightU: tool.heightU,
+      doorStyle: tool.doorStyle,
+      mounting: tool.mounting,
+      manufacturer: tool.comp?.name ? 'Antigravity Data Center Systems' : undefined,
+      model: tool.comp?.code || undefined,
+      position: { x: parseFloat(pos.x.toFixed(3)), y: parseFloat(pos.y.toFixed(3)), z: 0 },
+      rotation: rot,
+      color: tool.color,
+      maxPowerKw: tool.maxPowerKw,
+      coolingCapacityKw: tool.coolingCapacityKw,
+      upsCapacityKva: tool.upsCapacityKva,
+      pduVoltage: tool.pduVoltage,
+      pduPhases: tool.pduPhases,
+      pduAmperage: tool.pduAmperage,
+      pduOutletCount: tool.pduOutletCount,
+      busbarAmps: tool.busbarAmps,
+      transformerKva: tool.transformerKva,
+      securityLock: tool.securityLock,
+    };
+
+    if (dcState.isOverlapping(newRack)) {
+      eventBus.emit('notification', { message: 'Warning: Placed equipment overlaps an existing rack or boundary.', type: 'warning' });
+    }
+
+    dcState.addRack(newRack);
+    dcState.setState({ selectedRackId: newRack.id, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
+    this.refresh();
+
+    const tileM = floor.tileSizeMm / 1000;
+    const colIdx = Math.floor(pos.x / tileM);
+    const rowIdx = Math.floor(pos.y / tileM);
+    const rowLabel = getRowLabel(rowIdx, floor.rowScheme ?? 'letters');
+    const colLabel = getColLabel(colIdx, floor.colScheme ?? 'numbers', floor.addressFormat ?? 'compact');
+    const gridAddr = `${rowLabel}-${colLabel}`;
+
+    eventBus.emit('notification', {
+      message: `Placed ${tool.name} at Grid Tile ${gridAddr}.`,
+      type: 'success',
+    });
+  }
+
+  private getFrontCenterScreen(sx: number, sy: number, pw: number, ph: number, rot: number) {
+    if (rot === 0) return { x: sx + pw / 2, y: sy + ph };
+    if (rot === 90) return { x: sx, y: sy + ph / 2 };
+    if (rot === 180) return { x: sx + pw / 2, y: sy };
+    return { x: sx + pw, y: sy + ph / 2 };
+  }
 
   public startMovingRack(rackId: string) {
     const floor = dcState.getActiveFloor();
@@ -426,6 +741,9 @@ export class BuildFloorView {
     eventBus.on('dc:add-row', () => this.showAddRowDialog());
     eventBus.on('dc:new-floor', () => this.showCreateFloorDialog());
     eventBus.on('dc:toggle-left-panel', () => this.toggleLeftPanel());
+    eventBus.on('dc:start-lay-pathway' as any, (data) => this.startLayingPathway(data));
+    eventBus.on('dc:start-place-equipment' as any, (data) => this.startPlacingEquipment(data));
+    eventBus.on('dc:cancel-tool' as any, () => this.cancelActiveTools());
   }
 
   private setToolMode(mode: 'select' | 'pan') {
@@ -725,6 +1043,11 @@ export class BuildFloorView {
         }
       }
       if (key === 'R') {
+        if (this.activePlacementTool) {
+          this.activePlacementTool.rotation = ((this.activePlacementTool.rotation + 90) % 360) as 0 | 90 | 180 | 270;
+          this.draw();
+          return;
+        }
         const s = dcState.getState();
         const floor = dcState.getActiveFloor();
         if (s.selectedRackId && floor) {
@@ -784,6 +1107,8 @@ export class BuildFloorView {
           return;
         }
         this.camY += 60 / this.ppm; this.draw();
+      } else if (key === 'S') {
+        this.camY += 60 / this.ppm; this.draw();
       }
       if (e.key === '=' || e.key === '+') {
         if (is3D) {
@@ -799,7 +1124,26 @@ export class BuildFloorView {
           this.zoomAtPoint(this.canvas.width / 2, this.canvas.height / 2, 0.8);
         }
       }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const s = dcState.getState();
+        if (s.selectedRackId) {
+          dcState.deleteRack(s.selectedRackId);
+          this.refresh();
+          eventBus.emit('notification', { message: 'Rack deleted.', type: 'info' });
+          return;
+        }
+        if (s.selectedInfraId) {
+          dcState.deleteInfrastructureItem(s.selectedInfraId);
+          this.refresh();
+          eventBus.emit('notification', { message: 'Infrastructure item deleted.', type: 'info' });
+          return;
+        }
+      }
       if (e.key === 'Escape') {
+        if (this.activePathwayTool || this.activePlacementTool) {
+          this.cancelActiveTools();
+          return;
+        }
         if (this.isMovingPlacementMode) {
           this.isMovingPlacementMode = false;
           this.isDraggingRack = false;
@@ -844,6 +1188,10 @@ export class BuildFloorView {
     // Right-click context menu on 2D Canvas
     this.canvas.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      if (this.activePathwayTool || this.activePlacementTool) {
+        this.cancelActiveTools();
+        return;
+      }
       const rect = this.canvas.getBoundingClientRect();
       const scaleX = this.canvas.width / (rect.width || 1);
       const scaleY = this.canvas.height / (rect.height || 1);
@@ -891,6 +1239,10 @@ export class BuildFloorView {
     });
 
     this.canvas.addEventListener('mousedown', (e) => {
+      if (this.activePathwayTool || this.activePlacementTool) {
+        if (e.button === 0) this.handleMouseDown(e);
+        return;
+      }
       if (e.button === 1 || (e.button === 0 && e.altKey) || this.toolMode === 'pan') {
         this.pendingPan = true;
         this.isPanning = false;
@@ -913,6 +1265,58 @@ export class BuildFloorView {
         const statusbar = this.container.querySelector('#dc-statusbar');
         const floor = dcState.getActiveFloor();
         const primaryUnit = floor?.unit ?? 'm';
+
+        // 1. Handling Active Pathway Drawing
+        if (this.activePathwayTool) {
+          const tileM = floor ? floor.tileSizeMm / 1000 : 0.6;
+          const snapStep = tileM / 2;
+          let sx = Math.round(xM / snapStep) * snapStep;
+          let sy = Math.round(yM / snapStep) * snapStep;
+          if (floor) {
+            sx = Math.max(0, Math.min(floor.lengthM, parseFloat(sx.toFixed(3))));
+            sy = Math.max(0, Math.min(floor.widthM, parseFloat(sy.toFixed(3))));
+          }
+          // Free 2D drag across both X and Y axes simultaneously
+          this.activePathwayTool.currentPoint = { x: sx, y: sy };
+
+          if (statusbar) {
+            if (this.activePathwayTool.startPoint) {
+              const sp = this.activePathwayTool.startPoint;
+              const dx = Math.abs(sx - sp.x);
+              const dy = Math.abs(sy - sp.y);
+              const isL = dx >= 0.15 && dy >= 0.15;
+              const totalM = isL ? (dx + dy) : Math.hypot(sx - sp.x, sy - sp.y);
+              const tiles = (totalM / tileM).toFixed(1);
+              statusbar.textContent = `⚡ DRAWING PATHWAY: ${this.activePathwayTool.name} | ${isL ? `L-Bend (X: ${dx.toFixed(2)}m + Y: ${dy.toFixed(2)}m)` : `Length: ${totalM.toFixed(2)}m`} (${tiles} tiles) | Click/Drop to Route & Continue | [Esc] Exit`;
+            } else {
+              statusbar.textContent = `⚡ LAYING PATHWAY: ${this.activePathwayTool.name} (${this.activePathwayTool.layer.toUpperCase()} @ slab) | Click starting floor tile to begin continuous routing | [Esc] Exit`;
+            }
+          }
+          this.draw();
+          return;
+        }
+
+        // 2. Handling Active Equipment Placement
+        if (this.activePlacementTool && floor) {
+          const tileM = floor.tileSizeMm / 1000;
+          const rot = this.activePlacementTool.rotation;
+          const rW = (rot % 180 === 0 ? this.activePlacementTool.widthMm : this.activePlacementTool.depthMm) / 1000;
+          const rD = (rot % 180 === 0 ? this.activePlacementTool.depthMm : this.activePlacementTool.widthMm) / 1000;
+          const col = Math.floor(xM / tileM);
+          const row = Math.floor(yM / tileM);
+          const posX = Math.max(0, Math.min(floor.lengthM - rW, col * tileM));
+          const posY = Math.max(0, Math.min(floor.widthM - rD, row * tileM));
+          this.activePlacementTool.previewPos = { x: parseFloat(posX.toFixed(3)), y: parseFloat(posY.toFixed(3)) };
+
+          if (statusbar) {
+            const rowLabel = getRowLabel(row, floor.rowScheme ?? 'letters');
+            const colLabel = getColLabel(col, floor.colScheme ?? 'numbers', floor.addressFormat ?? 'compact');
+            statusbar.textContent = `📦 PLACING: ${this.activePlacementTool.name} at Tile ${rowLabel}-${colLabel} | [R] Rotate 90° | Click to Place | [Esc] Exit`;
+          }
+          this.draw();
+          return;
+        }
+
         if (statusbar && xM >= 0 && yM >= 0) {
           if (this.isMovingPlacementMode) {
             statusbar.textContent = `✋ MOVING RACK: Click on floor to drop & position | [R] Rotate 90° | [Esc] Cancel | X: ${formatSingleDistance(xM, primaryUnit)} | Y: ${formatSingleDistance(yM, primaryUnit)}`;
@@ -968,6 +1372,22 @@ export class BuildFloorView {
         this.isPanning = false;
         this.canvas.style.cursor = this.toolMode === 'pan' ? 'grab' : 'default';
       }
+
+      // Complete pathway laying on drag-release if distance >= 0.2m with continuity
+      if (this.activePathwayTool && this.activePathwayTool.startPoint && this.activePathwayTool.currentPoint) {
+        const start = this.activePathwayTool.startPoint;
+        const end = this.activePathwayTool.currentPoint;
+        const lenM = Math.hypot(end.x - start.x, end.y - start.y);
+        if (lenM >= 0.2) {
+          this.commitPathway(start, end);
+          // CONTINUITY: seamlessly keep the end point active as the new start point
+          this.activePathwayTool.startPoint = { x: end.x, y: end.y };
+          this.activePathwayTool.currentPoint = { x: end.x, y: end.y };
+          this.draw();
+          return;
+        }
+      }
+
       if (this.isDraggingRack && !this.isMovingPlacementMode) {
         this.handleRackDrop(_e);
       } else if (!this.isMovingPlacementMode) {
@@ -1026,6 +1446,43 @@ export class BuildFloorView {
     const floor = dcState.getActiveFloor();
     if (!floor) return;
 
+    // 1. Handling Pathway Drawing Click
+    if (this.activePathwayTool) {
+      const snapStep = (floor.tileSizeMm / 1000) / 2;
+      let sx = Math.round(xM / snapStep) * snapStep;
+      let sy = Math.round(yM / snapStep) * snapStep;
+      sx = Math.max(0, Math.min(floor.lengthM, parseFloat(sx.toFixed(3))));
+      sy = Math.max(0, Math.min(floor.widthM, parseFloat(sy.toFixed(3))));
+
+      if (!this.activePathwayTool.startPoint) {
+        this.activePathwayTool.startPoint = { x: sx, y: sy };
+        this.activePathwayTool.currentPoint = { x: sx, y: sy };
+        this.draw();
+      } else {
+        const start = this.activePathwayTool.startPoint;
+        const end = { x: sx, y: sy };
+        const dist = Math.hypot(end.x - start.x, end.y - start.y);
+        if (dist >= 0.2) {
+          this.commitPathway(start, end);
+          // CONTINUITY: keep the end point as the starting node for the next continuous leg
+          this.activePathwayTool.startPoint = { x: end.x, y: end.y };
+          this.activePathwayTool.currentPoint = { x: end.x, y: end.y };
+          this.draw();
+        } else if (dist < 0.05) {
+          // Double clicked same point or clicked directly on start node: finish pathway routing
+          eventBus.emit('notification', { message: `Completed pathway routing run.`, type: 'info' });
+          this.cancelActiveTools();
+        }
+      }
+      return;
+    }
+
+    // 2. Handling Equipment Placement Click
+    if (this.activePlacementTool && this.activePlacementTool.previewPos) {
+      this.commitPlacement();
+      return;
+    }
+
     // If currently in active "Move Rack" placement mode, click to drop and place
     if (this.isMovingPlacementMode && this.draggingRackId) {
       this.handleRackDrop(e);
@@ -1036,7 +1493,7 @@ export class BuildFloorView {
 
     for (const rack of floor.racks) {
       if (this.hitTestRack(rack, xM, yM)) {
-        dcState.setState({ selectedRackId: rack.id, selectedTileId: null, selectedTileIds: [] });
+        dcState.setState({ selectedRackId: rack.id, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
         this.pendingDragRack = true;
         this.isDraggingRack = false;
         this.draggingRackId = rack.id;
@@ -1045,6 +1502,18 @@ export class BuildFloorView {
         this.renderPropsPanel();
         this.draw();
         return;
+      }
+    }
+
+    // Check Infrastructure selection in 2D
+    if (floor.infrastructure && floor.infrastructure.length > 0) {
+      for (const item of floor.infrastructure) {
+        if (this.hitTestInfrastructure(item, xM, yM)) {
+          dcState.setState({ selectedInfraId: item.id, selectedRackId: null, selectedTileId: null, selectedTileIds: [] });
+          this.renderPropsPanel();
+          this.draw();
+          return;
+        }
       }
     }
 
@@ -1073,7 +1542,7 @@ export class BuildFloorView {
       }
 
       const primaryTileId = newSelectedIds.length > 0 ? newSelectedIds[newSelectedIds.length - 1] : null;
-      dcState.setState({ selectedTileId: primaryTileId, selectedTileIds: newSelectedIds, selectedRackId: null });
+      dcState.setState({ selectedTileId: primaryTileId, selectedTileIds: newSelectedIds, selectedRackId: null, selectedInfraId: null });
       this.renderPropsPanel();
     } else {
       if (this.toolMode === 'pan' || e.altKey) {
@@ -1082,7 +1551,7 @@ export class BuildFloorView {
         this.panStartCam = { camX: this.camX, camY: this.camY, mouseX: e.clientX, mouseY: e.clientY };
       }
       if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
-        dcState.setState({ selectedTileId: null, selectedTileIds: [], selectedRackId: null });
+        dcState.setState({ selectedTileId: null, selectedTileIds: [], selectedRackId: null, selectedInfraId: null });
         this.renderPropsPanel();
       }
     }
@@ -1214,6 +1683,19 @@ export class BuildFloorView {
     const eD = rack.rotation % 180 === 0 ? rD : rW;
     return xM >= rack.position.x && xM <= rack.position.x + eW &&
            yM >= rack.position.y && yM <= rack.position.y + eD;
+  }
+
+  private hitTestInfrastructure(item: DcInfrastructureItem, xM: number, yM: number): boolean {
+    const x1 = item.start.x, y1 = item.start.y;
+    const x2 = item.end.x, y2 = item.end.y;
+    const l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+    const thresholdM = Math.max(0.18, ((item.widthMm || 300) / 1000) / 2 + 0.08);
+    if (l2 === 0) return Math.hypot(xM - x1, yM - y1) <= thresholdM;
+    let t = ((xM - x1) * (x2 - x1) + (yM - y1) * (y2 - y1)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    const projX = x1 + t * (x2 - x1);
+    const projY = y1 + t * (y2 - y1);
+    return Math.hypot(xM - projX, yM - projY) <= thresholdM;
   }
 
   private draw() {
@@ -1448,31 +1930,24 @@ export class BuildFloorView {
       }
     }
 
-    // 2. Under-Floor Infrastructure Paths in 2D (Cable Trays, Ducts, Power/Data Bundles, Risers)
+    // 2. Under-Floor & Overhead Infrastructure Paths & Automatic Assembly Fittings in 2D
     if (floor.infrastructure && floor.infrastructure.length > 0) {
-      for (const item of floor.infrastructure) {
-        const p1 = this.worldToScreen(item.start.x, item.start.y);
-        const p2 = this.worldToScreen(item.end.x, item.end.y);
-        const isSelected = item.id === s.selectedInfraId;
+      const items = floor.infrastructure;
+      const junctionNodes = solveRacewayTopology(items, { racks: floor.racks, snapRadiusM: 0.22 });
+      const truncatedSegments = getTruncatedInfraSegments(items, junctionNodes);
+
+      // A. Draw Linear Channel Corridors
+      for (const tSeg of truncatedSegments) {
+        const item = tSeg.originalItem;
+        const p1 = this.worldToScreen(tSeg.start.x, tSeg.start.y);
+        const p2 = this.worldToScreen(tSeg.end.x, tSeg.end.y);
+        const isSelected = item.id === s.selectedInfraId || item.parentItemId === s.selectedInfraId;
+        const widthPx = Math.max(4, ((item.widthMm || 300) / 1000) * this.ppm);
+        const isUF = item.layer === 'underfloor';
 
         this.ctx.save();
-        if (item.category === 'cable-tray') {
-          this.ctx.strokeStyle = '#f59e0b'; // Industrial amber tray
-          this.ctx.lineWidth = Math.max(3, (item.widthMm / 1000) * this.ppm);
-          this.ctx.setLineDash([8, 4]);
-        } else if (item.category === 'cable-duct') {
-          this.ctx.strokeStyle = '#94a3b8'; // Galvanized metal duct
-          this.ctx.lineWidth = Math.max(3, (item.widthMm / 1000) * this.ppm);
-          this.ctx.setLineDash([]);
-        } else if (item.category === 'power-cable') {
-          this.ctx.strokeStyle = '#ef4444'; // Power red
-          this.ctx.lineWidth = 2.5;
-          this.ctx.setLineDash([4, 2]);
-        } else if (item.category === 'data-cable') {
-          this.ctx.strokeStyle = '#3b82f6'; // Data blue
-          this.ctx.lineWidth = 2.5;
-          this.ctx.setLineDash([4, 2]);
-        } else if (item.category === 'riser') {
+
+        if (item.category === 'riser') {
           // Circle riser pillar
           this.ctx.fillStyle = '#10b981';
           this.ctx.strokeStyle = '#047857';
@@ -1486,24 +1961,322 @@ export class BuildFloorView {
           continue;
         }
 
+        const theme = getRacewayTheme(item.category, item.subtype);
+        const strokeColor = item.color || theme.color2D;
+
         if (isSelected) {
           this.ctx.shadowColor = '#38bdf8';
-          this.ctx.shadowBlur = 8;
+          this.ctx.shadowBlur = 10;
         }
 
+        // 1. Channel Body Outer Fill
+        this.ctx.strokeStyle = strokeColor;
+        this.ctx.lineWidth = widthPx;
+        this.ctx.lineCap = 'butt';
         this.ctx.beginPath();
         this.ctx.moveTo(p1.sx, p1.sy);
         this.ctx.lineTo(p2.sx, p2.sy);
         this.ctx.stroke();
 
-        // Infrastructure label badge
+        // 2. Channel Inner Details (Distinct CAD pattern per subtype)
+        const sub = (item.subtype || (item.category === 'cable-duct' ? 'pvc-duct' : item.category === 'cable-tray' ? 'basket-tray' : 'pvc-duct')).toLowerCase();
+        const segLenPx = Math.hypot(p2.sx - p1.sx, p2.sy - p1.sy) || 1;
+        const uX = (p2.sx - p1.sx) / segLenPx;
+        const uY = (p2.sy - p1.sy) / segLenPx;
+        const nX = -uY;
+        const nY = uX;
+
+        if (sub === 'basket-tray') {
+          // Wire mesh cross-hatch: Outer rails + Transverse welded wire rungs
+          this.ctx.strokeStyle = '#fef08a';
+          this.ctx.lineWidth = 1.5;
+          const rungStep = 14;
+          const numRungs = Math.floor(segLenPx / rungStep);
+          for (let ri = 0; ri <= numRungs; ri++) {
+            const rx = p1.sx + uX * (ri * rungStep);
+            const ry = p1.sy + uY * (ri * rungStep);
+            this.ctx.beginPath();
+            this.ctx.moveTo(rx - nX * (widthPx / 2 - 1), ry - nY * (widthPx / 2 - 1));
+            this.ctx.lineTo(rx + nX * (widthPx / 2 - 1), ry + nY * (widthPx / 2 - 1));
+            this.ctx.stroke();
+          }
+          // 2 longitudinal center wires
+          this.ctx.strokeStyle = '#ffffff';
+          this.ctx.lineWidth = 1;
+          this.ctx.setLineDash([4, 4]);
+          this.ctx.beginPath();
+          this.ctx.moveTo(p1.sx - nX * (widthPx / 4), p1.sy - nY * (widthPx / 4));
+          this.ctx.lineTo(p2.sx - nX * (widthPx / 4), p2.sy - nY * (widthPx / 4));
+          this.ctx.moveTo(p1.sx + nX * (widthPx / 4), p1.sy + nY * (widthPx / 4));
+          this.ctx.lineTo(p2.sx + nX * (widthPx / 4), p2.sy + nY * (widthPx / 4));
+          this.ctx.stroke();
+          this.ctx.setLineDash([]);
+        } else if (sub === 'ladder-rack') {
+          // Ladder Runway: 2 heavy side stringers + thick transverse ladder rungs
+          this.ctx.strokeStyle = '#0f172a';
+          this.ctx.lineWidth = 3;
+          this.ctx.beginPath();
+          this.ctx.moveTo(p1.sx - nX * (widthPx / 2 - 1.5), p1.sy - nY * (widthPx / 2 - 1.5));
+          this.ctx.lineTo(p2.sx - nX * (widthPx / 2 - 1.5), p2.sy - nY * (widthPx / 2 - 1.5));
+          this.ctx.moveTo(p1.sx + nX * (widthPx / 2 - 1.5), p1.sy + nY * (widthPx / 2 - 1.5));
+          this.ctx.lineTo(p2.sx + nX * (widthPx / 2 - 1.5), p2.sy + nY * (widthPx / 2 - 1.5));
+          this.ctx.stroke();
+
+          // Ladder cross rungs every 22px
+          this.ctx.strokeStyle = '#94a3b8';
+          this.ctx.lineWidth = 2.5;
+          const rungStep = 22;
+          const numRungs = Math.floor(segLenPx / rungStep);
+          for (let ri = 0; ri <= numRungs; ri++) {
+            const rx = p1.sx + uX * (ri * rungStep);
+            const ry = p1.sy + uY * (ri * rungStep);
+            this.ctx.beginPath();
+            this.ctx.moveTo(rx - nX * (widthPx / 2 - 3), ry - nY * (widthPx / 2 - 3));
+            this.ctx.lineTo(rx + nX * (widthPx / 2 - 3), ry + nY * (widthPx / 2 - 3));
+            this.ctx.stroke();
+          }
+        } else if (sub === 'fiber-raceway' || item.category === 'fiber-raceway') {
+          // Dual safety yellow internal guide ribs & fiber bundle core
+          this.ctx.strokeStyle = '#fef08a';
+          this.ctx.lineWidth = 1.8;
+          this.ctx.beginPath();
+          this.ctx.moveTo(p1.sx - nX * (widthPx / 3), p1.sy - nY * (widthPx / 3));
+          this.ctx.lineTo(p2.sx - nX * (widthPx / 3), p2.sy - nY * (widthPx / 3));
+          this.ctx.moveTo(p1.sx + nX * (widthPx / 3), p1.sy + nY * (widthPx / 3));
+          this.ctx.lineTo(p2.sx + nX * (widthPx / 3), p2.sy + nY * (widthPx / 3));
+          this.ctx.stroke();
+
+          this.ctx.strokeStyle = '#a16207';
+          this.ctx.lineWidth = 1.2;
+          this.ctx.setLineDash([6, 4]);
+          this.ctx.beginPath();
+          this.ctx.moveTo(p1.sx, p1.sy);
+          this.ctx.lineTo(p2.sx, p2.sy);
+          this.ctx.stroke();
+          this.ctx.setLineDash([]);
+        } else if (sub === 'busway' || sub === 'power-busway' || item.category === 'busway' || item.category === 'power-cable') {
+          // 3-Phase conductor busbar lines (L1 red, L2 yellow, L3 blue)
+          const phases = ['#f87171', '#fde047', '#60a5fa'];
+          phases.forEach((pColor, pi) => {
+            const offset = (pi - 1) * (widthPx / 3.5);
+            this.ctx.strokeStyle = pColor;
+            this.ctx.lineWidth = 1.8;
+            this.ctx.beginPath();
+            this.ctx.moveTo(p1.sx + nX * offset, p1.sy + nY * offset);
+            this.ctx.lineTo(p2.sx + nX * offset, p2.sy + nY * offset);
+            this.ctx.stroke();
+          });
+        } else if (sub === 'conduit' || item.category === 'conduit') {
+          // Cylindrical conduit tube with coupling collars
+          this.ctx.strokeStyle = '#ffffff';
+          this.ctx.lineWidth = 1.5;
+          this.ctx.beginPath();
+          this.ctx.moveTo(p1.sx, p1.sy);
+          this.ctx.lineTo(p2.sx, p2.sy);
+          this.ctx.stroke();
+
+          // Coupler sleeves every 35px
+          this.ctx.fillStyle = '#475569';
+          const couplerStep = 35;
+          const numCouplers = Math.floor(segLenPx / couplerStep);
+          for (let ci = 0; ci <= numCouplers; ci++) {
+            const cx = p1.sx + uX * (ci * couplerStep);
+            const cy = p1.sy + uY * (ci * couplerStep);
+            this.ctx.fillRect(cx - 3, cy - 3, 6, 6);
+          }
+        } else if (sub === 'solid-duct') {
+          // Galvanized sheet with bolted seam collars
+          this.ctx.strokeStyle = '#cbd5e1';
+          this.ctx.lineWidth = 1.5;
+          this.ctx.beginPath();
+          this.ctx.moveTo(p1.sx, p1.sy);
+          this.ctx.lineTo(p2.sx, p2.sy);
+          this.ctx.stroke();
+
+          this.ctx.strokeStyle = '#334155';
+          this.ctx.lineWidth = 2.5;
+          const seamStep = 45;
+          const numSeams = Math.floor(segLenPx / seamStep);
+          for (let si = 0; si <= numSeams; si++) {
+            const sx = p1.sx + uX * (si * seamStep);
+            const sy = p1.sy + uY * (si * seamStep);
+            this.ctx.beginPath();
+            this.ctx.moveTo(sx - nX * (widthPx / 2), sy - nY * (widthPx / 2));
+            this.ctx.lineTo(sx + nX * (widthPx / 2), sy + nY * (widthPx / 2));
+            this.ctx.stroke();
+          }
+        } else {
+          // PVC Solid Duct with center compartment divider
+          this.ctx.strokeStyle = '#cbd5e1';
+          this.ctx.lineWidth = 1.8;
+          this.ctx.beginPath();
+          this.ctx.moveTo(p1.sx, p1.sy);
+          this.ctx.lineTo(p2.sx, p2.sy);
+          this.ctx.stroke();
+        }
+
+        // 3. Selection Outline
+        if (isSelected) {
+          this.ctx.strokeStyle = '#38bdf8';
+          this.ctx.lineWidth = widthPx + 4;
+          this.ctx.globalAlpha = 0.4;
+          this.ctx.beginPath();
+          this.ctx.moveTo(p1.sx, p1.sy);
+          this.ctx.lineTo(p2.sx, p2.sy);
+          this.ctx.stroke();
+          this.ctx.globalAlpha = 1.0;
+
+          // Start & End Anchor Grab Rings
+          this.ctx.fillStyle = '#38bdf8';
+          this.ctx.beginPath();
+          this.ctx.arc(p1.sx, p1.sy, 5, 0, Math.PI * 2);
+          this.ctx.fill();
+          this.ctx.beginPath();
+          this.ctx.arc(p2.sx, p2.sy, 5, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+
+        // 4. Infrastructure Label
         const midX = (p1.sx + p2.sx) / 2;
         const midY = (p1.sy + p2.sy) / 2;
-        this.ctx.fillStyle = isSelected ? '#38bdf8' : '#e2e8f0';
+        const lenM = Math.hypot(item.end.x - item.start.x, item.end.y - item.start.y);
+        const labelText = `${item.name} (${lenM.toFixed(1)}m • ${item.widthMm}mm)`;
+
+        this.ctx.fillStyle = isSelected ? '#38bdf8' : '#f1f5f9';
         this.ctx.font = 'bold 9px system-ui';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'bottom';
-        this.ctx.fillText(item.name, midX, midY - 3);
+        this.ctx.fillText(labelText, midX, midY - widthPx / 2 - 2);
+        this.ctx.restore();
+      }
+
+      // B. Draw Procedural Automatic Fittings (90° Elbows, T-Joints, Cross-Joints, Couplers, Drops, Reducers)
+      for (const jn of junctionNodes) {
+        const pJ = this.worldToScreen(jn.x, jn.y);
+        const jSizePx = Math.max(8, ((jn.widthMm + 60) / 1000) * this.ppm);
+        const isSelected = jn.connectedInfraIds.some(id => {
+          const base = id.split('_sub')[0];
+          return base === s.selectedInfraId || id === s.selectedInfraId;
+        });
+        const theme = getRacewayTheme(jn.category, jn.subtype);
+
+        this.ctx.save();
+        if (isSelected) {
+          this.ctx.shadowColor = '#38bdf8';
+          this.ctx.shadowBlur = 12;
+        }
+
+        const baseColor = jn.color || theme.color2D;
+        const accentColor = theme.accentColor;
+
+        if (jn.fittingType === 'elbow-90' || jn.fittingType === 'elbow-45') {
+          // 90° / 45° Smooth Curved Radius Elbow Fitting
+          this.ctx.fillStyle = baseColor;
+          this.ctx.beginPath();
+          this.ctx.arc(pJ.sx, pJ.sy, jSizePx / 2, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          this.ctx.strokeStyle = isSelected ? '#38bdf8' : '#0f172a';
+          this.ctx.lineWidth = isSelected ? 2.5 : 1.5;
+          this.ctx.stroke();
+
+          // Inner radius curve guide
+          this.ctx.strokeStyle = accentColor;
+          this.ctx.lineWidth = 2;
+          this.ctx.beginPath();
+          this.ctx.arc(pJ.sx, pJ.sy, jSizePx / 3.5, 0, Math.PI * 2);
+          this.ctx.stroke();
+
+          // Port connection flange tabs
+          for (const angle of jn.angles) {
+            const fx = pJ.sx + Math.cos(angle) * (jSizePx / 2);
+            const fy = pJ.sy + Math.sin(angle) * (jSizePx / 2);
+            this.ctx.fillStyle = '#1e293b';
+            this.ctx.beginPath();
+            this.ctx.arc(fx, fy, 2.5, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+        } else if (jn.fittingType === 'tee-joint') {
+          // 3-Way T-Joint with internal fillet curves
+          this.ctx.fillStyle = baseColor;
+          this.ctx.fillRect(pJ.sx - jSizePx / 2, pJ.sy - jSizePx / 2, jSizePx, jSizePx);
+
+          this.ctx.strokeStyle = isSelected ? '#38bdf8' : '#0f172a';
+          this.ctx.lineWidth = isSelected ? 2.5 : 1.5;
+          this.ctx.strokeRect(pJ.sx - jSizePx / 2, pJ.sy - jSizePx / 2, jSizePx, jSizePx);
+
+          // T-Center through guide
+          this.ctx.strokeStyle = accentColor;
+          this.ctx.lineWidth = 2;
+          this.ctx.beginPath();
+          this.ctx.arc(pJ.sx, pJ.sy, jSizePx / 3, 0, Math.PI * 2);
+          this.ctx.stroke();
+
+          // Center fastener bolt
+          this.ctx.fillStyle = '#0f172a';
+          this.ctx.beginPath();
+          this.ctx.arc(pJ.sx, pJ.sy, 2.5, 0, Math.PI * 2);
+          this.ctx.fill();
+        } else if (jn.fittingType === 'cross-joint') {
+          // 4-Way Cross Joint with rounded corner guides
+          this.ctx.fillStyle = baseColor;
+          this.ctx.fillRect(pJ.sx - jSizePx / 2, pJ.sy - jSizePx / 2, jSizePx, jSizePx);
+
+          this.ctx.strokeStyle = isSelected ? '#38bdf8' : '#0f172a';
+          this.ctx.lineWidth = isSelected ? 2.5 : 1.5;
+          this.ctx.strokeRect(pJ.sx - jSizePx / 2, pJ.sy - jSizePx / 2, jSizePx, jSizePx);
+
+          // Center cross inspection plate
+          this.ctx.fillStyle = accentColor;
+          this.ctx.fillRect(pJ.sx - jSizePx / 4, pJ.sy - jSizePx / 4, jSizePx / 2, jSizePx / 2);
+
+          this.ctx.fillStyle = '#0f172a';
+          this.ctx.beginPath();
+          this.ctx.arc(pJ.sx, pJ.sy, 2.5, 0, Math.PI * 2);
+          this.ctx.fill();
+        } else if (jn.fittingType === 'coupling' || jn.fittingType === 'reducing-coupling') {
+          // Coupling assembly clamp with thumbscrews/bolts
+          const cW = jSizePx * 0.7;
+          const cH = jSizePx * 1.1;
+          this.ctx.fillStyle = jn.fittingType === 'reducing-coupling' ? '#d97706' : '#475569';
+          this.ctx.fillRect(pJ.sx - cW / 2, pJ.sy - cH / 2, cW, cH);
+
+          this.ctx.strokeStyle = isSelected ? '#38bdf8' : '#ffffff';
+          this.ctx.lineWidth = 1.2;
+          this.ctx.strokeRect(pJ.sx - cW / 2, pJ.sy - cH / 2, cW, cH);
+
+          // 2 Side clamp fastener bolts
+          this.ctx.fillStyle = '#f8fafc';
+          this.ctx.beginPath();
+          this.ctx.arc(pJ.sx, pJ.sy - cH / 3, 2, 0, Math.PI * 2);
+          this.ctx.arc(pJ.sx, pJ.sy + cH / 3, 2, 0, Math.PI * 2);
+          this.ctx.fill();
+        } else if (jn.fittingType === 'waterfall-outlet') {
+          // Waterfall trumpet drop spout over rack
+          this.ctx.fillStyle = '#eab308';
+          this.ctx.beginPath();
+          this.ctx.arc(pJ.sx, pJ.sy, jSizePx / 2, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          this.ctx.strokeStyle = '#0284c7';
+          this.ctx.lineWidth = 2;
+          this.ctx.stroke();
+
+          // Downward arrow / drop icon
+          this.ctx.fillStyle = '#0f172a';
+          this.ctx.font = 'bold 8px system-ui';
+          this.ctx.textAlign = 'center';
+          this.ctx.textBaseline = 'middle';
+          this.ctx.fillText('▼ DROP', pJ.sx, pJ.sy);
+        } else if (jn.fittingType === 'end-cap') {
+          // End closure cap
+          this.ctx.fillStyle = '#334155';
+          this.ctx.fillRect(pJ.sx - jSizePx / 3, pJ.sy - jSizePx / 3, (jSizePx * 2) / 3, (jSizePx * 2) / 3);
+          this.ctx.strokeStyle = '#64748b';
+          this.ctx.lineWidth = 1;
+          this.ctx.strokeRect(pJ.sx - jSizePx / 3, pJ.sy - jSizePx / 3, (jSizePx * 2) / 3, (jSizePx * 2) / 3);
+        }
+
         this.ctx.restore();
       }
     }
@@ -1544,6 +2317,210 @@ export class BuildFloorView {
       this.ctx.textAlign = 'center';
       this.ctx.fillText(`SNAP: ${this.snapGapInfo.label}`, midX, midY - 6);
       this.ctx.restore();
+    }
+
+    // 4.1 Draw Active Pathway Laying Rubberband Channel Preview
+    if (this.activePathwayTool) {
+      const tool = this.activePathwayTool;
+      const curPt = tool.currentPoint;
+      const startPt = tool.startPoint;
+
+      this.ctx.save();
+      if (startPt && curPt) {
+        const p1 = this.worldToScreen(startPt.x, startPt.y);
+        const p2 = this.worldToScreen(curPt.x, curPt.y);
+        const dx = Math.abs(curPt.x - startPt.x);
+        const dy = Math.abs(curPt.y - startPt.y);
+        const minLegM = Math.max(0.15, tileM / 4);
+        const isLRoute = dx >= minLegM && dy >= minLegM;
+        const corner = { x: curPt.x, y: startPt.y };
+        const pCorner = this.worldToScreen(corner.x, corner.y);
+
+        const totalLenM = isLRoute ? (dx + dy) : Math.hypot(curPt.x - startPt.x, curPt.y - startPt.y);
+        const tileCount = (totalLenM / tileM).toFixed(1);
+        const widthPx = Math.max(4, (tool.widthMm / 1000) * this.ppm);
+        const isUF = tool.layer === 'underfloor';
+        const strokeColor = tool.color || (isUF ? '#38bdf8' : '#eab308');
+
+        // Draw outer channel corridor
+        this.ctx.strokeStyle = strokeColor;
+        this.ctx.lineWidth = widthPx;
+        this.ctx.lineCap = 'round';
+        this.ctx.lineJoin = 'round';
+        this.ctx.globalAlpha = 0.45;
+        this.ctx.beginPath();
+        this.ctx.moveTo(p1.sx, p1.sy);
+        if (isLRoute) {
+          this.ctx.lineTo(pCorner.sx, pCorner.sy);
+          this.ctx.lineTo(p2.sx, p2.sy);
+        } else {
+          this.ctx.lineTo(p2.sx, p2.sy);
+        }
+        this.ctx.stroke();
+
+        // Draw centerline with glowing dashed guide
+        this.ctx.globalAlpha = 1.0;
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 2.5;
+        this.ctx.setLineDash([8, 6]);
+        this.ctx.beginPath();
+        this.ctx.moveTo(p1.sx, p1.sy);
+        if (isLRoute) {
+          this.ctx.lineTo(pCorner.sx, pCorner.sy);
+          this.ctx.lineTo(p2.sx, p2.sy);
+        } else {
+          this.ctx.lineTo(p2.sx, p2.sy);
+        }
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+
+        // Start anchor node
+        this.ctx.fillStyle = strokeColor;
+        this.ctx.beginPath();
+        this.ctx.arc(p1.sx, p1.sy, 6, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+
+        if (isLRoute) {
+          // 90° Elbow Corner Fitting Marker
+          this.ctx.fillStyle = '#0f172a';
+          this.ctx.fillRect(pCorner.sx - 8, pCorner.sy - 8, 16, 16);
+          this.ctx.strokeStyle = strokeColor;
+          this.ctx.lineWidth = 2;
+          this.ctx.strokeRect(pCorner.sx - 8, pCorner.sy - 8, 16, 16);
+
+          this.ctx.fillStyle = '#38bdf8';
+          this.ctx.font = 'bold 9px system-ui';
+          this.ctx.textAlign = 'center';
+          this.ctx.textBaseline = 'bottom';
+          this.ctx.fillText('90°', pCorner.sx, pCorner.sy - 10);
+        }
+
+        // End cursor node
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.beginPath();
+        this.ctx.arc(p2.sx, p2.sy, 6, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.strokeStyle = strokeColor;
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+
+        // Floating dimension & specs badge
+        const midX = isLRoute ? (pCorner.sx + p2.sx) / 2 : (p1.sx + p2.sx) / 2;
+        const midY = isLRoute ? (pCorner.sy + p2.sy) / 2 : (p1.sy + p2.sy) / 2;
+        const badgeText = isLRoute
+          ? `⚡ ${tool.name} | L-Bend: ${totalLenM.toFixed(2)}m (X: ${dx.toFixed(2)}m → Y: ${dy.toFixed(2)}m) | ${tool.widthMm}mm W | ${tool.layer.toUpperCase()}`
+          : `⚡ ${tool.name} | ${totalLenM.toFixed(2)}m (${tileCount} tiles) | ${tool.widthMm}mm W | ${tool.layer.toUpperCase()}`;
+
+        this.ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+        const txtMetrics = this.ctx.measureText(badgeText);
+        const bw = txtMetrics.width + 24;
+        const bh = 24;
+
+        this.ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+        this.ctx.strokeStyle = strokeColor;
+        this.ctx.lineWidth = 1.5;
+        this.ctx.beginPath();
+        this.ctx.roundRect(midX - bw / 2, midY - bh - 8, bw, bh, 6);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        this.ctx.fillStyle = '#f8fafc';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(badgeText, midX, midY - 8 - bh / 2);
+      } else if (curPt) {
+        // Hover cursor dot and tile guide before clicking start
+        const p = this.worldToScreen(curPt.x, curPt.y);
+        this.ctx.fillStyle = tool.color || '#38bdf8';
+        this.ctx.beginPath();
+        this.ctx.arc(p.sx, p.sy, 6, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+
+        const hint = `Click tile to start laying ${tool.name}`;
+        this.ctx.font = 'bold 11px system-ui';
+        const hw = this.ctx.measureText(hint).width + 16;
+        this.ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+        this.ctx.fillRect(p.sx - hw / 2, p.sy - 30, hw, 20);
+        this.ctx.strokeStyle = '#38bdf8';
+        this.ctx.strokeRect(p.sx - hw / 2, p.sy - 30, hw, 20);
+        this.ctx.fillStyle = '#38bdf8';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(hint, p.sx, p.sy - 20);
+      }
+      this.ctx.restore();
+    }
+
+    // 4.2 Draw Active Equipment Placement Preview Footprint
+    if (this.activePlacementTool && this.activePlacementTool.previewPos) {
+      const tool = this.activePlacementTool;
+      const pos = tool.previewPos;
+      if (pos) {
+        const rot = tool.rotation;
+        const rW = tool.widthMm / 1000;
+        const rD = tool.depthMm / 1000;
+        const effW = rot % 180 === 0 ? rW : rD;
+        const effD = rot % 180 === 0 ? rD : rW;
+
+        const pScreen = this.worldToScreen(pos.x, pos.y);
+        const pw = effW * this.ppm;
+        const ph = effD * this.ppm;
+
+        // Check collision
+        const mockRack: DcRack = {
+          id: 'placement-test',
+          name: tool.name,
+          type: tool.type,
+          widthMm: tool.widthMm,
+          depthMm: tool.depthMm,
+          heightU: tool.heightU,
+          position: { x: pos.x, y: pos.y, z: 0 },
+          rotation: rot,
+        };
+        const isOverlap = dcState.isOverlapping(mockRack);
+        const boxColor = isOverlap ? '#ef4444' : '#10b981';
+
+        this.ctx.save();
+        // Translucent fill
+        this.ctx.fillStyle = isOverlap ? 'rgba(239, 68, 68, 0.28)' : 'rgba(16, 185, 129, 0.28)';
+        this.ctx.fillRect(pScreen.sx, pScreen.sy, pw, ph);
+
+        // Outline border
+        this.ctx.strokeStyle = boxColor;
+        this.ctx.lineWidth = 2.5;
+        this.ctx.setLineDash([5, 3]);
+        this.ctx.strokeRect(pScreen.sx, pScreen.sy, pw, ph);
+        this.ctx.setLineDash([]);
+
+        // Door swing direction indicator
+        const frontCenter = this.getFrontCenterScreen(pScreen.sx, pScreen.sy, pw, ph, rot);
+        this.ctx.fillStyle = boxColor;
+        this.ctx.beginPath();
+        this.ctx.arc(frontCenter.x, frontCenter.y, 4, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Top label badge
+        const badgeText = `${tool.name} • ${rot}° [R: Rotate | Click: Place | Esc: Exit]`;
+        this.ctx.font = 'bold 11px system-ui';
+        const bw = this.ctx.measureText(badgeText).width + 16;
+        this.ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+        this.ctx.fillRect(pScreen.sx + pw / 2 - bw / 2, pScreen.sy - 26, bw, 20);
+        this.ctx.strokeStyle = boxColor;
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(pScreen.sx + pw / 2 - bw / 2, pScreen.sy - 26, bw, 20);
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(badgeText, pScreen.sx + pw / 2, pScreen.sy - 16);
+
+        this.ctx.restore();
+      }
     }
 
     this.ctx.restore();
@@ -2301,17 +3278,47 @@ export class BuildFloorView {
               <div class="dc-info-row"><span class="dc-info-label">Y Pos</span><span class="dc-info-val">${formatSingleDistance(tile.y, unit)}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${formatDimensionsMm(tile.widthMm, tile.depthMm, unit === 'm' ? 'mm' : unit)}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Type</span><span class="dc-info-val"><b>${typeDesc}</b></span></div>
-              ${tile.airflowDir ? `<div class="dc-info-row"><span class="dc-info-label">Airflow</span><span class="dc-info-val" style="color:#0284c7;font-weight:600;">${tile.airflowDir.toUpperCase()}</span></div>` : ''}
+              ${tile.type === 'air-channel' ? `
+                <div class="dc-info-row">
+                  <span class="dc-info-label">Air Direction</span>
+                  <select id="dc-tile-ac-dir" class="dc-input" style="width:130px;height:24px;padding:2px 4px;font-size:11px;background:#0d1520;color:#38bdf8;font-weight:600;">
+                    <option value="north" ${(tile.airflowDir || 'north') === 'north' ? 'selected' : ''}>North (⬆)</option>
+                    <option value="south" ${tile.airflowDir === 'south' ? 'selected' : ''}>South (⬇)</option>
+                    <option value="east" ${tile.airflowDir === 'east' ? 'selected' : ''}>East (➡)</option>
+                    <option value="west" ${tile.airflowDir === 'west' ? 'selected' : ''}>West (⬅)</option>
+                  </select>
+                </div>
+                <div class="dc-info-row">
+                  <span class="dc-info-label">Vent Depth</span>
+                  <select id="dc-tile-ac-depth" class="dc-input" style="width:130px;height:24px;padding:2px 4px;font-size:11px;background:#0d1520;color:#38bdf8;font-weight:600;">
+                    <option value="200" ${tile.airChannelHeightMm === 200 ? 'selected' : ''}>200 mm (Slim)</option>
+                    <option value="300" ${(tile.airChannelHeightMm || 300) === 300 ? 'selected' : ''}>300 mm (Standard - Clears Ducts)</option>
+                    <option value="400" ${tile.airChannelHeightMm === 400 ? 'selected' : ''}>400 mm (High Flow)</option>
+                  </select>
+                </div>
+              ` : ''}
               <div class="dc-info-row"><span class="dc-info-label">Plenum</span><span class="dc-info-val">${floor.raisedFloorHeightMm || 450} mm</span></div>
             </div>
             <div class="dc-props-actions">
               <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-tile-btn-vent">🔲 Set to Ventilated Grille</button>
               <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-tile-btn-perf">▦ Set to Perforated / Vented</button>
-              <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-tile-btn-ac">💨 Under-Floor Air Channel</button>
+              <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-tile-btn-ac">💨 Under-Floor Air Channel (300mm)</button>
               <button class="dc-btn dc-btn-sm dc-btn-full" id="dc-tile-btn-addinfra">⚡ Add Cable Tray / Duct</button>
               <button class="dc-btn dc-btn-sm dc-btn-secondary dc-btn-full" id="dc-tile-btn-std">↺ Convert to Standard</button>
             </div>
           `;
+
+          el.querySelector('#dc-tile-ac-dir')?.addEventListener('change', (e: any) => {
+            const dir = e.target.value as DcAirflowDirection;
+            dcState.setFloorTileType(tile.id, 'air-channel', dir, tile.airChannelHeightMm || 300);
+            this.refresh();
+          });
+
+          el.querySelector('#dc-tile-ac-depth')?.addEventListener('change', (e: any) => {
+            const depth = parseInt(e.target.value, 10) || 300;
+            dcState.setFloorTileType(tile.id, 'air-channel', tile.airflowDir || 'north', depth);
+            this.refresh();
+          });
 
           el.querySelector('#dc-tile-btn-vent')?.addEventListener('click', () => {
             dcState.setFloorTileType(tile.id, 'ventilated');
@@ -2326,7 +3333,7 @@ export class BuildFloorView {
             const dirs: DcAirflowDirection[] = ['north', 'south', 'east', 'west'];
             const curIdx = dirs.indexOf(tile.airflowDir || 'north');
             const nextDir = dirs[(curIdx + 1) % dirs.length];
-            dcState.setFloorTileType(tile.id, 'air-channel', nextDir);
+            dcState.setFloorTileType(tile.id, 'air-channel', nextDir, 300);
             this.refresh();
           });
           el.querySelector('#dc-tile-btn-addinfra')?.addEventListener('click', () => {
@@ -2341,24 +3348,167 @@ export class BuildFloorView {
       }
 
       if (s.selectedInfraId && floor && floor.infrastructure) {
-        const item = floor.infrastructure.find(i => i.id === s.selectedInfraId);
+        const baseId = s.selectedInfraId.includes('_sub') ? s.selectedInfraId.split('_sub')[0] : s.selectedInfraId;
+        const item = floor.infrastructure.find(i => i.id === s.selectedInfraId || i.id === baseId);
         if (item) {
+          const lenM = Math.hypot(item.end.x - item.start.x, item.end.y - item.start.y);
+          const sub = item.subtype || (item.category === 'cable-duct' ? 'pvc-duct' : item.category === 'cable-tray' ? 'basket-tray' : 'cable');
+
           el.innerHTML = `
             <div class="dc-props-section">
-              <div class="dc-props-title">Under-Floor Infrastructure</div>
-              <div class="dc-info-row"><span class="dc-info-label">ID</span><span class="dc-info-val">${item.id}</span></div>
-              <div class="dc-info-row"><span class="dc-info-label">Name</span><span class="dc-info-val">${item.name}</span></div>
-              <div class="dc-info-row"><span class="dc-info-label">Category</span><span class="dc-info-val"><b>${item.category.toUpperCase()}</b></span></div>
-              <div class="dc-info-row"><span class="dc-info-label">Layer</span><span class="dc-info-val">${item.layer}</span></div>
-              <div class="dc-info-row"><span class="dc-info-label">Size</span><span class="dc-info-val">${item.widthMm}W × ${item.heightMm}H mm</span></div>
-              <div class="dc-info-row"><span class="dc-info-label">Elevation</span><span class="dc-info-val">${item.elevationMm} mm</span></div>
+              <div class="dc-props-title">⚡ Raceway & Pathway Properties</div>
+              <div class="dc-info-row"><span class="dc-info-label">Name</span><span class="dc-info-val" style="color:#38bdf8;font-weight:700;">${item.name}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Length</span><span class="dc-info-val">${lenM.toFixed(2)} m (${(lenM / (floor.tileSizeMm / 1000)).toFixed(1)} tiles)</span></div>
+              
+              <!-- Pathway Subtype / Material Switcher -->
+              <div class="dc-info-row">
+                <span class="dc-info-label">Raceway Type</span>
+                <select id="dc-infra-subtype" class="dc-input" style="width:138px;height:24px;padding:2px 4px;font-size:11px;background:#0d1520;color:#38bdf8;font-weight:600;">
+                  <option value="pvc-duct" ${sub === 'pvc-duct' ? 'selected' : ''}>PVC Solid Duct</option>
+                  <option value="solid-duct" ${sub === 'solid-duct' ? 'selected' : ''}>Solid Metal Duct</option>
+                  <option value="basket-tray" ${sub === 'basket-tray' ? 'selected' : ''}>Wire Basket Tray</option>
+                  <option value="ladder-rack" ${sub === 'ladder-rack' ? 'selected' : ''}>Ladder Cable Runway</option>
+                  <option value="fiber-raceway" ${sub === 'fiber-raceway' ? 'selected' : ''}>Yellow Fiber Raceway</option>
+                  <option value="busway" ${sub === 'busway' ? 'selected' : ''}>Power Busway Bar</option>
+                  <option value="conduit" ${sub === 'conduit' ? 'selected' : ''}>EMT Metallic Conduit</option>
+                </select>
+              </div>
+
+              <!-- Pathway Width -->
+              <div class="dc-info-row">
+                <span class="dc-info-label">Width (mm)</span>
+                <select id="dc-infra-width" class="dc-input" style="width:138px;height:24px;padding:2px 4px;font-size:11px;background:#0d1520;color:#38bdf8;font-weight:600;">
+                  <option value="100" ${item.widthMm === 100 ? 'selected' : ''}>100 mm (4 in)</option>
+                  <option value="150" ${item.widthMm === 150 ? 'selected' : ''}>150 mm (6 in)</option>
+                  <option value="200" ${item.widthMm === 200 ? 'selected' : ''}>200 mm (8 in)</option>
+                  <option value="300" ${item.widthMm === 300 ? 'selected' : ''}>300 mm (12 in)</option>
+                  <option value="400" ${(item.widthMm || 400) === 400 ? 'selected' : ''}>400 mm (16 in)</option>
+                  <option value="500" ${item.widthMm === 500 ? 'selected' : ''}>500 mm (20 in)</option>
+                  <option value="600" ${item.widthMm === 600 ? 'selected' : ''}>600 mm (24 in - Tile Width)</option>
+                </select>
+              </div>
+
+              <!-- Pathway Height -->
+              <div class="dc-info-row">
+                <span class="dc-info-label">Height (mm)</span>
+                <select id="dc-infra-height" class="dc-input" style="width:138px;height:24px;padding:2px 4px;font-size:11px;background:#0d1520;color:#38bdf8;font-weight:600;">
+                  <option value="50" ${item.heightMm === 50 ? 'selected' : ''}>50 mm (2 in)</option>
+                  <option value="80" ${(item.heightMm || 80) === 80 ? 'selected' : ''}>80 mm (3.2 in)</option>
+                  <option value="100" ${item.heightMm === 100 ? 'selected' : ''}>100 mm (4 in)</option>
+                  <option value="150" ${item.heightMm === 150 ? 'selected' : ''}>150 mm (6 in)</option>
+                </select>
+              </div>
+
+              <!-- Floor Elevation & Slab Sticking -->
+              <div class="dc-info-row">
+                <span class="dc-info-label">Elevation</span>
+                <select id="dc-infra-elev" class="dc-input" style="width:138px;height:24px;padding:2px 4px;font-size:11px;background:#0d1520;color:#38bdf8;font-weight:600;">
+                  <option value="slab" ${item.layer === 'underfloor' && item.mountType !== 'bracket' ? 'selected' : ''}>Sticks to Subfloor Slab (Base)</option>
+                  <option value="mid-plenum" ${item.layer === 'underfloor' && item.mountType === 'bracket' ? 'selected' : ''}>Mid-Plenum Bracket (-220mm)</option>
+                  <option value="overhead" ${item.layer === 'overhead' ? 'selected' : ''}>Overhead Trapeze (+2600mm)</option>
+                </select>
+              </div>
+
               <div class="dc-info-row"><span class="dc-info-label">Start</span><span class="dc-info-val">(${item.start.x.toFixed(2)}m, ${item.start.y.toFixed(2)}m)</span></div>
               <div class="dc-info-row"><span class="dc-info-label">End</span><span class="dc-info-val">(${item.end.x.toFixed(2)}m, ${item.end.y.toFixed(2)}m)</span></div>
             </div>
             <div class="dc-props-actions">
+              <button class="dc-btn dc-btn-sm dc-btn-secondary dc-btn-full" id="dc-infra-stick-slab">⚓ Stick to Floor Slab</button>
+              <button class="dc-btn dc-btn-sm dc-btn-secondary dc-btn-full" id="dc-infra-dup">⊕ Duplicate Raceway</button>
               <button class="dc-btn dc-btn-sm dc-btn-danger dc-btn-full" id="dc-infra-delete">🗑 Delete Infrastructure</button>
             </div>
           `;
+
+          el.querySelector('#dc-infra-subtype')?.addEventListener('change', (e: any) => {
+            const newSub = e.target.value;
+            const catMap: Record<string, DcInfraCategory> = {
+              'pvc-duct': 'cable-duct',
+              'solid-duct': 'cable-duct',
+              'basket-tray': 'cable-tray',
+              'ladder-rack': 'cable-tray',
+              'fiber-raceway': 'fiber-raceway',
+              'busway': 'busway',
+              'conduit': 'conduit',
+            };
+            const cat = catMap[newSub] || 'cable-duct';
+            const name = newSub === 'pvc-duct' ? 'PVC Cable Duct'
+              : newSub === 'solid-duct' ? 'Galvanized Solid Duct'
+              : newSub === 'basket-tray' ? 'Wire Basket Tray'
+              : newSub === 'ladder-rack' ? 'Ladder Cable Runway'
+              : newSub === 'fiber-raceway' ? 'Yellow Fiber Optic Raceway'
+              : newSub === 'busway' ? 'Power Busway Feeder'
+              : 'Metallic Conduit';
+
+            dcState.updateInfrastructureItem(item.id, { subtype: newSub, category: cat, name });
+            this.refresh();
+            eventBus.emit('notification', { message: `Updated raceway to ${name}.`, type: 'success' });
+          });
+
+          el.querySelector('#dc-infra-width')?.addEventListener('change', (e: any) => {
+            const w = parseInt(e.target.value, 10) || 400;
+            dcState.updateInfrastructureItem(item.id, { widthMm: w });
+            this.refresh();
+            eventBus.emit('notification', { message: `Updated raceway width to ${w}mm.`, type: 'info' });
+          });
+
+          el.querySelector('#dc-infra-height')?.addEventListener('change', (e: any) => {
+            const h = parseInt(e.target.value, 10) || 80;
+            dcState.updateInfrastructureItem(item.id, { heightMm: h });
+            this.refresh();
+          });
+
+          el.querySelector('#dc-infra-elev')?.addEventListener('change', (e: any) => {
+            const val = e.target.value;
+            const plenumDepthMm = floor.raisedFloorHeightMm || 450;
+            if (val === 'slab') {
+              dcState.updateInfrastructureItem(item.id, {
+                layer: 'underfloor',
+                mountType: 'slab-resting',
+                elevationMm: -(plenumDepthMm - (item.heightMm || 80) / 2),
+              });
+              eventBus.emit('notification', { message: 'Set raceway to stick firmly to subfloor concrete slab.', type: 'success' });
+            } else if (val === 'mid-plenum') {
+              dcState.updateInfrastructureItem(item.id, {
+                layer: 'underfloor',
+                mountType: 'bracket',
+                elevationMm: -220,
+              });
+            } else if (val === 'overhead') {
+              dcState.updateInfrastructureItem(item.id, {
+                layer: 'overhead',
+                mountType: 'trapeze',
+                elevationMm: 2600,
+              });
+            }
+            this.refresh();
+          });
+
+          el.querySelector('#dc-infra-stick-slab')?.addEventListener('click', () => {
+            const plenumDepthMm = floor.raisedFloorHeightMm || 450;
+            dcState.updateInfrastructureItem(item.id, {
+              layer: 'underfloor',
+              mountType: 'slab-resting',
+              elevationMm: -(plenumDepthMm - (item.heightMm || 80) / 2),
+            });
+            this.refresh();
+            eventBus.emit('notification', { message: 'Raceway anchored directly to concrete slab.', type: 'success' });
+          });
+
+          el.querySelector('#dc-infra-dup')?.addEventListener('click', () => {
+            const tileM = floor.tileSizeMm / 1000;
+            const dupId = 'INFRA-' + Date.now().toString(36).toUpperCase();
+            const dupItem: DcInfrastructureItem = {
+              ...item,
+              id: dupId,
+              name: `${item.name} (Copy)`,
+              start: { ...item.start, y: item.start.y + tileM },
+              end: { ...item.end, y: item.end.y + tileM },
+            };
+            dcState.addInfrastructureItem(dupItem);
+            dcState.setState({ selectedInfraId: dupId });
+            this.refresh();
+          });
+
           el.querySelector('#dc-infra-delete')?.addEventListener('click', () => {
             if (confirm(`Delete infrastructure "${item.name}"?`)) {
               dcState.deleteInfrastructureItem(item.id);
@@ -3857,7 +5007,8 @@ export class BuildFloorView {
               break;
             }
             if (cur.userData?.infraId) {
-              clickedInfraId = cur.userData.infraId;
+              const rawId = cur.userData.infraId;
+              clickedInfraId = rawId.includes('_sub') ? rawId.split('_sub')[0] : rawId;
               break;
             }
             if (cur.userData?.tileId) {
@@ -3874,7 +5025,8 @@ export class BuildFloorView {
           this.renderPropsPanel();
           this.update3DSelectionHighlight();
         } else if (clickedInfraId) {
-          dcState.setState({ selectedInfraId: clickedInfraId, selectedRackId: null, selectedTileId: null, selectedTileIds: [] });
+          const baseId = clickedInfraId.includes('_sub') ? clickedInfraId.split('_sub')[0] : clickedInfraId;
+          dcState.setState({ selectedInfraId: baseId, selectedRackId: null, selectedTileId: null, selectedTileIds: [] });
           this.renderPropsPanel();
           this.rebuildThreeScene(currentFloor);
         } else if (clickedTileId) {
@@ -4273,19 +5425,19 @@ export class BuildFloorView {
           acMesh.userData = { isDynamic: true, tileId: t.id };
           tilesGroup.add(acMesh);
 
-          // Physical Under-Floor Air Duct Box below raised floor (y = -plenumDepthMm to 0)
-          const ductDepth = plenumDepthMm - 40;
-          const ductBoxGeo = new THREE.BoxGeometry(panelSize - 10, ductDepth, panelSize - 10);
+          // Physical Under-Floor Air Duct Box (Default 300mm height to avoid obstructing underfloor raceways)
+          const acHeight = Math.min(plenumDepthMm - 50, t.airChannelHeightMm || 300);
+          const ductBoxGeo = new THREE.BoxGeometry(panelSize - 12, acHeight, panelSize - 12);
           const ductMesh = new THREE.Mesh(ductBoxGeo, airChannelDuctMat);
-          ductMesh.position.set(txMm, -ductDepth / 2 - 10, tzMm);
+          ductMesh.position.set(txMm, -acHeight / 2 - 2, tzMm);
           ductMesh.userData = { isDynamic: true, tileId: t.id };
           airChannelGroup.add(ductMesh);
 
-          // Directional airflow arrow inside/on top of under-floor duct
+          // Directional airflow arrow inside under-floor duct
           const arrowDir = t.airflowDir || 'north';
           const arrowConeGeo = new THREE.ConeGeometry(30, 80, 8);
           const arrowMesh = new THREE.Mesh(arrowConeGeo, airArrowMat);
-          arrowMesh.position.set(txMm, -ductDepth / 2, tzMm);
+          arrowMesh.position.set(txMm, -acHeight / 2 - 2, tzMm);
           if (arrowDir === 'north') arrowMesh.rotation.x = -Math.PI / 2;
           else if (arrowDir === 'south') arrowMesh.rotation.x = Math.PI / 2;
           else if (arrowDir === 'east') arrowMesh.rotation.z = -Math.PI / 2;
@@ -4352,24 +5504,44 @@ export class BuildFloorView {
       this.threeScene.add(airChannelGroup);
     }
 
-    // 4. Under-Floor Cabling, Cable Trays, Ducts & Risers
+    // 4. Under-Floor & Overhead Cabling, Cable Trays, Ducts & Risers
     const infraGroup = new THREE.Group();
     infraGroup.userData = { isDynamic: true };
 
-    const trayMat = new THREE.MeshStandardMaterial({
-      color: 0xf59e0b, // Industrial yellow cable tray
+    const pvcMat = new THREE.MeshStandardMaterial({
+      color: 0xd1d5db, // Industrial PVC light grey
       roughness: 0.40,
-      metalness: 0.70,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
     });
-    const ductMat = new THREE.MeshStandardMaterial({
+    const solidDuctMat = new THREE.MeshStandardMaterial({
       color: 0x94a3b8, // Galvanized metal duct
       roughness: 0.35,
+      metalness: 0.85,
+      side: THREE.DoubleSide,
+    });
+    const trayMat = new THREE.MeshStandardMaterial({
+      color: 0xf59e0b, // Industrial amber wire basket tray
+      roughness: 0.40,
+      metalness: 0.70,
+      side: THREE.DoubleSide,
+    });
+    const ladderMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b, // Dark powder-coated ladder runway
+      roughness: 0.30,
       metalness: 0.80,
+      side: THREE.DoubleSide,
+    });
+    const fiberMat = new THREE.MeshStandardMaterial({
+      color: 0xfacc15, // Bright authentic safety yellow fiber optic raceway
+      roughness: 0.25,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
     });
     const powerCableMat = new THREE.MeshStandardMaterial({
       color: 0xef4444, // Red high-voltage / power busway
       roughness: 0.50,
-      metalness: 0.20,
+      metalness: 0.30,
     });
     const dataCableMat = new THREE.MeshStandardMaterial({
       color: 0x3b82f6, // Blue fiber / Cat6 data bundle
@@ -4381,41 +5553,548 @@ export class BuildFloorView {
       roughness: 0.45,
       metalness: 0.65,
     });
+    const unistrutMat = new THREE.MeshStandardMaterial({
+      color: 0x64748b, // Zinc-plated unistrut support channel
+      roughness: 0.35,
+      metalness: 0.75,
+    });
+    const steelRodMat = new THREE.MeshStandardMaterial({
+      color: 0xd4d4d8, // Threaded steel ceiling hanger rod
+      roughness: 0.20,
+      metalness: 0.90,
+    });
+    const roofY = (floor as any).ceilingHeightMm || 3800;
 
-    (floor.infrastructure || []).forEach(item => {
-      const sX = item.start.x * 1000;
-      const sZ = item.start.y * 1000;
-      const eX = item.end.x * 1000;
-      const eZ = item.end.y * 1000;
-      const elevY = item.elevationMm !== undefined ? item.elevationMm : -220; // depth below raised floor
-      const lengthMm = Math.hypot(eX - sX, eZ - sZ) || 600;
-      const midX = (sX + eX) / 2;
-      const midZ = (sZ + eZ) / 2;
-      const angleY = Math.atan2(eX - sX, eZ - sZ);
+    const infraItems = floor.infrastructure || [];
+    const junctionNodes3D = solveRacewayTopology(infraItems, { racks: floor.racks, snapRadiusM: 0.22 });
+    const truncatedSegments3D = getTruncatedInfraSegments(infraItems, junctionNodes3D);
 
-      let itemMat = trayMat;
-      if (item.category === 'cable-duct') itemMat = ductMat;
-      else if (item.category === 'power-cable') itemMat = powerCableMat;
-      else if (item.category === 'data-cable') itemMat = dataCableMat;
-      else if (item.category === 'riser') itemMat = riserMat;
+    const getInfraMaterial = (cat: string, sub?: string) => {
+      const s = sub || (cat === 'cable-duct' ? 'pvc-duct' : 'basket-tray');
+      if (s === 'solid-duct') return solidDuctMat;
+      if (s === 'basket-tray') return trayMat;
+      if (s === 'ladder-rack') return ladderMat;
+      if (s === 'fiber-raceway' || cat === 'fiber-raceway') return fiberMat;
+      if (cat === 'power-cable' || s === 'busway' || s === 'power-busway') return powerCableMat;
+      if (cat === 'data-cable') return dataCableMat;
+      if (cat === 'riser') return riserMat;
+      return pvcMat;
+    };
+
+    // A. Render Linear Horizontal Channel Segments & Risers
+    truncatedSegments3D.forEach(tSeg => {
+      const item = tSeg.originalItem;
+      const sX = tSeg.start.x * 1000;
+      const sZ = tSeg.start.y * 1000;
+      const eX = tSeg.end.x * 1000;
+      const eZ = tSeg.end.y * 1000;
+      const isUF = item.layer === 'underfloor';
+      const subfloorY = -plenumDepthMm;
+      const itemH = item.heightMm || 80;
+      const itemW = item.widthMm || 300;
+      const defaultSlabY = subfloorY + itemH / 2;
+
+      // Underfloor raceways sit directly on the concrete slab unless explicitly mounted on bracket
+      const elevY = item.mountType === 'bracket'
+        ? (item.elevationMm !== undefined ? item.elevationMm : -220)
+        : (isUF ? defaultSlabY : (item.elevationMm && item.elevationMm > 0 ? item.elevationMm : 2600));
+
+      const lengthMm = tSeg.lengthMm;
+      const midX = tSeg.midX;
+      const midZ = tSeg.midZ;
+      const angleY = tSeg.angleY;
+      const masterInfraId = item.parentItemId || item.id;
+      const isSelected = item.id === s.selectedInfraId || item.parentItemId === s.selectedInfraId;
+      const itemMat = getInfraMaterial(item.category, item.subtype);
 
       if (item.category === 'riser') {
         // Vertical riser pillar spanning from subfloor through raised floor
-        const rGeo = new THREE.CylinderGeometry(item.widthMm / 2, item.widthMm / 2, plenumDepthMm + 300, 16);
+        const rGeo = new THREE.CylinderGeometry(itemW / 2, itemW / 2, plenumDepthMm + 300, 16);
         const rMesh = new THREE.Mesh(rGeo, itemMat);
         rMesh.position.set(midX, -plenumDepthMm / 2 + 150, midZ);
-        rMesh.userData = { isDynamic: true, infraId: item.id };
+        rMesh.userData = { isDynamic: true, infraId: masterInfraId };
         infraGroup.add(rMesh);
       } else {
-        // Linear horizontal under-floor pathway (Tray, Duct, Conduit, Cable Bundle)
-        const iGeo = new THREE.BoxGeometry(item.widthMm || 200, item.heightMm || 60, lengthMm);
-        const iMesh = new THREE.Mesh(iGeo, itemMat);
-        iMesh.position.set(midX, elevY, midZ);
-        iMesh.rotation.y = angleY;
-        iMesh.userData = { isDynamic: true, infraId: item.id };
-        infraGroup.add(iMesh);
+        // Open 'U' Section Linear Horizontal Pathway Channel (holding visible cables)
+        const channelGroup = new THREE.Group();
+        channelGroup.position.set(midX, elevY, midZ);
+        channelGroup.rotation.y = angleY;
+        channelGroup.userData = { isDynamic: true, infraId: masterInfraId };
+
+        const sub = (item.subtype || (item.category === 'cable-duct' ? 'pvc-duct' : item.category === 'cable-tray' ? 'basket-tray' : 'pvc-duct')).toLowerCase();
+        const wallT = Math.max(5, itemW * 0.025); // ~6-8mm wall thickness
+        const baseT = Math.max(6, itemW * 0.03);  // ~8mm base thickness
+
+        if (sub === 'basket-tray') {
+          // ── 1. WIRE MESH BASKET TRAY (Authentic Open Wire Mesh Structure) ──
+          // Top rim wire rails (Left & Right)
+          const rimWireGeo = new THREE.CylinderGeometry(3.5, 3.5, lengthMm, 8);
+          const rimL = new THREE.Mesh(rimWireGeo, trayMat);
+          rimL.rotation.x = Math.PI / 2;
+          rimL.position.set(-itemW / 2, itemH / 2, 0);
+          rimL.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(rimL);
+
+          const rimR = new THREE.Mesh(rimWireGeo, trayMat);
+          rimR.rotation.x = Math.PI / 2;
+          rimR.position.set(itemW / 2, itemH / 2, 0);
+          rimR.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(rimR);
+
+          // Longitudinal bottom wire rods (4-6 parallel rods)
+          const numBottomWires = Math.max(3, Math.round(itemW / 60));
+          const bWireGeo = new THREE.CylinderGeometry(2.5, 2.5, lengthMm, 8);
+          for (let bi = 0; bi < numBottomWires; bi++) {
+            const bx = -itemW / 2 + (bi / (numBottomWires - 1)) * itemW;
+            const bWire = new THREE.Mesh(bWireGeo, trayMat);
+            bWire.rotation.x = Math.PI / 2;
+            bWire.position.set(bx, -itemH / 2, 0);
+            bWire.userData = { isDynamic: true, infraId: item.id };
+            channelGroup.add(bWire);
+          }
+
+          // Side middle longitudinal wire rods
+          const midWireGeo = new THREE.CylinderGeometry(2.5, 2.5, lengthMm, 8);
+          const midL = new THREE.Mesh(midWireGeo, trayMat);
+          midL.rotation.x = Math.PI / 2;
+          midL.position.set(-itemW / 2, 0, 0);
+          midL.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(midL);
+
+          const midR = new THREE.Mesh(midWireGeo, trayMat);
+          midR.rotation.x = Math.PI / 2;
+          midR.position.set(itemW / 2, 0, 0);
+          midR.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(midR);
+
+          // Transverse welded U-rungs spaced every 100mm along length
+          const rungSpacing = 100;
+          const numRungs = Math.max(2, Math.floor(lengthMm / rungSpacing) + 1);
+          const crossBottomGeo = new THREE.CylinderGeometry(2.5, 2.5, itemW, 8);
+          const crossSideGeo = new THREE.CylinderGeometry(2.5, 2.5, itemH, 8);
+
+          for (let ri = 0; ri < numRungs; ri++) {
+            const rz = -lengthMm / 2 + (ri / (numRungs - 1)) * lengthMm;
+            const bCross = new THREE.Mesh(crossBottomGeo, trayMat);
+            bCross.rotation.z = Math.PI / 2;
+            bCross.position.set(0, -itemH / 2, rz);
+            bCross.userData = { isDynamic: true, infraId: item.id };
+            channelGroup.add(bCross);
+
+            const vL = new THREE.Mesh(crossSideGeo, trayMat);
+            vL.position.set(-itemW / 2, 0, rz);
+            vL.userData = { isDynamic: true, infraId: item.id };
+            channelGroup.add(vL);
+
+            const vR = new THREE.Mesh(crossSideGeo, trayMat);
+            vR.position.set(itemW / 2, 0, rz);
+            vR.userData = { isDynamic: true, infraId: item.id };
+            channelGroup.add(vR);
+          }
+
+          // Internal cables inside wire mesh basket
+          const cableRadius = Math.max(4, itemH * 0.12);
+          const cableGeo = new THREE.CylinderGeometry(cableRadius, cableRadius, lengthMm - 20, 8);
+          const cable1 = new THREE.Mesh(cableGeo, dataCableMat);
+          cable1.rotation.x = Math.PI / 2;
+          cable1.position.set(-itemW / 4, -itemH / 2 + cableRadius + 4, 0);
+          cable1.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(cable1);
+
+          const cable2 = new THREE.Mesh(cableGeo, fiberMat);
+          cable2.rotation.x = Math.PI / 2;
+          cable2.position.set(itemW / 4, -itemH / 2 + cableRadius + 4, 0);
+          cable2.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(cable2);
+
+        } else if (sub === 'ladder-rack') {
+          // ── 2. LADDER CABLE RUNWAY (Side Stringers + Welded Rungs) ──
+          const stringerGeo = new THREE.BoxGeometry(16, itemH, lengthMm);
+          const stringerL = new THREE.Mesh(stringerGeo, ladderMat);
+          stringerL.position.set(-itemW / 2 + 8, 0, 0);
+          stringerL.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(stringerL);
+
+          const stringerR = new THREE.Mesh(stringerGeo, ladderMat);
+          stringerR.position.set(itemW / 2 - 8, 0, 0);
+          stringerR.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(stringerR);
+
+          // Transverse rectangular rungs spaced every 250mm
+          const rungSpacing = 250;
+          const numRungs = Math.max(2, Math.floor(lengthMm / rungSpacing) + 1);
+          const rungGeo = new THREE.BoxGeometry(itemW - 32, 14, 28);
+
+          for (let ri = 0; ri < numRungs; ri++) {
+            const rz = -lengthMm / 2 + (ri / (numRungs - 1)) * lengthMm;
+            const rung = new THREE.Mesh(rungGeo, ladderMat);
+            rung.position.set(0, -itemH / 2 + 7, rz);
+            rung.userData = { isDynamic: true, infraId: item.id };
+            channelGroup.add(rung);
+          }
+
+          // Heavy cables draped across rungs
+          const cableRadius = Math.max(6, itemH * 0.16);
+          const cableGeo = new THREE.CylinderGeometry(cableRadius, cableRadius, lengthMm - 20, 8);
+          const cable1 = new THREE.Mesh(cableGeo, dataCableMat);
+          cable1.rotation.x = Math.PI / 2;
+          cable1.position.set(-itemW / 4, -itemH / 2 + 14 + cableRadius, 0);
+          cable1.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(cable1);
+
+          const cable2 = new THREE.Mesh(cableGeo, powerCableMat);
+          cable2.rotation.x = Math.PI / 2;
+          cable2.position.set(itemW / 4, -itemH / 2 + 14 + cableRadius, 0);
+          cable2.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(cable2);
+
+        } else if (sub === 'fiber-raceway' || item.category === 'fiber-raceway') {
+          // ── 3. YELLOW FIBER OPTIC RACEWAY (Molded Plastic U-Trough + Side Ribs) ──
+          const baseGeo = new THREE.BoxGeometry(itemW, baseT, lengthMm);
+          const baseMesh = new THREE.Mesh(baseGeo, fiberMat);
+          baseMesh.position.set(0, -itemH / 2 + baseT / 2, 0);
+          baseMesh.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(baseMesh);
+
+          const wallGeo = new THREE.BoxGeometry(wallT, itemH, lengthMm);
+          const wallL = new THREE.Mesh(wallGeo, fiberMat);
+          wallL.position.set(-itemW / 2 + wallT / 2, 0, 0);
+          wallL.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(wallL);
+
+          const wallR = new THREE.Mesh(wallGeo, fiberMat);
+          wallR.position.set(itemW / 2 - wallT / 2, 0, 0);
+          wallR.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(wallR);
+
+          const lipGeo = new THREE.BoxGeometry(wallT * 1.6, wallT, lengthMm);
+          const lipL = new THREE.Mesh(lipGeo, fiberMat);
+          lipL.position.set(-itemW / 2 - wallT * 0.2, itemH / 2 - wallT / 2, 0);
+          lipL.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(lipL);
+
+          const lipR = new THREE.Mesh(lipGeo, fiberMat);
+          lipR.position.set(itemW / 2 + wallT * 0.2, itemH / 2 - wallT / 2, 0);
+          lipR.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(lipR);
+
+          // Exterior snap-on rib tracks
+          const ribGeo = new THREE.BoxGeometry(wallT * 0.8, wallT * 1.5, lengthMm);
+          const ribL = new THREE.Mesh(ribGeo, fiberMat);
+          ribL.position.set(-itemW / 2 - wallT * 0.4, 0, 0);
+          ribL.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(ribL);
+
+          const ribR = new THREE.Mesh(ribGeo, fiberMat);
+          ribR.position.set(itemW / 2 + wallT * 0.4, 0, 0);
+          ribR.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(ribR);
+
+        } else if (sub === 'solid-duct') {
+          // ── 4. SOLID GALVANIZED STEEL DUCT (Sheet Metal + Splice Collars) ──
+          const baseGeo = new THREE.BoxGeometry(itemW, baseT, lengthMm);
+          const baseMesh = new THREE.Mesh(baseGeo, solidDuctMat);
+          baseMesh.position.set(0, -itemH / 2 + baseT / 2, 0);
+          baseMesh.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(baseMesh);
+
+          const wallGeo = new THREE.BoxGeometry(wallT, itemH, lengthMm);
+          const wallL = new THREE.Mesh(wallGeo, solidDuctMat);
+          wallL.position.set(-itemW / 2 + wallT / 2, 0, 0);
+          wallL.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(wallL);
+
+          const wallR = new THREE.Mesh(wallGeo, solidDuctMat);
+          wallR.position.set(itemW / 2 - wallT / 2, 0, 0);
+          wallR.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(wallR);
+
+          const flangeGeo = new THREE.BoxGeometry(wallT * 1.5, wallT, lengthMm);
+          const flangeL = new THREE.Mesh(flangeGeo, solidDuctMat);
+          flangeL.position.set(-itemW / 2 - wallT * 0.25, itemH / 2 - wallT / 2, 0);
+          flangeL.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(flangeL);
+
+          const flangeR = new THREE.Mesh(flangeGeo, solidDuctMat);
+          flangeR.position.set(itemW / 2 + wallT * 0.25, itemH / 2 - wallT / 2, 0);
+          flangeR.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(flangeR);
+
+          const cableRadius = Math.max(4, itemH * 0.12);
+          const cableGeo = new THREE.CylinderGeometry(cableRadius, cableRadius, lengthMm - 20, 8);
+          const cable1 = new THREE.Mesh(cableGeo, dataCableMat);
+          cable1.rotation.x = Math.PI / 2;
+          cable1.position.set(-itemW / 4, -itemH / 2 + baseT + cableRadius, 0);
+          cable1.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(cable1);
+
+        } else if (sub === 'busway' || sub === 'power-busway' || item.category === 'busway' || item.category === 'power-cable') {
+          // ── 5. POWER BUSWAY TRUNK BAR (Red Extruded Box + Copper Busbars) ──
+          const housingGeo = new THREE.BoxGeometry(itemW, itemH, lengthMm);
+          const housing = new THREE.Mesh(housingGeo, powerCableMat);
+          housing.position.set(0, 0, 0);
+          housing.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(housing);
+
+          const finGeo = new THREE.BoxGeometry(itemW * 0.85, 8, lengthMm);
+          const fin = new THREE.Mesh(finGeo, powerCableMat);
+          fin.position.set(0, itemH / 2 + 4, 0);
+          fin.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(fin);
+
+          // Copper busbar terminal bars
+          const copperMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.25, metalness: 0.95 });
+          const barW = Math.max(8, itemW * 0.12);
+          const barH = itemH * 0.5;
+          const barGeo = new THREE.BoxGeometry(barW, barH, 20);
+          for (let bi = -2; bi <= 2; bi++) {
+            const copperBar = new THREE.Mesh(barGeo, copperMat);
+            copperBar.position.set((bi * itemW) / 6, 0, lengthMm / 2 + 10);
+            copperBar.userData = { isDynamic: true, infraId: item.id };
+            channelGroup.add(copperBar);
+          }
+
+          // Tap-off distribution plug boxes
+          const tapSpacing = 1200;
+          const numTaps = Math.max(1, Math.floor(lengthMm / tapSpacing));
+          const tapBoxGeo = new THREE.BoxGeometry(70, 70, 70);
+          for (let ti = 0; ti < numTaps; ti++) {
+            const tz = -lengthMm / 2 + ((ti + 0.5) / numTaps) * lengthMm;
+            const tapBox = new THREE.Mesh(tapBoxGeo, solidDuctMat);
+            tapBox.position.set(0, -itemH / 2 - 35, tz);
+            tapBox.userData = { isDynamic: true, infraId: item.id };
+            channelGroup.add(tapBox);
+          }
+
+        } else if (sub === 'conduit' || item.category === 'conduit') {
+          // ── 6. EMT METALLIC CONDUIT (Tubular Steel Pipe) ──
+          const conduitRadius = Math.max(15, itemW * 0.20);
+          const conduitGeo = new THREE.CylinderGeometry(conduitRadius, conduitRadius, lengthMm, 20);
+          const conduitMesh = new THREE.Mesh(conduitGeo, solidDuctMat);
+          conduitMesh.rotation.x = Math.PI / 2;
+          conduitMesh.position.set(0, 0, 0);
+          conduitMesh.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(conduitMesh);
+
+        } else {
+          // ── 7. PVC SOLID DUCT (Default: Polymer U-Trough with Center Divider) ──
+          const baseGeo = new THREE.BoxGeometry(itemW, baseT, lengthMm);
+          const baseMesh = new THREE.Mesh(baseGeo, pvcMat);
+          baseMesh.position.set(0, -itemH / 2 + baseT / 2, 0);
+          baseMesh.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(baseMesh);
+
+          const wallGeo = new THREE.BoxGeometry(wallT, itemH, lengthMm);
+          const wallL = new THREE.Mesh(wallGeo, pvcMat);
+          wallL.position.set(-itemW / 2 + wallT / 2, 0, 0);
+          wallL.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(wallL);
+
+          const wallR = new THREE.Mesh(wallGeo, pvcMat);
+          wallR.position.set(itemW / 2 - wallT / 2, 0, 0);
+          wallR.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(wallR);
+
+          const divGeo = new THREE.BoxGeometry(4, itemH * 0.75, lengthMm);
+          const divider = new THREE.Mesh(divGeo, pvcMat);
+          divider.position.set(0, -itemH / 8, 0);
+          divider.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(divider);
+
+          const lipGeo = new THREE.BoxGeometry(wallT * 1.4, wallT, lengthMm);
+          const lipL = new THREE.Mesh(lipGeo, pvcMat);
+          lipL.position.set(-itemW / 2 + wallT * 0.2, itemH / 2 - wallT / 2, 0);
+          lipL.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(lipL);
+
+          const lipR = new THREE.Mesh(lipGeo, pvcMat);
+          lipR.position.set(itemW / 2 - wallT * 0.2, itemH / 2 - wallT / 2, 0);
+          lipR.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(lipR);
+
+          const cableRadius = Math.max(4, itemH * 0.12);
+          const cableGeo = new THREE.CylinderGeometry(cableRadius, cableRadius, lengthMm - 20, 8);
+          const cable1 = new THREE.Mesh(cableGeo, dataCableMat);
+          cable1.rotation.x = Math.PI / 2;
+          cable1.position.set(-itemW / 4, -itemH / 2 + baseT + cableRadius, 0);
+          cable1.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(cable1);
+
+          const cable2 = new THREE.Mesh(cableGeo, powerCableMat);
+          cable2.rotation.x = Math.PI / 2;
+          cable2.position.set(itemW / 4, -itemH / 2 + baseT + cableRadius, 0);
+          cable2.userData = { isDynamic: true, infraId: item.id };
+          channelGroup.add(cable2);
+        }
+
+        // ── 8. THREADED CEILING HANGER RODS & TRAPEZE UNISTRUT SUPPORTS ──
+        if (!isUF) {
+          const rodLen = Math.max(100, (roofY - elevY) - (-itemH / 2 - 18));
+          const rodCenterY = (-itemH / 2 - 18 + (roofY - elevY)) / 2;
+          const rodRadius = 5; // 10mm diameter threaded rod
+
+          const rodGeo = new THREE.CylinderGeometry(rodRadius, rodRadius, rodLen, 10);
+          const uniGeo = new THREE.BoxGeometry(itemW + 80, 20, 40);
+          const anchorGeo = new THREE.BoxGeometry(36, 8, 36);
+          const nutGeo = new THREE.CylinderGeometry(8, 8, 8, 6);
+
+          // Calculate hanger locations along length (minimized, spaced ~2.0m-2.4m, never inside tray)
+          const hangerPositions: number[] = [];
+          if (lengthMm >= 900 && lengthMm < 2400) {
+            // Single clean central support for standard runs
+            hangerPositions.push(0);
+          } else if (lengthMm >= 2400) {
+            const numHangers = Math.max(2, Math.round(lengthMm / 2000));
+            const margin = Math.min(500, lengthMm * 0.2);
+            for (let hi = 0; hi < numHangers; hi++) {
+              const hz = -lengthMm / 2 + margin + (hi / (numHangers - 1)) * (lengthMm - 2 * margin);
+              hangerPositions.push(hz);
+            }
+          }
+
+          for (const hz of hangerPositions) {
+            // Unistrut horizontal trapeze bar underneath the channel
+            const uniMesh = new THREE.Mesh(uniGeo, unistrutMat);
+            uniMesh.position.set(0, -itemH / 2 - 10, hz);
+            uniMesh.userData = { isDynamic: true, infraId: masterInfraId };
+            channelGroup.add(uniMesh);
+
+            // Left Rod (strictly on the external side of the tray)
+            const rodL = new THREE.Mesh(rodGeo, steelRodMat);
+            rodL.position.set(-itemW / 2 - 30, rodCenterY, hz);
+            rodL.userData = { isDynamic: true, infraId: masterInfraId };
+            channelGroup.add(rodL);
+
+            // Right Rod (strictly on the external side of the tray)
+            const rodR = new THREE.Mesh(rodGeo, steelRodMat);
+            rodR.position.set(itemW / 2 + 30, rodCenterY, hz);
+            rodR.userData = { isDynamic: true, infraId: masterInfraId };
+            channelGroup.add(rodR);
+
+            // Top Ceiling Anchor Brackets
+            const anchorL = new THREE.Mesh(anchorGeo, unistrutMat);
+            anchorL.position.set(-itemW / 2 - 30, roofY - elevY - 4, hz);
+            anchorL.userData = { isDynamic: true, infraId: masterInfraId };
+            channelGroup.add(anchorL);
+
+            const anchorR = new THREE.Mesh(anchorGeo, unistrutMat);
+            anchorR.position.set(itemW / 2 + 30, roofY - elevY - 4, hz);
+            anchorR.userData = { isDynamic: true, infraId: masterInfraId };
+            channelGroup.add(anchorR);
+
+            // Bottom Hex Nuts clamping Unistrut
+            const nutL = new THREE.Mesh(nutGeo, steelRodMat);
+            nutL.position.set(-itemW / 2 - 30, -itemH / 2 - 24, hz);
+            nutL.userData = { isDynamic: true, infraId: masterInfraId };
+            channelGroup.add(nutL);
+
+            const nutR = new THREE.Mesh(nutGeo, steelRodMat);
+            nutR.position.set(itemW / 2 + 30, -itemH / 2 - 24, hz);
+            nutR.userData = { isDynamic: true, infraId: masterInfraId };
+            channelGroup.add(nutR);
+          }
+        }
+
+        // Selection Wireframe Outline
+        if (isSelected) {
+          const selBoxGeo = new THREE.BoxGeometry(itemW + 12, itemH + 12, lengthMm + 12);
+          const selWireGeo = new THREE.WireframeGeometry(selBoxGeo);
+          const selWireMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 2 });
+          const selWire = new THREE.LineSegments(selWireGeo, selWireMat);
+          selWire.userData = { isDynamic: true, infraId: masterInfraId };
+          channelGroup.add(selWire);
+        }
+
+        infraGroup.add(channelGroup);
       }
     });
+
+    // B. Render Procedural 3D Automatic Fittings (Open 'U' Section Curved 90° Elbows, T-Joints, Cross-Joints, Couplers, Waterfall Drops, Reducers)
+    junctionNodes3D.forEach(jn => {
+      const jGroup = new THREE.Group();
+      const isUF = jn.layer === 'underfloor';
+      const subfloorY = -plenumDepthMm;
+      const jElevY = isUF ? (subfloorY + jn.heightMm / 2) : (jn.elevationMm || 2600);
+
+      const primaryConnectedInfraId = jn.connectedInfraIds[0]?.split('_sub')[0];
+      jGroup.position.set(jn.x * 1000, jElevY, jn.y * 1000);
+      jGroup.userData = { isDynamic: true, infraId: primaryConnectedInfraId };
+
+      const jMat = getInfraMaterial(jn.category, jn.subtype);
+      const isSelected = jn.connectedInfraIds.some(id => {
+        const base = id.split('_sub')[0];
+        return base === s.selectedInfraId || id === s.selectedInfraId;
+      });
+      const hubSize = jn.widthMm + 24;
+      const hubH = jn.heightMm;
+      const wallT = Math.max(5, jn.widthMm * 0.025);
+      const baseT = Math.max(6, jn.widthMm * 0.03);
+
+      if (jn.fittingType === 'elbow-90' || jn.fittingType === 'elbow-45') {
+        const u1 = jn.branchVectors?.[0] || { x: 1, z: 0 };
+        const u2 = jn.branchVectors?.[1] || { x: 0, z: 1 };
+        const elbow = createElbowMesh(jn.widthMm, jn.heightMm, u1, u2, jMat);
+        jGroup.add(elbow);
+
+      } else if (jn.fittingType === 'tee-joint') {
+        const tee = createTeeMesh(jn.widthMm, jn.heightMm, jn.branchVectors || [], jMat);
+        jGroup.add(tee);
+
+      } else if (jn.fittingType === 'cross-joint') {
+        const cross = createCrossMesh(jn.widthMm, jn.heightMm, jMat);
+        jGroup.add(cross);
+
+      } else if (jn.fittingType === 'reducing-coupling' || jn.fittingType === 'coupling') {
+        const coupling = createCouplingMesh(jn.widthMm, jn.heightMm, jn.branchVectors?.[0], jMat);
+        jGroup.add(coupling);
+
+      } else if (jn.fittingType === 'waterfall-outlet') {
+        // ── 7. OUTLET ASSEMBLY (Trumpet Waterfall Drop Spout over Server Rack) ──
+        const dropHoodGeo = new THREE.BoxGeometry(hubSize, baseT, hubSize);
+        const dropHood = new THREE.Mesh(dropHoodGeo, jMat);
+        dropHood.position.set(0, -hubH / 2 + baseT / 2, 0);
+        dropHood.userData = { isDynamic: true };
+        jGroup.add(dropHood);
+
+        const spoutGeo = new THREE.CylinderGeometry(hubSize * 0.4, hubSize * 0.5, 60, 16, 1, true);
+        const spoutMesh = new THREE.Mesh(spoutGeo, jMat);
+        spoutMesh.position.set(0, -hubH / 2 - 25, 0);
+        spoutMesh.userData = { isDynamic: true };
+        jGroup.add(spoutMesh);
+
+        const chuteHeight = 550;
+        const chuteW = hubSize * 0.6;
+        const chuteWallGeo = new THREE.BoxGeometry(6, chuteHeight, chuteW);
+        
+        const chuteWallL = new THREE.Mesh(chuteWallGeo, jMat);
+        chuteWallL.position.set(-chuteW / 2 + 3, -hubH / 2 - chuteHeight / 2 - 40, 0);
+        chuteWallL.userData = { isDynamic: true };
+        jGroup.add(chuteWallL);
+
+        const chuteWallR = new THREE.Mesh(chuteWallGeo, jMat);
+        chuteWallR.position.set(chuteW / 2 - 3, -hubH / 2 - chuteHeight / 2 - 40, 0);
+        chuteWallR.userData = { isDynamic: true };
+        jGroup.add(chuteWallR);
+
+        const dropCableGeo = new THREE.CylinderGeometry(5, 5, chuteHeight, 8);
+        const dropCable = new THREE.Mesh(dropCableGeo, dataCableMat);
+        dropCable.position.set(0, -hubH / 2 - chuteHeight / 2 - 40, 0);
+        dropCable.userData = { isDynamic: true };
+        jGroup.add(dropCable);
+      }
+
+
+      if (isSelected) {
+        const jWireGeo = new THREE.WireframeGeometry(new THREE.BoxGeometry(hubSize + 16, hubH + 12, hubSize + 16));
+        const jWireMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 2 });
+        const jWire = new THREE.LineSegments(jWireGeo, jWireMat);
+        jWire.userData = { isDynamic: true };
+        jGroup.add(jWire);
+      }
+
+      infraGroup.add(jGroup);
+    });
+
     this.threeScene.add(infraGroup);
 
     // 5. Clean, Exact ESD Grid Lines running directly through pedestal pillar centers
