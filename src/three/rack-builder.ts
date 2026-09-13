@@ -320,8 +320,8 @@ export function buildShellMaterials(colorKeyOrHex: string): {
   };
 }
 
-function make3DPduFaceMat(side: 'left' | 'right'): THREE.MeshStandardMaterial {
-  const TW = 64, TH = 512;
+function make3DPduFaceMat(side: 'left' | 'right', pduW: number = 44): THREE.MeshStandardMaterial {
+  const TW = Math.round(pduW * 3), TH = 512;
   const canvas = document.createElement('canvas');
   canvas.width = TW;
   canvas.height = TH;
@@ -335,22 +335,22 @@ function make3DPduFaceMat(side: 'left' | 'right'): THREE.MeshStandardMaterial {
   // Status LED
   ctx.fillStyle = side === 'left' ? '#00e676' : '#2979ff';
   ctx.beginPath();
-  ctx.arc(TW / 2, 16, 4, 0, Math.PI * 2);
+  ctx.arc(TW / 2, 16, 5, 0, Math.PI * 2);
   ctx.fill();
 
   // Digital readout
   ctx.fillStyle = '#0a0d12';
-  ctx.fillRect(8, 26, TW - 16, 18);
+  ctx.fillRect(16, 26, TW - 32, 20);
   ctx.fillStyle = '#38bdf8';
-  ctx.font = 'bold 9px monospace';
+  ctx.font = 'bold 10px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('230V', TW / 2, 39);
+  ctx.fillText('230V', TW / 2, 40);
 
   // Breaker
   ctx.fillStyle = '#222730';
-  ctx.fillRect(16, 52, TW - 32, 14);
+  ctx.fillRect(24, 52, TW - 48, 16);
   ctx.fillStyle = '#e63946';
-  ctx.fillRect(20, 55, (TW - 40) / 2, 8);
+  ctx.fillRect(28, 55, (TW - 56) / 2, 10);
 
   // Outlets
   const numSockets = 16;
@@ -358,16 +358,16 @@ function make3DPduFaceMat(side: 'left' | 'right'): THREE.MeshStandardMaterial {
   for (let i = 0; i < numSockets; i++) {
     const sy = 75 + i * socketGap;
     ctx.fillStyle = '#090b0e';
-    ctx.fillRect(10, sy, TW - 20, socketGap - 4);
+    ctx.fillRect(18, sy, TW - 36, socketGap - 4);
     ctx.strokeStyle = '#282f3a';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(10, sy, TW - 20, socketGap - 4);
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(18, sy, TW - 36, socketGap - 4);
 
     // Socket pin holes
     ctx.fillStyle = '#000000';
-    ctx.fillRect(TW / 2 - 8, sy + 3, 4, 3);
-    ctx.fillRect(TW / 2 + 4, sy + 3, 4, 3);
-    ctx.fillRect(TW / 2 - 2, sy + 7, 4, 3);
+    ctx.fillRect(TW / 2 - 10, sy + 3, 5, 4);
+    ctx.fillRect(TW / 2 + 5, sy + 3, 5, 4);
+    ctx.fillRect(TW / 2 - 2.5, sy + 8, 5, 4);
   }
 
   const tex = new THREE.CanvasTexture(canvas);
@@ -943,34 +943,36 @@ export function buildRackGroup(
   const has3DLeftPdu = !!rack.leftPduId;
   const has3DRightPdu = !!rack.rightPduId;
 
+  let leftPduW = 0;
   if (has3DLeftPdu) {
     const leftPduDevice = rack.leftPduId ? stateManager.getDevice(rack.leftPduId) : null;
     const leftPduTemplate = leftPduDevice ? getTemplate(leftPduDevice.templateId) : null;
-    const pduW = 22;
+    leftPduW = leftPduTemplate?.pduWidth ?? 44;
     const leftPduFaceMat = (leftPduDevice && leftPduTemplate)
-      ? getSidePdu3DMaterial(rack, 'left', leftPduDevice, leftPduTemplate, pduW, bodyH)
-      : make3DPduFaceMat('left');
+      ? getSidePdu3DMaterial(rack, 'left', leftPduDevice, leftPduTemplate, leftPduW, bodyH)
+      : make3DPduFaceMat('left', leftPduW);
     // BoxGeometry face order: 0=+X, 1=-X, 2=+Y, 3=-Y, 4=+Z(front), 5=-Z(back)
     const pduMats = [pduMat, pduMat, pduMat, pduMat, leftPduFaceMat, pduMat];
-    const pduGeo = new THREE.BoxGeometry(pduW, shellH, 50);
+    const pduGeo = new THREE.BoxGeometry(leftPduW, shellH, 50);
     const pduMesh = new THREE.Mesh(pduGeo, pduMats);
     pduMesh.name = 'rack-pdu-left';
-    pduMesh.position.set(-(RACK_OUTER_WIDTH / 2 + pduW / 2 + 2), shellCenterY, fz - 45);
+    pduMesh.position.set(-(RACK_OUTER_WIDTH / 2 + leftPduW / 2 + 2), shellCenterY, fz - 45);
     group.add(pduMesh);
   }
 
+  let rightPduW = 0;
   if (has3DRightPdu) {
     const rightPduDevice = rack.rightPduId ? stateManager.getDevice(rack.rightPduId) : null;
     const rightPduTemplate = rightPduDevice ? getTemplate(rightPduDevice.templateId) : null;
-    const pduW = 22;
+    rightPduW = rightPduTemplate?.pduWidth ?? 44;
     const rightPduFaceMat = (rightPduDevice && rightPduTemplate)
-      ? getSidePdu3DMaterial(rack, 'right', rightPduDevice, rightPduTemplate, pduW, bodyH)
-      : make3DPduFaceMat('right');
+      ? getSidePdu3DMaterial(rack, 'right', rightPduDevice, rightPduTemplate, rightPduW, bodyH)
+      : make3DPduFaceMat('right', rightPduW);
     const pduMats = [pduMat, pduMat, pduMat, pduMat, rightPduFaceMat, pduMat];
-    const pduGeo = new THREE.BoxGeometry(pduW, shellH, 50);
+    const pduGeo = new THREE.BoxGeometry(rightPduW, shellH, 50);
     const pduMesh = new THREE.Mesh(pduGeo, pduMats);
     pduMesh.name = 'rack-pdu-right';
-    pduMesh.position.set(RACK_OUTER_WIDTH / 2 + pduW / 2 + 2, shellCenterY, fz - 45);
+    pduMesh.position.set(RACK_OUTER_WIDTH / 2 + rightPduW / 2 + 2, shellCenterY, fz - 45);
     group.add(pduMesh);
   }
 
@@ -983,7 +985,7 @@ export function buildRackGroup(
     const vcmGeo = new THREE.BoxGeometry(leftVcmW, shellH, 120);
     const leftVcmMesh = new THREE.Mesh(vcmGeo, vcmMats);
     leftVcmMesh.name = 'rack-vcm-left';
-    const leftOffset = has3DLeftPdu ? (26 + leftVcmW / 2 + 4) : (leftVcmW / 2 + 2);
+    const leftOffset = has3DLeftPdu ? (leftPduW + 4 + leftVcmW / 2 + 2) : (leftVcmW / 2 + 2);
     leftVcmMesh.position.set(-(RACK_OUTER_WIDTH / 2 + leftOffset), shellCenterY, fz - 65);
     group.add(leftVcmMesh);
   }
@@ -997,7 +999,7 @@ export function buildRackGroup(
     const vcmGeo = new THREE.BoxGeometry(rightVcmW, shellH, 120);
     const rightVcmMesh = new THREE.Mesh(vcmGeo, vcmMats);
     rightVcmMesh.name = 'rack-vcm-right';
-    const rightOffset = has3DRightPdu ? (26 + rightVcmW / 2 + 4) : (rightVcmW / 2 + 2);
+    const rightOffset = has3DRightPdu ? (rightPduW + 4 + rightVcmW / 2 + 2) : (rightVcmW / 2 + 2);
     rightVcmMesh.position.set(RACK_OUTER_WIDTH / 2 + rightOffset, shellCenterY, fz - 65);
     group.add(rightVcmMesh);
   }
