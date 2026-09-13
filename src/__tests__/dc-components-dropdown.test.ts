@@ -71,4 +71,37 @@ describe('Datacenter Components & Ducts Dropdown', () => {
     expect(optimizeBtn).not.toBeNull();
     expect(optimizeBtn?.textContent).toContain('Swap / Optimize');
   });
+
+  it('filters components correctly when clicking sub-category chips', () => {
+    const toolbar = new DcFloatingToolbar();
+    const toolbarEl = document.getElementById('dc-floating-toolbar');
+    expect(toolbarEl).not.toBeNull();
+
+    // Open dropdown menu
+    (toolbar as any).isComponentMenuOpen = true;
+    (toolbar as any).activeCategoryTab = 'cooling';
+    (toolbar as any).activeSubCategoryTab = 'inrow_heatex';
+    (toolbar as any).render();
+
+    const menuEl = document.getElementById('dc-component-menu');
+    expect(menuEl).not.toBeNull();
+
+    const activeChip = menuEl?.querySelector('.dc-comp-subcat-chip.active');
+    expect(activeChip?.textContent?.trim()).toContain('In-Row & Rear Door RDHx');
+
+    const cards = menuEl?.querySelectorAll('.dc-comp-card');
+    expect(cards?.length).toBe(2); // In-Row Cooling Unit and Rear Door Heat Exchanger
+    const cardTitles = [...(cards || [])].map(c => c.querySelector('.dc-comp-card-title')?.textContent?.trim());
+    expect(cardTitles).toContain('In-Row Cooling Unit (300/600mm)');
+    expect(cardTitles).toContain('Rear Door Heat Exchanger (RDHx)');
+
+    // Switch to perimeter air
+    (toolbar as any).activeSubCategoryTab = 'perimeter_air';
+    (toolbar as any).render();
+    const perimeterCards = document.querySelectorAll('#dc-component-menu .dc-comp-card');
+    expect(perimeterCards.length).toBe(2);
+    const perimeterTitles = [...perimeterCards].map(c => c.querySelector('.dc-comp-card-title')?.textContent?.trim());
+    expect(perimeterTitles).toContain('CRAC Unit (Direct Expansion DX)');
+    expect(perimeterTitles).toContain('CRAH Unit (Chilled Water CW)');
+  });
 });

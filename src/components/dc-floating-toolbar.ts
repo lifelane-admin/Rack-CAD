@@ -201,15 +201,12 @@ export class DcFloatingToolbar {
       filteredComponents = ALL_DC_COMPONENTS.filter(c => c.category === this.activeCategoryTab);
 
       // Sub-category filtering
-      if (this.activeSubCategoryTab !== 'all') {
+      if (this.activeSubCategoryTab && this.activeSubCategoryTab !== 'all') {
         filteredComponents = filteredComponents.filter(c => {
           if (this.activeCategoryTab === 'pathways') {
             return c.pathwayLevel === this.activeSubCategoryTab || c.subCategory === this.activeSubCategoryTab;
           }
-          if (c.subCategory) {
-            return c.subCategory === this.activeSubCategoryTab;
-          }
-          return true;
+          return c.subCategory === this.activeSubCategoryTab;
         });
       }
     }
