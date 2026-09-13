@@ -535,14 +535,13 @@ export class DcFloatingToolbar {
                     <div>No components found matching "${this.componentSearchQuery}"</div>
                   </div>
                 ` : filteredComponents.map(item => `
-                  <div class="dc-comp-card ${item.id === this.selectedComponentId ? 'selected' : ''}" data-comp-id="${item.id}" title="${item.description}">
+                  <div class="dc-comp-card ${item.id === this.selectedComponentId ? 'selected' : ''}" data-comp-id="${item.id}" title="${item.name} (${item.code}) — ${item.description}">
                     <div class="dc-comp-card-badge">${item.code}</div>
                     <div class="dc-comp-card-graphic">
-                      ${getDcComponentGraphicSvg(item.id, 90, 26)}
+                      ${getDcComponentGraphicSvg(item.id, 130, 56)}
                     </div>
                     <div class="dc-comp-card-body">
                       <div class="dc-comp-card-title">${item.name}</div>
-                      <div class="dc-comp-card-sub">${item.pathwayLevel ? (item.pathwayLevel === 'underfloor' ? 'Under ESD Floor Pathway' : 'Roof / Overhead Pathway') : item.description.slice(0, 52) + '...'}</div>
                     </div>
                   </div>
                 `).join('')}
