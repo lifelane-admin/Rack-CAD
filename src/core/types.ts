@@ -782,6 +782,7 @@ export interface AppState {
   cloudConnectors: CloudConnector[];
   cloudHierarchies: CloudHierarchy[];
   activeElevationRackId?: string | null;
+  workflowMode?: 'rack' | 'datacenter' | 'cloud' | 'hybrid';
 }
 
 // === Events ===

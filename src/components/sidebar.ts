@@ -227,12 +227,21 @@ export class Sidebar {
   }
 
   private renderTabBar(container: HTMLElement, activeView: string): void {
-    const tabs: Array<{ label: string; view: 'rack' | 'cloud' | 'hybrid' | 'datacenter' }> = [
-      { label: 'Rack', view: 'rack' },
-      { label: 'Cloud', view: 'cloud' },
-      { label: 'Hybrid', view: 'hybrid' },
-      { label: 'Datacenter', view: 'datacenter' },
-    ];
+    const state = State.getState();
+    const isDcWorkflow = state.workflowMode === 'datacenter' || activeView === 'datacenter' || Boolean(state.activeElevationRackId);
+
+    const tabs: Array<{ label: string; view: 'rack' | 'cloud' | 'hybrid' | 'datacenter' }> = isDcWorkflow
+      ? [
+          { label: 'Datacenter', view: 'datacenter' },
+          { label: 'Rack', view: 'rack' },
+          { label: 'Cloud', view: 'cloud' },
+          { label: 'Hybrid', view: 'hybrid' },
+        ]
+      : [
+          { label: 'Rack', view: 'rack' },
+          { label: 'Cloud', view: 'cloud' },
+          { label: 'Hybrid', view: 'hybrid' },
+        ];
 
     for (const tab of tabs) {
       const isActive = tab.view === activeView;

@@ -72,6 +72,7 @@ class StateManager {
       cloudConnectors: [],
       cloudHierarchies: [],
       activeElevationRackId: null,
+      workflowMode: 'rack',
     };
   }
 

@@ -1238,6 +1238,26 @@ export class BuildFloorView {
       }
     });
 
+    // Double-click on rack in 2D floor directly opens Rack Elevation ("Work on this Rack")
+    this.canvas.addEventListener('dblclick', (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const scaleX = this.canvas.width / (rect.width || 1);
+      const scaleY = this.canvas.height / (rect.height || 1);
+      const canvasSx = (e.clientX - rect.left) * scaleX;
+      const canvasSy = (e.clientY - rect.top) * scaleY;
+      const { xM, yM } = this.screenToWorld(canvasSx, canvasSy);
+
+      const floor = dcState.getActiveFloor();
+      if (!floor) return;
+
+      for (const rack of floor.racks) {
+        if (this.hitTestRack(rack, xM, yM)) {
+          this.workOnRack(rack);
+          return;
+        }
+      }
+    });
+
     this.canvas.addEventListener('mousedown', (e) => {
       if (this.activePathwayTool || this.activePlacementTool) {
         if (e.button === 0) this.handleMouseDown(e);
@@ -3552,15 +3572,17 @@ export class BuildFloorView {
       name: rack.name,
       units: rack.heightU,
       depthMm: rack.depthMm,
+      rackWidth: rack.widthMm === 800 ? '23-inch' : '19-inch',
       rackType: (rack.type === 'open-frame' ? 'open-frame' : rack.type === 'network' ? 'network' : rack.type === 'wall-mount' ? 'wall-mount' : 'server') as any,
+      frontDoor: rack.doorStyle as any,
       mounting: rack.mounting === 'wall-mount' ? 'wall-mount' : 'floor',
       rackColor: rack.color ?? '#1e3a5f',
       x: posX,
       y: posY,
-      leftCableManagerWidth: existing?.leftCableManagerWidth,
-      rightCableManagerWidth: existing?.rightCableManagerWidth,
-      leftPduId: existing?.leftPduId,
-      rightPduId: existing?.rightPduId,
+      leftCableManagerWidth: rack.leftCableManagerWidth || existing?.leftCableManagerWidth || 'none',
+      rightCableManagerWidth: rack.rightCableManagerWidth || existing?.rightCableManagerWidth || 'none',
+      leftPduId: rack.leftPduId || existing?.leftPduId,
+      rightPduId: rack.rightPduId || existing?.rightPduId,
     };
 
     const finalRacks = [...otherRacks, targetRack];
@@ -3569,6 +3591,7 @@ export class BuildFloorView {
       racks: finalRacks,
       selection: [{ type: 'rack', id: rack.id }],
       activeElevationRackId: rack.id,
+      workflowMode: 'datacenter',
     });
 
     eventBus.emit('view:switch' as any, 'rack');
@@ -3621,6 +3644,7 @@ export class BuildFloorView {
     banner.querySelector('#dc-btn-return-dc')?.addEventListener('click', () => {
       stateManager.setState({ activeElevationRackId: null });
       eventBus.emit('view:switch' as any, 'datacenter');
+      this.refresh();
       banner?.remove();
     });
   }
@@ -5052,6 +5076,33 @@ export class BuildFloorView {
             dcState.setState({ selectedTileId: null, selectedTileIds: [], selectedRackId: null, selectedInfraId: null });
             this.renderPropsPanel();
             this.update3DSelectionHighlight();
+          }
+        }
+      });
+
+      // Double-click on rack in 3D data hall directly opens Rack Elevation ("Work on this Rack")
+      this.threeRenderer.domElement.addEventListener('dblclick', (e) => {
+        const currentFloor = dcState.getActiveFloor();
+        if (!currentFloor) return;
+
+        const rect = this.threeRenderer!.domElement.getBoundingClientRect();
+        this.threeMouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        this.threeMouse.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+        this.threeRaycaster.setFromCamera(this.threeMouse, this.threeCamera!);
+
+        const intersects = this.threeRaycaster.intersectObjects(this.threeScene!.children, true);
+        for (const hit of intersects) {
+          let cur: THREE.Object3D | null = hit.object;
+          while (cur && cur !== this.threeScene) {
+            if (this.rackMeshMap.has(cur)) {
+              const rackId = this.rackMeshMap.get(cur)!;
+              const rack = currentFloor.racks.find(r => r.id === rackId);
+              if (rack) {
+                this.workOnRack(rack);
+                return;
+              }
+            }
+            cur = cur.parent;
           }
         }
       });

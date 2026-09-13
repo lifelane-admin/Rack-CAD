@@ -723,10 +723,12 @@ export class App {
     showStartupModal((choice: StartupChoice | null) => {
       if (!choice) return;
       if (choice === 'rack') {
+        stateManager.setState({ workflowMode: 'rack', activeElevationRackId: null });
         eventBus.emit('view:switch', 'rack');
         return;
       }
       if (choice === 'datacenter') {
+        stateManager.setState({ workflowMode: 'datacenter' });
         eventBus.emit('view:switch', 'datacenter');
         return;
       }
@@ -734,12 +736,14 @@ export class App {
         // Lands unscoped (every provider section collapsed, search unscoped) so Local
         // Resources/On-Prem/AWS/Azure/GCP are all equally reachable in the cloud-side catalog
         // alongside the rack device catalog (see sidebar.ts's hybrid render branch).
+        stateManager.setState({ workflowMode: 'hybrid', activeElevationRackId: null });
         this.sidebar.focusCloudProvider(null);
         eventBus.emit('view:switch', 'hybrid');
         return;
       }
       // aws/azure/gcp focus their own section, same as clicking that provider in the sidebar's
       // Cloud nav group.
+      stateManager.setState({ workflowMode: 'cloud', activeElevationRackId: null });
       this.sidebar.focusCloudProvider(choice);
       eventBus.emit('view:switch', 'cloud');
     });
