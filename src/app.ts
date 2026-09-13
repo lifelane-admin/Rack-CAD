@@ -2710,9 +2710,10 @@ export class App {
         }
       }
 
-      const color = s.selectedCableType === 'custom'
-        ? (s.selectedCableColor || '#78909c')
-        : (CABLE_COLORS[s.cableInProgress.cableType] || CABLE_COLORS.general);
+      const color = s.selectedCableColor
+        || (s.cableInProgress.cableType ? CABLE_COLORS[s.cableInProgress.cableType] : null)
+        || CABLE_COLORS.general
+        || '#78909c';
 
       const cableInProgressSnapshot = s.cableInProgress;
 
@@ -2830,9 +2831,10 @@ export class App {
     const sourcePort = sourcePortId ? stateManager.getPort(sourcePortId) : null;
     if (!sourcePort && !isSrcOutlet && !s.cableInProgress.floatingSource) return;
 
-    const color = s.selectedCableType === 'custom'
-      ? (s.selectedCableColor || '#78909c')
-      : (CABLE_COLORS[s.cableInProgress.cableType] || CABLE_COLORS.general);
+    const color = s.selectedCableColor
+      || (s.cableInProgress.cableType ? CABLE_COLORS[s.cableInProgress.cableType] : null)
+      || CABLE_COLORS.general
+      || '#78909c';
 
     const newCable: CableData = {
       id: generateId(),

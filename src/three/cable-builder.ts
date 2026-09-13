@@ -251,13 +251,19 @@ export function getConnectorKind(
   state: AppState
 ): Connector3DKind {
   const cType = (cable.type || '').toLowerCase();
+  const cTerm = ((cable.sourceTermination || '') + ' ' + (cable.destTermination || '')).toLowerCase();
+  const pid = (portId || '').toLowerCase();
   const found = portId ? findPort(portId, state.devices) : null;
   const pType = (found?.port?.type || '').toLowerCase();
+  const pName = (found?.port?.name || '').toLowerCase();
 
   if (cType === 'ground') return 'ground';
   if (
-    cType.includes('power') || cType.includes('c13') || cType.includes('c19') ||
-    pType.includes('power') || pType.includes('c13') || pType.includes('c19') || pType.includes('outlet') ||
+    cType.includes('power') || cType.includes('c13') || cType.includes('c14') || cType.includes('c19') || cType.includes('c20') ||
+    cTerm.includes('c13') || cTerm.includes('c14') || cTerm.includes('power') ||
+    pid.startsWith('outlet-') || pid.includes('c13') || pid.includes('c14') || pid.includes('c19') || pid.includes('pdu') || pid.includes('power') ||
+    pType.includes('power') || pType.includes('c13') || pType.includes('c14') || pType.includes('c19') || pType.includes('outlet') ||
+    pName.includes('c13') || pName.includes('c14') || pName.includes('pwr') || pName.includes('power') ||
     cable.powerCableType === 'power'
   ) {
     return 'power';
@@ -536,50 +542,152 @@ function buildMPOPlug(x: number, y: number, fz: number, color: THREE.Color, flip
 }
 
 /**
- * 5. 3D IEC Power Plug (C13 / C14 / C19)
+ * 5. 3D Enterprise IEC 60320 C13 / C14 / C19 Heavy-Duty Power Plug
  */
 function buildPowerIECPlug(x: number, y: number, fz: number, color: THREE.Color, flipY: number): THREE.Group {
   const group = new THREE.Group();
 
-  const shroudMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(0x181c22),
-    roughness: 0.45,
-    metalness: 0.1,
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x15191e),
+    roughness: 0.38,
+    metalness: 0.18,
+  });
+  const gripMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x0a0c0f),
+    roughness: 0.7,
+    metalness: 0.08,
   });
   const bootMat = new THREE.MeshStandardMaterial({
     color,
-    roughness: 0.4,
-    metalness: 0.12,
+    roughness: 0.42,
+    metalness: 0.1,
   });
-  const pinSlotMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(0x0a0c10),
-    roughness: 0.8,
+  const pinMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0xf59e0b), // Brass contact pins
+    roughness: 0.2,
+    metalness: 0.85,
   });
 
-  // Molded IEC shroud head inserted flush
-  const shroud = new THREE.Mesh(new THREE.BoxGeometry(7.6, 6.2, 4.5), shroudMat);
-  shroud.position.set(x, y, fz + 0.5);
-  group.add(shroud);
+  // 1. IEC 60320 authentic pentagonal connector profile
+  const w2 = 5.2;      // half-width (10.4mm wide)
+  const h2 = 5.8;      // half-height (11.6mm tall)
+  const chamfer = 2.4; // 45-degree angled shoulder chamfers
 
-  // 3 Contact Slots / Prongs face
-  const slot = new THREE.Mesh(new THREE.BoxGeometry(5.2, 3.8, 0.4), pinSlotMat);
-  slot.position.set(x, y, fz - 1.6);
-  group.add(slot);
+  // Construct true IEC cross-section shape
+  const iecShape = new THREE.Shape();
+  if (flipY >= 0) {
+    // Standard: chamfers at the top
+    iecShape.moveTo(-w2, -h2);
+    iecShape.lineTo(w2, -h2);
+    iecShape.lineTo(w2, h2 - chamfer);
+    iecShape.lineTo(w2 - chamfer, h2);
+    iecShape.lineTo(-(w2 - chamfer), h2);
+    iecShape.lineTo(-w2, h2 - chamfer);
+  } else {
+    // Inverted: chamfers at the bottom
+    iecShape.moveTo(-w2, h2);
+    iecShape.lineTo(w2, h2);
+    iecShape.lineTo(w2, -(h2 - chamfer));
+    iecShape.lineTo(w2 - chamfer, -h2);
+    iecShape.lineTo(-(w2 - chamfer), -h2);
+    iecShape.lineTo(-w2, -(h2 - chamfer));
+  }
+  iecShape.closePath();
 
-  // Finger grip indent collar
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(8.2, 6.8, 2.2), shroudMat);
-  grip.position.set(x, y, fz + 3.4);
-  group.add(grip);
+  // 2. Mating Shroud Nose (plugs into female C13 socket)
+  const noseExtrude = new THREE.ExtrudeGeometry(iecShape, {
+    depth: 4.0,
+    bevelEnabled: true,
+    bevelSegments: 2,
+    steps: 1,
+    bevelSize: 0.3,
+    bevelThickness: 0.3,
+  });
+  const nose = new THREE.Mesh(noseExtrude, bodyMat);
+  nose.position.set(x, y, fz - 2.0);
+  group.add(nose);
 
-  // High-amp molded strain relief boot
-  const boot = new THREE.Mesh(new THREE.BoxGeometry(5.8, 5.0, 4.2), bootMat);
-  boot.position.set(x, y, fz + 6.2);
-  group.add(boot);
+  // 3. Brass / Copper Contact Terminals (3 IEC Pins visible in front mating face)
+  const pinGeo = new THREE.BoxGeometry(0.8, 2.2, 2.8);
+  const pinL = new THREE.Mesh(pinGeo, pinMat);
+  pinL.position.set(x - 2.0, y + (flipY >= 0 ? 0.8 : -0.8), fz - 1.8);
+  group.add(pinL);
 
-  // Exit sleeve
-  const exit = new THREE.Mesh(new THREE.BoxGeometry(4.2, 3.8, 2.0), bootMat);
-  exit.position.set(x, y, fz + 8.8);
-  group.add(exit);
+  const pinR = new THREE.Mesh(pinGeo, pinMat);
+  pinR.position.set(x + 2.0, y + (flipY >= 0 ? 0.8 : -0.8), fz - 1.8);
+  group.add(pinR);
+
+  const pinEarth = new THREE.Mesh(pinGeo, pinMat);
+  pinEarth.position.set(x, y + (flipY >= 0 ? -1.8 : 1.8), fz - 1.8);
+  group.add(pinEarth);
+
+  // 4. Main Molded Plug Body (Heavy-duty Thermoplastic housing with IEC shoulder)
+  const mainW2 = 6.4;
+  const mainH2 = 7.0;
+  const mainChamfer = 2.8;
+  const mainShape = new THREE.Shape();
+  if (flipY >= 0) {
+    mainShape.moveTo(-mainW2, -mainH2);
+    mainShape.lineTo(mainW2, -mainH2);
+    mainShape.lineTo(mainW2, mainH2 - mainChamfer);
+    mainShape.lineTo(mainW2 - mainChamfer, mainH2);
+    mainShape.lineTo(-(mainW2 - mainChamfer), mainH2);
+    mainShape.lineTo(-mainW2, mainH2 - mainChamfer);
+  } else {
+    mainShape.moveTo(-mainW2, mainH2);
+    mainShape.lineTo(mainW2, mainH2);
+    mainShape.lineTo(mainW2, -(mainH2 - mainChamfer));
+    mainShape.lineTo(mainW2 - mainChamfer, -mainH2);
+    mainShape.lineTo(-(mainW2 - mainChamfer), -mainH2);
+    mainShape.lineTo(-mainW2, -(mainH2 - mainChamfer));
+  }
+  mainShape.closePath();
+
+  const mainExtrude = new THREE.ExtrudeGeometry(mainShape, {
+    depth: 7.5,
+    bevelEnabled: true,
+    bevelSegments: 2,
+    steps: 1,
+    bevelSize: 0.4,
+    bevelThickness: 0.4,
+  });
+  const mainBody = new THREE.Mesh(mainExtrude, bodyMat);
+  mainBody.position.set(x, y, fz + 1.8);
+  group.add(mainBody);
+
+  // 5. Ergonomic Side Finger Grip Ribs (Recessed grooves for thumb/finger grip)
+  for (let i = 0; i < 3; i++) {
+    const gz = fz + 3.2 + i * 1.8;
+    const gripL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 4.8, 0.9), gripMat);
+    gripL.position.set(x - mainW2 - 0.2, y, gz);
+    group.add(gripL);
+
+    const gripR = new THREE.Mesh(new THREE.BoxGeometry(0.8, 4.8, 0.9), gripMat);
+    gripR.position.set(x + mainW2 + 0.2, y, gz);
+    group.add(gripR);
+  }
+
+  // 6. Tiered Segmented Flexible Strain Relief Boot (Tapers down to cable)
+  // Collar Tier 1 (Body transition ring)
+  const collar1 = new THREE.Mesh(new THREE.BoxGeometry(8.2, 7.8, 2.2), bootMat);
+  collar1.position.set(x, y, fz + 9.8);
+  group.add(collar1);
+
+  // Collar Tier 2 (Middle taper segment)
+  const collar2 = new THREE.Mesh(new THREE.BoxGeometry(6.6, 6.2, 2.0), bootMat);
+  collar2.position.set(x, y, fz + 11.6);
+  group.add(collar2);
+
+  // Collar Tier 3 (Flex rib ring)
+  const collar3 = new THREE.Mesh(new THREE.BoxGeometry(5.2, 4.8, 1.8), bodyMat);
+  collar3.position.set(x, y, fz + 13.2);
+  group.add(collar3);
+
+  // Collar Tier 4 (Cable exit nozzle)
+  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.5, 2.4, 16), bootMat);
+  nozzle.rotation.x = Math.PI / 2;
+  nozzle.position.set(x, y, fz + 14.8);
+  group.add(nozzle);
 
   return group;
 }

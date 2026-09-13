@@ -953,10 +953,10 @@ export function buildRackGroup(
       : make3DPduFaceMat('left', leftPduW);
     // BoxGeometry face order: 0=+X, 1=-X, 2=+Y, 3=-Y, 4=+Z(front), 5=-Z(back)
     const pduMats = [pduMat, pduMat, pduMat, pduMat, leftPduFaceMat, pduMat];
-    const pduGeo = new THREE.BoxGeometry(leftPduW, shellH, 50);
+    const pduGeo = new THREE.BoxGeometry(leftPduW, bodyH, 50);
     const pduMesh = new THREE.Mesh(pduGeo, pduMats);
     pduMesh.name = 'rack-pdu-left';
-    pduMesh.position.set(-(RACK_OUTER_WIDTH / 2 + leftPduW / 2 + 2), shellCenterY, fz - 45);
+    pduMesh.position.set(-(RACK_OUTER_WIDTH / 2 + leftPduW / 2 + 2), 0, fz - 25);
     group.add(pduMesh);
   }
 
@@ -969,10 +969,10 @@ export function buildRackGroup(
       ? getSidePdu3DMaterial(rack, 'right', rightPduDevice, rightPduTemplate, rightPduW, bodyH)
       : make3DPduFaceMat('right', rightPduW);
     const pduMats = [pduMat, pduMat, pduMat, pduMat, rightPduFaceMat, pduMat];
-    const pduGeo = new THREE.BoxGeometry(rightPduW, shellH, 50);
+    const pduGeo = new THREE.BoxGeometry(rightPduW, bodyH, 50);
     const pduMesh = new THREE.Mesh(pduGeo, pduMats);
     pduMesh.name = 'rack-pdu-right';
-    pduMesh.position.set(RACK_OUTER_WIDTH / 2 + rightPduW / 2 + 2, shellCenterY, fz - 45);
+    pduMesh.position.set(RACK_OUTER_WIDTH / 2 + rightPduW / 2 + 2, 0, fz - 25);
     group.add(pduMesh);
   }
 

@@ -439,7 +439,7 @@ export function renderCableInProgress(sourcePos: Point, currentPos: Point, cable
 
   const s = stateManager.getState();
   const mat = getMaterialProfile(cableType);
-  const strokeColor = CABLE_COLORS[cableType] || CABLE_COLORS.general || mat.defaultColor;
+  const strokeColor = s.selectedCableColor || CABLE_COLORS[cableType] || CABLE_COLORS.general || mat.defaultColor;
 
   const pathData = generateOrthogonalPath(sourcePos, currentPos, [exitPoint], 10);
 
