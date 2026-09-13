@@ -221,6 +221,7 @@ export class FloatingToolbar {
     const isLabelMode = this.currentTool === 'label';
     const isAirdropDestination = !!state.airdropDestination;
     const show3D = !!state.show3DPanel;
+    const isDcWorkflow = state.workflowMode === 'datacenter' || Boolean(state.activeElevationRackId);
 
     const activeColor = cable ? cable.color : (state.selectedCableColor || '#2563eb');
     const selectedType = state.selectedCableType || 'general';
@@ -237,12 +238,13 @@ export class FloatingToolbar {
     ];
 
     this.element.innerHTML = `
-      <!-- Row 1: Drag handle, Swap to Datacenter, Select, Rotate, Move, Undo, Redo, Delete, Anchors, Inserts, 2D/3D -->
+      <!-- Row 1: Drag handle, Swap to Datacenter (if DC workflow), Select, Rotate, Move, Undo, Redo, Delete, Anchors, Inserts, 2D/3D -->
       <div class="ft-row" id="ft-row-1">
         <div class="ft-drag-handle" title="Drag to reposition toolbar">
           <span class="ft-drag-dots">⋮⋮</span>
         </div>
 
+        ${isDcWorkflow ? `
         <div class="ft-separator"></div>
 
         <!-- Swap to Datacenter View Button -->
@@ -252,6 +254,7 @@ export class FloatingToolbar {
           </svg>
           <span>⇄ Datacenter Floor</span>
         </button>
+        ` : ''}
 
         <div class="ft-separator"></div>
 

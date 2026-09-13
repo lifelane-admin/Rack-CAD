@@ -99,4 +99,20 @@ describe('Workflow Isolation & Datacenter "Work on this Rack" Protocol', () => {
     const tabs = Array.from(sidebarContainer.querySelectorAll('.sb-tab')).map(el => el.textContent?.trim());
     expect(tabs).toContain('Datacenter');
   });
+
+  it('hides "⇄ Datacenter Floor" button in FloatingToolbar when in standalone Rack Builder mode', async () => {
+    const { FloatingToolbar } = await import('../components/floating-toolbar');
+    stateManager.setState({ workflowMode: 'rack', activeView: 'rack', activeElevationRackId: null });
+    const ft = new FloatingToolbar();
+    const btn = document.getElementById('ft-swap-datacenter');
+    expect(btn).toBeNull();
+  });
+
+  it('shows "⇄ Datacenter Floor" button in FloatingToolbar when in Datacenter workflow', async () => {
+    const { FloatingToolbar } = await import('../components/floating-toolbar');
+    stateManager.setState({ workflowMode: 'datacenter', activeView: 'rack', activeElevationRackId: 'RACK-042' });
+    const ft = new FloatingToolbar();
+    const btn = document.getElementById('ft-swap-datacenter');
+    expect(btn).not.toBeNull();
+  });
 });
