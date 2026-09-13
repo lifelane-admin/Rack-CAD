@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { CableData, AppState, DeviceData, RackData, Point } from '../core/types';
+import type { CableData, AppState, DeviceData, RackData, Point, PortData } from '../core/types';
 import { RACK_CONSTANTS } from '../core/types';
 import { RACK_DEPTH, DEVICE_FACE_Z } from './rack-builder';
 import { getTemplate } from '../library/device-catalog';
@@ -27,8 +27,26 @@ const POWER_TYPES = new Set(['power', 'c13-power', 'c19-power']);
 const LANE_Z_SPACING = 3;
 const MAX_STAGGERED_LANES = 8; // beyond this, extra cables in one channel just re-share a Z plane
 
-function findPort(portId: string | null, devices: DeviceData[]) {
+export function findPort(portId: string | null, devices: DeviceData[]): { port: PortData; device: DeviceData } | null {
   if (!portId || !devices) return null;
+  const outletMatch = /^outlet-(.+)-(\d+)$/.exec(portId);
+  if (outletMatch) {
+    const device = devices.find(d => d.id === outletMatch[1]);
+    if (device) {
+      return {
+        port: {
+          id: portId,
+          deviceId: device.id,
+          name: `C13 Outlet ${Number(outletMatch[2]) + 1}`,
+          type: 'power',
+          relativeX: 0,
+          relativeY: 0,
+          connected: true
+        } as PortData,
+        device
+      };
+    }
+  }
   for (const device of devices) {
     const port = (device.ports || []).find(p => p.id === portId);
     if (port) return { port, device };

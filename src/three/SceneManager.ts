@@ -6,7 +6,7 @@ import { getTemplate } from '../library/device-catalog';
 import type { MaterialManager } from './MaterialManager';
 import { buildRackGroup, buildShellMaterials, type RackColorKey, RACK_DEPTH, DEVICE_FACE_Z } from './rack-builder';
 import { buildDeviceMesh } from './device-builder';
-import { buildCableMesh } from './cable-builder';
+import { buildCableMesh, findPort } from './cable-builder';
 import { renderFrontPanel } from '../renderers/panel-renderer';
 import { computePduLoad } from '../renderers/pdu-renderer';
 import { getDeviceFrontMaterial, disposeSVGTextures } from './svg-texture';
@@ -130,9 +130,11 @@ export class SceneManager {
       ? (state.cables ?? []).filter(c => {
           const sp = stateManager.getPort(c.sourcePortId);
           const dp = c.destPortId ? stateManager.getPort(c.destPortId) : null;
-          const sDev = sp ? stateManager.getDevice(sp.deviceId) : null;
-          const dDev = dp ? stateManager.getDevice(dp.deviceId) : null;
-          return (sDev && rackIds.has(sDev.rackId)) || (dDev && rackIds.has(dDev.rackId));
+          const sFound = findPort(c.sourcePortId, state.devices);
+          const dFound = c.destPortId ? findPort(c.destPortId, state.devices) : null;
+          const sDev = sp ? stateManager.getDevice(sp.deviceId) : (sFound?.device ?? null);
+          const dDev = dp ? stateManager.getDevice(dp.deviceId) : (dFound?.device ?? null);
+          return (sDev && rackIds.has(sDev.rackId)) || (dDev && rackIds.has(dDev.rackId)) || (!c.destPortId && sDev && rackIds.has(sDev.rackId));
         })
       : (state.cables ?? []);
 
