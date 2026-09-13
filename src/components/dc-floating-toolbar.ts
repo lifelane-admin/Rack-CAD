@@ -5,10 +5,15 @@
  *   ⋮⋮ Drag | ⇄ Swap to Rack Elevation | Select (S) · Move (M) | 2D/3D Toggle · ↻ Rotate 2D · 🦴 X-Ray |
  *   ⊞ Grid · ⌂ Snap · ▦ Grid-Lock · 🏷 Labels | ⤢ Fit (Z) · ＋ Zoom In · － Zoom Out | 📦 Catalog
  *
- * Row 2 (Context-Aware Action Palette & Components Selector Dropdown):
+ * Row 2 (Context-Aware Action Palette & 2-Pane Menu/Sub-Menu Dropdown):
  *   - Default:        Components Selector Pill (SVG Icon + Graphic + Code + Dropdown) + Quick Add Presets + Add Row
  *   - Rack Selected:  📦 Rack Info · ⚙ Work on Rack · ↻ Rotate 90° · ⊕ Duplicate · 🔄 Swap/Optimize Cabinet · 📊 HUD · 🗑 Delete
  *   - Tiles Selected: ▦ Tile Info · 🔲 Vent Grille · ▦ Perf Panel · 💨 Air Channel · ⚡ Add Pathway · ↺ Standard
+ *
+ * Popover Dropdown Architecture:
+ *   - Top: Search Header + Item Count Badge
+ *   - Left Pane: Primary Category Menu with Active Indicator & Counts
+ *   - Right Pane: Sub-Category Filter Tabs + Responsive Component Objects Grid with Photorealistic SVGs
  */
 
 import EventBus from '../core/event-bus';
@@ -35,11 +40,11 @@ export class DcFloatingToolbar {
   private dragOffsetX = 0;
   private dragOffsetY = 0;
 
-  // Dropdown States
+  // Dropdown States: 2-Pane Master / Detail
   private isComponentMenuOpen = false;
   private isOptimizeMenuOpen = false;
   private activeCategoryTab = 'racks';
-  private pathwaySubfilter: 'all' | 'underfloor' | 'overhead' = 'all';
+  private activeSubCategoryTab = 'all';
   private componentSearchQuery = '';
   private selectedComponentId = 'rack-server-42u';
 
@@ -180,20 +185,32 @@ export class DcFloatingToolbar {
     const hasSelectedTiles = selectedTileIds.length > 0 && !selectedRack;
 
     const currentComponent = ALL_DC_COMPONENTS.find(c => c.id === this.selectedComponentId) || ALL_DC_COMPONENTS[0];
+    const activeCategoryObj = DC_COMPONENT_CATEGORIES.find(c => c.id === this.activeCategoryTab) || DC_COMPONENT_CATEGORIES[0];
 
-    // Filter components for popover dropdown
+    // Filter components for 2-Pane popover dropdown
     let filteredComponents = ALL_DC_COMPONENTS;
     if (this.componentSearchQuery.trim()) {
       const q = this.componentSearchQuery.toLowerCase();
       filteredComponents = ALL_DC_COMPONENTS.filter(c =>
         c.name.toLowerCase().includes(q) ||
         c.code.toLowerCase().includes(q) ||
-        c.description.toLowerCase().includes(q)
+        c.description.toLowerCase().includes(q) ||
+        c.category.toLowerCase().includes(q)
       );
     } else {
       filteredComponents = ALL_DC_COMPONENTS.filter(c => c.category === this.activeCategoryTab);
-      if (this.activeCategoryTab === 'pathways' && this.pathwaySubfilter !== 'all') {
-        filteredComponents = filteredComponents.filter(c => c.pathwayLevel === this.pathwaySubfilter);
+
+      // Sub-category filtering
+      if (this.activeSubCategoryTab !== 'all') {
+        filteredComponents = filteredComponents.filter(c => {
+          if (this.activeCategoryTab === 'pathways') {
+            return c.pathwayLevel === this.activeSubCategoryTab || c.subCategory === this.activeSubCategoryTab;
+          }
+          if (c.subCategory) {
+            return c.subCategory === this.activeSubCategoryTab;
+          }
+          return true;
+        });
       }
     }
 
@@ -280,7 +297,7 @@ export class DcFloatingToolbar {
       row2Html = `
         <div class="dc-ft-context-group">
           <!-- Components Selection Pill -->
-          <div class="dc-component-selector ${this.isComponentMenuOpen ? 'menu-open' : ''}" id="dc-ft-component-selector-btn" title="Click to browse 57+ Racks, Cable Ducts, Power, Cooling & DCIM Components">
+          <div class="dc-component-selector ${this.isComponentMenuOpen ? 'menu-open' : ''}" id="dc-ft-component-selector-btn" title="Click to browse 57+ Racks, Cable Ducts, Power, Cooling & DCIM Components (2-Pane Menu)">
             <div class="dc-comp-icon-badge">
               ${getDcComponentBadgeSvg(currentComponent.badgeType)}
             </div>
@@ -464,57 +481,73 @@ export class DcFloatingToolbar {
         ${row2Html}
       </div>
 
-      <!-- Popover 1: Datacenter Components & Ducts Dropdown Menu -->
+      <!-- Popover 1: 2-Pane Menu & Sub-Menu Components Dropdown -->
       ${this.isComponentMenuOpen ? `
-        <div class="dc-component-menu" id="dc-component-menu">
-          <!-- Search Header -->
-          <div class="dc-comp-menu-header">
+        <div class="dc-component-menu dc-2pane-menu" id="dc-component-menu">
+          <!-- Top Header: Search & Info -->
+          <div class="dc-comp-menu-topbar">
             <div class="dc-comp-search-wrap">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
               <input type="text" id="dc-comp-search-input" placeholder="Search 57+ components (e.g. 42U, duct, mesh, UPS, CRAC)..." value="${this.componentSearchQuery}" />
               ${this.componentSearchQuery ? '<button id="dc-comp-search-clear">×</button>' : ''}
             </div>
+            <div class="dc-comp-top-count">${filteredComponents.length} Components Available</div>
           </div>
 
-          <!-- Category Tabs -->
-          <div class="dc-comp-tabs-bar">
-            ${DC_COMPONENT_CATEGORIES.map(cat => `
-              <button class="dc-comp-tab ${cat.id === this.activeCategoryTab && !this.componentSearchQuery ? 'active' : ''}" data-cat="${cat.id}">
-                <span>${cat.icon}</span>
-                <span>${cat.label}</span>
-                <span class="dc-comp-tab-count">${cat.items.length}</span>
-              </button>
-            `).join('')}
-          </div>
-
-          <!-- Ducts Subfilter (Underfloor ESD vs Roof Overhead) -->
-          ${this.activeCategoryTab === 'pathways' && !this.componentSearchQuery ? `
-            <div class="dc-comp-subfilters">
-              <span class="dc-comp-subfilter-label">PATHWAY LEVEL:</span>
-              <button class="dc-comp-subfilter-btn ${this.pathwaySubfilter === 'all' ? 'active' : ''}" data-subfilter="all">All Pathways (8)</button>
-              <button class="dc-comp-subfilter-btn ${this.pathwaySubfilter === 'underfloor' ? 'active' : ''}" data-subfilter="underfloor">▼ Under ESD Floor (4)</button>
-              <button class="dc-comp-subfilter-btn ${this.pathwaySubfilter === 'overhead' ? 'active' : ''}" data-subfilter="overhead">▲ Overhead / Roof (4)</button>
+          <!-- 2-Column Body: Left Master Categories Menu + Right Sub-Category & Object Grid -->
+          <div class="dc-comp-menu-body">
+            <!-- Left Side: Master Categories Menu -->
+            <div class="dc-comp-sidebar-menu">
+              <div class="dc-comp-sidebar-title">EQUIPMENT CATEGORIES</div>
+              ${DC_COMPONENT_CATEGORIES.map(cat => `
+                <button class="dc-comp-sidebar-item ${cat.id === this.activeCategoryTab && !this.componentSearchQuery ? 'active' : ''}" data-cat="${cat.id}">
+                  <span class="dc-comp-sidebar-icon">${cat.icon}</span>
+                  <span class="dc-comp-sidebar-label">${cat.label}</span>
+                  <span class="dc-comp-sidebar-count">${cat.items.length}</span>
+                  <span class="dc-comp-sidebar-arrow">›</span>
+                </button>
+              `).join('')}
             </div>
-          ` : ''}
 
-          <!-- Component Grid Cards -->
-          <div class="dc-comp-grid">
-            ${filteredComponents.length === 0 ? `
-              <div class="dc-comp-empty">No datacenter components match "${this.componentSearchQuery}"</div>
-            ` : filteredComponents.map(item => `
-              <div class="dc-comp-card ${item.id === this.selectedComponentId ? 'selected' : ''}" data-comp-id="${item.id}" title="${item.description}">
-                <div class="dc-comp-card-badge">${item.code}</div>
-                <div class="dc-comp-card-graphic">
-                  ${getDcComponentGraphicSvg(item.id, 85, 24)}
+            <!-- Right Side: Sub-Category Filter Bar & Component Objects Grid -->
+            <div class="dc-comp-content-pane">
+              <!-- Sub-Category Filter Bar -->
+              ${activeCategoryObj && activeCategoryObj.subCategories && !this.componentSearchQuery ? `
+                <div class="dc-comp-subcat-bar">
+                  <span class="dc-comp-subcat-title">${activeCategoryObj.label.toUpperCase()}:</span>
+                  <div class="dc-comp-subcat-chips">
+                    ${activeCategoryObj.subCategories.map(sub => `
+                      <button class="dc-comp-subcat-chip ${this.activeSubCategoryTab === sub.id ? 'active' : ''}" data-subcat="${sub.id}">
+                        ${sub.label}
+                      </button>
+                    `).join('')}
+                  </div>
                 </div>
-                <div class="dc-comp-card-body">
-                  <div class="dc-comp-card-title">${item.name}</div>
-                  <div class="dc-comp-card-sub">${item.pathwayLevel ? (item.pathwayLevel === 'underfloor' ? 'Under ESD Floor' : 'Roof / Overhead Runway') : item.description.slice(0, 50) + '...'}</div>
-                </div>
+              ` : ''}
+
+              <!-- Objects Cards Grid -->
+              <div class="dc-comp-grid">
+                ${filteredComponents.length === 0 ? `
+                  <div class="dc-comp-empty">
+                    <div class="dc-comp-empty-icon">🔍</div>
+                    <div>No components found matching "${this.componentSearchQuery}"</div>
+                  </div>
+                ` : filteredComponents.map(item => `
+                  <div class="dc-comp-card ${item.id === this.selectedComponentId ? 'selected' : ''}" data-comp-id="${item.id}" title="${item.description}">
+                    <div class="dc-comp-card-badge">${item.code}</div>
+                    <div class="dc-comp-card-graphic">
+                      ${getDcComponentGraphicSvg(item.id, 90, 26)}
+                    </div>
+                    <div class="dc-comp-card-body">
+                      <div class="dc-comp-card-title">${item.name}</div>
+                      <div class="dc-comp-card-sub">${item.pathwayLevel ? (item.pathwayLevel === 'underfloor' ? 'Under ESD Floor Pathway' : 'Roof / Overhead Pathway') : item.description.slice(0, 52) + '...'}</div>
+                    </div>
+                  </div>
+                `).join('')}
               </div>
-            `).join('')}
+            </div>
           </div>
         </div>
       ` : ''}
@@ -670,26 +703,27 @@ export class DcFloatingToolbar {
       this.render();
     });
 
-    // Category Tabs in Popover
-    this.element.querySelectorAll('.dc-comp-tab[data-cat]').forEach(tabBtn => {
-      tabBtn.addEventListener('click', (e) => {
+    // Left Master Categories Menu Click
+    this.element.querySelectorAll('.dc-comp-sidebar-item[data-cat]').forEach(itemBtn => {
+      itemBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const cat = (e.currentTarget as HTMLElement).getAttribute('data-cat');
         if (cat) {
           this.activeCategoryTab = cat;
+          this.activeSubCategoryTab = 'all';
           this.componentSearchQuery = '';
           this.render();
         }
       });
     });
 
-    // Pathway Subfilters
-    this.element.querySelectorAll('.dc-comp-subfilter-btn[data-subfilter]').forEach(subBtn => {
+    // Right Sub-Category Chips Click
+    this.element.querySelectorAll('.dc-comp-subcat-chip[data-subcat]').forEach(subBtn => {
       subBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const sub = (e.currentTarget as HTMLElement).getAttribute('data-subfilter') as any;
+        const sub = (e.currentTarget as HTMLElement).getAttribute('data-subcat');
         if (sub) {
-          this.pathwaySubfilter = sub;
+          this.activeSubCategoryTab = sub;
           this.render();
         }
       });

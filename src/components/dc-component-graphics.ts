@@ -100,6 +100,7 @@ export interface DcComponentItem {
   code: string;
   name: string;
   category: 'racks' | 'pathways' | 'power' | 'cooling' | 'monitoring' | 'security' | 'grounding' | 'patching';
+  subCategory?: string;
   pathwayLevel?: 'underfloor' | 'overhead';
   presetId?: string;
   badgeType: 'rack' | 'pathway' | 'power' | 'cooling' | 'sensor' | 'security' | 'fire' | 'ground' | 'fiber';
@@ -111,10 +112,16 @@ export interface DcComponentItem {
   heightU?: number;
 }
 
+export interface DcSubCategoryInfo {
+  id: string;
+  label: string;
+}
+
 export interface DcComponentCategoryGroup {
   id: string;
   label: string;
   icon: string;
+  subCategories?: DcSubCategoryInfo[];
   items: DcComponentItem[];
 }
 
@@ -1115,48 +1122,95 @@ export const DC_COMPONENT_CATEGORIES: DcComponentCategoryGroup[] = [
     id: 'racks',
     label: 'Racks & Enclosures',
     icon: '🖥️',
+    subCategories: [
+      { id: 'all', label: 'All Cabinets' },
+      { id: 'server', label: 'Server & HD Racks' },
+      { id: 'network', label: 'Network 2-Post' },
+      { id: 'enclosure', label: 'Wall Mount' },
+      { id: 'battery', label: 'Battery Open Frame' }
+    ],
     items: ALL_DC_COMPONENTS.filter(c => c.category === 'racks')
   },
   {
     id: 'pathways',
     label: 'Cable Ducts & Pathways',
     icon: '⚡',
+    subCategories: [
+      { id: 'all', label: 'All Pathways' },
+      { id: 'underfloor', label: '▼ Under ESD Floor' },
+      { id: 'overhead', label: '▲ Overhead / Roof' }
+    ],
     items: ALL_DC_COMPONENTS.filter(c => c.category === 'pathways')
   },
   {
     id: 'power',
     label: 'Power Distribution',
     icon: '🔌',
+    subCategories: [
+      { id: 'all', label: 'All Power' },
+      { id: 'grid_switchgear', label: 'Switchgear & ATS' },
+      { id: 'ups_backup', label: 'Central UPS & Batteries' },
+      { id: 'distribution_pdu', label: 'Floor PDU & RPP' },
+      { id: 'busway_rackpdu', label: 'Busway & Rack ePDUs' }
+    ],
     items: ALL_DC_COMPONENTS.filter(c => c.category === 'power')
   },
   {
     id: 'cooling',
     label: 'Cooling & Thermal',
     icon: '❄️',
+    subCategories: [
+      { id: 'all', label: 'All Cooling' },
+      { id: 'perimeter_air', label: 'Perimeter CRAC/CRAH' },
+      { id: 'inrow_heatex', label: 'In-Row & Rear Door RDHx' },
+      { id: 'liquid_direct', label: 'Liquid CDU & Immersion' },
+      { id: 'containment_flow', label: 'Aisle Containment' }
+    ],
     items: ALL_DC_COMPONENTS.filter(c => c.category === 'cooling')
   },
   {
     id: 'monitoring',
     label: 'Sensors & DCIM',
     icon: '📡',
+    subCategories: [
+      { id: 'all', label: 'All Sensors' },
+      { id: 'env_probes', label: 'Temp, Humidity & Leak' },
+      { id: 'telemetry_meters', label: 'Airflow, ΔP & Power' }
+    ],
     items: ALL_DC_COMPONENTS.filter(c => c.category === 'monitoring')
   },
   {
     id: 'patching',
     label: 'Structured Cabling',
     icon: '🔗',
+    subCategories: [
+      { id: 'all', label: 'All Cabling' },
+      { id: 'fiber_cassettes', label: 'Fiber & MPO Panels' },
+      { id: 'cable_organizers', label: 'Cable Managers (1U/VCO)' }
+    ],
     items: ALL_DC_COMPONENTS.filter(c => c.category === 'patching')
   },
   {
     id: 'security',
     label: 'Fire & Security',
     icon: '🛡️',
+    subCategories: [
+      { id: 'all', label: 'All Security' },
+      { id: 'fire_safety', label: 'Fire & VESDA System' },
+      { id: 'cctv_surveillance', label: 'CCTV Surveillance' },
+      { id: 'access_control', label: 'Access Control & Mantrap' }
+    ],
     items: ALL_DC_COMPONENTS.filter(c => c.category === 'security')
   },
   {
     id: 'grounding',
     label: 'Grounding & SRG',
     icon: '⚡',
+    subCategories: [
+      { id: 'all', label: 'All Grounding' },
+      { id: 'busbars', label: 'TMGB & RGB Busbars' },
+      { id: 'signal_grid', label: 'Signal Reference Grid (SRG)' }
+    ],
     items: ALL_DC_COMPONENTS.filter(c => c.category === 'grounding')
   }
 ];
