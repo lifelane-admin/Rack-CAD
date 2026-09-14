@@ -33,9 +33,7 @@ class StateManager {
       gridVisible: true,
       snapEnabled: true,
       rulersVisible: true,
-      racks: [
-        { id: 'rack-1', name: 'Rack 1', units: 42, x: 300, y: 100, leftCableManagerWidth: 'none', rightCableManagerWidth: 'none' },
-      ],
+      racks: [],
       devices: [],
       cables: [],
       bundles: [],
@@ -462,7 +460,7 @@ class StateManager {
 
   addRack(data: RackData): void {
     const racks = [...this.state.racks, data];
-    this.setState({ racks });
+    this.setState({ racks, selection: [{ type: 'rack', id: data.id }] });
     eventBus.emit('rack:added', data);
   }
 

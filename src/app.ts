@@ -38,6 +38,7 @@ import { renderTextLabel } from './renderers/text-label-renderer';
 import { renderImageAsset } from './renderers/image-asset-renderer';
 import { deviceCatalog, getTemplate } from './library/device-catalog';
 import { RACK_TEMPLATES, VCM_TEMPLATES, createRackFromTemplate } from './library/rack-catalog';
+import { customRackModal } from './components/custom-rack-modal';
 import { generateId, distToSegment } from './utils/geometry';
 import { initExportHandlers, downloadFile, exportJSON } from './utils/export';
 import { computeSmartRouting, get3DefaultAnchors } from './utils/routing';
@@ -481,8 +482,14 @@ export class App {
     this.renderCloudAll();
 
     // Listen for state changes that require re-render
-    eventBus.on('rack:added', () => this.renderAll());
-    eventBus.on('rack:removed', () => this.renderAll());
+    eventBus.on('rack:added', () => {
+      this.renderAll();
+      this.properties.update(stateManager.getState().selection);
+    });
+    eventBus.on('rack:removed', () => {
+      this.renderAll();
+      this.properties.update(stateManager.getState().selection);
+    });
     eventBus.on('rack:update', ({ id, data }) => {
       const racks = stateManager.getState().racks.map(r => r.id === id ? { ...r, ...data } : r);
       stateManager.setState({ racks });
@@ -5150,6 +5157,38 @@ export class App {
         appendExportSummaryOverlay(summaryPreviewLayer, racksForPreview, devicesForPreview, s.cables, s.customLegendItems, { draggable: true });
       }
     }
+
+    // Manage Empty Rack Canvas quick-start prompt
+    const viewport = document.getElementById('canvas-viewport');
+    let promptEl = document.getElementById('rack-empty-canvas-prompt');
+    const shouldShowPrompt = racksToRender.length === 0 && (s.activeView === 'rack' || s.activeView === 'hybrid');
+
+    if (shouldShowPrompt && viewport) {
+      if (!promptEl) {
+        promptEl = document.createElement('div');
+        promptEl.id = 'rack-empty-canvas-prompt';
+        promptEl.className = 'rack-empty-prompt';
+        promptEl.innerHTML = `
+          <div class="rack-empty-prompt-icon">📦</div>
+          <div class="rack-empty-prompt-title">Empty Rack Canvas</div>
+          <div class="rack-empty-prompt-subtitle">Deploy a standard server rack or build a custom cabinet to begin your layout.</div>
+          <div class="rack-empty-prompt-actions">
+            <button id="rack-empty-add-42u" class="dc-btn dc-btn-primary">＋ Standard 42U Rack</button>
+            <button id="rack-empty-custom-rack" class="dc-btn dc-btn-secondary">⚙️ Custom Rack Builder</button>
+          </div>
+          <div class="rack-empty-prompt-hint">💡 Tip: You can also drag standard & server cabinets directly from the "RACKS & CABINETS" palette on the left.</div>
+        `;
+        promptEl.querySelector('#rack-empty-add-42u')?.addEventListener('click', () => {
+          eventBus.emit('rack:add', { units: 42 });
+        });
+        promptEl.querySelector('#rack-empty-custom-rack')?.addEventListener('click', () => {
+          customRackModal.show();
+        });
+        viewport.appendChild(promptEl);
+      }
+    } else if (promptEl) {
+      promptEl.remove();
+    }
   }
 
   /**
@@ -5793,9 +5832,10 @@ export class App {
     eventBus.emit('view:changed', view);
     this.sidebar.render();
     if (isDiagram || isHybrid) this.renderCloudAll();
-    if (isHybrid) this.renderAll();
+    if (isHybrid || view === 'rack') this.renderAll();
     if (isDc || isDiagram) {
       document.getElementById('dc-working-banner')?.remove();
+      document.getElementById('rack-empty-canvas-prompt')?.remove();
     }
     if (isDc) this.buildFloorView?.show();
   }

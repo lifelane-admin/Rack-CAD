@@ -139,28 +139,39 @@ describe('Startup modal', () => {
     expect(document.querySelector('#catalog-container .cat-row')).toBeTruthy();
   });
 
-  it('dismissing via the ✕ button leaves the current view untouched', async () => {
+  it('starts with an empty canvas and renders the quick-start prompt in Rack Design mode', async () => {
     mountAppSkeleton();
     const { App } = await import('../app');
     const app = new App();
     app.init();
 
-    document.getElementById('startup-modal-close')!.click();
+    document.querySelector<HTMLButtonElement>('.startup-card[data-choice="rack"]')!.click();
 
-    expect(document.getElementById('startup-modal')).toBeNull();
-    expect(stateManager.getState().activeView).toBe('rack');
+    expect(stateManager.getState().racks.length).toBe(0);
+    const prompt = document.getElementById('rack-empty-canvas-prompt');
+    expect(prompt).not.toBeNull();
+    expect(prompt?.textContent).toContain('Empty Rack Canvas');
+    expect(prompt?.querySelector('#rack-empty-add-42u')).not.toBeNull();
+    expect(prompt?.querySelector('#rack-empty-custom-rack')).not.toBeNull();
   });
 
-  it('Escape dismisses the modal without changing the view', async () => {
+  it('clicking "＋ Standard 42U Rack" on empty prompt deploys and automatically selects the rack', async () => {
     mountAppSkeleton();
     const { App } = await import('../app');
     const app = new App();
     app.init();
 
-    expect(document.getElementById('startup-modal')).not.toBeNull();
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    document.querySelector<HTMLButtonElement>('.startup-card[data-choice="rack"]')!.click();
 
-    expect(document.getElementById('startup-modal')).toBeNull();
-    expect(stateManager.getState().activeView).toBe('rack');
+    const addBtn = document.querySelector<HTMLButtonElement>('#rack-empty-add-42u')!;
+    addBtn.click();
+
+    const state = stateManager.getState();
+    expect(state.racks.length).toBe(1);
+    expect(state.racks[0].units).toBe(42);
+    // Auto-select verifies selection is set to the new rack
+    expect(state.selection).toEqual([{ type: 'rack', id: state.racks[0].id }]);
+    // Prompt is removed once a rack is present
+    expect(document.getElementById('rack-empty-canvas-prompt')).toBeNull();
   });
 });
