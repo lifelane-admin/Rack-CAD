@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { MaterialManager } from '../three/MaterialManager';
 import { buildRackGroup } from '../three/rack-builder';
 import { dcState, getRowLabel, getColLabel } from './dc-state';
-import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacingStandard, DcAddressFormat, DcFloorTile, DcAirflowDirection, DcInfrastructureItem, DcInfraCategory, DcGaugeStyle, DcSpaceType, DcEquipmentCategory, DcRacewayFittingType, DcRacewayJunctionNode, DcWallSegment, DcWallItem, DcWallItemType, DcWallSide } from './types';
+import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcDoorOperation, DcDoorOpening, DcMounting, DcSpacingStandard, DcAddressFormat, DcFloorTile, DcAirflowDirection, DcInfrastructureItem, DcInfraCategory, DcGaugeStyle, DcSpaceType, DcEquipmentCategory, DcRacewayFittingType, DcRacewayJunctionNode, DcWallSegment, DcWallItem, DcWallItemType, DcWallSide } from './types';
 import { RACK_PRESETS, SPACING_STANDARDS, RackPreset, SpacingStandardInfo } from './standards';
 import { DATACENTER_CATALOG, CATEGORY_DEFINITIONS, WALL_EQUIPMENT_CATALOG, CatalogItemPreset, WallItemCatalogPreset } from './catalog';
 import { solveRacewayTopology, getRacewayTheme, getTruncatedInfraSegments } from './raceway-topology';
@@ -5216,6 +5216,7 @@ export class BuildFloorView {
       rackType: (rack.type === 'open-frame' ? 'open-frame' : rack.type === 'network' ? 'network' : rack.type === 'wall-mount' ? 'wall-mount' : 'server') as any,
       frontDoor: rack.doorStyle as any,
       doorOperation: rack.doorOperation as any,
+      doorOpening: (rack.doorOpening || existing?.doorOpening || 'front-only') as any,
       mounting: rack.mounting === 'wall-mount' ? 'wall-mount' : 'floor',
       rackColor: rack.color ?? '#1e3a5f',
       x: posX,
@@ -6260,6 +6261,12 @@ export class BuildFloorView {
             <option value="bifold">Bi-Fold (Folding Hinge)</option>
           </select>
         </label>
+        <label>Door Opening
+          <select id="dr-door-opening" class="dc-input">
+            <option value="front-only" selected>Front Only (Single Access)</option>
+            <option value="front-rear">Front + Rear (Dual Access)</option>
+          </select>
+        </label>
         <label>Mounting Style
           <select id="dr-mounting" class="dc-input">
             <option value="floor" selected>Floor Mounted (Free-standing / Bayed)</option>
@@ -6280,6 +6287,7 @@ export class BuildFloorView {
       const h = parseFloat((document.getElementById('dr-height') as HTMLInputElement).value) || 42;
       const door = (document.getElementById('dr-door') as HTMLSelectElement).value as DcDoorStyle;
       const doorOp = (document.getElementById('dr-door-op') as HTMLSelectElement).value as any;
+      const doorOpening = ((document.getElementById('dr-door-opening') as HTMLSelectElement)?.value || 'front-only') as DcDoorOpening;
       const mounting = (document.getElementById('dr-mounting') as HTMLSelectElement).value as DcMounting;
       const mfr = (document.getElementById('dr-mfr') as HTMLInputElement).value.trim();
       const model = (document.getElementById('dr-model') as HTMLInputElement).value.trim();
@@ -6298,6 +6306,7 @@ export class BuildFloorView {
         heightU: h,
         doorStyle: door,
         doorOperation: doorOp,
+        doorOpening,
         mounting,
         manufacturer: mfr || undefined,
         model: model || undefined,
@@ -6417,6 +6426,12 @@ export class BuildFloorView {
             <option value="bifold"${rack.doorOperation === 'bifold' ? ' selected' : ''}>Bi-Fold (Folding Hinge)</option>
           </select>
         </label>
+        <label>Door Opening
+          <select id="dr-door-opening" class="dc-input">
+            <option value="front-only"${(rack.doorOpening ?? 'front-only') === 'front-only' ? ' selected' : ''}>Front Only (Single Access)</option>
+            <option value="front-rear"${rack.doorOpening === 'front-rear' ? ' selected' : ''}>Front + Rear (Dual Access)</option>
+          </select>
+        </label>
         <label>Mounting Style
           <select id="dr-mounting" class="dc-input">
             <option value="floor"${(rack.mounting ?? 'floor') === 'floor' ? ' selected' : ''}>Floor Mounted (Free-standing / Bayed)</option>
@@ -6446,6 +6461,7 @@ export class BuildFloorView {
       const h = parseFloat((document.getElementById('dr-height') as HTMLInputElement).value) || rack.heightU;
       const door = (document.getElementById('dr-door') as HTMLSelectElement).value as DcDoorStyle;
       const doorOp = (document.getElementById('dr-door-op') as HTMLSelectElement).value as any;
+      const doorOpening = ((document.getElementById('dr-door-opening') as HTMLSelectElement)?.value || 'front-only') as DcDoorOpening;
       const mounting = (document.getElementById('dr-mounting') as HTMLSelectElement).value as DcMounting;
       const mfr = (document.getElementById('dr-mfr') as HTMLInputElement).value.trim();
       const model = (document.getElementById('dr-model') as HTMLInputElement).value.trim();
@@ -6462,6 +6478,7 @@ export class BuildFloorView {
         heightU: h,
         doorStyle: door,
         doorOperation: doorOp,
+        doorOpening,
         mounting,
         manufacturer: mfr || undefined,
         model: model || undefined,
@@ -8260,6 +8277,7 @@ export class BuildFloorView {
         rackColor: dcRack.color ?? '#0c0e12',
         frontDoor: (dcRack.doorStyle || 'perforated') as any,
         doorOperation: (dcRack.doorOperation || stateRack?.doorOperation) as any,
+        doorOpening: (dcRack.doorOpening || stateRack?.doorOpening || 'front-only') as any,
         sidePanels: dcRack.type !== 'open-frame',
         leftCableManagerWidth: dcRack.leftCableManagerWidth || stateRack?.leftCableManagerWidth || 'none',
         rightCableManagerWidth: dcRack.rightCableManagerWidth || stateRack?.rightCableManagerWidth || 'none',

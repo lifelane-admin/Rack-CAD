@@ -222,6 +222,7 @@ export type DcDoorOperation =
   | 'lift-off'
   | 'bifold'
   | 'interlock';
+export type DcDoorOpening = 'front-only' | 'front-rear';
 export type DcMounting = 'floor' | 'wall-mount' | 'pad-mount';
 export type DcSpacingStandard =
   | 'bayed-0mm'
@@ -248,6 +249,7 @@ export interface DcRack {
   mounting?: DcMounting;
   doorStyle?: DcDoorStyle;
   doorOperation?: DcDoorOperation;
+  doorOpening?: DcDoorOpening;
   position: { x: number; y: number; z: number }; // real-world meters
   rotation: 0 | 90 | 180 | 270;  // degrees
   color?: string;

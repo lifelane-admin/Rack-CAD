@@ -7,6 +7,7 @@ import {
   RackType,
   RackDoorType,
   RackDoorOperation,
+  RackDoorOpening,
   RackMounting,
   RackWidthOption,
   VcmWidth,
@@ -30,6 +31,7 @@ export class CustomRackModal {
     const rackType: RackType = initial?.rackType ?? 'server';
     const frontDoor: RackDoorType = initial?.frontDoor ?? 'perforated';
     const doorOperation: RackDoorOperation = initial?.doorOperation ?? 'swing-left';
+    const doorOpening: RackDoorOpening = initial?.doorOpening ?? 'front-only';
     const sidePanels = initial?.sidePanels ?? true;
     const rackColor = initial?.rackColor ?? '#0c0e12';
     const mounting: RackMounting = initial?.mounting ?? 'floor';
@@ -182,6 +184,14 @@ export class CustomRackModal {
             </div>
 
             <div>
+              <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #fb8c00; margin-bottom: 6px;">Door Opening</label>
+              <select id="crm-door-opening" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px;">
+                <option value="front-only" ${doorOpening === 'front-only' || !doorOpening ? 'selected' : ''}>Front Only (Single Front Access)</option>
+                <option value="front-rear" ${doorOpening === 'front-rear' ? 'selected' : ''}>Front + Rear (Dual Front & Rear Access)</option>
+              </select>
+            </div>
+
+            <div>
               <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #fb8c00; margin-bottom: 6px;">Side Panels</label>
               <select id="crm-side-panels" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px;">
                 <option value="true" ${sidePanels ? 'selected' : ''}>Enabled (Removable Locking Panels)</option>
@@ -219,22 +229,22 @@ export class CustomRackModal {
               <div>
                 <label style="display: block; font-size: 10px; color: #8b949e; margin-bottom: 4px;">Left VCM Width</label>
                 <select id="crm-vcm-left" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 6px 8px; color: #fff; font-size: 11px;">
-                  <option value="none" ${leftVcm === 'none' ? 'selected' : ''}>None</option>
-                  <option value="2-inch" ${leftVcm === '2-inch' ? 'selected' : ''}>2" Slim Organizer</option>
-                  <option value="4-inch" ${leftVcm === '4-inch' ? 'selected' : ''}>4" Standard Gutter</option>
-                  <option value="6-inch" ${leftVcm === '6-inch' ? 'selected' : ''}>6" High-Density VCM</option>
-                  <option value="8-inch" ${leftVcm === '8-inch' ? 'selected' : ''}>8" Backbone Duct</option>
+                  <option value="none" ${leftVcm === 'none' ? 'selected' : ''}>None (Standard Mounting)</option>
+                  <option value="2-inch" ${leftVcm === '2-inch' ? 'selected' : ''}>2" Gutter (50mm)</option>
+                  <option value="4-inch" ${leftVcm === '4-inch' ? 'selected' : ''}>4" Gutter (100mm)</option>
+                  <option value="6-inch" ${leftVcm === '6-inch' ? 'selected' : ''}>6" Gutter (150mm)</option>
+                  <option value="8-inch" ${leftVcm === '8-inch' ? 'selected' : ''}>8" Gutter (200mm)</option>
                 </select>
               </div>
 
               <div>
                 <label style="display: block; font-size: 10px; color: #8b949e; margin-bottom: 4px;">Right VCM Width</label>
                 <select id="crm-vcm-right" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 6px 8px; color: #fff; font-size: 11px;">
-                  <option value="none" ${rightVcm === 'none' ? 'selected' : ''}>None</option>
-                  <option value="2-inch" ${rightVcm === '2-inch' ? 'selected' : ''}>2" Slim Organizer</option>
-                  <option value="4-inch" ${rightVcm === '4-inch' ? 'selected' : ''}>4" Standard Gutter</option>
-                  <option value="6-inch" ${rightVcm === '6-inch' ? 'selected' : ''}>6" High-Density VCM</option>
-                  <option value="8-inch" ${rightVcm === '8-inch' ? 'selected' : ''}>8" Backbone Duct</option>
+                  <option value="none" ${rightVcm === 'none' ? 'selected' : ''}>None (Standard Mounting)</option>
+                  <option value="2-inch" ${rightVcm === '2-inch' ? 'selected' : ''}>2" Gutter (50mm)</option>
+                  <option value="4-inch" ${rightVcm === '4-inch' ? 'selected' : ''}>4" Gutter (100mm)</option>
+                  <option value="6-inch" ${rightVcm === '6-inch' ? 'selected' : ''}>6" Gutter (150mm)</option>
+                  <option value="8-inch" ${rightVcm === '8-inch' ? 'selected' : ''}>8" Gutter (200mm)</option>
                 </select>
               </div>
 
@@ -289,6 +299,7 @@ export class CustomRackModal {
       const typeVal = (overlay.querySelector('#crm-type') as HTMLSelectElement)?.value as RackType;
       const doorVal = (overlay.querySelector('#crm-door') as HTMLSelectElement)?.value as RackDoorType;
       const doorOpVal = (overlay.querySelector('#crm-door-op') as HTMLSelectElement)?.value as RackDoorOperation;
+      const doorOpeningVal = ((overlay.querySelector('#crm-door-opening') as HTMLSelectElement)?.value || 'front-only') as RackDoorOpening;
       const sidePanelsVal = (overlay.querySelector('#crm-side-panels') as HTMLSelectElement)?.value === 'true';
       const colorVal = (overlay.querySelector('#crm-color') as HTMLSelectElement)?.value || '#0c0e12';
       const mountVal = (overlay.querySelector('#crm-mounting') as HTMLSelectElement)?.value as RackMounting;
@@ -307,6 +318,7 @@ export class CustomRackModal {
         rackType: typeVal,
         frontDoor: doorVal,
         doorOperation: doorOpVal,
+        doorOpening: doorOpeningVal,
         sidePanels: sidePanelsVal,
         rackColor: colorVal,
         mounting: mountVal,

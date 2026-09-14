@@ -690,8 +690,9 @@ export function buildRackGroup(
     group.add(rightSide);
   }
 
-  // ── Back panel ─────────────────────────────────────────────────────────────
-  if (rack.rackType !== 'open-frame') {
+  // ── Back panel (only rendered for front-only access; front-rear replaces this with rear door) ──
+  const isDualAccess = rack.doorOpening === 'front-rear';
+  if (rack.rackType !== 'open-frame' && !isDualAccess) {
     const backGeo  = new THREE.BoxGeometry(RACK_OUTER_WIDTH, shellH, 10);
     const backPanel = new THREE.Mesh(backGeo, bodyMat);
     backPanel.name  = 'rack-back';
@@ -713,7 +714,7 @@ export function buildRackGroup(
   botPlinth.position.set(0, -(totalH - RACK_PADDING_BOTTOM) / 2, 0);
   group.add(botPlinth);
 
-  // ── Front vent header strip (spans between left & right side walls) ───────
+  // ── Front and Rear vent header strips ───────
   const ventH   = 14;
   const ventGeo = new THREE.BoxGeometry(RACK_INNER_WIDTH, ventH, 4);
   const vent    = new THREE.Mesh(ventGeo, ventMat);
@@ -732,6 +733,21 @@ export function buildRackGroup(
     group.add(frontHeader);
   }
 
+  if (isDualAccess && rack.rackType !== 'open-frame') {
+    const rearVent = new THREE.Mesh(ventGeo, ventMat);
+    rearVent.name = 'rack-rear-vent-header';
+    rearVent.position.set(0, bodyH / 2 - ventH / 2, -fz + 2);
+    group.add(rearVent);
+
+    if (frontHeaderH > 0) {
+      const rearHeaderGeo = new THREE.BoxGeometry(RACK_INNER_WIDTH, frontHeaderH, 4);
+      const rearHeader = new THREE.Mesh(rearHeaderGeo, bodyMat);
+      rearHeader.name = 'rack-rear-header';
+      rearHeader.position.set(0, (frontHeaderTop + frontHeaderBottom) / 2, -fz + 2);
+      group.add(rearHeader);
+    }
+  }
+
   // ── Door groups (Single, Split / Dual 50-50, Asymmetric 60/40, Bi-Fold, Multi-Compartment) ────────────
   const hasDoor = (rack.frontDoor !== 'none') && (rack.rackType !== 'open-frame');
   const doorOp = rack.doorOperation || (doorStyle.startsWith('split-') || doorStyle.startsWith('asym-') ? 'split-swing' : doorStyle.startsWith('bifold-') ? 'bifold' : 'swing-left');
@@ -742,292 +758,303 @@ export function buildRackGroup(
     const isSplit = doorStyle.startsWith('split-') || isAsym || isBifold;
     const isColo = doorStyle === 'multi-compartment-2' || doorStyle === 'multi-compartment-4';
 
-    if (isSplit && !isColo) {
-      // ── Dual / Split / Asymmetric / Bi-Fold Doors ──
-      const totalDoorW = PERF_END * 2 - 3;
-      const leftRatio = isAsym ? 0.60 : 0.50;
-      const rightRatio = isAsym ? 0.40 : 0.50;
-
-      const leftLeafW = totalDoorW * leftRatio;
-      const rightLeafW = totalDoorW * rightRatio;
-      const frameBorder = 14;
-      const frameD = 4.0;
-      const insertD = 1.6;
-
-      const isSolid = doorStyle.includes('solid');
-      const isGlass = doorStyle.includes('glass') || doorStyle.includes('acrylic');
-
-      // 1. Left Door Leaf (Hinged at left outer edge x = -PERF_END)
-      const leftDoorGroup = new THREE.Group();
-      leftDoorGroup.name = 'rack-door-left';
-      leftDoorGroup.position.set(-PERF_END, 0, fz + 1.5);
-
-      const leftWinW = Math.max(10, leftLeafW - frameBorder * 2);
-      const leftWinH = Math.max(10, bodyH - frameBorder * 2);
-      const leftSplitMat = resolveDoorInsertMat(doorStyle, leftWinW, leftWinH);
-
-      if (isSolid) {
-        const solidPanel = new THREE.Mesh(new THREE.BoxGeometry(leftLeafW, bodyH, frameD), bodyMat);
-        solidPanel.position.set(leftLeafW / 2, 0, 0);
-        leftDoorGroup.add(solidPanel);
-      } else {
-        // Perimeter frame
-        const leftBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
-        leftBeam.position.set(frameBorder / 2, 0, 0);
-        leftDoorGroup.add(leftBeam);
-
-        const rightBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
-        rightBeam.position.set(leftLeafW - frameBorder / 2, 0, 0);
-        leftDoorGroup.add(rightBeam);
-
-        const topBeam = new THREE.Mesh(new THREE.BoxGeometry(leftWinW, frameBorder, frameD), bodyMat);
-        topBeam.position.set(leftLeafW / 2, bodyH / 2 - frameBorder / 2, 0);
-        leftDoorGroup.add(topBeam);
-
-        const botBeam = new THREE.Mesh(new THREE.BoxGeometry(leftWinW, frameBorder, frameD), bodyMat);
-        botBeam.position.set(leftLeafW / 2, -bodyH / 2 + frameBorder / 2, 0);
-        leftDoorGroup.add(botBeam);
-
-        // Center insert
-        const insertGeo = isGlass ? new THREE.BoxGeometry(leftWinW, leftWinH, insertD) : new THREE.PlaneGeometry(leftWinW, leftWinH);
-        const leftInsert = new THREE.Mesh(insertGeo, leftSplitMat);
-        leftInsert.position.set(leftLeafW / 2, 0, 0);
-        leftDoorGroup.add(leftInsert);
-      }
-
-      // Bi-fold knuckle center hinge if bifold
-      if (isBifold) {
-        for (const hingeY of [-bodyH * 0.35, 0, bodyH * 0.35]) {
-          const bifoldHinge = new THREE.Mesh(new THREE.BoxGeometry(4, 18, 5), hingeMat);
-          bifoldHinge.position.set(leftLeafW / 2, hingeY, 2);
-          leftDoorGroup.add(bifoldHinge);
-        }
-      }
-
-      // Left Escutcheon & Handle
-      const leftEscutcheon = new THREE.Mesh(new THREE.BoxGeometry(7, 70, 4.5), bodyMat);
-      leftEscutcheon.position.set(leftLeafW - 7, 0, 2);
-      leftDoorGroup.add(leftEscutcheon);
-
-      const leftHandle = new THREE.Mesh(new THREE.BoxGeometry(4, 55, 9), handleMat);
-      leftHandle.position.set(leftLeafW - 7, 0, 4);
-      leftDoorGroup.add(leftHandle);
-
-      // Left Hinges
-      for (const hingeY of [-bodyH * 0.38, bodyH * 0.38]) {
-        const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 16, 5), hingeMat);
-        hinge.position.set(0, hingeY, -1);
-        leftDoorGroup.add(hinge);
-      }
-      group.add(leftDoorGroup);
-
-      // 2. Right Door Leaf (Hinged at right outer edge x = PERF_END)
-      const rightDoorGroup = new THREE.Group();
-      rightDoorGroup.name = 'rack-door-right';
-      rightDoorGroup.position.set(PERF_END, 0, fz + 1.5);
-
-      const rightWinW = Math.max(10, rightLeafW - frameBorder * 2);
-      const rightWinH = Math.max(10, bodyH - frameBorder * 2);
-      const rightSplitMat = resolveDoorInsertMat(doorStyle, rightWinW, rightWinH);
-
-      if (isSolid) {
-        const solidPanel = new THREE.Mesh(new THREE.BoxGeometry(rightLeafW, bodyH, frameD), bodyMat);
-        solidPanel.position.set(-rightLeafW / 2, 0, 0);
-        rightDoorGroup.add(solidPanel);
-      } else {
-        const rightBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
-        rightBeam.position.set(-frameBorder / 2, 0, 0);
-        rightDoorGroup.add(rightBeam);
-
-        const leftBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
-        leftBeam.position.set(-rightLeafW + frameBorder / 2, 0, 0);
-        rightDoorGroup.add(leftBeam);
-
-        const topBeam = new THREE.Mesh(new THREE.BoxGeometry(rightWinW, frameBorder, frameD), bodyMat);
-        topBeam.position.set(-rightLeafW / 2, bodyH / 2 - frameBorder / 2, 0);
-        rightDoorGroup.add(topBeam);
-
-        const botBeam = new THREE.Mesh(new THREE.BoxGeometry(rightWinW, frameBorder, frameD), bodyMat);
-        botBeam.position.set(-rightLeafW / 2, -bodyH / 2 + frameBorder / 2, 0);
-        rightDoorGroup.add(botBeam);
-
-        const insertGeo = isGlass ? new THREE.BoxGeometry(rightWinW, rightWinH, insertD) : new THREE.PlaneGeometry(rightWinW, rightWinH);
-        const rightInsert = new THREE.Mesh(insertGeo, rightSplitMat);
-        rightInsert.position.set(-rightLeafW / 2, 0, 0);
-        rightDoorGroup.add(rightInsert);
-      }
-
-      // Bi-fold knuckle center hinge if bifold
-      if (isBifold) {
-        for (const hingeY of [-bodyH * 0.35, 0, bodyH * 0.35]) {
-          const bifoldHinge = new THREE.Mesh(new THREE.BoxGeometry(4, 18, 5), hingeMat);
-          bifoldHinge.position.set(-rightLeafW / 2, hingeY, 2);
-          rightDoorGroup.add(bifoldHinge);
-        }
-      }
-
-      // Right Escutcheon & Handle
-      const rightEscutcheon = new THREE.Mesh(new THREE.BoxGeometry(7, 70, 4.5), bodyMat);
-      rightEscutcheon.position.set(-rightLeafW + 7, 0, 2);
-      rightDoorGroup.add(rightEscutcheon);
-
-      const rightHandle = new THREE.Mesh(new THREE.BoxGeometry(4, 55, 9), handleMat);
-      rightHandle.position.set(-rightLeafW + 7, 0, 4);
-      rightDoorGroup.add(rightHandle);
-
-      // Right Hinges
-      for (const hingeY of [-bodyH * 0.38, bodyH * 0.38]) {
-        const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 16, 5), hingeMat);
-        hinge.position.set(0, hingeY, -1);
-        rightDoorGroup.add(hinge);
-      }
-      group.add(rightDoorGroup);
-
-    } else if (isColo) {
-      // ── Multi-Compartment Colocation Doors ──
-      const numCompartments = doorStyle === 'multi-compartment-4' ? 4 : 2;
-      const compH = (bodyH - (numCompartments - 1) * 6) / numCompartments;
-      const dividerH = 6;
-      const compPerfMat = makePerforatedMat(GLASS_HW * 2, compH, doorStyle);
-      const compWingMat = makePerforatedMat(PERF_W, compH, doorStyle);
-
-      for (let c = 0; c < numCompartments; c++) {
-        const compDoorGroup = new THREE.Group();
-        compDoorGroup.name = `rack-door-comp-${c}`;
-        const centerY = (bodyH / 2) - (c * (compH + dividerH)) - (compH / 2);
-        compDoorGroup.position.set(PERF_END, centerY, fz);
-
-        const compGeo = new THREE.PlaneGeometry(GLASS_HW * 2, compH);
-        const compDoor = new THREE.Mesh(compGeo, compPerfMat);
-        compDoor.position.set(-PERF_END, 0, 0);
-        compDoorGroup.add(compDoor);
-
-        // Handle for each compartment
-        const compHandle = new THREE.Mesh(new THREE.BoxGeometry(4, 30, 8), handleMat);
-        compHandle.position.set(-PERF_END - GLASS_HW + 10, 0, 3);
-        compDoorGroup.add(compHandle);
-
-        // Hinges for each compartment
-        for (const hingeY of [-compH * 0.3, compH * 0.3]) {
-          const hinge = new THREE.Mesh(new THREE.BoxGeometry(4, 10, 4), hingeMat);
-          hinge.position.set(0, hingeY, -1);
-          compDoorGroup.add(hinge);
-        }
-
-        // Side mesh wings for compartment (single plane)
-        const compPerfGeo = new THREE.PlaneGeometry(PERF_W, compH);
-        const leftPerf = new THREE.Mesh(compPerfGeo, compWingMat);
-        leftPerf.position.set(-(PERF_END + PERF_CX), 0, 0);
-        compDoorGroup.add(leftPerf);
-
-        const rightPerf = new THREE.Mesh(compPerfGeo, compWingMat);
-        rightPerf.position.set(PERF_CX - PERF_END, 0, 0);
-        compDoorGroup.add(rightPerf);
-
-        group.add(compDoorGroup);
-
-        // Horizontal steel divider bar between compartments
-        if (c < numCompartments - 1) {
-          const divY = (bodyH / 2) - ((c + 1) * compH + c * dividerH) - (dividerH / 2);
-          const divider = new THREE.Mesh(new THREE.BoxGeometry(RACK_INNER_WIDTH + 8, dividerH, 12), bodyMat);
-          divider.name = 'rack-colo-divider';
-          divider.position.set(0, divY, fz - 2);
-          group.add(divider);
-        }
-      }
-
-    } else {
-      // ── Single Door Styles (glass, acrylic, perforated, solid, louvered, wire-mesh, hexa, round-hole) ──
-      const doorGroup = new THREE.Group();
-      doorGroup.name  = 'rack-door';
-      doorGroup.position.set(PERF_END, 0, fz);
-
-      const isMeshDoor = doorStyle.includes('perforated') || doorStyle.includes('honeycomb') || doorStyle.includes('hexa') || doorStyle.includes('mesh') || doorStyle.includes('round-hole');
-      const activeDoorMat = resolveDoorInsertMat(doorStyle, GLASS_HW * 2, bodyH);
-      const wingMat = makePerforatedMat(PERF_W, bodyH, doorStyle);
-      const glassGeo  = isMeshDoor ? new THREE.PlaneGeometry(GLASS_HW * 2, bodyH) : new THREE.BoxGeometry(GLASS_HW * 2, bodyH, 4);
-      const glassDoor = new THREE.Mesh(glassGeo, activeDoorMat);
-      glassDoor.name  = 'rack-glass';
-      glassDoor.position.set(-PERF_END, 0, isMeshDoor ? 0 : -2);
-      doorGroup.add(glassDoor);
-
-      // Louvered slats for louvered door
-      if (doorStyle === 'louvered' || doorStyle === 'louvred') {
-        const slatGeo = new THREE.BoxGeometry(GLASS_HW * 1.8, 3, 2);
-        const numSlats = Math.floor(bodyH / 18);
-        for (let s = 0; s < numSlats; s++) {
-          const slat = new THREE.Mesh(slatGeo, handleMat);
-          const slatY = -bodyH / 2 + 15 + s * 18;
-          slat.position.set(-PERF_END, slatY, 1);
-          slat.rotation.x = 0.4; // tilted louver slat
-          doorGroup.add(slat);
-        }
-      }
-
-      // Handle & Hinges
-      const handleGeo = new THREE.BoxGeometry(5, 65, 10);
-      const handle    = new THREE.Mesh(handleGeo, handleMat);
-      handle.name     = 'rack-handle';
-      handle.position.set(-PERF_END - GLASS_HW + 10, 0, 3);
-      doorGroup.add(handle);
-
-      const hingePosX = doorOp === 'swing-left' ? -PERF_END * 2 : 0;
-      for (const hingeY of [-bodyH * 0.35, bodyH * 0.35]) {
-        const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 14, 5), hingeMat);
-        hinge.position.set(hingePosX, hingeY, -1);
-        doorGroup.add(hinge);
-      }
-
-      // Red accent strips
-      const redGeo  = new THREE.BoxGeometry(RED_W, bodyH, 11);
-      const leftRed = new THREE.Mesh(redGeo, redMat);
-      leftRed.name  = 'rack-red-L';
-      leftRed.position.set(-(PERF_END + GLASS_HW + RED_W / 2), 0, -5.5);
-      doorGroup.add(leftRed);
-
-      const rightRed = new THREE.Mesh(redGeo, redMat);
-      rightRed.name  = 'rack-red-R';
-      rightRed.position.set(GLASS_HW + RED_W / 2 - PERF_END, 0, -5.5);
-      doorGroup.add(rightRed);
-
-      // Perforated mesh wings
-      const perfGeo  = new THREE.PlaneGeometry(PERF_W, bodyH);
-      const leftPerf = new THREE.Mesh(perfGeo, wingMat);
-      leftPerf.name  = 'rack-perf-L';
-      leftPerf.position.set(-(PERF_END + PERF_CX), 0, 0);
-      doorGroup.add(leftPerf);
-
-      const rightPerf = new THREE.Mesh(perfGeo, wingMat);
-      rightPerf.name  = 'rack-perf-R';
-      rightPerf.position.set(PERF_CX - PERF_END, 0, 0);
-      doorGroup.add(rightPerf);
-
-      group.add(doorGroup);
+    const facesToBuild: Array<{ isRear: boolean; faceZ: number; zDir: number; zOffset: number }> = [
+      { isRear: false, faceZ: fz, zDir: 1, zOffset: 1.5 },
+    ];
+    if (isDualAccess) {
+      facesToBuild.push({ isRear: true, faceZ: -fz, zDir: -1, zOffset: -1.5 });
     }
 
-    // ── Door Operation Hardware Visual Cues (Sliding Track / Lift-off Pins) ──
-    if (doorOp === 'sliding' || doorStyle.includes('sliding')) {
-      // Top sliding track guide rail
-      const trackGeo = new THREE.BoxGeometry(RACK_INNER_WIDTH + 10, 10, 12);
-      const topTrack = new THREE.Mesh(trackGeo, trackMat);
-      topTrack.position.set(0, bodyH / 2 + 5, fz + 4);
-      group.add(topTrack);
+    for (const { isRear, faceZ, zDir, zOffset } of facesToBuild) {
+      const prefix = isRear ? 'rack-rear-door' : 'rack-door';
 
-      // Bottom sliding track guide rail
-      const botTrack = new THREE.Mesh(trackGeo, trackMat);
-      botTrack.position.set(0, -bodyH / 2 - 5, fz + 4);
-      group.add(botTrack);
-    } else if (doorOp === 'lift-off') {
-      // Quick-release ball-detent lift pins
-      for (const px of [-PERF_END + 15, PERF_END - 15]) {
-        const pinGeo = new THREE.CylinderGeometry(3, 3, 14, 12);
-        const topPin = new THREE.Mesh(pinGeo, handleMat);
-        topPin.position.set(px, bodyH / 2 + 3, fz + 2);
-        group.add(topPin);
+      if (isSplit && !isColo) {
+        // ── Dual / Split / Asymmetric / Bi-Fold Doors ──
+        const totalDoorW = PERF_END * 2 - 3;
+        const leftRatio = isAsym ? 0.60 : 0.50;
+        const rightRatio = isAsym ? 0.40 : 0.50;
 
-        const botPin = new THREE.Mesh(pinGeo, handleMat);
-        botPin.position.set(px, -bodyH / 2 - 3, fz + 2);
-        group.add(botPin);
+        const leftLeafW = totalDoorW * leftRatio;
+        const rightLeafW = totalDoorW * rightRatio;
+        const frameBorder = 14;
+        const frameD = 4.0;
+        const insertD = 1.6;
+
+        const isSolid = doorStyle.includes('solid');
+        const isGlass = doorStyle.includes('glass') || doorStyle.includes('acrylic');
+
+        // 1. Left Door Leaf (Hinged at left outer edge x = -PERF_END)
+        const leftDoorGroup = new THREE.Group();
+        leftDoorGroup.name = `${prefix}-left`;
+        leftDoorGroup.position.set(-PERF_END, 0, faceZ + zOffset);
+
+        const leftWinW = Math.max(10, leftLeafW - frameBorder * 2);
+        const leftWinH = Math.max(10, bodyH - frameBorder * 2);
+        const leftSplitMat = resolveDoorInsertMat(doorStyle, leftWinW, leftWinH);
+
+        if (isSolid) {
+          const solidPanel = new THREE.Mesh(new THREE.BoxGeometry(leftLeafW, bodyH, frameD), bodyMat);
+          solidPanel.position.set(leftLeafW / 2, 0, 0);
+          leftDoorGroup.add(solidPanel);
+        } else {
+          // Perimeter frame
+          const leftBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
+          leftBeam.position.set(frameBorder / 2, 0, 0);
+          leftDoorGroup.add(leftBeam);
+
+          const rightBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
+          rightBeam.position.set(leftLeafW - frameBorder / 2, 0, 0);
+          leftDoorGroup.add(rightBeam);
+
+          const topBeam = new THREE.Mesh(new THREE.BoxGeometry(leftWinW, frameBorder, frameD), bodyMat);
+          topBeam.position.set(leftLeafW / 2, bodyH / 2 - frameBorder / 2, 0);
+          leftDoorGroup.add(topBeam);
+
+          const botBeam = new THREE.Mesh(new THREE.BoxGeometry(leftWinW, frameBorder, frameD), bodyMat);
+          botBeam.position.set(leftLeafW / 2, -bodyH / 2 + frameBorder / 2, 0);
+          leftDoorGroup.add(botBeam);
+
+          // Center insert
+          const insertGeo = isGlass ? new THREE.BoxGeometry(leftWinW, leftWinH, insertD) : new THREE.PlaneGeometry(leftWinW, leftWinH);
+          const leftInsert = new THREE.Mesh(insertGeo, leftSplitMat);
+          leftInsert.position.set(leftLeafW / 2, 0, 0);
+          leftDoorGroup.add(leftInsert);
+        }
+
+        // Bi-fold knuckle center hinge if bifold
+        if (isBifold) {
+          for (const hingeY of [-bodyH * 0.35, 0, bodyH * 0.35]) {
+            const bifoldHinge = new THREE.Mesh(new THREE.BoxGeometry(4, 18, 5), hingeMat);
+            bifoldHinge.position.set(leftLeafW / 2, hingeY, zDir * 2);
+            leftDoorGroup.add(bifoldHinge);
+          }
+        }
+
+        // Left Escutcheon & Handle
+        const leftEscutcheon = new THREE.Mesh(new THREE.BoxGeometry(7, 70, 4.5), bodyMat);
+        leftEscutcheon.position.set(leftLeafW - 7, 0, zDir * 2);
+        leftDoorGroup.add(leftEscutcheon);
+
+        const leftHandle = new THREE.Mesh(new THREE.BoxGeometry(4, 55, 9), handleMat);
+        leftHandle.position.set(leftLeafW - 7, 0, zDir * 4);
+        leftDoorGroup.add(leftHandle);
+
+        // Left Hinges
+        for (const hingeY of [-bodyH * 0.38, bodyH * 0.38]) {
+          const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 16, 5), hingeMat);
+          hinge.position.set(0, hingeY, zDir * -1);
+          leftDoorGroup.add(hinge);
+        }
+        group.add(leftDoorGroup);
+
+        // 2. Right Door Leaf (Hinged at right outer edge x = PERF_END)
+        const rightDoorGroup = new THREE.Group();
+        rightDoorGroup.name = `${prefix}-right`;
+        rightDoorGroup.position.set(PERF_END, 0, faceZ + zOffset);
+
+        const rightWinW = Math.max(10, rightLeafW - frameBorder * 2);
+        const rightWinH = Math.max(10, bodyH - frameBorder * 2);
+        const rightSplitMat = resolveDoorInsertMat(doorStyle, rightWinW, rightWinH);
+
+        if (isSolid) {
+          const solidPanel = new THREE.Mesh(new THREE.BoxGeometry(rightLeafW, bodyH, frameD), bodyMat);
+          solidPanel.position.set(-rightLeafW / 2, 0, 0);
+          rightDoorGroup.add(solidPanel);
+        } else {
+          const rightBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
+          rightBeam.position.set(-frameBorder / 2, 0, 0);
+          rightDoorGroup.add(rightBeam);
+
+          const leftBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
+          leftBeam.position.set(-rightLeafW + frameBorder / 2, 0, 0);
+          rightDoorGroup.add(leftBeam);
+
+          const topBeam = new THREE.Mesh(new THREE.BoxGeometry(rightWinW, frameBorder, frameD), bodyMat);
+          topBeam.position.set(-rightLeafW / 2, bodyH / 2 - frameBorder / 2, 0);
+          rightDoorGroup.add(topBeam);
+
+          const botBeam = new THREE.Mesh(new THREE.BoxGeometry(rightWinW, frameBorder, frameD), bodyMat);
+          botBeam.position.set(-rightLeafW / 2, -bodyH / 2 + frameBorder / 2, 0);
+          rightDoorGroup.add(botBeam);
+
+          const insertGeo = isGlass ? new THREE.BoxGeometry(rightWinW, rightWinH, insertD) : new THREE.PlaneGeometry(rightWinW, rightWinH);
+          const rightInsert = new THREE.Mesh(insertGeo, rightSplitMat);
+          rightInsert.position.set(-rightLeafW / 2, 0, 0);
+          rightDoorGroup.add(rightInsert);
+        }
+
+        // Bi-fold knuckle center hinge if bifold
+        if (isBifold) {
+          for (const hingeY of [-bodyH * 0.35, 0, bodyH * 0.35]) {
+            const bifoldHinge = new THREE.Mesh(new THREE.BoxGeometry(4, 18, 5), hingeMat);
+            bifoldHinge.position.set(-rightLeafW / 2, hingeY, zDir * 2);
+            rightDoorGroup.add(bifoldHinge);
+          }
+        }
+
+        // Right Escutcheon & Handle
+        const rightEscutcheon = new THREE.Mesh(new THREE.BoxGeometry(7, 70, 4.5), bodyMat);
+        rightEscutcheon.position.set(-rightLeafW + 7, 0, zDir * 2);
+        rightDoorGroup.add(rightEscutcheon);
+
+        const rightHandle = new THREE.Mesh(new THREE.BoxGeometry(4, 55, 9), handleMat);
+        rightHandle.position.set(-rightLeafW + 7, 0, zDir * 4);
+        rightDoorGroup.add(rightHandle);
+
+        // Right Hinges
+        for (const hingeY of [-bodyH * 0.38, bodyH * 0.38]) {
+          const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 16, 5), hingeMat);
+          hinge.position.set(0, hingeY, zDir * -1);
+          rightDoorGroup.add(hinge);
+        }
+        group.add(rightDoorGroup);
+
+      } else if (isColo) {
+        // ── Multi-Compartment Colocation Doors ──
+        const numCompartments = doorStyle === 'multi-compartment-4' ? 4 : 2;
+        const compH = (bodyH - (numCompartments - 1) * 6) / numCompartments;
+        const dividerH = 6;
+        const compPerfMat = makePerforatedMat(GLASS_HW * 2, compH, doorStyle);
+        const compWingMat = makePerforatedMat(PERF_W, compH, doorStyle);
+
+        for (let c = 0; c < numCompartments; c++) {
+          const compDoorGroup = new THREE.Group();
+          compDoorGroup.name = isRear ? `rack-rear-door-comp-${c}` : `rack-door-comp-${c}`;
+          const centerY = (bodyH / 2) - (c * (compH + dividerH)) - (compH / 2);
+          compDoorGroup.position.set(PERF_END, centerY, faceZ);
+
+          const compGeo = new THREE.PlaneGeometry(GLASS_HW * 2, compH);
+          const compDoor = new THREE.Mesh(compGeo, compPerfMat);
+          compDoor.position.set(-PERF_END, 0, 0);
+          compDoorGroup.add(compDoor);
+
+          // Handle for each compartment
+          const compHandle = new THREE.Mesh(new THREE.BoxGeometry(4, 30, 8), handleMat);
+          compHandle.position.set(-PERF_END - GLASS_HW + 10, 0, zDir * 3);
+          compDoorGroup.add(compHandle);
+
+          // Hinges for each compartment
+          for (const hingeY of [-compH * 0.3, compH * 0.3]) {
+            const hinge = new THREE.Mesh(new THREE.BoxGeometry(4, 10, 4), hingeMat);
+            hinge.position.set(0, hingeY, zDir * -1);
+            compDoorGroup.add(hinge);
+          }
+
+          // Side mesh wings for compartment (single plane)
+          const compPerfGeo = new THREE.PlaneGeometry(PERF_W, compH);
+          const leftPerf = new THREE.Mesh(compPerfGeo, compWingMat);
+          leftPerf.position.set(-(PERF_END + PERF_CX), 0, 0);
+          compDoorGroup.add(leftPerf);
+
+          const rightPerf = new THREE.Mesh(compPerfGeo, compWingMat);
+          rightPerf.position.set(PERF_CX - PERF_END, 0, 0);
+          compDoorGroup.add(rightPerf);
+
+          group.add(compDoorGroup);
+
+          // Horizontal steel divider bar between compartments
+          if (c < numCompartments - 1) {
+            const divY = (bodyH / 2) - ((c + 1) * compH + c * dividerH) - (dividerH / 2);
+            const divider = new THREE.Mesh(new THREE.BoxGeometry(RACK_INNER_WIDTH + 8, dividerH, 12), bodyMat);
+            divider.name = isRear ? 'rack-rear-colo-divider' : 'rack-colo-divider';
+            divider.position.set(0, divY, faceZ - zDir * 2);
+            group.add(divider);
+          }
+        }
+
+      } else {
+        // ── Single Door Styles (glass, acrylic, perforated, solid, louvered, wire-mesh, hexa, round-hole) ──
+        const doorGroup = new THREE.Group();
+        doorGroup.name  = prefix;
+        doorGroup.position.set(PERF_END, 0, faceZ);
+
+        const isMeshDoor = doorStyle.includes('perforated') || doorStyle.includes('honeycomb') || doorStyle.includes('hexa') || doorStyle.includes('mesh') || doorStyle.includes('round-hole');
+        const activeDoorMat = resolveDoorInsertMat(doorStyle, GLASS_HW * 2, bodyH);
+        const wingMat = makePerforatedMat(PERF_W, bodyH, doorStyle);
+        const glassGeo  = isMeshDoor ? new THREE.PlaneGeometry(GLASS_HW * 2, bodyH) : new THREE.BoxGeometry(GLASS_HW * 2, bodyH, 4);
+        const glassDoor = new THREE.Mesh(glassGeo, activeDoorMat);
+        glassDoor.name  = isRear ? 'rack-rear-glass' : 'rack-glass';
+        glassDoor.position.set(-PERF_END, 0, isMeshDoor ? 0 : zDir * -2);
+        doorGroup.add(glassDoor);
+
+        // Louvered slats for louvered door
+        if (doorStyle === 'louvered' || doorStyle === 'louvred') {
+          const slatGeo = new THREE.BoxGeometry(GLASS_HW * 1.8, 3, 2);
+          const numSlats = Math.floor(bodyH / 18);
+          for (let s = 0; s < numSlats; s++) {
+            const slat = new THREE.Mesh(slatGeo, handleMat);
+            const slatY = -bodyH / 2 + 15 + s * 18;
+            slat.position.set(-PERF_END, slatY, zDir * 1);
+            slat.rotation.x = zDir * 0.4; // tilted louver slat
+            doorGroup.add(slat);
+          }
+        }
+
+        // Handle & Hinges
+        const handleGeo = new THREE.BoxGeometry(5, 65, 10);
+        const handle    = new THREE.Mesh(handleGeo, handleMat);
+        handle.name     = isRear ? 'rack-rear-handle' : 'rack-handle';
+        handle.position.set(-PERF_END - GLASS_HW + 10, 0, zDir * 3);
+        doorGroup.add(handle);
+
+        const hingePosX = doorOp === 'swing-left' ? -PERF_END * 2 : 0;
+        for (const hingeY of [-bodyH * 0.35, bodyH * 0.35]) {
+          const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 14, 5), hingeMat);
+          hinge.position.set(hingePosX, hingeY, zDir * -1);
+          doorGroup.add(hinge);
+        }
+
+        // Red accent strips
+        const redGeo  = new THREE.BoxGeometry(RED_W, bodyH, 11);
+        const leftRed = new THREE.Mesh(redGeo, redMat);
+        leftRed.name  = isRear ? 'rack-rear-red-L' : 'rack-red-L';
+        leftRed.position.set(-(PERF_END + GLASS_HW + RED_W / 2), 0, zDir * -5.5);
+        doorGroup.add(leftRed);
+
+        const rightRed = new THREE.Mesh(redGeo, redMat);
+        rightRed.name  = isRear ? 'rack-rear-red-R' : 'rack-red-R';
+        rightRed.position.set(GLASS_HW + RED_W / 2 - PERF_END, 0, zDir * -5.5);
+        doorGroup.add(rightRed);
+
+        // Perforated mesh wings
+        const perfGeo  = new THREE.PlaneGeometry(PERF_W, bodyH);
+        const leftPerf = new THREE.Mesh(perfGeo, wingMat);
+        leftPerf.name  = isRear ? 'rack-rear-perf-L' : 'rack-perf-L';
+        leftPerf.position.set(-(PERF_END + PERF_CX), 0, 0);
+        doorGroup.add(leftPerf);
+
+        const rightPerf = new THREE.Mesh(perfGeo, wingMat);
+        rightPerf.name  = isRear ? 'rack-rear-perf-R' : 'rack-perf-R';
+        rightPerf.position.set(PERF_CX - PERF_END, 0, 0);
+        doorGroup.add(rightPerf);
+
+        group.add(doorGroup);
+      }
+
+      // ── Door Operation Hardware Visual Cues (Sliding Track / Lift-off Pins) ──
+      if (doorOp === 'sliding' || doorStyle.includes('sliding')) {
+        // Top sliding track guide rail
+        const trackGeo = new THREE.BoxGeometry(RACK_INNER_WIDTH + 10, 10, 12);
+        const topTrack = new THREE.Mesh(trackGeo, trackMat);
+        topTrack.position.set(0, bodyH / 2 + 5, faceZ + zDir * 4);
+        group.add(topTrack);
+
+        // Bottom sliding track guide rail
+        const botTrack = new THREE.Mesh(trackGeo, trackMat);
+        botTrack.position.set(0, -bodyH / 2 - 5, faceZ + zDir * 4);
+        group.add(botTrack);
+      } else if (doorOp === 'lift-off') {
+        // Quick-release ball-detent lift pins
+        for (const px of [-PERF_END + 15, PERF_END - 15]) {
+          const pinGeo = new THREE.CylinderGeometry(3, 3, 14, 12);
+          const topPin = new THREE.Mesh(pinGeo, handleMat);
+          topPin.position.set(px, bodyH / 2 + 3, faceZ + zDir * 2);
+          group.add(topPin);
+
+          const botPin = new THREE.Mesh(pinGeo, handleMat);
+          botPin.position.set(px, -bodyH / 2 - 3, faceZ + zDir * 2);
+          group.add(botPin);
+        }
       }
     }
   }

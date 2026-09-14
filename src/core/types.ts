@@ -28,6 +28,8 @@ export type RackDoorOperation =
   | 'lift-off'
   | 'bifold';
 
+export type RackDoorOpening = 'front-only' | 'front-rear';
+
 export type RackDoorType =
   // Single leaf doors
   | 'glass'
@@ -108,6 +110,7 @@ export interface RackData {
   rackType?: RackType;
   frontDoor?: RackDoorType;
   doorOperation?: RackDoorOperation;
+  doorOpening?: RackDoorOpening;
   sidePanels?: boolean;
   rackColor?: string;
   mounting?: RackMounting;

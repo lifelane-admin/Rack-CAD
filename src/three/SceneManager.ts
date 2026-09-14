@@ -178,6 +178,7 @@ export class SceneManager {
         existingGroup.userData?.rightPduHash !== rightPduHash ||
         existingGroup.userData?.frontDoor !== rack.frontDoor ||
         existingGroup.userData?.doorOperation !== rack.doorOperation ||
+        existingGroup.userData?.doorOpening !== rack.doorOpening ||
         existingGroup.userData?.sidePanels !== rack.sidePanels ||
         existingGroup.userData?.rackType !== rack.rackType ||
         existingGroup.userData?.rackColor !== rack.rackColor ||
@@ -209,6 +210,7 @@ export class SceneManager {
           rightPduHash,
           frontDoor: rack.frontDoor,
           doorOperation: rack.doorOperation,
+          doorOpening: rack.doorOpening,
           sidePanels: rack.sidePanels,
           rackType: rack.rackType,
           rackColor: rack.rackColor,
@@ -322,11 +324,12 @@ export class SceneManager {
     this.doorTargetAngle = state === 'open' ? Math.PI * 0.7 : 0;
     for (const group of this.rackGroups.values()) {
       group.children.forEach(c => {
-        if (c.name.startsWith('rack-door') || c.name === 'rack-colo-divider') {
+        if (c.name.startsWith('rack-door') || c.name.startsWith('rack-rear-door') || c.name === 'rack-colo-divider' || c.name === 'rack-rear-colo-divider') {
           c.visible = visible;
           if (!visible || state === 'closed') {
-            const isLeftHinge = c.name === 'rack-door-left';
-            c.rotation.y = isLeftHinge ? -this.doorTargetAngle : this.doorTargetAngle;
+            const isLeftHinge = c.name === 'rack-door-left' || c.name === 'rack-rear-door-left';
+            const sign = c.name.startsWith('rack-rear-door') ? (isLeftHinge ? 1 : -1) : (isLeftHinge ? -1 : 1);
+            c.rotation.y = sign * this.doorTargetAngle;
           }
         }
       });
@@ -356,8 +359,10 @@ export class SceneManager {
           mesh.name === 'rack-top' ||
           mesh.name === 'rack-base' ||
           mesh.name === 'rack-front-header' ||
+          mesh.name === 'rack-rear-header' ||
           mesh.name === 'rack-colo-divider' ||
-          (mesh.name === 'rack-glass' && (mesh.parent?.name?.startsWith('rack-door') ?? false))
+          mesh.name === 'rack-rear-colo-divider' ||
+          ((mesh.name === 'rack-glass' || mesh.name === 'rack-rear-glass') && (mesh.parent?.name?.includes('door') ?? false))
         ) {
           mesh.material = bodyMat;
         }
@@ -406,6 +411,10 @@ export class SceneManager {
       group.children.forEach(c => {
         if (c.name.startsWith('rack-door') && c.visible) {
           const target = c.name === 'rack-door-left' ? -this.doorTargetAngle : this.doorTargetAngle;
+          const diff = target - c.rotation.y;
+          if (Math.abs(diff) > 0.001) c.rotation.y += diff * 0.1;
+        } else if (c.name.startsWith('rack-rear-door') && c.visible) {
+          const target = c.name === 'rack-rear-door-left' ? this.doorTargetAngle : -this.doorTargetAngle;
           const diff = target - c.rotation.y;
           if (Math.abs(diff) > 0.001) c.rotation.y += diff * 0.1;
         }

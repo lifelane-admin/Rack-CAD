@@ -721,6 +721,14 @@ export class PropertiesPanel {
           </div>
 
           <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 10px;">Door Opening</label>
+            <select id="prop-rack-door-opening" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
+              <option value="front-only" ${rack.doorOpening === 'front-only' || !rack.doorOpening ? 'selected' : ''}>Front Only</option>
+              <option value="front-rear" ${rack.doorOpening === 'front-rear' ? 'selected' : ''}>Front + Rear</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
             <label style="font-size: 10px;">Side Panels</label>
             <select id="prop-rack-side-panels" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
               <option value="true" ${rack.sidePanels !== false ? 'selected' : ''}>Enabled (Removable Panels)</option>
@@ -844,6 +852,9 @@ export class PropertiesPanel {
     });
     container.querySelector('#prop-rack-door-op')?.addEventListener('change', (e: any) => {
       EventBus.emit('rack:update', { id, data: { doorOperation: e.target.value } });
+    });
+    container.querySelector('#prop-rack-door-opening')?.addEventListener('change', (e: any) => {
+      EventBus.emit('rack:update', { id, data: { doorOpening: e.target.value } });
     });
     container.querySelector('#prop-rack-side-panels')?.addEventListener('change', (e: any) => {
       EventBus.emit('rack:update', { id, data: { sidePanels: e.target.value === 'true' } });
