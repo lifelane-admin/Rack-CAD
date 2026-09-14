@@ -3838,11 +3838,65 @@ export class BuildFloorView {
     const accordionContainer = el.querySelector('#dc-cat-accordion-list') as HTMLElement;
     if (!accordionContainer) return;
 
+    const createSubgroupHeader = (title: string, badge: string, accentColor = '#38bdf8'): HTMLElement => {
+      const header = document.createElement('div');
+      header.className = 'cat-subgroup-header';
+      header.style.cssText = `padding: 7px 10px 4px 14px; font-size: 10px; font-weight: 700; color: ${accentColor}; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid ${accentColor}26; margin: 6px 0 2px; display: flex; align-items: center; justify-content: space-between;`;
+      header.innerHTML = `<span>${title}</span><span style="font-size: 9px; opacity: 0.8; color: #8b949e; text-transform: none; letter-spacing: normal;">${badge}</span>`;
+      return header;
+    };
+
+    const makePresetItemEl = (p: CatalogItemPreset, catAccent: string): HTMLElement => {
+      const itemEl = document.createElement('div');
+      itemEl.className = 'cat-item';
+      itemEl.draggable = true;
+      let meta = `${p.depthMm}mm`;
+      if (p.heightU) meta = `${p.heightU}U • ${p.depthMm}mm`;
+      else if (p.coolingCapacityKw) meta = `${p.coolingCapacityKw} kW`;
+      else if (p.upsCapacityKva) meta = `${p.upsCapacityKva} kVA`;
+      else if (p.maxPowerKw) meta = `${p.maxPowerKw} kW`;
+      else if (p.busbarAmps) meta = `${p.busbarAmps} A`;
+      else if (p.transformerKva) meta = `${p.transformerKva} kVA`;
+      else if (p.tileType) {
+        if (p.tileType === 'perforated') meta = 'Perforated';
+        else if (p.tileType === 'air-channel') meta = 'High Airflow';
+        else if (p.tileType === 'ventilated') meta = 'Grille';
+        else if (p.tileType === 'cutout') meta = 'Cutout';
+        else meta = `${p.widthMm}×${p.depthMm}mm`;
+      } else if (p.pathwayLayer) {
+        meta = `${p.pathwayLayer === 'overhead' ? 'Overhead' : 'Underfloor'} • ${p.pathwayWidthMm || p.widthMm}mm`;
+      }
+
+      itemEl.title = `${p.name}\nDimensions: ${p.widthMm}×${p.depthMm}mm${p.heightU ? ` (${p.heightU}U)` : ''}\n${p.description}`;
+      itemEl.innerHTML = `
+        <div class="cat-item-dot" style="background: ${catAccent};"></div>
+        <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name}</div>
+        <span class="cat-item-meta">${meta}</span>
+      `;
+      itemEl.ondragstart = (e) => {
+        e.dataTransfer?.setData('application/json', JSON.stringify({ dcCatalogPresetId: p.id }));
+      };
+      itemEl.onclick = () => this.addEquipmentFromCatalog(p.id);
+      return itemEl;
+    };
+
+    const appendSubgroup = (
+      title: string,
+      badge: string,
+      elements: HTMLElement[],
+      target: HTMLElement[],
+      accentColor: string
+    ) => {
+      if (elements.length === 0) return;
+      target.push(createSubgroupHeader(title, badge, accentColor));
+      target.push(...elements);
+    };
+
     for (const cat of CATEGORIES) {
       let itemEls: HTMLElement[] = [];
 
       if (cat.id === 'housing') {
-        // Special: Custom Rack Builder Configurator button
+        const customRackBtnEls: HTMLElement[] = [];
         if (!query || 'custom rack builder configurator'.includes(query)) {
           const customRackBtn = document.createElement('div');
           customRackBtn.className = 'cat-item';
@@ -3855,7 +3909,7 @@ export class BuildFloorView {
             <span class="cat-item-meta" style="color: #00e5ff;">Configurator</span>
           `;
           customRackBtn.onclick = () => this.showAddRackDialog();
-          itemEls.push(customRackBtn);
+          customRackBtnEls.push(customRackBtn);
         }
 
         const presets = DATACENTER_CATALOG.filter(p => p.category === 'housing').filter(p => {
@@ -3863,22 +3917,32 @@ export class BuildFloorView {
           return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.shortLabel.toLowerCase().includes(query);
         });
 
-        presets.forEach(p => {
-          const itemEl = document.createElement('div');
-          itemEl.className = 'cat-item';
-          itemEl.draggable = true;
-          itemEl.title = `${p.name}\nDimensions: ${p.widthMm}×${p.depthMm}mm (${p.heightU}U)\n${p.description}`;
-          itemEl.innerHTML = `
-            <div class="cat-item-dot" style="background: ${cat.accent};"></div>
-            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name}</div>
-            <span class="cat-item-meta">${p.heightU ? `${p.heightU}U • ` : ''}${p.depthMm}mm</span>
-          `;
-          itemEl.ondragstart = (e) => {
-            e.dataTransfer?.setData('application/json', JSON.stringify({ dcCatalogPresetId: p.id }));
-          };
-          itemEl.onclick = () => this.addEquipmentFromCatalog(p.id);
-          itemEls.push(itemEl);
-        });
+        const isStandard = (p: CatalogItemPreset) =>
+          !p.id.includes('colo') &&
+          !p.id.includes('open') &&
+          !p.id.includes('wall') &&
+          !p.name.toLowerCase().includes('open frame') &&
+          !p.name.toLowerCase().includes('wall mount') &&
+          (p.type === 'server' || p.type === 'network' || p.type === 'gpu-ai' || (p.heightU && p.heightU >= 42));
+
+        const standardPresets = presets.filter(isStandard);
+        const coloOpenWallPresets = presets.filter(p => !isStandard(p));
+
+        appendSubgroup(
+          'Standard & High-Density Server Racks',
+          '42U - 52U',
+          [...customRackBtnEls, ...standardPresets.map(p => makePresetItemEl(p, cat.accent))],
+          itemEls,
+          cat.accent
+        );
+
+        appendSubgroup(
+          'Colocation, Open Frame & Wall Mounts',
+          'Colo / Open / Edge',
+          coloOpenWallPresets.map(p => makePresetItemEl(p, cat.accent)),
+          itemEls,
+          cat.accent
+        );
       } else if (cat.isArchitecture) {
         const archActions = [
           { id: 'lay-wall', name: '+ Lay Custom Wall (Coordinates)', meta: 'Draw', desc: 'Click and drag on floor canvas to lay custom transparent walls', fn: () => this.startLayingWall() },
@@ -3888,8 +3952,8 @@ export class BuildFloorView {
           { id: 'toggle-roof', name: s.roofVisible !== false ? 'Hide Transparent Roof' : 'Show Transparent Roof', meta: 'Toggle', desc: 'Toggle visibility of roof', fn: () => { const v = dcState.toggleRoofVisibility(); this.refresh(); eventBus.emit('notification', { message: `🏠 Roof ${v ? 'Visible' : 'Hidden'}`, type: 'info' }); } },
         ];
 
-        const matched = archActions.filter(a => !query || a.name.toLowerCase().includes(query) || a.desc.toLowerCase().includes(query));
-        matched.forEach(a => {
+        const matchedActions = archActions.filter(a => !query || a.name.toLowerCase().includes(query) || a.desc.toLowerCase().includes(query));
+        const actionEls = matchedActions.map(a => {
           const itemEl = document.createElement('div');
           itemEl.className = 'cat-item';
           itemEl.title = a.desc;
@@ -3900,15 +3964,28 @@ export class BuildFloorView {
             <span class="cat-item-meta" style="color: #38bdf8;">${a.meta}</span>
           `;
           itemEl.onclick = a.fn;
-          itemEls.push(itemEl);
+          return itemEl;
         });
+
+        appendSubgroup('Interactive CAD & Perimeter Tools', 'CAD Tools', actionEls, itemEls, cat.accent);
+
+        const archPresets = DATACENTER_CATALOG.filter(p => p.category === 'architecture').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query);
+        });
+
+        const wallPresets = archPresets.filter(p => !p.id.includes('ceiling') && !p.id.includes('plenum'));
+        const ceilingPresets = archPresets.filter(p => p.id.includes('ceiling') || p.id.includes('plenum'));
+
+        appendSubgroup('Walls, Partitions & Doors', 'Fire / Glass / Acoustic', wallPresets.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Ceilings & Structural Plenums', 'Structural Grid', ceilingPresets.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
       } else if (cat.isWallEquipment) {
         const presets = WALL_EQUIPMENT_CATALOG.filter(w => {
           if (!query) return true;
           return w.name.toLowerCase().includes(query) || w.description.toLowerCase().includes(query) || w.manufacturer.toLowerCase().includes(query);
         });
 
-        presets.forEach(w => {
+        const makeWallEl = (w: typeof WALL_EQUIPMENT_CATALOG[0]) => {
           const itemEl = document.createElement('div');
           itemEl.className = 'cat-item';
           itemEl.title = `${w.name}\nDimensions: ${w.widthMm}×${w.heightMm}×${w.depthMm}mm\nMount Height: ${w.defaultHeightOffsetM}m\n${w.description}`;
@@ -3918,110 +3995,428 @@ export class BuildFloorView {
             <span class="cat-item-meta">Wall Mount</span>
           `;
           itemEl.onclick = () => this.startPlacingWallItem(w);
-          itemEls.push(itemEl);
-        });
-      } else if (cat.id === 'pathways') {
-        // Special custom pathway draw action
-        if (!query || 'draw custom cable pathway tray duct runway'.includes(query)) {
-          const drawAction = document.createElement('div');
-          drawAction.className = 'cat-item';
-          drawAction.style.cssText = 'border: 1px dashed rgba(148,163,184,0.4); background: rgba(148,163,184,0.06); font-weight: 600; color: #94a3b8; cursor: pointer;';
-          drawAction.innerHTML = `
-            <div class="cat-item-dot" style="background: #94a3b8;"></div>
-            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">+ Draw Pathway (Click & Drag)…</div>
-            <span class="cat-item-meta" style="color: #94a3b8;">Route</span>
-          `;
-          drawAction.onclick = () => this.startLayingPathway({ name: 'Cable Runway', layer: 'overhead', widthMm: 400, heightMm: 100 });
-          itemEls.push(drawAction);
-        }
+          return itemEl;
+        };
 
+        const secItems = presets.filter(w => w.id.includes('bio') || w.id.includes('card') || w.id.includes('panic') || w.id.includes('keypad') || w.id.includes('intercom') || w.id.includes('epo') || w.id.includes('cctv') || w.name.toLowerCase().includes('access') || w.name.toLowerCase().includes('cctv') || w.name.toLowerCase().includes('intercom') || w.name.toLowerCase().includes('emergency'));
+        const pwrItems = presets.filter(w => !secItems.includes(w) && (w.id.includes('meter') || w.id.includes('db') || w.id.includes('spd') || w.id.includes('power') || w.name.toLowerCase().includes('distribution') || w.name.toLowerCase().includes('meter') || w.name.toLowerCase().includes('panel')));
+        const fireItems = presets.filter(w => !secItems.includes(w) && !pwrItems.includes(w));
+
+        appendSubgroup('Security & Access Control', 'Biometrics & Readers', secItems.map(makeWallEl), itemEls, cat.accent);
+        appendSubgroup('Power, Meters & Distribution', 'SMDB / DB / SPD', pwrItems.map(makeWallEl), itemEls, cat.accent);
+        appendSubgroup('Fire Alarms & Life Safety', 'VESDA / Sounders', fireItems.map(makeWallEl), itemEls, cat.accent);
+      } else if (cat.id === 'compute') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'compute').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        const isStandardCompute = (p: CatalogItemPreset) =>
+          (p.heightU <= 2) &&
+          !p.id.includes('ai') &&
+          !p.id.includes('gpu') &&
+          !p.id.includes('blade') &&
+          !p.id.includes('dgx') &&
+          !p.name.toLowerCase().includes('accelerator') &&
+          !p.name.toLowerCase().includes('supercomputer') &&
+          !p.name.toLowerCase().includes('blade');
+
+        const rackCompute = presets.filter(isStandardCompute);
+        const aiChassis = presets.filter(p => !isStandardCompute(p));
+
+        appendSubgroup('Rack Servers & HCI Appliances', '1U - 2U Compute', rackCompute.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('AI Accelerators & Blade Chassis', '4U - 10U High-Power', aiChassis.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'network') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'network').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        const isFabricSwitch = (p: CatalogItemPreset) =>
+          p.id.includes('switch') ||
+          p.id.includes('director') ||
+          p.id.includes('leaf') ||
+          p.id.includes('spine') ||
+          p.name.toLowerCase().includes('switch') ||
+          p.name.toLowerCase().includes('director');
+
+        const fabricSwitches = presets.filter(isFabricSwitch);
+        const routersControllers = presets.filter(p => !isFabricSwitch(p));
+
+        appendSubgroup('Fabric Switches & Core Directors', 'ToR / Leaf / Spine / Core', fabricSwitches.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Routers, Firewalls & Controllers', 'WAN / NGFW / ADC / TAP', routersControllers.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'storage') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'storage').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        const isPrimarySan = (p: CatalogItemPreset) =>
+          p.id.includes('nvme') ||
+          p.id.includes('san') ||
+          p.id.includes('flash') ||
+          p.name.toLowerCase().includes('flash') ||
+          p.name.toLowerCase().includes('san') ||
+          p.name.toLowerCase().includes('nvme');
+
+        const primarySan = presets.filter(isPrimarySan);
+        const jbodTape = presets.filter(p => !isPrimarySan(p));
+
+        appendSubgroup('Primary All-Flash & SAN Directors', 'NVMe SAN / NAS', primarySan.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('JBOD Expansion & Tape Archives', 'Density & LTO Tape', jbodTape.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'power-distribution') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'power-distribution').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        const isRackPduAts = (p: CatalogItemPreset) =>
+          p.type === 'power-rpp' ? false :
+          (p.id.includes('pdu') || p.id.includes('ats') || (p.heightU !== undefined && p.heightU <= 2 && (p.maxPowerKw ?? 0) <= 30 && !p.id.includes('rpp') && !p.id.includes('busway') && !p.id.includes('meter') && !p.id.includes('smdb')));
+
+        const rackPdus = presets.filter(isRackPduAts);
+        const floorPanels = presets.filter(p => !isRackPduAts(p));
+
+        appendSubgroup('Rack PDUs & Transfer Switches', 'ePDUs & ATS', rackPdus.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Floor Panels, Busways & Switchgear', 'RPP / Busway / MDB', floorPanels.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'backup-generation') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'backup-generation').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        const isUpsBattery = (p: CatalogItemPreset) =>
+          p.type === 'ups-cabinet' ||
+          p.type === 'battery-cabinet' ||
+          p.id.includes('ups') ||
+          p.id.includes('battery') ||
+          p.id.includes('bms') ||
+          p.id.includes('mbp') ||
+          p.id.includes('vrla') ||
+          p.id.includes('li-ion');
+
+        const upsBattery = presets.filter(isUpsBattery);
+        const standbyGenset = presets.filter(p => !isUpsBattery(p));
+
+        appendSubgroup('UPS Systems & Battery Storage', 'UPS / Li-Ion / VRLA', upsBattery.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Standby Generation & MV Substations', 'Diesel Genset / MV', standbyGenset.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'cooling') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'cooling').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        const isAirDucts = (p: CatalogItemPreset) =>
+          p.id.includes('duct') ||
+          p.id.includes('damper') ||
+          p.id.includes('vav') ||
+          p.name.toLowerCase().includes('duct') ||
+          p.name.toLowerCase().includes('damper') ||
+          p.name.toLowerCase().includes('vav');
+
+        const isLiquidCentral = (p: CatalogItemPreset) =>
+          !isAirDucts(p) && (
+            p.type === 'cduhx' ||
+            p.type === 'chiller-plant' ||
+            p.type === 'cooling-tower' ||
+            p.id.includes('cdu') ||
+            p.id.includes('rdhx') ||
+            p.id.includes('chiller') ||
+            p.id.includes('tower') ||
+            p.id.includes('heat-exchanger') ||
+            p.id.includes('expansion-tank') ||
+            p.name.toLowerCase().includes('chiller') ||
+            p.name.toLowerCase().includes('cdu')
+          );
+
+        const inrowPerimeter = presets.filter(p => !isAirDucts(p) && !isLiquidCentral(p));
+        const liquidCentral = presets.filter(isLiquidCentral);
+        const airDucts = presets.filter(isAirDucts);
+
+        appendSubgroup('In-Row & Perimeter CRAC/CRAH', 'Precision Air Handlers', inrowPerimeter.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Liquid Cooling & Central Plant', 'CDU / Chillers / Towers', liquidCentral.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Air Distribution Ducts & Dampers', 'Plenums & VAV', airDucts.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'structured-cabling') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'structured-cabling').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        const isCopper = (p: CatalogItemPreset) =>
+          p.id.includes('copper') ||
+          p.id.includes('cat6') ||
+          p.name.toLowerCase().includes('cat6') ||
+          p.name.toLowerCase().includes('copper') ||
+          p.name.toLowerCase().includes('rj45');
+
+        const copperPresets = presets.filter(isCopper);
+        const fiberPresets = presets.filter(p => !isCopper(p));
+
+        appendSubgroup('Copper Patch Panels & Distributors', 'Cat6 / Cat6A', copperPresets.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Fiber Optic ODF, LIU & MPO Cassettes', 'LC / SC / MPO / Splice', fiberPresets.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'containment') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'containment').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        const isColdAisle = (p: CatalogItemPreset) =>
+          p.containmentType === 'cold-aisle' ||
+          p.id.includes('cold') ||
+          p.id.includes('door') ||
+          p.id.includes('ceiling') ||
+          p.id.includes('curtain') ||
+          p.name.toLowerCase().includes('cold') ||
+          p.name.toLowerCase().includes('door') ||
+          p.name.toLowerCase().includes('ceiling') ||
+          p.name.toLowerCase().includes('curtain');
+
+        const coldAisle = presets.filter(isColdAisle);
+        const hotAisle = presets.filter(p => !isColdAisle(p));
+
+        appendSubgroup('Cold Aisle Containment', 'Doors & Roofs', coldAisle.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Hot Aisle Chimneys & Baffles', 'Return Plenums & Baffles', hotAisle.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'pathways') {
         const presets = DATACENTER_CATALOG.filter(p => p.category === 'pathways').filter(p => {
           if (!query) return true;
           return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
         });
 
-        presets.forEach(p => {
-          const itemEl = document.createElement('div');
-          itemEl.className = 'cat-item';
-          itemEl.draggable = true;
-          const meta = `${p.pathwayLayer === 'overhead' ? 'Overhead' : 'Underfloor'} • ${p.pathwayWidthMm || p.widthMm}mm`;
+        const isUnderfloor = (p: CatalogItemPreset) =>
+          p.pathwayLayer === 'underfloor' ||
+          p.id.includes('underfloor') ||
+          p.id.includes('trench') ||
+          p.id.includes('gi-duct') ||
+          p.id.includes('pvc-duct') ||
+          p.name.toLowerCase().includes('underfloor') ||
+          p.name.toLowerCase().includes('trench') ||
+          p.name.toLowerCase().includes('pvc') ||
+          p.name.toLowerCase().includes('gi slotted');
 
-          itemEl.title = `${p.name}\n${p.description}\nClick to start continuous pathway laying or drag to floor.`;
-          itemEl.innerHTML = `
-            <div class="cat-item-dot" style="background: ${cat.accent};"></div>
-            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name}</div>
-            <span class="cat-item-meta">${meta}</span>
+        const underfloorPresets = presets.filter(isUnderfloor);
+        const overheadPresets = presets.filter(p => !isUnderfloor(p));
+
+        // Underfloor Draw Action
+        const underfloorActions: HTMLElement[] = [];
+        if (!query || 'draw underfloor cable pathway tray duct runway'.includes(query)) {
+          const drawAction = document.createElement('div');
+          drawAction.className = 'cat-item';
+          drawAction.style.cssText = 'border: 1px dashed rgba(148,163,184,0.4); background: rgba(148,163,184,0.06); font-weight: 600; color: #94a3b8; cursor: pointer;';
+          drawAction.innerHTML = `
+            <div class="cat-item-dot" style="background: #94a3b8;"></div>
+            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">+ Draw Underfloor Pathway…</div>
+            <span class="cat-item-meta" style="color: #94a3b8;">Underfloor</span>
           `;
-          itemEl.ondragstart = (e) => {
-            e.dataTransfer?.setData('application/json', JSON.stringify({ dcCatalogPresetId: p.id }));
-          };
-          itemEl.onclick = () => this.addEquipmentFromCatalog(p.id);
-          itemEls.push(itemEl);
-        });
+          drawAction.onclick = () => this.startLayingPathway({ name: 'Underfloor Mesh Tray', layer: 'underfloor', widthMm: 300, heightMm: 100 });
+          underfloorActions.push(drawAction);
+        }
+
+        // Overhead Draw Action
+        const overheadActions: HTMLElement[] = [];
+        if (!query || 'draw overhead cable pathway tray duct runway ladder'.includes(query)) {
+          const drawAction = document.createElement('div');
+          drawAction.className = 'cat-item';
+          drawAction.style.cssText = 'border: 1px dashed rgba(148,163,184,0.4); background: rgba(148,163,184,0.06); font-weight: 600; color: #94a3b8; cursor: pointer;';
+          drawAction.innerHTML = `
+            <div class="cat-item-dot" style="background: #94a3b8;"></div>
+            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">+ Draw Overhead Pathway…</div>
+            <span class="cat-item-meta" style="color: #94a3b8;">Overhead</span>
+          `;
+          drawAction.onclick = () => this.startLayingPathway({ name: 'Cable Runway Ladder', layer: 'overhead', widthMm: 400, heightMm: 100 });
+          overheadActions.push(drawAction);
+        }
+
+        appendSubgroup(
+          'Underfloor Pathways',
+          'Underfloor / Ducts / Mesh',
+          [...underfloorActions, ...underfloorPresets.map(p => makePresetItemEl(p, cat.accent))],
+          itemEls,
+          cat.accent
+        );
+
+        appendSubgroup(
+          'Overhead Pathways',
+          'Overhead / Ladders / Trays',
+          [...overheadActions, ...overheadPresets.map(p => makePresetItemEl(p, cat.accent))],
+          itemEls,
+          cat.accent
+        );
       } else if (cat.id === 'flooring') {
         const presets = DATACENTER_CATALOG.filter(p => p.category === 'flooring').filter(p => {
           if (!query) return true;
           return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
         });
 
-        presets.forEach(p => {
-          const itemEl = document.createElement('div');
-          itemEl.className = 'cat-item';
-          itemEl.draggable = true;
-          let meta = `${p.widthMm}×${p.depthMm}mm`;
-          if (p.tileType) {
-            if (p.tileType === 'perforated') meta = 'Perforated';
-            else if (p.tileType === 'air-channel') meta = 'High Airflow';
-            else if (p.tileType === 'ventilated') meta = 'Grille';
-            else if (p.tileType === 'cutout') meta = 'Cutout';
-            else meta = 'Solid Tile';
-          }
+        const isTileOrGrille = (p: CatalogItemPreset) =>
+          p.tileType !== undefined ||
+          p.id.includes('tile') ||
+          p.id.includes('grille') ||
+          p.id.includes('diffuser') ||
+          p.name.toLowerCase().includes('tile') ||
+          p.name.toLowerCase().includes('grille') ||
+          p.name.toLowerCase().includes('diffuser');
 
-          itemEl.title = `${p.name}\n${p.description}\nClick to apply to selected tiles or drag onto floor.`;
-          itemEl.innerHTML = `
-            <div class="cat-item-dot" style="background: ${cat.accent};"></div>
-            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name}</div>
-            <span class="cat-item-meta">${meta}</span>
-          `;
-          itemEl.ondragstart = (e) => {
-            e.dataTransfer?.setData('application/json', JSON.stringify({ dcCatalogPresetId: p.id }));
-          };
-          itemEl.onclick = () => this.addEquipmentFromCatalog(p.id);
-          itemEls.push(itemEl);
-        });
-      } else if (cat.category) {
-        const presets = DATACENTER_CATALOG.filter(p => p.category === cat.category).filter(p => {
+        const tilePresets = presets.filter(isTileOrGrille);
+        const accessPresets = presets.filter(p => !isTileOrGrille(p));
+
+        appendSubgroup('Raised Floor Tiles & Grilles', '600×600mm Panels', tilePresets.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Structure, Grommets & Access', 'Understructure & Access', accessPresets.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'fire-safety') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'fire-safety').filter(p => {
           if (!query) return true;
           return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
         });
 
-        presets.forEach(p => {
-          const itemEl = document.createElement('div');
-          itemEl.className = 'cat-item';
-          itemEl.draggable = true;
-          let meta = `${p.depthMm}mm`;
-          if (p.heightU) meta = `${p.heightU}U • ${p.depthMm}mm`;
-          else if (p.coolingCapacityKw) meta = `${p.coolingCapacityKw} kW`;
-          else if (p.upsCapacityKva) meta = `${p.upsCapacityKva} kVA`;
-          else if (p.maxPowerKw) meta = `${p.maxPowerKw} kW`;
-          else if (p.busbarAmps) meta = `${p.busbarAmps} A`;
-          else if (p.transformerKva) meta = `${p.transformerKva} kVA`;
+        const isDetection = (p: CatalogItemPreset) =>
+          p.id.includes('vesda') ||
+          p.id.includes('smoke') ||
+          p.id.includes('detector') ||
+          p.id.includes('optical') ||
+          p.id.includes('flame') ||
+          p.name.toLowerCase().includes('vesda') ||
+          p.name.toLowerCase().includes('detector') ||
+          p.name.toLowerCase().includes('smoke');
 
-          itemEl.title = `${p.name}\n${p.description}`;
-          itemEl.innerHTML = `
-            <div class="cat-item-dot" style="background: ${cat.accent};"></div>
-            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name}</div>
-            <span class="cat-item-meta">${meta}</span>
-          `;
-          itemEl.ondragstart = (e) => {
-            e.dataTransfer?.setData('application/json', JSON.stringify({ dcCatalogPresetId: p.id }));
-          };
-          itemEl.onclick = () => this.addEquipmentFromCatalog(p.id);
-          itemEls.push(itemEl);
+        const detectionPresets = presets.filter(isDetection);
+        const suppressionPresets = presets.filter(p => !isDetection(p));
+
+        appendSubgroup('Detection & Very Early Warning', 'VESDA & Optical Sensors', detectionPresets.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Suppression, Alarms & Hydrants', 'Clean Agent / Pre-Action', suppressionPresets.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'security') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'security').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
         });
+
+        const isAccessPortal = (p: CatalogItemPreset) =>
+          p.id.includes('turnstile') ||
+          p.id.includes('mantrap') ||
+          p.id.includes('maglock') ||
+          p.id.includes('door') ||
+          p.id.includes('access') ||
+          p.name.toLowerCase().includes('turnstile') ||
+          p.name.toLowerCase().includes('mantrap') ||
+          p.name.toLowerCase().includes('door') ||
+          p.name.toLowerCase().includes('access');
+
+        const accessPortals = presets.filter(isAccessPortal);
+        const surveillance = presets.filter(p => !isAccessPortal(p));
+
+        appendSubgroup('Access Control & Portals', 'Biometrics & Mantraps', accessPortals.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Surveillance & Communication', '4K CCTV & Intercoms', surveillance.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'bms-dcim') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'bms-dcim').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        const isSensorProbe = (p: CatalogItemPreset) =>
+          p.id.includes('probe') ||
+          p.id.includes('sensor') ||
+          p.id.includes('temp') ||
+          p.id.includes('pressure') ||
+          p.id.includes('delta-p') ||
+          p.id.includes('tree') ||
+          p.name.toLowerCase().includes('probe') ||
+          p.name.toLowerCase().includes('sensor') ||
+          p.name.toLowerCase().includes('pressure') ||
+          p.name.toLowerCase().includes('temp');
+
+        const sensors = presets.filter(isSensorProbe);
+        const gateways = presets.filter(p => !isSensorProbe(p));
+
+        appendSubgroup('Environmental Sensors & Probes', 'Temp / Humidity / ΔP', sensors.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Gateways & SCADA Controllers', 'DCIM & PLC Gateways', gateways.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'plumbing') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'plumbing').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        const isPipingHeader = (p: CatalogItemPreset) =>
+          p.id.includes('chilled-water') ||
+          p.id.includes('condenser') ||
+          p.id.includes('manifold') ||
+          p.id.includes('buffer-tank') ||
+          p.id.includes('pipe') ||
+          p.name.toLowerCase().includes('pipe') ||
+          p.name.toLowerCase().includes('header') ||
+          p.name.toLowerCase().includes('manifold') ||
+          p.name.toLowerCase().includes('tank');
+
+        const piping = presets.filter(isPipingHeader);
+        const pumps = presets.filter(p => !isPipingHeader(p));
+
+        appendSubgroup('Chilled & Condenser Water Piping', 'Headers & Liquid Loops', piping.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Pumps, Valves & Water Treatment', 'Pumps & Filtration', pumps.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'earthing') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'earthing').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        const isBusbarSrg = (p: CatalogItemPreset) =>
+          p.id.includes('tmgb') ||
+          p.id.includes('tgb') ||
+          p.id.includes('srg') ||
+          p.id.includes('jumper') ||
+          p.id.includes('ground-bar') ||
+          p.id.includes('busbar') ||
+          p.name.toLowerCase().includes('tmgb') ||
+          p.name.toLowerCase().includes('tgb') ||
+          p.name.toLowerCase().includes('srg') ||
+          p.name.toLowerCase().includes('busbar') ||
+          p.name.toLowerCase().includes('bonding');
+
+        const busbars = presets.filter(isBusbarSrg);
+        const pits = presets.filter(p => !isBusbarSrg(p));
+
+        appendSubgroup('Busbars & Ground Reference Grids', 'TMGB / TGB / SRG', busbars.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Chemical Earth Pits & Lightning', 'Pits & Air Terminals', pits.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'operations') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'operations').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        const isLiftTrolley = (p: CatalogItemPreset) =>
+          p.id.includes('lift') ||
+          p.id.includes('trolley') ||
+          (p.id.includes('cart') && p.id.includes('battery')) ||
+          p.id.includes('scissor') ||
+          p.name.toLowerCase().includes('lift') ||
+          p.name.toLowerCase().includes('trolley') ||
+          p.name.toLowerCase().includes('cart');
+
+        const lifts = presets.filter(isLiftTrolley);
+        const workbenches = presets.filter(p => !isLiftTrolley(p));
+
+        appendSubgroup('Material Handling & Lifts', 'Server Lifts & Trolleys', lifts.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Workbenches, Tools & Ladders', 'Workstations & Tooling', workbenches.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+      } else if (cat.id === 'facility-plant') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'facility-plant').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        const isSwitchgearChiller = (p: CatalogItemPreset) =>
+          p.id.includes('mdb') ||
+          p.id.includes('switchgear') ||
+          p.id.includes('ups') ||
+          p.id.includes('chiller') ||
+          p.name.toLowerCase().includes('switchgear') ||
+          p.name.toLowerCase().includes('ups') ||
+          p.name.toLowerCase().includes('chiller');
+
+        const switchgearChillers = presets.filter(isSwitchgearChiller);
+        const utilityYard = presets.filter(p => !isSwitchgearChiller(p));
+
+        appendSubgroup('Heavy Switchgear & Chiller Plant', 'Plant Rooms', switchgearChillers.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
+        appendSubgroup('Bulk Fuel, Water & Loading Bay', 'Utility Yard', utilityYard.map(p => makePresetItemEl(p, cat.accent)), itemEls, cat.accent);
       }
 
-      if (query && itemEls.length === 0) continue;
+      const selectableCount = itemEls.filter(el => !el.classList.contains('cat-subgroup-header')).length;
+      if (query && selectableCount === 0) continue;
 
       const isInitiallyOpen = query ? true : (this.openCatalogFolders.has(cat.id) || cat.id === 'housing');
 
@@ -4031,7 +4426,7 @@ export class BuildFloorView {
         <div class="cat-accent" style="background:${cat.accent}"></div>
         <div class="cat-icon" style="color:${cat.accent}">${cat.svgHtml}</div>
         <span class="cat-label">${cat.label}</span>
-        <span class="cat-count">${itemEls.length}</span>
+        <span class="cat-count">${selectableCount}</span>
         <div class="cat-chevron">${svg('<path d="M9 18l6-6-6-6"/>')}</div>
       `;
 

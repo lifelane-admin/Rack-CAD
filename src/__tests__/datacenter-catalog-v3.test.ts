@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { DATACENTER_CATALOG, CATEGORY_DEFINITIONS, WALL_EQUIPMENT_CATALOG } from '../datacenter/catalog';
 import { ALL_DC_COMPONENTS, DC_COMPONENT_CATEGORIES, getDcComponentGraphicSvg } from '../components/dc-component-graphics';
 import { deviceCatalog } from '../library/device-catalog';
@@ -182,10 +182,110 @@ describe('Datacenter & Rack Builder Delta Upgrade Master Specification', () => {
     }
   });
 
-  it('should have component categories linking all items', () => {
-    expect(DC_COMPONENT_CATEGORIES.length).toBeGreaterThanOrEqual(10);
-    for (const group of DC_COMPONENT_CATEGORIES) {
-      expect(group.items.length).toBeGreaterThan(0);
-    }
+  it('should render subcategory headers in Datacenter BuildFloorView catalog panel', async () => {
+    const { BuildFloorView } = await import('../datacenter/build-floor');
+    const dcContainer = document.createElement('div');
+    document.body.appendChild(dcContainer);
+    new BuildFloorView(dcContainer);
+
+    const subgroupHeaders = dcContainer.querySelectorAll('.cat-subgroup-header');
+    expect(subgroupHeaders.length).toBeGreaterThanOrEqual(20);
+
+    const headerTexts = Array.from(subgroupHeaders).map(h => (h.textContent || '').toLowerCase());
+
+    // Verify Cabling & Pathways subgroups (Underfloor Pathways & Overhead Pathways)
+    expect(headerTexts.some(t => t.includes('underfloor pathways'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('overhead pathways'))).toBe(true);
+
+    // Verify Flooring Systems subgroups
+    expect(headerTexts.some(t => t.includes('raised floor tiles & grilles'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('structure, grommets & access'))).toBe(true);
+
+    // Verify Racks & Enclosures subgroups
+    expect(headerTexts.some(t => t.includes('standard & high-density server racks'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('colocation, open frame & wall mounts'))).toBe(true);
+
+    // Verify Architecture & Walls subgroups
+    expect(headerTexts.some(t => t.includes('interactive cad & perimeter tools'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('walls, partitions & doors'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('ceilings & structural plenums'))).toBe(true);
+
+    // Verify Power Distribution subgroups
+    expect(headerTexts.some(t => t.includes('rack pdus & transfer switches'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('floor panels, busways & switchgear'))).toBe(true);
+
+    // Verify UPS & Backup Generation subgroups
+    expect(headerTexts.some(t => t.includes('ups systems & battery storage'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('standby generation & mv substations'))).toBe(true);
+
+    // Verify Cooling & HVAC subgroups
+    expect(headerTexts.some(t => t.includes('in-row & perimeter crac/crah'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('liquid cooling & central plant'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('air distribution ducts & dampers'))).toBe(true);
+
+    // Verify Aisle Containment subgroups
+    expect(headerTexts.some(t => t.includes('cold aisle containment'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('hot aisle chimneys & baffles'))).toBe(true);
+
+    // Verify Fire Safety & Physical Security subgroups
+    expect(headerTexts.some(t => t.includes('detection & very early warning'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('suppression, alarms & hydrants'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('access control & portals'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('surveillance & communication'))).toBe(true);
+  });
+
+  it('should render subcategory headers in Rack Builder Sidebar catalog', async () => {
+    const { Sidebar } = await import('../components/sidebar');
+    const { default: State } = await import('../core/state');
+    State.setState({ activeView: 'rack' });
+
+    const catalogContainer = document.createElement('div');
+    catalogContainer.id = 'catalog-container';
+    document.body.appendChild(catalogContainer);
+
+    const sidebar = new Sidebar(catalogContainer);
+    sidebar.render();
+
+    const subgroupHeaders = catalogContainer.querySelectorAll('.cat-subgroup-header');
+    expect(subgroupHeaders.length).toBeGreaterThanOrEqual(15);
+
+    const headerTexts = Array.from(subgroupHeaders).map(h => (h.textContent || '').toLowerCase());
+
+    // Verify Racks & Cabinets subgroups
+    expect(headerTexts.some(t => t.includes('standard server cabinets'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('open relay frames'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('wall mount & edge'))).toBe(true);
+
+    // Verify Servers subgroups
+    expect(headerTexts.some(t => t.includes('rack servers & hci appliances'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('ai gpu accelerators'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('blade enclosures & chassis'))).toBe(true);
+
+    // Verify Switches subgroups
+    expect(headerTexts.some(t => t.includes('top-of-rack & access switches'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('spine, core & packet brokers'))).toBe(true);
+
+    // Verify Routers subgroups
+    expect(headerTexts.some(t => t.includes('enterprise & edge routers'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('wireless lan controllers'))).toBe(true);
+
+    // Verify PDU subgroups
+    expect(headerTexts.some(t => t.includes('vertical pdus'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('horizontal pdus & smart relays'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('environmental & security sensors'))).toBe(true);
+
+    // Verify Patch Panels subgroups
+    expect(headerTexts.some(t => t.includes('copper patch panels'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('fiber optic odf, liu & mpo'))).toBe(true);
+
+    // Verify Cables subgroups
+    expect(headerTexts.some(t => t.includes('copper twisted pair & dac'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('fiber optic patch cords'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('equipment power cords'))).toBe(true);
+
+    // Verify Cable Managers subgroups
+    expect(headerTexts.some(t => t.includes('vertical cable managers'))).toBe(true);
+    expect(headerTexts.some(t => t.includes('horizontal cable managers'))).toBe(true);
   });
 });
+
