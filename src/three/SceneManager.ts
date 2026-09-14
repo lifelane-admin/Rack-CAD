@@ -177,6 +177,7 @@ export class SceneManager {
         existingGroup.userData?.leftPduHash !== leftPduHash ||
         existingGroup.userData?.rightPduHash !== rightPduHash ||
         existingGroup.userData?.frontDoor !== rack.frontDoor ||
+        existingGroup.userData?.doorOperation !== rack.doorOperation ||
         existingGroup.userData?.sidePanels !== rack.sidePanels ||
         existingGroup.userData?.rackType !== rack.rackType ||
         existingGroup.userData?.rackColor !== rack.rackColor ||
@@ -207,6 +208,7 @@ export class SceneManager {
           leftPduHash,
           rightPduHash,
           frontDoor: rack.frontDoor,
+          doorOperation: rack.doorOperation,
           sidePanels: rack.sidePanels,
           rackType: rack.rackType,
           rackColor: rack.rackColor,
