@@ -150,9 +150,28 @@ export type DcRackType =
 
 export type DcDoorStyle =
   | 'perforated'
-  | 'split-perforated'
+  | 'perforated-large'
+  | 'perforated-medium'
+  | 'perforated-small'
+  | 'perforated-tiny'
+  | 'honeycomb-large'
+  | 'honeycomb-medium'
+  | 'honeycomb-small'
+  | 'honeycomb-tiny'
   | 'solid'
   | 'glass'
+  | 'split-perforated'
+  | 'split-perforated-large'
+  | 'split-perforated-medium'
+  | 'split-perforated-small'
+  | 'split-perforated-tiny'
+  | 'split-honeycomb'
+  | 'split-honeycomb-large'
+  | 'split-honeycomb-medium'
+  | 'split-honeycomb-small'
+  | 'split-honeycomb-tiny'
+  | 'split-solid'
+  | 'split-glass'
   | 'hexa'
   | 'round-hole'
   | 'mesh'
@@ -162,7 +181,8 @@ export type DcDoorStyle =
   | 'multi-compartment-4'
   | 'smart-lcd'
   | 'containment-sliding'
-  | 'louvred';
+  | 'louvred'
+  | 'louvered';
 
 export type DcDoorOperation =
   | 'swing-left'

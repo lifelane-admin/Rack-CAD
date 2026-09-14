@@ -121,13 +121,35 @@ export class CustomRackModal {
             <div>
               <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #fb8c00; margin-bottom: 6px;">Front Door Style</label>
               <select id="crm-door" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px;">
-                <optgroup label="Twin Doors (Multi-Door / Split)">
-                  <option value="split-perforated" ${frontDoor === 'split-perforated' ? 'selected' : ''}>Twin Door - Perforated Mesh (Dual Split)</option>
-                  <option value="split-glass" ${frontDoor === 'split-glass' ? 'selected' : ''}>Twin Door - Observation Glass (Dual Split)</option>
-                  <option value="split-solid" ${frontDoor === 'split-solid' ? 'selected' : ''}>Twin Door - Solid Steel (Dual Split)</option>
+                <optgroup label="Twin Doors - Perforated Round Mesh (4 Levels)">
+                  <option value="split-perforated-large" ${frontDoor === 'split-perforated-large' ? 'selected' : ''}>Twin Door - Perforated (Large Round Holes)</option>
+                  <option value="split-perforated" ${frontDoor === 'split-perforated' || frontDoor === 'split-perforated-medium' ? 'selected' : ''}>Twin Door - Perforated (Medium Round Holes)</option>
+                  <option value="split-perforated-small" ${frontDoor === 'split-perforated-small' ? 'selected' : ''}>Twin Door - Perforated (Small Round Holes)</option>
+                  <option value="split-perforated-tiny" ${frontDoor === 'split-perforated-tiny' ? 'selected' : ''}>Twin Door - Perforated (Tiny / Micro-Mesh)</option>
                 </optgroup>
-                <optgroup label="Single Doors">
-                  <option value="perforated" ${frontDoor === 'perforated' ? 'selected' : ''}>Single Perforated Mesh Door (80% Airflow)</option>
+                <optgroup label="Twin Doors - Honeycomb Hex Mesh (4 Levels)">
+                  <option value="split-honeycomb-large" ${frontDoor === 'split-honeycomb-large' ? 'selected' : ''}>Twin Door - Honeycomb (Large Hex Mesh)</option>
+                  <option value="split-honeycomb" ${frontDoor === 'split-honeycomb' || frontDoor === 'split-honeycomb-medium' ? 'selected' : ''}>Twin Door - Honeycomb (Medium Hex Mesh)</option>
+                  <option value="split-honeycomb-small" ${frontDoor === 'split-honeycomb-small' ? 'selected' : ''}>Twin Door - Honeycomb (Small Hex Mesh)</option>
+                  <option value="split-honeycomb-tiny" ${frontDoor === 'split-honeycomb-tiny' ? 'selected' : ''}>Twin Door - Honeycomb (Tiny / Micro-Hex)</option>
+                </optgroup>
+                <optgroup label="Twin Doors - Glass & Solid">
+                  <option value="split-glass" ${frontDoor === 'split-glass' ? 'selected' : ''}>Twin Door - Observation Glass (Dual Split)</option>
+                  <option value="split-solid" ${frontDoor === 'split-solid' ? 'selected' : ''}>Twin Door - Solid Steel Security (Dual Split)</option>
+                </optgroup>
+                <optgroup label="Single Doors - Perforated Round Mesh (4 Levels)">
+                  <option value="perforated-large" ${frontDoor === 'perforated-large' ? 'selected' : ''}>Single Door - Perforated (Large Round Holes)</option>
+                  <option value="perforated" ${frontDoor === 'perforated' || frontDoor === 'perforated-medium' || !frontDoor ? 'selected' : ''}>Single Door - Perforated (Medium Round Holes)</option>
+                  <option value="perforated-small" ${frontDoor === 'perforated-small' ? 'selected' : ''}>Single Door - Perforated (Small Round Holes)</option>
+                  <option value="perforated-tiny" ${frontDoor === 'perforated-tiny' ? 'selected' : ''}>Single Door - Perforated (Tiny / Micro-Mesh)</option>
+                </optgroup>
+                <optgroup label="Single Doors - Honeycomb Hex Mesh (4 Levels)">
+                  <option value="honeycomb-large" ${frontDoor === 'honeycomb-large' ? 'selected' : ''}>Single Door - Honeycomb (Large Hex Mesh)</option>
+                  <option value="honeycomb-medium" ${frontDoor === 'honeycomb-medium' ? 'selected' : ''}>Single Door - Honeycomb (Medium Hex Mesh)</option>
+                  <option value="honeycomb-small" ${frontDoor === 'honeycomb-small' ? 'selected' : ''}>Single Door - Honeycomb (Small Hex Mesh)</option>
+                  <option value="honeycomb-tiny" ${frontDoor === 'honeycomb-tiny' ? 'selected' : ''}>Single Door - Honeycomb (Tiny / Micro-Hex)</option>
+                </optgroup>
+                <optgroup label="Single Doors - Glass, Solid & Louvered">
                   <option value="glass" ${frontDoor === 'glass' ? 'selected' : ''}>Single Tempered Glass Door</option>
                   <option value="solid" ${frontDoor === 'solid' ? 'selected' : ''}>Single Solid Steel Door</option>
                   <option value="louvered" ${frontDoor === 'louvered' ? 'selected' : ''}>Louvered / Vented Steel Door</option>

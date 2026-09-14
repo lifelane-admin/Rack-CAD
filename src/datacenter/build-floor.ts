@@ -6191,13 +6191,46 @@ export class BuildFloorView {
         <label>Height (U)<input id="dr-height" type="number" value="42" min="2" max="54" step="2" class="dc-input"/></label>
         <label>Door Style
           <select id="dr-door" class="dc-input">
-            <option value="perforated" selected>Perforated High-Airflow Steel (Single Door)</option>
-            <option value="split-perforated">Split Perforated Twin-Doors (Dual Wardrobe)</option>
-            <option value="glass">Tempered Glass Window Door</option>
-            <option value="solid">Solid Steel Security Door</option>
-            <option value="multi-compartment-2">Multi-Compartment 2-Colo Doors</option>
-            <option value="multi-compartment-4">Multi-Compartment 4-Colo Doors</option>
-            <option value="none">No Door (Open Frame Relay Rack)</option>
+            <optgroup label="Twin Doors - Perforated Round Mesh (4 Levels)">
+              <option value="split-perforated-large">Twin Door - Perforated (Large Round Holes)</option>
+              <option value="split-perforated">Twin Door - Perforated (Medium Round Holes)</option>
+              <option value="split-perforated-small">Twin Door - Perforated (Small Round Holes)</option>
+              <option value="split-perforated-tiny">Twin Door - Perforated (Tiny / Micro-Mesh)</option>
+            </optgroup>
+            <optgroup label="Twin Doors - Honeycomb Hex Mesh (4 Levels)">
+              <option value="split-honeycomb-large">Twin Door - Honeycomb (Large Hex Mesh)</option>
+              <option value="split-honeycomb">Twin Door - Honeycomb (Medium Hex Mesh)</option>
+              <option value="split-honeycomb-small">Twin Door - Honeycomb (Small Hex Mesh)</option>
+              <option value="split-honeycomb-tiny">Twin Door - Honeycomb (Tiny / Micro-Hex)</option>
+            </optgroup>
+            <optgroup label="Twin Doors - Glass & Solid">
+              <option value="split-glass">Twin Door - Observation Glass (Dual Split)</option>
+              <option value="split-solid">Twin Door - Solid Steel Security (Dual Split)</option>
+            </optgroup>
+            <optgroup label="Single Doors - Perforated Round Mesh (4 Levels)">
+              <option value="perforated-large">Single Door - Perforated (Large Round Holes)</option>
+              <option value="perforated" selected>Single Door - Perforated (Medium Round Holes)</option>
+              <option value="perforated-small">Single Door - Perforated (Small Round Holes)</option>
+              <option value="perforated-tiny">Single Door - Perforated (Tiny / Micro-Mesh)</option>
+            </optgroup>
+            <optgroup label="Single Doors - Honeycomb Hex Mesh (4 Levels)">
+              <option value="honeycomb-large">Single Door - Honeycomb (Large Hex Mesh)</option>
+              <option value="honeycomb-medium">Single Door - Honeycomb (Medium Hex Mesh)</option>
+              <option value="honeycomb-small">Single Door - Honeycomb (Small Hex Mesh)</option>
+              <option value="honeycomb-tiny">Single Door - Honeycomb (Tiny / Micro-Hex)</option>
+            </optgroup>
+            <optgroup label="Single Doors - Glass, Solid & Louvered">
+              <option value="glass">Single Tempered Glass Door</option>
+              <option value="solid">Single Solid Steel Door</option>
+              <option value="louvered">Louvered / Vented Steel Door</option>
+            </optgroup>
+            <optgroup label="Colocation Compartment Doors">
+              <option value="multi-compartment-2">2-Compartment Colo Doors (Dual-Tier)</option>
+              <option value="multi-compartment-4">4-Compartment Colo Doors (Multi-Tenant)</option>
+            </optgroup>
+            <optgroup label="Open Enclosure">
+              <option value="none">None (Open Frame / No Door)</option>
+            </optgroup>
           </select>
         </label>
         <label>Mounting Style
@@ -6287,13 +6320,46 @@ export class BuildFloorView {
         <label>Height (U)<input id="dr-height" type="number" value="${rack.heightU}" min="2" max="54" step="2" class="dc-input"/></label>
         <label>Door Style
           <select id="dr-door" class="dc-input">
-            <option value="perforated"${rack.doorStyle === 'perforated' ? ' selected' : ''}>Perforated High-Airflow Steel (Single Door)</option>
-            <option value="split-perforated"${rack.doorStyle === 'split-perforated' ? ' selected' : ''}>Split Perforated Twin-Doors (Dual Wardrobe)</option>
-            <option value="glass"${rack.doorStyle === 'glass' ? ' selected' : ''}>Tempered Glass Window Door</option>
-            <option value="solid"${rack.doorStyle === 'solid' ? ' selected' : ''}>Solid Steel Security Door</option>
-            <option value="multi-compartment-2"${rack.doorStyle === 'multi-compartment-2' ? ' selected' : ''}>Multi-Compartment 2-Colo Doors</option>
-            <option value="multi-compartment-4"${rack.doorStyle === 'multi-compartment-4' ? ' selected' : ''}>Multi-Compartment 4-Colo Doors</option>
-            <option value="none"${rack.doorStyle === 'none' ? ' selected' : ''}>No Door (Open Frame Relay Rack)</option>
+            <optgroup label="Twin Doors - Perforated Round Mesh (4 Levels)">
+              <option value="split-perforated-large"${rack.doorStyle === 'split-perforated-large' ? ' selected' : ''}>Twin Door - Perforated (Large Round Holes)</option>
+              <option value="split-perforated"${rack.doorStyle === 'split-perforated' || rack.doorStyle === 'split-perforated-medium' ? ' selected' : ''}>Twin Door - Perforated (Medium Round Holes)</option>
+              <option value="split-perforated-small"${rack.doorStyle === 'split-perforated-small' ? ' selected' : ''}>Twin Door - Perforated (Small Round Holes)</option>
+              <option value="split-perforated-tiny"${rack.doorStyle === 'split-perforated-tiny' ? ' selected' : ''}>Twin Door - Perforated (Tiny / Micro-Mesh)</option>
+            </optgroup>
+            <optgroup label="Twin Doors - Honeycomb Hex Mesh (4 Levels)">
+              <option value="split-honeycomb-large"${rack.doorStyle === 'split-honeycomb-large' ? ' selected' : ''}>Twin Door - Honeycomb (Large Hex Mesh)</option>
+              <option value="split-honeycomb"${rack.doorStyle === 'split-honeycomb' || rack.doorStyle === 'split-honeycomb-medium' ? ' selected' : ''}>Twin Door - Honeycomb (Medium Hex Mesh)</option>
+              <option value="split-honeycomb-small"${rack.doorStyle === 'split-honeycomb-small' ? ' selected' : ''}>Twin Door - Honeycomb (Small Hex Mesh)</option>
+              <option value="split-honeycomb-tiny"${rack.doorStyle === 'split-honeycomb-tiny' ? ' selected' : ''}>Twin Door - Honeycomb (Tiny / Micro-Hex)</option>
+            </optgroup>
+            <optgroup label="Twin Doors - Glass & Solid">
+              <option value="split-glass"${rack.doorStyle === 'split-glass' ? ' selected' : ''}>Twin Door - Observation Glass (Dual Split)</option>
+              <option value="split-solid"${rack.doorStyle === 'split-solid' ? ' selected' : ''}>Twin Door - Solid Steel Security (Dual Split)</option>
+            </optgroup>
+            <optgroup label="Single Doors - Perforated Round Mesh (4 Levels)">
+              <option value="perforated-large"${rack.doorStyle === 'perforated-large' ? ' selected' : ''}>Single Door - Perforated (Large Round Holes)</option>
+              <option value="perforated"${rack.doorStyle === 'perforated' || rack.doorStyle === 'perforated-medium' || !rack.doorStyle ? ' selected' : ''}>Single Door - Perforated (Medium Round Holes)</option>
+              <option value="perforated-small"${rack.doorStyle === 'perforated-small' ? ' selected' : ''}>Single Door - Perforated (Small Round Holes)</option>
+              <option value="perforated-tiny"${rack.doorStyle === 'perforated-tiny' ? ' selected' : ''}>Single Door - Perforated (Tiny / Micro-Mesh)</option>
+            </optgroup>
+            <optgroup label="Single Doors - Honeycomb Hex Mesh (4 Levels)">
+              <option value="honeycomb-large"${rack.doorStyle === 'honeycomb-large' ? ' selected' : ''}>Single Door - Honeycomb (Large Hex Mesh)</option>
+              <option value="honeycomb-medium"${rack.doorStyle === 'honeycomb-medium' ? ' selected' : ''}>Single Door - Honeycomb (Medium Hex Mesh)</option>
+              <option value="honeycomb-small"${rack.doorStyle === 'honeycomb-small' ? ' selected' : ''}>Single Door - Honeycomb (Small Hex Mesh)</option>
+              <option value="honeycomb-tiny"${rack.doorStyle === 'honeycomb-tiny' ? ' selected' : ''}>Single Door - Honeycomb (Tiny / Micro-Hex)</option>
+            </optgroup>
+            <optgroup label="Single Doors - Glass, Solid & Louvered">
+              <option value="glass"${rack.doorStyle === 'glass' ? ' selected' : ''}>Single Tempered Glass Door</option>
+              <option value="solid"${rack.doorStyle === 'solid' ? ' selected' : ''}>Single Solid Steel Door</option>
+              <option value="louvered"${rack.doorStyle === 'louvered' || rack.doorStyle === 'louvred' ? ' selected' : ''}>Louvered / Vented Steel Door</option>
+            </optgroup>
+            <optgroup label="Colocation Compartment Doors">
+              <option value="multi-compartment-2"${rack.doorStyle === 'multi-compartment-2' ? ' selected' : ''}>2-Compartment Colo Doors (Dual-Tier)</option>
+              <option value="multi-compartment-4"${rack.doorStyle === 'multi-compartment-4' ? ' selected' : ''}>4-Compartment Colo Doors (Multi-Tenant)</option>
+            </optgroup>
+            <optgroup label="Open Enclosure">
+              <option value="none"${rack.doorStyle === 'none' ? ' selected' : ''}>None (Open Frame / No Door)</option>
+            </optgroup>
           </select>
         </label>
         <label>Mounting Style
