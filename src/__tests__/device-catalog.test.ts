@@ -51,7 +51,7 @@ describe('Standard Library catalog', () => {
   });
 
   it('all entries have valid category', () => {
-    const validCategories = ['server','switch','router','firewall','nac','storage','patch-panel','pdu','ats','ups','blank-panel','cable-manager','cooling','console'];
+    const validCategories = ['server','switch','router','firewall','nac','storage','patch-panel','pdu','ats','ups','blank-panel','cable-manager','cooling','console','load-balancer','ids-ips','vpn-concentrator','proxy-waf'];
     for (const item of deviceCatalog) {
       expect(validCategories).toContain(item.category);
     }
