@@ -936,7 +936,11 @@ export class App {
       this.renderAll();
     });
 
-    (eventBus as any).on('view:switch', (view: 'rack' | 'cloud' | 'hybrid' | 'datacenter') => {
+    (eventBus as any).on('app:show-landing', () => {
+      this.showStartupModal();
+    });
+
+    (eventBus as any).on('view:switch', (view: 'rack' | 'cloud' | 'hybrid' | 'datacenter' | 'flowchart') => {
       this.setActiveView(view);
     });
 

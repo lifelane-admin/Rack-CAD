@@ -14,23 +14,21 @@ describe('Workflow Isolation & Datacenter "Work on this Rack" Protocol', () => {
     sidebar = new Sidebar(sidebarContainer);
   });
 
-  it('isolates Datacenter tab from sidebar when in standalone Rack Builder mode', () => {
+  it('isolates tabs completely from sidebar when in standalone Rack Builder mode', () => {
     stateManager.setState({ workflowMode: 'rack', activeView: 'rack', activeElevationRackId: null });
     sidebar.render();
 
-    const tabs = Array.from(sidebarContainer.querySelectorAll('.sb-tab')).map(el => el.textContent?.trim());
-    expect(tabs).toContain('Rack');
-    expect(tabs).toContain('Cloud');
-    expect(tabs).toContain('Hybrid');
-    expect(tabs).not.toContain('Datacenter');
+    const tabsContainer = sidebarContainer.querySelector('.sb-tabs') as HTMLElement;
+    expect(tabsContainer.style.display).toBe('none');
+    expect(sidebarContainer.querySelectorAll('.sb-tab').length).toBe(0);
   });
 
-  it('shows Datacenter tab when in Datacenter workflow mode', () => {
+  it('hides tab bar when on standalone Datacenter floor without elevation active', () => {
     stateManager.setState({ workflowMode: 'datacenter', activeView: 'datacenter', activeElevationRackId: null });
     sidebar.render();
 
-    const tabs = Array.from(sidebarContainer.querySelectorAll('.sb-tab')).map(el => el.textContent?.trim());
-    expect(tabs).toContain('Datacenter');
+    const tabsContainer = sidebarContainer.querySelector('.sb-tabs') as HTMLElement;
+    expect(tabsContainer.style.display).toBe('none');
   });
 
   it('carries exact rack config and model from Datacenter rack into Rack Builder state', () => {
@@ -94,10 +92,10 @@ describe('Workflow Isolation & Datacenter "Work on this Rack" Protocol', () => {
     expect(activeRack?.leftPduId).toBe('pdu-l');
     expect(activeRack?.rightPduId).toBe('pdu-r');
 
-    // Sidebar when editing elevation of datacenter rack retains access to Datacenter
+    // Sidebar when editing elevation of datacenter rack retains access to Datacenter Floor & Rack Elevation
     sidebar.render();
     const tabs = Array.from(sidebarContainer.querySelectorAll('.sb-tab')).map(el => el.textContent?.trim());
-    expect(tabs).toContain('Datacenter');
+    expect(tabs).toEqual(['🏢 Datacenter Floor', '📦 Rack Elevation']);
   });
 
   it('hides "⇄ Datacenter Floor" button in FloatingToolbar when in standalone Rack Builder mode', async () => {

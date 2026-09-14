@@ -187,9 +187,9 @@ describe('Hybrid view — sidebar dual-render', () => {
     expect(cloudContainer!.children.length).toBeGreaterThan(0);
   });
 
-  it('marks the Hybrid tab active while hybrid is the active view', () => {
+  it('marks the Rack Devices tab active while hybrid is the active view', () => {
     mountSidebar();
-    const hybridTab = [...document.querySelectorAll('.sb-tab')].find(el => el.textContent?.trim() === 'Hybrid');
+    const hybridTab = [...document.querySelectorAll('.sb-tab')].find(el => el.getAttribute('data-view') === 'hybrid');
     expect(hybridTab?.classList.contains('active')).toBe(true);
   });
 });

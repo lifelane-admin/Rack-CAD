@@ -184,12 +184,13 @@ export class Toolbar {
     ]);
     menuBar.appendChild(exportMenu);
 
-    // Conditionally render Cloud menu on initial render
+    // Conditionally render Cloud/Flowchart menu on initial render
     const initialView = State.getState().activeView;
-    if (initialView === 'cloud' || initialView === 'hybrid') {
-      const cloudMenu = this.menu('Cloud', MENU_ICONS.cloud, [
-        { label: 'Export Cloud SVG…', icon: ICONS.exportSvg, action: () => EventBus.emit('export:cloud-svg', undefined) },
-        { label: 'Export Cloud PNG…', icon: ICONS.exportPng, action: () => EventBus.emit('export:cloud-png', undefined) },
+    if (initialView === 'cloud' || initialView === 'hybrid' || initialView === 'flowchart') {
+      const label = initialView === 'flowchart' ? 'Flowchart' : 'Cloud';
+      const cloudMenu = this.menu(label, MENU_ICONS.cloud, [
+        { label: `Export ${label} SVG…`, icon: ICONS.exportSvg, action: () => EventBus.emit('export:cloud-svg', undefined) },
+        { label: `Export ${label} PNG…`, icon: ICONS.exportPng, action: () => EventBus.emit('export:cloud-png', undefined) },
       ]);
       cloudMenu.id = 'tb-menu-cloud';
       menuBar.appendChild(cloudMenu);
@@ -256,13 +257,14 @@ export class Toolbar {
       // Update tool buttons
       updateToolButtons(s.tool);
 
-      // Cloud menu — add/remove based on activeView
+      // Cloud/Flowchart menu — add/remove based on activeView
       const existing = menuBar.querySelector('#tb-menu-cloud');
       const needsCloud = s.activeView === 'cloud' || s.activeView === 'hybrid' || s.activeView === 'flowchart';
       if (needsCloud && !existing) {
-        const cloudMenu = this.menu('Diagram', MENU_ICONS.cloud, [
-          { label: 'Export Diagram SVG…', icon: ICONS.exportSvg, action: () => EventBus.emit('export:cloud-svg', undefined) },
-          { label: 'Export Diagram PNG…', icon: ICONS.exportPng, action: () => EventBus.emit('export:cloud-png', undefined) },
+        const label = s.activeView === 'flowchart' ? 'Flowchart' : 'Cloud';
+        const cloudMenu = this.menu(label, MENU_ICONS.cloud, [
+          { label: `Export ${label} SVG…`, icon: ICONS.exportSvg, action: () => EventBus.emit('export:cloud-svg', undefined) },
+          { label: `Export ${label} PNG…`, icon: ICONS.exportPng, action: () => EventBus.emit('export:cloud-png', undefined) },
         ]);
         cloudMenu.id = 'tb-menu-cloud';
         menuBar.appendChild(cloudMenu);

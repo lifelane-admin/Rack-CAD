@@ -66,19 +66,49 @@ export class Sidebar {
   }
 
   render() {
+    this.container.innerHTML = '';
     const activeView = State.getState().activeView;
     const isCloud = activeView === 'cloud';
     const isHybrid = activeView === 'hybrid';
     const isDc = activeView === 'datacenter';
     const isFlowchart = activeView === 'flowchart';
 
-    this.container.innerHTML = '';
-    this.container.className = 'sidebar';
+    const state = State.getState();
+    const wf = state.workflowMode ?? (activeView as any);
 
-    // Header
+    let moduleTitle = 'Rack Design';
+    let moduleIcon = '📦';
+    if (wf === 'datacenter' || activeView === 'datacenter') {
+      moduleTitle = 'Datacenter Planner';
+      moduleIcon = '🏢';
+    } else if (wf === 'flowchart' || activeView === 'flowchart') {
+      moduleTitle = 'Flowchart Designer';
+      moduleIcon = '🔀';
+    } else if (wf === 'cloud' || activeView === 'cloud') {
+      moduleTitle = 'Cloud Architecture';
+      moduleIcon = '☁️';
+    } else if (wf === 'hybrid' || activeView === 'hybrid') {
+      moduleTitle = 'Hybrid Architecture';
+      moduleIcon = '🌐';
+    }
+
+    // Header with Module Title & Switch Button
     const header = document.createElement('div');
     header.className = 'sidebar-header';
-    header.innerHTML = `<h3>Rack Slicer</h3><button class="collapse-btn" title="Collapse Left Sidebar (Hide completely)">«</button>`;
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.08);background:#0d1117;';
+    header.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;">
+        <span style="font-size:16px;">${moduleIcon}</span>
+        <span style="font-size:13px;font-weight:800;color:#f0f6fc;letter-spacing:0.3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${moduleTitle.toUpperCase()}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button id="sb-switch-module" class="dc-btn dc-btn-sm" style="padding:2px 8px;font-size:10px;font-weight:700;background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.35);border-radius:4px;cursor:pointer;" title="Switch to a different module or landing page">⇄ Switch</button>
+        <button class="collapse-btn" title="Collapse Left Sidebar" style="background:none;border:none;color:#8b949e;cursor:pointer;font-size:14px;padding:2px 4px;">«</button>
+      </div>
+    `;
+    header.querySelector('#sb-switch-module')?.addEventListener('click', () => {
+      EventBus.emit('app:show-landing' as any, undefined);
+    });
     header.querySelector('.collapse-btn')!.addEventListener('click', () => {
       this.toggleCollapse();
     });
@@ -237,25 +267,30 @@ export class Sidebar {
 
   private renderTabBar(container: HTMLElement, activeView: string): void {
     const state = State.getState();
-    const isDcWorkflow = state.workflowMode === 'datacenter' || activeView === 'datacenter' || Boolean(state.activeElevationRackId);
+    const wf = state.workflowMode ?? (activeView as any);
 
-    const tabs: Array<{ label: string; view: 'rack' | 'cloud' | 'hybrid' | 'datacenter' | 'flowchart' }> = isDcWorkflow
-      ? [
-          { label: 'Datacenter', view: 'datacenter' },
-          { label: 'Rack', view: 'rack' },
-          { label: 'Cloud', view: 'cloud' },
-          { label: 'Flowchart', view: 'flowchart' },
-          { label: 'Hybrid', view: 'hybrid' },
-        ]
-      : [
-          { label: 'Rack', view: 'rack' },
-          { label: 'Cloud', view: 'cloud' },
-          { label: 'Flowchart', view: 'flowchart' },
-          { label: 'Hybrid', view: 'hybrid' },
-        ];
+    let tabs: Array<{ label: string; view: 'rack' | 'cloud' | 'hybrid' | 'datacenter' | 'flowchart' }> = [];
+
+    if (wf === 'datacenter' && state.activeElevationRackId) {
+      tabs = [
+        { label: '🏢 Datacenter Floor', view: 'datacenter' },
+        { label: '📦 Rack Elevation', view: 'rack' },
+      ];
+    } else if (wf === 'hybrid' || activeView === 'hybrid') {
+      tabs = [
+        { label: '📦 Rack Devices', view: 'hybrid' },
+        { label: '☁ Cloud Services', view: 'cloud' },
+      ];
+    }
+
+    if (tabs.length <= 1) {
+      container.style.display = 'none';
+      return;
+    }
+    container.style.display = 'flex';
 
     for (const tab of tabs) {
-      const isActive = tab.view === activeView;
+      const isActive = tab.view === activeView || (wf === 'hybrid' && tab.view === 'hybrid' && activeView === 'hybrid');
 
       const el = document.createElement('div');
       el.className = `sb-tab${isActive ? ' active' : ''}`;
@@ -266,9 +301,7 @@ export class Sidebar {
         this.focusedCloudProvider = null;
         this.focusedCloudCategory = null;
         this.searchTerm = '';
-        const currentView = State.getState().activeView;
-        const target = tab.view === 'cloud' && currentView !== 'cloud' ? 'hybrid' : tab.view;
-        EventBus.emit('view:switch', target as any);
+        EventBus.emit('view:switch', tab.view as any);
       });
 
       container.appendChild(el);

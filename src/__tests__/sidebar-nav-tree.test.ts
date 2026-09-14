@@ -18,87 +18,73 @@ function wireViewSwitch(sidebar: Sidebar): void {
   });
 }
 
-describe('Sidebar workspace tabs', () => {
+describe('Sidebar module header and isolated workspace tabs', () => {
   beforeEach(() => {
-    stateManager.setState({ activeView: 'rack', selection: [] });
+    stateManager.setState({ activeView: 'rack', workflowMode: 'rack', selection: [], activeElevationRackId: undefined });
   });
 
-  it('renders workspace tabs: Rack, Cloud, Flowchart, Hybrid', () => {
+  it('renders module title header with Switch button for Rack Design', () => {
     mountSidebar();
+    const title = document.querySelector('.sidebar-header span:nth-child(2)');
+    expect(title?.textContent).toBe('RACK DESIGN');
+    const switchBtn = document.getElementById('sb-switch-module');
+    expect(switchBtn).not.toBeNull();
+  });
+
+  it('emits app:show-landing when Switch button is clicked', () => {
+    const handler = vi.fn();
+    eventBus.on('app:show-landing' as any, handler);
+    mountSidebar();
+    const switchBtn = document.getElementById('sb-switch-module') as HTMLButtonElement;
+    switchBtn.click();
+    expect(handler).toHaveBeenCalled();
+  });
+
+  it('hides tab bar in standalone Rack mode', () => {
+    mountSidebar();
+    const tabsContainer = document.querySelector('.sb-tabs') as HTMLElement;
+    expect(tabsContainer.style.display).toBe('none');
+  });
+
+  it('hides tab bar in standalone Cloud mode', () => {
+    stateManager.setState({ activeView: 'cloud', workflowMode: 'cloud' });
+    mountSidebar();
+    const tabsContainer = document.querySelector('.sb-tabs') as HTMLElement;
+    expect(tabsContainer.style.display).toBe('none');
+  });
+
+  it('hides tab bar in standalone Flowchart mode', () => {
+    stateManager.setState({ activeView: 'flowchart', workflowMode: 'flowchart' });
+    mountSidebar();
+    const tabsContainer = document.querySelector('.sb-tabs') as HTMLElement;
+    expect(tabsContainer.style.display).toBe('none');
+  });
+
+  it('renders contextual tabs in Hybrid mode (Rack Devices & Cloud Services)', () => {
+    stateManager.setState({ activeView: 'hybrid', workflowMode: 'hybrid' });
+    mountSidebar();
+    const tabsContainer = document.querySelector('.sb-tabs') as HTMLElement;
+    expect(tabsContainer.style.display).toBe('flex');
     const tabs = [...document.querySelectorAll('.sb-tab')].map(el => el.textContent?.trim());
-    expect(tabs).toEqual(['Rack', 'Cloud', 'Flowchart', 'Hybrid']);
+    expect(tabs).toEqual(['📦 Rack Devices', '☁ Cloud Services']);
   });
 
-  it('Rack tab is active by default when activeView is rack', () => {
+  it('renders contextual tabs in Datacenter Elevation mode (Datacenter Floor & Rack Elevation)', () => {
+    stateManager.setState({ activeView: 'rack', workflowMode: 'datacenter', activeElevationRackId: 'rack-1' });
     mountSidebar();
-    const tabs = document.querySelectorAll('.sb-tab');
-    expect(tabs[0].classList.contains('active')).toBe(true);
-    expect(tabs[1].classList.contains('active')).toBe(false);
-    expect(tabs[2].classList.contains('active')).toBe(false);
-    expect(tabs[3].classList.contains('active')).toBe(false);
+    const tabsContainer = document.querySelector('.sb-tabs') as HTMLElement;
+    expect(tabsContainer.style.display).toBe('flex');
+    const tabs = [...document.querySelectorAll('.sb-tab')].map(el => el.textContent?.trim());
+    expect(tabs).toEqual(['🏢 Datacenter Floor', '📦 Rack Elevation']);
   });
 
-  it('Cloud tab is active when activeView is cloud', () => {
-    stateManager.setState({ activeView: 'cloud' });
-    mountSidebar();
-    const tabs = document.querySelectorAll('.sb-tab');
-    expect(tabs[1].classList.contains('active')).toBe(true);
-  });
-
-  it('Flowchart tab is active when activeView is flowchart', () => {
-    stateManager.setState({ activeView: 'flowchart' });
-    mountSidebar();
-    const tabs = document.querySelectorAll('.sb-tab');
-    expect(tabs[2].classList.contains('active')).toBe(true);
-  });
-
-  it('Hybrid tab is active when activeView is hybrid', () => {
-    stateManager.setState({ activeView: 'hybrid' });
-    mountSidebar();
-    const tabs = document.querySelectorAll('.sb-tab');
-    expect(tabs[3].classList.contains('active')).toBe(true);
-  });
-
-  it('clicking Cloud tab from Rack view switches to hybrid (preserves the rack)', () => {
-    const sidebar = mountSidebar();
-    wireViewSwitch(sidebar);
-    const cloudTab = document.querySelectorAll('.sb-tab')[1] as HTMLElement;
-    cloudTab.click();
-    expect(stateManager.getState().activeView).toBe('hybrid');
-  });
-
-  it('clicking Cloud tab while already in cloud view stays in cloud', () => {
-    stateManager.setState({ activeView: 'cloud' });
+  it('switching tabs in Hybrid mode switches view', () => {
+    stateManager.setState({ activeView: 'hybrid', workflowMode: 'hybrid' });
     const sidebar = mountSidebar();
     wireViewSwitch(sidebar);
     const cloudTab = document.querySelectorAll('.sb-tab')[1] as HTMLElement;
     cloudTab.click();
     expect(stateManager.getState().activeView).toBe('cloud');
-  });
-
-  it('clicking Flowchart tab switches to flowchart', () => {
-    const sidebar = mountSidebar();
-    wireViewSwitch(sidebar);
-    const fcTab = document.querySelectorAll('.sb-tab')[2] as HTMLElement;
-    fcTab.click();
-    expect(stateManager.getState().activeView).toBe('flowchart');
-  });
-
-  it('clicking Rack tab switches to rack', () => {
-    stateManager.setState({ activeView: 'hybrid' });
-    const sidebar = mountSidebar();
-    wireViewSwitch(sidebar);
-    const rackTab = document.querySelectorAll('.sb-tab')[0] as HTMLElement;
-    rackTab.click();
-    expect(stateManager.getState().activeView).toBe('rack');
-  });
-
-  it('clicking Hybrid tab switches to hybrid', () => {
-    const sidebar = mountSidebar();
-    wireViewSwitch(sidebar);
-    const hybridTab = document.querySelectorAll('.sb-tab')[3] as HTMLElement;
-    hybridTab.click();
-    expect(stateManager.getState().activeView).toBe('hybrid');
   });
 
   it('search placeholder is "Search components..." on Rack tab', () => {
@@ -108,7 +94,7 @@ describe('Sidebar workspace tabs', () => {
   });
 
   it('search placeholder reflects cloud context on Cloud tab', () => {
-    stateManager.setState({ activeView: 'cloud' });
+    stateManager.setState({ activeView: 'cloud', workflowMode: 'cloud' });
     mountSidebar();
     const input = document.querySelector('.sidebar-search input') as HTMLInputElement;
     expect(input.placeholder.toLowerCase()).toContain('search');
@@ -116,7 +102,7 @@ describe('Sidebar workspace tabs', () => {
   });
 
   it('search placeholder covers both catalogs in Hybrid view', () => {
-    stateManager.setState({ activeView: 'hybrid' });
+    stateManager.setState({ activeView: 'hybrid', workflowMode: 'hybrid' });
     mountSidebar();
     const input = document.querySelector('.sidebar-search input') as HTMLInputElement;
     expect(input.placeholder).toContain('rack devices + cloud');

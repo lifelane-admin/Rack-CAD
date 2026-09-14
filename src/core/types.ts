@@ -916,6 +916,7 @@ export interface AppEvents {
    *  'canvas:area-select's doc comment, same mechanics via CloudCanvasManager. */
   'cloud-canvas:area-select': ScreenRect;
   'notification': { message: string; type: 'info' | 'success' | 'warning' | 'error' };
+  'app:show-landing': void;
   'ai:mode-changed': boolean;
   'ai:provider-changed': AIProviderName;
   'ai:request': { messages: AIMessage[]; selectedId?: string };
