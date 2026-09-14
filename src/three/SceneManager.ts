@@ -41,7 +41,11 @@ export class SceneManager {
   private deviceEntries = new Map<string, DeviceEntry>();
   private cableMeshes = new Map<string, THREE.Mesh | THREE.Line | THREE.Group>();
   private materials: MaterialManager;
-  private doorTargetAngle = 0;  // 0 = closed, Math.PI * 0.7 = open
+  private doorTargetAngle = 0;  // legacy alias
+  private frontDoorTargetAngle = 0;  // 0 = closed, Math.PI * 0.7 = open
+  private rearDoorTargetAngle = 0;
+  private frontDoorState: DoorState = 'closed';
+  private rearDoorState: DoorState = 'closed';
   private rackColor: RackColorKey = 'black';
   private panelOpacity = 1;  // 1 = fully opaque; applies to side/back panel shell materials
 
@@ -216,6 +220,22 @@ export class SceneManager {
           rackColor: rack.rackColor,
           colorKey: this.rackColor
         };
+
+        // Apply current front & rear door states to newly built group
+        const frontVis = this.frontDoorState !== 'removed';
+        const rearVis = this.rearDoorState !== 'removed';
+        group.children.forEach(c => {
+          if (c.name.startsWith('rack-door') || c.name === 'rack-colo-divider') {
+            c.visible = frontVis;
+            const isLeftHinge = c.name === 'rack-door-left';
+            c.rotation.y = isLeftHinge ? -this.frontDoorTargetAngle : this.frontDoorTargetAngle;
+          } else if (c.name.startsWith('rack-rear-door') || c.name === 'rack-rear-colo-divider') {
+            c.visible = rearVis;
+            const isLeftHinge = c.name === 'rack-rear-door-left';
+            c.rotation.y = isLeftHinge ? this.rearDoorTargetAngle : -this.rearDoorTargetAngle;
+          }
+        });
+
         group.position.set(rack.x + RACK_OUTER_WIDTH / 2, totalH / 2, 0);
         this.applyPanelOpacity(group, this.panelOpacity);
         this.scene.add(group);
@@ -319,20 +339,47 @@ export class SceneManager {
     }
   }
 
-  setDoorState(state: DoorState): void {
+  setFrontDoorState(state: DoorState): void {
+    this.frontDoorState = state;
     const visible = state !== 'removed';
-    this.doorTargetAngle = state === 'open' ? Math.PI * 0.7 : 0;
+    this.frontDoorTargetAngle = state === 'open' ? Math.PI * 0.7 : 0;
+    this.doorTargetAngle = this.frontDoorTargetAngle;
     for (const group of this.rackGroups.values()) {
       group.children.forEach(c => {
-        if (c.name.startsWith('rack-door') || c.name.startsWith('rack-rear-door') || c.name === 'rack-colo-divider' || c.name === 'rack-rear-colo-divider') {
+        if (c.name.startsWith('rack-door') || c.name === 'rack-colo-divider') {
           c.visible = visible;
           if (!visible || state === 'closed') {
-            const isLeftHinge = c.name === 'rack-door-left' || c.name === 'rack-rear-door-left';
-            const sign = c.name.startsWith('rack-rear-door') ? (isLeftHinge ? 1 : -1) : (isLeftHinge ? -1 : 1);
-            c.rotation.y = sign * this.doorTargetAngle;
+            const isLeftHinge = c.name === 'rack-door-left';
+            c.rotation.y = isLeftHinge ? -this.frontDoorTargetAngle : this.frontDoorTargetAngle;
           }
         }
       });
+    }
+  }
+
+  setRearDoorState(state: DoorState): void {
+    this.rearDoorState = state;
+    const visible = state !== 'removed';
+    this.rearDoorTargetAngle = state === 'open' ? Math.PI * 0.7 : 0;
+    for (const group of this.rackGroups.values()) {
+      group.children.forEach(c => {
+        if (c.name.startsWith('rack-rear-door') || c.name === 'rack-rear-colo-divider') {
+          c.visible = visible;
+          if (!visible || state === 'closed') {
+            const isLeftHinge = c.name === 'rack-rear-door-left';
+            c.rotation.y = isLeftHinge ? this.rearDoorTargetAngle : -this.rearDoorTargetAngle;
+          }
+        }
+      });
+    }
+  }
+
+  setDoorState(state: DoorState, target: 'front' | 'rear' | 'all' = 'front'): void {
+    if (target === 'front' || target === 'all') {
+      this.setFrontDoorState(state);
+    }
+    if (target === 'rear' || target === 'all') {
+      this.setRearDoorState(state);
     }
   }
 
@@ -410,11 +457,11 @@ export class SceneManager {
 
       group.children.forEach(c => {
         if (c.name.startsWith('rack-door') && c.visible) {
-          const target = c.name === 'rack-door-left' ? -this.doorTargetAngle : this.doorTargetAngle;
+          const target = c.name === 'rack-door-left' ? -this.frontDoorTargetAngle : this.frontDoorTargetAngle;
           const diff = target - c.rotation.y;
           if (Math.abs(diff) > 0.001) c.rotation.y += diff * 0.1;
         } else if (c.name.startsWith('rack-rear-door') && c.visible) {
-          const target = c.name === 'rack-rear-door-left' ? this.doorTargetAngle : -this.doorTargetAngle;
+          const target = c.name === 'rack-rear-door-left' ? this.rearDoorTargetAngle : -this.rearDoorTargetAngle;
           const diff = target - c.rotation.y;
           if (Math.abs(diff) > 0.001) c.rotation.y += diff * 0.1;
         }

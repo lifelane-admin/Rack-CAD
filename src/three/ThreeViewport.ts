@@ -272,8 +272,16 @@ export class ThreeViewport {
     this.camera.setPreset(preset);
   }
 
-  setDoorState(state: DoorState): void {
-    this.sceneManager.setDoorState(state);
+  setDoorState(state: DoorState, target?: 'front' | 'rear' | 'all'): void {
+    this.sceneManager.setDoorState(state, target);
+  }
+
+  setFrontDoorState(state: DoorState): void {
+    this.sceneManager.setFrontDoorState(state);
+  }
+
+  setRearDoorState(state: DoorState): void {
+    this.sceneManager.setRearDoorState(state);
   }
 
   setRackColor(colorKey: RackColorKey): void {

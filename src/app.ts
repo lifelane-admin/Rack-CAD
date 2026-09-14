@@ -5453,16 +5453,15 @@ export class App {
       'box-shadow:0 2px 12px rgba(0,0,0,0.6)',
     ].join(';');
 
-    const lbl = document.createElement('div');
-    lbl.textContent = 'RACK DOOR';
-    lbl.style.cssText = [
-      'font-size:9px', 'color:#4a7aaa', 'font-family:monospace',
-      'letter-spacing:2px', 'text-align:center', 'user-select:none',
-    ].join(';');
-    panel.appendChild(lbl);
-
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:4px;';
+    const makeLabel = (text: string) => {
+      const el = document.createElement('div');
+      el.textContent = text;
+      el.style.cssText = [
+        'font-size:9px', 'color:#4a7aaa', 'font-family:monospace',
+        'letter-spacing:2px', 'text-align:center', 'user-select:none',
+      ].join(';');
+      return el;
+    };
 
     type DoorState = 'closed' | 'open' | 'removed';
     const states: { state: DoorState; label: string }[] = [
@@ -5484,26 +5483,50 @@ export class App {
       'outline:none',
     ].join(';');
 
-    let activeBtn: HTMLButtonElement | null = null;
+    // ── Front Door Controls ──
+    panel.appendChild(makeLabel('FRONT DOOR'));
+    const frontRow = document.createElement('div');
+    frontRow.style.cssText = 'display:flex;gap:4px;';
+
+    let activeFrontBtn: HTMLButtonElement | null = null;
     for (const { state, label } of states) {
       const btn = document.createElement('button');
       btn.textContent = label;
       btn.style.cssText = state === 'closed' ? ACTIVE_BTN : BASE_BTN;
       btn.addEventListener('click', () => {
-        if (activeBtn) activeBtn.style.cssText = BASE_BTN;
+        if (activeFrontBtn) activeFrontBtn.style.cssText = BASE_BTN;
         btn.style.cssText = ACTIVE_BTN;
-        activeBtn = btn;
-        this.threeViewport!.setDoorState(state);
+        activeFrontBtn = btn;
+        this.threeViewport!.setFrontDoorState(state);
       });
-      row.appendChild(btn);
-      if (state === 'closed') activeBtn = btn;
+      frontRow.appendChild(btn);
+      if (state === 'closed') activeFrontBtn = btn;
     }
-    panel.appendChild(row);
+    panel.appendChild(frontRow);
+
+    // ── Rear Door Controls ──
+    panel.appendChild(makeLabel('REAR DOOR'));
+    const rearRow = document.createElement('div');
+    rearRow.style.cssText = 'display:flex;gap:4px;';
+
+    let activeRearBtn: HTMLButtonElement | null = null;
+    for (const { state, label } of states) {
+      const btn = document.createElement('button');
+      btn.textContent = label;
+      btn.style.cssText = state === 'closed' ? ACTIVE_BTN : BASE_BTN;
+      btn.addEventListener('click', () => {
+        if (activeRearBtn) activeRearBtn.style.cssText = BASE_BTN;
+        btn.style.cssText = ACTIVE_BTN;
+        activeRearBtn = btn;
+        this.threeViewport!.setRearDoorState(state);
+      });
+      rearRow.appendChild(btn);
+      if (state === 'closed') activeRearBtn = btn;
+    }
+    panel.appendChild(rearRow);
 
     // ── Rack Colour — swatch buttons ──────────────────────────────────────────
-    const colorLbl = document.createElement('div');
-    colorLbl.textContent = 'RACK COLOUR';
-    colorLbl.style.cssText = lbl.style.cssText;
+    const colorLbl = makeLabel('RACK COLOUR');
     panel.appendChild(colorLbl);
 
     const colorRow = document.createElement('div');
@@ -5548,9 +5571,7 @@ export class App {
     panel.appendChild(colorRow);
 
     // ── Transparency Threshold — side/back panel opacity slider ────────────────
-    const opacityLbl = document.createElement('div');
-    opacityLbl.textContent = 'TRANSPARENCY THRESHOLD';
-    opacityLbl.style.cssText = lbl.style.cssText;
+    const opacityLbl = makeLabel('TRANSPARENCY THRESHOLD');
     panel.appendChild(opacityLbl);
 
     const opacityRow = document.createElement('div');
