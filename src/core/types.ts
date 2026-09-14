@@ -769,7 +769,7 @@ export interface AppState {
    *  the standalone Cloud Architecture diagram canvas, 'hybrid' shows both canvases together (2D
    *  only — never shows the 3D panel), laid out per hybridLayoutMode. See app.ts's
    *  setActiveView() for how the layering/pass-through works. */
-  activeView: 'rack' | 'cloud' | 'hybrid' | 'datacenter';
+  activeView: 'rack' | 'cloud' | 'hybrid' | 'datacenter' | 'flowchart';
   /** Hybrid-only sub-mode, toggled from the toolbar's Hybrid Layout group (see toolbar.ts) —
    *  'split' (default) shows the rack and cloud canvases as separate side-by-side panes, each
    *  with its own independent pan/zoom/scale (see mountHybridSplitter in app.ts), good for a rack
@@ -782,7 +782,7 @@ export interface AppState {
   cloudConnectors: CloudConnector[];
   cloudHierarchies: CloudHierarchy[];
   activeElevationRackId?: string | null;
-  workflowMode?: 'rack' | 'datacenter' | 'cloud' | 'hybrid';
+  workflowMode?: 'rack' | 'datacenter' | 'cloud' | 'hybrid' | 'flowchart';
 }
 
 // === Events ===
@@ -867,7 +867,7 @@ export interface AppEvents {
   'textlabel:update': { id: string; data: Partial<TextLabel> };
   'image:insert': void;
   'imageasset:update': { id: string; data: Partial<ImageAsset> };
-  'view:switch': 'rack' | 'cloud' | 'hybrid' | 'datacenter';
+  'view:switch': 'rack' | 'cloud' | 'hybrid' | 'datacenter' | 'flowchart';
   'dc:set-tool': 'select' | 'pan';
   'dc:set-view': '2d' | '3d';
   'dc:rotate-2d': void;
@@ -897,7 +897,7 @@ export interface AppEvents {
    *  Resource Group/Account) — the dedicated toolbar shape buttons, as opposed to dropping a
    *  boundary-type palette icon (which also primes the same tool, see isBoundaryIcon()). */
   'cloud-shape:prime': CloudContainer['kind'];
-  'view:changed': 'rack' | 'cloud' | 'hybrid' | 'datacenter';
+  'view:changed': 'rack' | 'cloud' | 'hybrid' | 'datacenter' | 'flowchart';
   'cloudnode:added': CloudNode;
   'cloudnode:update': { id: string; data: Partial<CloudNode> };
   'cloudcontainer:added': CloudContainer;

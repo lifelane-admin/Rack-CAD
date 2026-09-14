@@ -733,9 +733,8 @@ export class App {
         return;
       }
       if (choice === 'flowchart') {
-        stateManager.setState({ workflowMode: 'cloud', activeElevationRackId: null });
-        this.sidebar.focusCloudProvider('onprem', 'Flowchart');
-        eventBus.emit('view:switch', 'cloud');
+        stateManager.setState({ workflowMode: 'flowchart', activeElevationRackId: null });
+        eventBus.emit('view:switch', 'flowchart');
         return;
       }
       if (choice === 'hybrid') {
@@ -5744,7 +5743,7 @@ export class App {
    *  written so every existing 'rack'/'cloud' toggle expression reduces to exactly its old value
    *  when isHybrid is false — hybrid support is additive, not a restructure of the pure rack/cloud
    *  behavior. */
-  setActiveView(view: 'rack' | 'cloud' | 'hybrid' | 'datacenter'): void {
+  setActiveView(view: 'rack' | 'cloud' | 'hybrid' | 'datacenter' | 'flowchart'): void {
     stateManager.setState({ activeView: view });
 
     const rackViewport = document.getElementById('canvas-viewport');
@@ -5759,23 +5758,25 @@ export class App {
     const isCloud = view === 'cloud';
     const isHybrid = view === 'hybrid';
     const isDc = view === 'datacenter';
+    const isFlowchart = view === 'flowchart';
+    const isDiagram = isCloud || isFlowchart;
     // Hybrid always uses merged mode — split sub-mode has been removed.
     const isMerged = isHybrid;
 
-    rackViewport?.classList.toggle('hidden', (isCloud && !isHybrid) || isDc);
-    cloudViewport?.classList.toggle('hidden', (!isCloud && !isHybrid) || isDc);
+    rackViewport?.classList.toggle('hidden', (isDiagram && !isHybrid) || isDc);
+    cloudViewport?.classList.toggle('hidden', (!isDiagram && !isHybrid) || isDc);
     dcViewport?.classList.toggle('hidden', !isDc);
     // hybridSplitter is always kept hidden — merged mode needs no draggable divider.
     hybridSplitter?.classList.add('hidden');
     // Clear any stale flex-basis so each pane fills the available width correctly.
     if (rackViewport) rackViewport.style.flex = '';
     if (cloudViewport) cloudViewport.style.flex = '';
-    rulerCorner?.classList.toggle('hidden', (isCloud && !isHybrid) || isDc);
-    rulerH?.classList.toggle('hidden', (isCloud && !isHybrid) || isDc);
-    rulerV?.classList.toggle('hidden', (isCloud && !isHybrid) || isDc);
-    minimap?.classList.toggle('hidden', (isCloud && !isHybrid) || isDc || (stateManager.getState().show3DPanel && !isHybrid));
+    rulerCorner?.classList.toggle('hidden', (isDiagram && !isHybrid) || isDc);
+    rulerH?.classList.toggle('hidden', (isDiagram && !isHybrid) || isDc);
+    rulerV?.classList.toggle('hidden', (isDiagram && !isHybrid) || isDc);
+    minimap?.classList.toggle('hidden', (isDiagram && !isHybrid) || isDc || (stateManager.getState().show3DPanel && !isHybrid));
     if (splitter) {
-      if (isCloud || isHybrid || isDc) {
+      if (isDiagram || isHybrid || isDc) {
         splitter.classList.add('hidden');
       } else if (splitter.style.display !== 'none') {
         splitter.classList.toggle('hidden', !stateManager.getState().show3DPanel);
@@ -5787,9 +5788,9 @@ export class App {
 
     eventBus.emit('view:changed', view);
     this.sidebar.render();
-    if (isCloud || isHybrid) this.renderCloudAll();
+    if (isDiagram || isHybrid) this.renderCloudAll();
     if (isHybrid) this.renderAll();
-    if (isDc || isCloud) {
+    if (isDc || isDiagram) {
       document.getElementById('dc-working-banner')?.remove();
     }
     if (isDc) this.buildFloorView?.show();

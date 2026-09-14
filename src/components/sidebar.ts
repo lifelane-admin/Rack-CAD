@@ -1,7 +1,7 @@
 import EventBus from '../core/event-bus';
 import State from '../core/state';
 import { deviceCatalog, getTemplate } from '../library/device-catalog';
-import { DeviceCategory, DeviceTemplate, CloudProvider, CloudContainer } from '../core/types';
+import { DeviceCategory, DeviceTemplate, CloudProvider, CloudContainer, CloudNode } from '../core/types';
 import { CustomAssetModal } from './custom-asset-modal';
 import { deleteCustomTemplate, exportCustomLibraryJSON, parseCustomLibraryJSON } from '../library/custom-catalog';
 import { RACK_TEMPLATES, VCM_TEMPLATES, createRackFromTemplate } from '../library/rack-catalog';
@@ -44,6 +44,7 @@ export class Sidebar {
    *  the Cloud > AWS/Azure/GCP tree leaf, so landing on the Cloud Architecture view drops them
    *  straight into that provider's icons instead of an all-collapsed palette. */
   private focusedCloudProvider: CloudProvider | null = null;
+  private focusedCloudCategory: string | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -53,8 +54,6 @@ export class Sidebar {
       }
     });
   }
-
-  private focusedCloudCategory: string | null = null;
 
   /** Sets which cloud provider's palette section auto-expands, from outside the nav-tree click
    *  itself — used by the startup screen (see startup-modal.ts) to land the sidebar in the same
@@ -71,6 +70,7 @@ export class Sidebar {
     const isCloud = activeView === 'cloud';
     const isHybrid = activeView === 'hybrid';
     const isDc = activeView === 'datacenter';
+    const isFlowchart = activeView === 'flowchart';
 
     this.container.innerHTML = '';
     this.container.className = 'sidebar';
@@ -93,6 +93,11 @@ export class Sidebar {
 
     if (isDc) {
       this.renderDatacenterSidebar();
+      return;
+    }
+
+    if (isFlowchart) {
+      this.renderFlowchartSidebar();
       return;
     }
 
@@ -234,16 +239,18 @@ export class Sidebar {
     const state = State.getState();
     const isDcWorkflow = state.workflowMode === 'datacenter' || activeView === 'datacenter' || Boolean(state.activeElevationRackId);
 
-    const tabs: Array<{ label: string; view: 'rack' | 'cloud' | 'hybrid' | 'datacenter' }> = isDcWorkflow
+    const tabs: Array<{ label: string; view: 'rack' | 'cloud' | 'hybrid' | 'datacenter' | 'flowchart' }> = isDcWorkflow
       ? [
           { label: 'Datacenter', view: 'datacenter' },
           { label: 'Rack', view: 'rack' },
           { label: 'Cloud', view: 'cloud' },
+          { label: 'Flowchart', view: 'flowchart' },
           { label: 'Hybrid', view: 'hybrid' },
         ]
       : [
           { label: 'Rack', view: 'rack' },
           { label: 'Cloud', view: 'cloud' },
+          { label: 'Flowchart', view: 'flowchart' },
           { label: 'Hybrid', view: 'hybrid' },
         ];
 
@@ -265,6 +272,146 @@ export class Sidebar {
       });
 
       container.appendChild(el);
+    }
+  }
+
+  private renderFlowchartSidebar(): void {
+    const searchContainer = document.createElement('div');
+    searchContainer.className = 'sidebar-search';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search flowchart shapes & logic...';
+    searchContainer.appendChild(searchInput);
+
+    const catalogContainer = document.createElement('div');
+    catalogContainer.className = 'sidebar-catalog flowchart-catalog';
+    catalogContainer.id = 'flowchart-catalog-container';
+
+    searchInput.oninput = (e: any) => {
+      this.searchTerm = e.target.value.toLowerCase();
+      this.renderFlowchartPalette(catalogContainer);
+    };
+
+    this.container.appendChild(searchContainer);
+    this.container.appendChild(catalogContainer);
+
+    this.renderFlowchartPalette(catalogContainer);
+  }
+
+  private renderFlowchartPalette(container: HTMLElement): void {
+    container.innerHTML = '';
+
+    // Quick Action Bar for instant Flowchart insertion
+    const quickBar = document.createElement('div');
+    quickBar.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.08);background:rgba(168,85,247,0.06);margin-bottom:8px;';
+    quickBar.innerHTML = `
+      <button class="dc-btn dc-btn-sm dc-btn-full" id="fc-quick-term" style="font-size:11px;background:#2d1b4e;color:#c084fc;border:1px solid #6b21a8;" title="Add Start / End Terminator">⚡ Start/End</button>
+      <button class="dc-btn dc-btn-sm dc-btn-full" id="fc-quick-proc" style="font-size:11px;background:#1e293b;color:#38bdf8;border:1px solid #334155;" title="Add Process Step">▢ Process</button>
+      <button class="dc-btn dc-btn-sm dc-btn-full" id="fc-quick-dec" style="font-size:11px;background:#3b2a1a;color:#fbbf24;border:1px solid #78350f;" title="Add Decision Branch">◇ Decision</button>
+      <button class="dc-btn dc-btn-sm dc-btn-full" id="fc-quick-data" style="font-size:11px;background:#14342b;color:#34d399;border:1px solid #065f46;" title="Add Data / IO">▱ Data I/O</button>
+    `;
+
+    const addQuickNode = (iconId: string, label: string) => {
+      const icon = getCloudIcon(iconId);
+      if (!icon) return;
+      const id = 'node-' + Math.random().toString(36).substring(2, 9);
+      const center = { x: 300 + Math.random() * 80, y: 200 + Math.random() * 80 };
+      const node: CloudNode = {
+        id,
+        iconId: icon.id,
+        provider: icon.provider,
+        label,
+        x: center.x,
+        y: center.y,
+        width: 60,
+        height: 60,
+      };
+      EventBus.emit('cloudnode:added', node);
+      recordIconUse(icon.id);
+      EventBus.emit('notification', { message: `Added ${label} to flowchart`, type: 'info' });
+    };
+
+    quickBar.querySelector('#fc-quick-term')?.addEventListener('click', () => addQuickNode('onprem-flowchart-terminator', 'Start / End'));
+    quickBar.querySelector('#fc-quick-proc')?.addEventListener('click', () => addQuickNode('onprem-flowchart-process', 'Process'));
+    quickBar.querySelector('#fc-quick-dec')?.addEventListener('click', () => addQuickNode('onprem-flowchart-decision', 'Decision'));
+    quickBar.querySelector('#fc-quick-data')?.addEventListener('click', () => addQuickNode('onprem-flowchart-data', 'Data I/O'));
+
+    container.appendChild(quickBar);
+
+    // Filter flowchart icons
+    const allFlowchartIcons = cloudIconManifest.filter(icon =>
+      icon.category === 'Flowchart' ||
+      (icon.provider === 'onprem' && (icon.category === 'Basic Shapes' || icon.category === 'Containers'))
+    );
+
+    if (this.searchTerm) {
+      const matches = allFlowchartIcons.filter(icon =>
+        icon.name.toLowerCase().includes(this.searchTerm) ||
+        icon.category.toLowerCase().includes(this.searchTerm)
+      );
+
+      const searchSection = document.createElement('div');
+      searchSection.className = 'sidebar-section expanded';
+      const sTitle = document.createElement('div');
+      sTitle.className = 'sidebar-section-title';
+      sTitle.textContent = `🔎 Results (${matches.length})`;
+      searchSection.appendChild(sTitle);
+
+      const sContent = document.createElement('div');
+      sContent.className = 'sidebar-section-content';
+      for (const icon of matches) {
+        sContent.appendChild(this.makeCloudIconItem(icon));
+      }
+      searchSection.appendChild(sContent);
+      container.appendChild(searchSection);
+      return;
+    }
+
+    container.appendChild(this.renderRecentUsedSection(true));
+
+    // Categorized Sections for pure flowcharting
+    const groups: { title: string; icon: string; match: (i: CloudIconEntry) => boolean }[] = [
+      {
+        title: 'Core Process Logic',
+        icon: '⚡',
+        match: (i) => ['Process', 'Decision', 'Terminator', 'Predefined Process', 'Preparation'].includes(i.name),
+      },
+      {
+        title: 'Data, Input & Storage',
+        icon: '📄',
+        match: (i) => ['Data', 'Document', 'Database', 'Manual Input', 'Manual Operation'].includes(i.name),
+      },
+      {
+        title: 'Connectors & Junctions',
+        icon: '🔀',
+        match: (i) => ['Connector', 'Off-Page Connector', 'Or', 'Summing Junction'].includes(i.name),
+      },
+      {
+        title: 'Basic Shapes & Groups',
+        icon: '📐',
+        match: (i) => i.category === 'Basic Shapes' || i.category === 'Containers',
+      },
+    ];
+
+    for (const grp of groups) {
+      const items = allFlowchartIcons.filter(grp.match);
+      if (items.length === 0) continue;
+
+      const sec = document.createElement('div');
+      sec.className = 'sidebar-section expanded';
+      const title = document.createElement('div');
+      title.className = 'sidebar-section-title';
+      title.innerHTML = `${grp.icon} ${grp.title} <span style="opacity:0.6;font-weight:normal;">(${items.length})</span>`;
+      title.onclick = () => sec.classList.toggle('expanded');
+      sec.appendChild(title);
+
+      const content = document.createElement('div');
+      content.className = 'sidebar-section-content';
+      for (const item of items) {
+        content.appendChild(this.makeCloudIconItem(item));
+      }
+      sec.appendChild(content);
+      container.appendChild(sec);
     }
   }
 

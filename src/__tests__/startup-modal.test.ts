@@ -72,7 +72,7 @@ describe('Startup modal', () => {
     expect(stateManager.getState().activeView).toBe('rack');
   });
 
-  it('picking "Flowchart" switches to cloud diagram and auto-expands the Flowchart category', async () => {
+  it('picking "Flowchart" switches to standalone flowchart view and renders dedicated palette', async () => {
     mountAppSkeleton();
     const { App } = await import('../app');
     const app = new App();
@@ -80,18 +80,21 @@ describe('Startup modal', () => {
 
     document.querySelector<HTMLButtonElement>('.startup-card[data-choice="flowchart"]')!.click();
 
-    expect(stateManager.getState().activeView).toBe('cloud');
+    expect(stateManager.getState().activeView).toBe('flowchart');
     const searchInput = document.querySelector('.sidebar-search input') as HTMLInputElement;
-    expect(searchInput.placeholder).toBe('Search Flowchart components...');
-    const onpremSection = [...document.querySelectorAll('.sidebar-section-title')]
-      .find(el => el.textContent?.includes('Local Resources'))
-      ?.closest('.sidebar-section');
-    expect(onpremSection?.classList.contains('expanded')).toBe(true);
+    expect(searchInput.placeholder).toBe('Search flowchart shapes & logic...');
+    
+    // Quick action bar buttons
+    expect(document.querySelector('#fc-quick-term')).not.toBeNull();
+    expect(document.querySelector('#fc-quick-proc')).not.toBeNull();
+    expect(document.querySelector('#fc-quick-dec')).not.toBeNull();
+    expect(document.querySelector('#fc-quick-data')).not.toBeNull();
 
-    const flowchartCategory = [...document.querySelectorAll('.cloud-icon-category-title')]
-      .find(el => el.textContent?.includes('Flowchart'))
-      ?.closest('.cloud-icon-category');
-    expect(flowchartCategory?.classList.contains('collapsed')).toBe(false);
+    // Categorized sections
+    const sectionTitles = [...document.querySelectorAll('.sidebar-section-title')].map(el => el.textContent);
+    expect(sectionTitles.some(t => t?.includes('Core Process Logic'))).toBe(true);
+    expect(sectionTitles.some(t => t?.includes('Data, Input & Storage'))).toBe(true);
+    expect(sectionTitles.some(t => t?.includes('Connectors & Junctions'))).toBe(true);
   });
 
   it('picking "AWS" switches to cloud and focuses the AWS palette section, same as the sidebar nav-tree click', async () => {

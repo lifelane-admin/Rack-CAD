@@ -23,10 +23,10 @@ describe('Sidebar workspace tabs', () => {
     stateManager.setState({ activeView: 'rack', selection: [] });
   });
 
-  it('renders workspace tabs: Rack, Cloud, Hybrid', () => {
+  it('renders workspace tabs: Rack, Cloud, Flowchart, Hybrid', () => {
     mountSidebar();
     const tabs = [...document.querySelectorAll('.sb-tab')].map(el => el.textContent?.trim());
-    expect(tabs).toEqual(['Rack', 'Cloud', 'Hybrid']);
+    expect(tabs).toEqual(['Rack', 'Cloud', 'Flowchart', 'Hybrid']);
   });
 
   it('Rack tab is active by default when activeView is rack', () => {
@@ -35,6 +35,7 @@ describe('Sidebar workspace tabs', () => {
     expect(tabs[0].classList.contains('active')).toBe(true);
     expect(tabs[1].classList.contains('active')).toBe(false);
     expect(tabs[2].classList.contains('active')).toBe(false);
+    expect(tabs[3].classList.contains('active')).toBe(false);
   });
 
   it('Cloud tab is active when activeView is cloud', () => {
@@ -44,11 +45,18 @@ describe('Sidebar workspace tabs', () => {
     expect(tabs[1].classList.contains('active')).toBe(true);
   });
 
+  it('Flowchart tab is active when activeView is flowchart', () => {
+    stateManager.setState({ activeView: 'flowchart' });
+    mountSidebar();
+    const tabs = document.querySelectorAll('.sb-tab');
+    expect(tabs[2].classList.contains('active')).toBe(true);
+  });
+
   it('Hybrid tab is active when activeView is hybrid', () => {
     stateManager.setState({ activeView: 'hybrid' });
     mountSidebar();
     const tabs = document.querySelectorAll('.sb-tab');
-    expect(tabs[2].classList.contains('active')).toBe(true);
+    expect(tabs[3].classList.contains('active')).toBe(true);
   });
 
   it('clicking Cloud tab from Rack view switches to hybrid (preserves the rack)', () => {
@@ -68,6 +76,14 @@ describe('Sidebar workspace tabs', () => {
     expect(stateManager.getState().activeView).toBe('cloud');
   });
 
+  it('clicking Flowchart tab switches to flowchart', () => {
+    const sidebar = mountSidebar();
+    wireViewSwitch(sidebar);
+    const fcTab = document.querySelectorAll('.sb-tab')[2] as HTMLElement;
+    fcTab.click();
+    expect(stateManager.getState().activeView).toBe('flowchart');
+  });
+
   it('clicking Rack tab switches to rack', () => {
     stateManager.setState({ activeView: 'hybrid' });
     const sidebar = mountSidebar();
@@ -80,7 +96,7 @@ describe('Sidebar workspace tabs', () => {
   it('clicking Hybrid tab switches to hybrid', () => {
     const sidebar = mountSidebar();
     wireViewSwitch(sidebar);
-    const hybridTab = document.querySelectorAll('.sb-tab')[2] as HTMLElement;
+    const hybridTab = document.querySelectorAll('.sb-tab')[3] as HTMLElement;
     hybridTab.click();
     expect(stateManager.getState().activeView).toBe('hybrid');
   });

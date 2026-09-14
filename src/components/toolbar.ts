@@ -258,11 +258,11 @@ export class Toolbar {
 
       // Cloud menu — add/remove based on activeView
       const existing = menuBar.querySelector('#tb-menu-cloud');
-      const needsCloud = s.activeView === 'cloud' || s.activeView === 'hybrid';
+      const needsCloud = s.activeView === 'cloud' || s.activeView === 'hybrid' || s.activeView === 'flowchart';
       if (needsCloud && !existing) {
-        const cloudMenu = this.menu('Cloud', MENU_ICONS.cloud, [
-          { label: 'Export Cloud SVG…', icon: ICONS.exportSvg, action: () => EventBus.emit('export:cloud-svg', undefined) },
-          { label: 'Export Cloud PNG…', icon: ICONS.exportPng, action: () => EventBus.emit('export:cloud-png', undefined) },
+        const cloudMenu = this.menu('Diagram', MENU_ICONS.cloud, [
+          { label: 'Export Diagram SVG…', icon: ICONS.exportSvg, action: () => EventBus.emit('export:cloud-svg', undefined) },
+          { label: 'Export Diagram PNG…', icon: ICONS.exportPng, action: () => EventBus.emit('export:cloud-png', undefined) },
         ]);
         cloudMenu.id = 'tb-menu-cloud';
         menuBar.appendChild(cloudMenu);
