@@ -198,6 +198,12 @@
   gap: 10px;
 }
 
+#dc-catalog-content {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
 .dc-panel-tab-content.hidden {
   display: none !important;
 }
@@ -312,114 +318,369 @@
   pointer-events: none;
 }
 
-.dc-catalog-list {
+/* ── Minimalistic Directory Structure Equipment Library ──────────────── */
+.dc-dir-container {
   display: flex;
   flex-direction: column;
+  height: 100%;
   gap: 8px;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
-.dc-catalog-card {
-  background: rgba(22, 27, 34, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 10px;
+.dc-dir-header {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  transition: all 0.15s ease;
+  flex-shrink: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dc-dir-search-wrap {
   position: relative;
+  width: 100%;
 }
 
-.dc-catalog-card:hover {
-  background: rgba(30, 41, 59, 0.9);
-  border-color: rgba(56, 189, 248, 0.5);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+.dc-dir-search-input {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  padding: 5px 8px 5px 26px;
+  color: #f0f6fc;
+  font-size: 11px;
+  outline: none;
+  box-sizing: border-box;
+  font-family: inherit;
+  transition: all 0.15s ease;
 }
 
-.dc-card-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 6px;
+.dc-dir-search-input:focus {
+  border-color: #38bdf8;
+  background: rgba(15, 23, 42, 0.95);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
 }
 
-.dc-card-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.dc-dir-search-icon {
+  position: absolute;
+  left: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  font-size: 11px;
+  pointer-events: none;
 }
 
-.dc-card-icon {
-  font-size: 16px;
+.dc-dir-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  font-size: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
   line-height: 1;
 }
+.dc-dir-search-clear:hover { color: #f0f6fc; }
 
-.dc-card-name {
-  font-size: 12px;
-  font-weight: 700;
+.dc-dir-scope-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 3px;
+}
+
+.dc-dir-scope-btn {
+  background: rgba(22, 27, 34, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 4px;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.12s ease;
+}
+
+.dc-dir-scope-btn:hover {
+  background: rgba(30, 41, 59, 0.9);
+  color: #f0f6fc;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.dc-dir-scope-btn.active {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.dc-dir-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+  font-size: 10px;
+  color: #64748b;
+}
+
+.dc-dir-count {
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.dc-dir-tool-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.dc-dir-tool-link {
+  background: transparent;
+  border: none;
+  color: #38bdf8;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+  opacity: 0.85;
+}
+.dc-dir-tool-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+/* ── Directory Tree View ─────────────────────────────────────────────── */
+.dc-dir-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  padding-right: 2px;
+}
+
+/* Folder Section */
+.dc-dir-folder {
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+}
+
+.dc-dir-folder-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: #cbd5e1;
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.12s ease;
+}
+
+.dc-dir-folder-header:hover {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.3);
   color: #f0f6fc;
 }
 
-.dc-card-tag {
-  font-size: 9.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 4px;
-  letter-spacing: 0.4px;
-}
-
-.dc-card-tag.housing { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
-.dc-card-tag.cooling { background: rgba(14, 165, 233, 0.25); color: #7dd3fc; }
-.dc-card-tag.micro-dc { background: rgba(168, 85, 247, 0.25); color: #c084fc; }
-.dc-card-tag.structured-cabling { background: rgba(234, 179, 8, 0.2); color: #facc15; }
-.dc-card-tag.power-distribution { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
-.dc-card-tag.security { background: rgba(168, 85, 247, 0.2); color: #d8b4fe; }
-.dc-card-tag.ups { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
-.dc-card-tag.busbars-transformers { background: rgba(217, 119, 6, 0.25); color: #f59e0b; }
-.dc-card-tag.cable-management { background: rgba(100, 116, 139, 0.25); color: #94a3b8; }
-.dc-card-tag.facility-plant { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-
-.dc-card-desc {
-  font-size: 11px;
+.dc-dir-folder.collapsed .dc-dir-folder-header {
+  background: transparent;
+  border-color: transparent;
   color: #94a3b8;
-  line-height: 1.4;
 }
 
-.dc-card-specs {
+.dc-dir-folder.collapsed .dc-dir-folder-header:hover {
+  background: rgba(30, 41, 59, 0.6);
+  color: #f0f6fc;
+}
+
+.dc-dir-caret {
+  display: inline-block;
+  font-size: 9px;
+  width: 10px;
+  text-align: center;
+  color: #64748b;
+  transition: transform 0.15s ease;
+}
+
+.dc-dir-folder:not(.collapsed) .dc-dir-caret {
+  transform: rotate(90deg);
+  color: #38bdf8;
+}
+
+.dc-dir-folder-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.dc-dir-folder-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.2px;
+}
+
+.dc-dir-folder-count {
+  font-size: 9.5px;
+  color: #64748b;
+  font-weight: normal;
+  flex-shrink: 0;
+}
+
+/* Folder Children List */
+.dc-dir-children {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  margin-left: 11px;
+  padding-left: 6px;
+  border-left: 1px solid rgba(56, 189, 248, 0.2);
+  gap: 1px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.dc-dir-folder.collapsed .dc-dir-children {
+  display: none;
+}
+
+/* Straight Directory Tree Item */
+.dc-dir-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 6px;
-  font-size: 10.5px;
-  color: #cbd5e1;
-}
-
-.dc-spec-badge {
-  background: rgba(15, 23, 42, 0.6);
-  padding: 2px 6px;
+  padding: 3px 6px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+  color: #e2e8f0;
+  transition: all 0.12s ease;
+  position: relative;
 }
 
-.dc-card-btn-add {
+.dc-dir-item:hover {
+  background: rgba(56, 189, 248, 0.14);
+  color: #ffffff;
+}
+
+.dc-dir-item-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+
+.dc-dir-guide {
+  font-family: monospace;
+  font-size: 10px;
+  color: rgba(56, 189, 248, 0.35);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.dc-dir-item-icon {
+  font-size: 12.5px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.dc-dir-item-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+}
+
+.dc-dir-item-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.dc-dir-item-spec {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.dc-dir-item:hover .dc-dir-item-spec {
+  border-color: rgba(56, 189, 248, 0.3);
+  color: #7dd3fc;
+}
+
+.dc-dir-add-btn {
   background: rgba(56, 189, 248, 0.15);
   border: 1px solid rgba(56, 189, 248, 0.4);
   color: #38bdf8;
   font-size: 11px;
-  font-weight: 700;
-  padding: 5px 10px;
-  border-radius: 6px;
+  font-weight: bold;
+  border-radius: 3px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  transition: all 0.15s ease;
-  margin-top: 4px;
-  width: 100%;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.6;
+  transition: all 0.12s ease;
 }
 
-.dc-card-btn-add:hover {
+.dc-dir-item:hover .dc-dir-add-btn {
+  opacity: 1;
   background: #38bdf8;
   color: #0f172a;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+}
+
+/* Action Items (Wall / Architecture tools inside tree) */
+.dc-dir-item.action-item {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.dc-dir-item.action-item .dc-dir-action-badge {
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+}
+
+.dc-dir-item.wall-item {
+  color: #f59e0b;
+}
+.dc-dir-item.wall-item .dc-dir-item-spec {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
 }
 
 .dc-btn-toggle-panel {

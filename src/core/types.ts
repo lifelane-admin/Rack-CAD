@@ -85,7 +85,7 @@ export interface RackData {
 }
 
 // === Ports ===
-export type PortType = 'rj45' | 'sfp' | 'sfp-plus' | 'sfp28' | 'qsfp' | 'qsfp28' | 'management' | 'console' | 'power' | 'hybrid' | 'usb' | 'dvi' | 'displayport' | 'vga' | 'hdmi' | 'audio' | 'mic' | 'serial';
+export type PortType = 'rj45' | 'sfp' | 'sfp-plus' | 'sfp28' | 'qsfp' | 'qsfp28' | 'qsfp-dd' | 'osfp' | 'management' | 'console' | 'power' | 'hybrid' | 'usb' | 'dvi' | 'displayport' | 'vga' | 'hdmi' | 'audio' | 'mic' | 'serial';
 
 export type SocketType =
   | 'C13' | 'C19' | 'C15' | 'C5'

@@ -80,6 +80,18 @@ export class BuildFloorView {
   private isLeftPanelCollapsed = false;
   private activeLeftTab: 'catalog' | 'info' = 'catalog';
   private catalogSearchQuery: string = '';
+  private openCatalogFolders: Set<string> = new Set([
+    'architecture',
+    'wall-equipment',
+    'housing',
+    'compute',
+    'storage',
+    'network',
+    'power-distribution',
+    'cooling',
+    'backup-generation',
+    'containment',
+  ]);
 
   // Drag threshold to prevent unintended pan/drag resets on simple clicks
   private pendingPan = false;
@@ -1534,6 +1546,32 @@ export class BuildFloorView {
         return;
       }
       if (e.button === 0) this.handleMouseDown(e);
+    });
+
+    // HTML5 Drag-and-drop from Equipment Directory Tree onto Canvas Floor
+    this.canvas.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    });
+
+    this.canvas.addEventListener('drop', (e) => {
+      e.preventDefault();
+      try {
+        const raw = e.dataTransfer?.getData('application/json');
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (data.dcCatalogPresetId) {
+          const rect = this.canvas.getBoundingClientRect();
+          const scaleX = this.canvas.width / (rect.width || 1);
+          const scaleY = this.canvas.height / (rect.height || 1);
+          const canvasSx = (e.clientX - rect.left) * scaleX;
+          const canvasSy = (e.clientY - rect.top) * scaleY;
+          const { xM, yM } = this.screenToWorld(canvasSx, canvasSy);
+          this.addEquipmentFromCatalog(data.dcCatalogPresetId, { x: xM, y: yM });
+        }
+      } catch (err) {
+        console.error('Directory tree drop error:', err);
+      }
     });
 
     window.addEventListener('mousemove', (e) => {
@@ -3518,7 +3556,7 @@ export class BuildFloorView {
     this.draw();
   }
 
-  public addEquipmentFromCatalog(presetId: string) {
+  public addEquipmentFromCatalog(presetId: string, customPos?: { x: number; y: number }) {
     const floor = dcState.getActiveFloor();
     if (!floor) {
       eventBus.emit('notification', { message: 'Please create or load a datacenter floor first.', type: 'warning' });
@@ -3527,9 +3565,55 @@ export class BuildFloorView {
     const preset = DATACENTER_CATALOG.find(p => p.id === presetId);
     if (!preset) return;
 
+    // Special handler: If preset is a flooring tile type (e.g. perforated, air-channel, ventilated, standard, cutout)
+    if (preset.tileType) {
+      const tileM = floor.tileSizeMm / 1000;
+      if (customPos) {
+        const col = Math.floor(customPos.x / tileM);
+        const row = Math.floor(customPos.y / tileM);
+        const tile = floor.tiles.find(t => t.col === col && t.row === row);
+        if (tile) {
+          dcState.setFloorTileType(tile.id, preset.tileType, preset.airflowDir, preset.airChannelHeightMm || 300);
+          this.refresh();
+          eventBus.emit('notification', { message: `Updated Tile ${tile.id} to ${preset.shortLabel}`, type: 'success' });
+          return;
+        }
+      }
+      const selIds = dcState.getState().selectedTileIds;
+      if (selIds && selIds.length > 0) {
+        dcState.setFloorTilesType(selIds, preset.tileType, preset.airflowDir, preset.airChannelHeightMm || 300);
+        this.refresh();
+        eventBus.emit('notification', { message: `Updated ${selIds.length} tile(s) to ${preset.shortLabel}`, type: 'success' });
+        return;
+      }
+    }
+
+    // Special handler: If preset is a pathway
+    if (preset.category === 'pathways') {
+      this.startLayingPathway({
+        name: preset.name,
+        layer: preset.pathwayLayer || 'underfloor',
+        elevationMm: preset.pathwayElevationMm,
+        widthMm: preset.pathwayWidthMm || preset.widthMm || 400,
+        heightMm: preset.pathwayHeightMm || 100,
+        category: preset.infraCategory,
+        color: preset.color,
+      });
+      return;
+    }
+
     const tileM = floor.tileSizeMm / 1000;
-    let targetX = tileM * 2;
-    let targetY = tileM * 2;
+    const rWM = preset.widthMm / 1000;
+    const rDM = preset.depthMm / 1000;
+
+    let targetX = customPos ? Math.max(0, Math.min(floor.lengthM - rWM, customPos.x - rWM / 2)) : tileM * 2;
+    let targetY = customPos ? Math.max(0, Math.min(floor.widthM - rDM, customPos.y - rDM / 2)) : tileM * 2;
+
+    if (dcState.getState().snapEnabled) {
+      targetX = Math.round(targetX / tileM) * tileM;
+      targetY = Math.round(targetY / tileM) * tileM;
+    }
+
     const count = (floor.racks.length || 0) + 1;
     const prefix = preset.shortLabel.replace(/[^a-zA-Z0-9]/g, '-').toUpperCase();
     const id = `${prefix}-${String(count).padStart(3, '0')}`;
@@ -3562,16 +3646,16 @@ export class BuildFloorView {
       securityLock: preset.securityLock,
     };
 
-    // Find non-overlapping grid location
-    const rWM = preset.widthMm / 1000;
-    const rDM = preset.depthMm / 1000;
-    while (dcState.isOverlapping(rack) && targetX < floor.lengthM - rWM) {
-      targetX += rWM + 0.3;
-      if (targetX + rWM > floor.lengthM) {
-        targetX = tileM * 2;
-        targetY += rDM + 1.2;
+    // If without customPos, find non-overlapping grid location
+    if (!customPos) {
+      while (dcState.isOverlapping(rack) && targetX < floor.lengthM - rWM) {
+        targetX += rWM + 0.3;
+        if (targetX + rWM > floor.lengthM) {
+          targetX = tileM * 2;
+          targetY += rDM + 1.2;
+        }
+        rack.position = { x: parseFloat(targetX.toFixed(3)), y: parseFloat(targetY.toFixed(3)), z: 0 };
       }
-      rack.position = { x: parseFloat(targetX.toFixed(3)), y: parseFloat(targetY.toFixed(3)), z: 0 };
     }
 
     dcState.addRack(rack);
@@ -3587,234 +3671,399 @@ export class BuildFloorView {
     const el = this.container.querySelector('#dc-catalog-content');
     if (!el) return;
     const s = dcState.getState();
-    const curSpace = s.activeSpaceTab || 'white-space';
-    const curCat = s.activeCatalogCategory || 'all';
+    const query = this.catalogSearchQuery.trim().toLowerCase();
 
-    // Filter presets
-    const isWallCat = curCat === 'wall-equipment' || curSpace === 'walls-roof';
-    const filteredFloorPresets = DATACENTER_CATALOG.filter(p => {
-      if (curSpace === 'walls-roof') return false;
-      if (isWallCat) return false;
-      if (curSpace !== 'all' && p.spaceType !== curSpace) return false;
-      if (curCat !== 'all' && p.category !== curCat) return false;
-      if (this.catalogSearchQuery.trim()) {
-        const q = this.catalogSearchQuery.toLowerCase();
-        const match = p.name.toLowerCase().includes(q) ||
-                      p.manufacturer.toLowerCase().includes(q) ||
-                      p.model.toLowerCase().includes(q) ||
-                      p.category.toLowerCase().includes(q) ||
-                      p.description.toLowerCase().includes(q);
-        if (!match) return false;
-      }
-      return true;
-    });
+    const svg = (d: string) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 
-    const filteredWallPresets = WALL_EQUIPMENT_CATALOG.filter(w => {
-      if (curSpace !== 'all' && curSpace !== 'walls-roof' && curCat !== 'wall-equipment' && !isWallCat) return false;
-      if (this.catalogSearchQuery.trim()) {
-        const q = this.catalogSearchQuery.toLowerCase();
-        const match = w.name.toLowerCase().includes(q) ||
-                      w.manufacturer.toLowerCase().includes(q) ||
-                      w.model.toLowerCase().includes(q) ||
-                      w.description.toLowerCase().includes(q);
-        if (!match) return false;
-      }
-      return true;
-    });
+    interface DcCatDefinition {
+      id: string;
+      label: string;
+      accent: string;
+      svgHtml: string;
+      isArchitecture?: boolean;
+      isWallEquipment?: boolean;
+      category?: DcEquipmentCategory;
+    }
 
-    const categoriesForSpace = CATEGORY_DEFINITIONS.filter(c => c.space === 'all' || c.space === curSpace || curSpace === 'all' || (curSpace === 'walls-roof' && c.id === 'wall-equipment'));
-
-    const showArchitectureCard = curSpace === 'walls-roof' || curCat === 'wall-equipment' || curSpace === 'all';
+    const CATEGORIES: DcCatDefinition[] = [
+      {
+        id: 'housing',
+        label: 'Racks & Enclosures',
+        accent: '#00e5ff',
+        svgHtml: svg('<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>'),
+        category: 'housing',
+      },
+      {
+        id: 'architecture',
+        label: 'Architecture & Walls',
+        accent: '#38bdf8',
+        svgHtml: svg('<path d="M3 21h18M3 7h18M3 14h18M7 7v7M17 7v7M12 14v7M7 14v7M17 14v7M12 3v4"/>'),
+        isArchitecture: true,
+      },
+      {
+        id: 'wall-equipment',
+        label: 'Wall Equipment',
+        accent: '#f59e0b',
+        svgHtml: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>'),
+        isWallEquipment: true,
+      },
+      {
+        id: 'compute',
+        label: 'Active Compute',
+        accent: '#fb8c00',
+        svgHtml: svg('<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>'),
+        category: 'compute',
+      },
+      {
+        id: 'network',
+        label: 'Active Networking',
+        accent: '#00f2fe',
+        svgHtml: svg('<rect x="2" y="7" width="20" height="10" rx="1"/><path d="M6 11h.01M10 11h.01"/>'),
+        category: 'network',
+      },
+      {
+        id: 'storage',
+        label: 'Active Storage',
+        accent: '#8e24aa',
+        svgHtml: svg('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>'),
+        category: 'storage',
+      },
+      {
+        id: 'power-distribution',
+        label: 'Power Distribution',
+        accent: '#fdd835',
+        svgHtml: svg('<path d="M18 20V10M12 20V4M6 20v-6"/>'),
+        category: 'power-distribution',
+      },
+      {
+        id: 'backup-generation',
+        label: 'UPS & Generation',
+        accent: '#4ade80',
+        svgHtml: svg('<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>'),
+        category: 'backup-generation',
+      },
+      {
+        id: 'cooling',
+        label: 'Cooling & HVAC',
+        accent: '#38bdf8',
+        svgHtml: svg('<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/><circle cx="12" cy="12" r="3"/>'),
+        category: 'cooling',
+      },
+      {
+        id: 'structured-cabling',
+        label: 'Structured Cabling',
+        accent: '#fbbf24',
+        svgHtml: svg('<rect x="2" y="8" width="20" height="8" rx="1"/><path d="M6 8v8M10 8v8M14 8v8M18 8v8"/>'),
+        category: 'structured-cabling',
+      },
+      {
+        id: 'containment',
+        label: 'Aisle Containment',
+        accent: '#c084fc',
+        svgHtml: svg('<path d="M3 21h18M4 18h16M7 18V6a2 2 0 012-2h6a2 2 0 012 2v12"/>'),
+        category: 'containment',
+      },
+      {
+        id: 'pathways',
+        label: 'Cabling & Pathways',
+        accent: '#94a3b8',
+        svgHtml: svg('<path d="M4 6h16M4 12h16M4 18h16"/>'),
+        category: 'pathways',
+      },
+      {
+        id: 'flooring',
+        label: 'Flooring Systems',
+        accent: '#38bdf8',
+        svgHtml: svg('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>'),
+        category: 'flooring',
+      },
+      {
+        id: 'fire-safety',
+        label: 'Fire & Life Safety',
+        accent: '#f87171',
+        svgHtml: svg('<path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/>'),
+        category: 'fire-safety',
+      },
+      {
+        id: 'security',
+        label: 'Physical Security',
+        accent: '#d8b4fe',
+        svgHtml: svg('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>'),
+        category: 'security',
+      },
+      {
+        id: 'bms-dcim',
+        label: 'BMS & DCIM Probes',
+        accent: '#38bdf8',
+        svgHtml: svg('<path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16zm-1-13h2v6h-2zm0 8h2v2h-2z"/>'),
+        category: 'bms-dcim',
+      },
+      {
+        id: 'plumbing',
+        label: 'Plumbing & Piping',
+        accent: '#06b6d4',
+        svgHtml: svg('<path d="M6 12h12M6 12a3 3 0 01-3-3V6h6v3a3 3 0 01-3 3zm12 0a3 3 0 003-3V6h-6v3a3 3 0 003 3zM12 12v9"/>'),
+        category: 'plumbing',
+      },
+      {
+        id: 'earthing',
+        label: 'Grounding & Lightning',
+        accent: '#facc15',
+        svgHtml: svg('<path d="M12 2v10M6 12h12M8 16h8M10 20h4"/>'),
+        category: 'earthing',
+      },
+      {
+        id: 'operations',
+        label: 'Operations & Handling',
+        accent: '#a3e635',
+        svgHtml: svg('<path d="M16 16v1a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h8a2 2 0 012 2v1M18 8h4v8h-4M10 12h4"/>'),
+        category: 'operations',
+      },
+      {
+        id: 'facility-plant',
+        label: 'Facility Plant (Grey Space)',
+        accent: '#f59e0b',
+        svgHtml: svg('<path d="M2 20h20M5 20V8l5 4V8l5 4V4h4v16"/>'),
+        category: 'facility-plant',
+      },
+    ];
 
     el.innerHTML = `
-      <div class="dc-space-toggle">
-        <button class="dc-space-toggle-btn ${curSpace === 'white-space' ? 'active' : ''}" id="dc-space-white" title="White Space: IT Equipment, Racks, In-Row Cooling, Cabling & PDUs">🌐 White Space</button>
-        <button class="dc-space-toggle-btn grey ${curSpace === 'grey-space' ? 'active' : ''}" id="dc-space-grey" title="Grey Space: Facility Plant, Switchgear, Central UPS, Transformers & Chillers">🏭 Grey Space</button>
-        <button class="dc-space-toggle-btn walls ${curSpace === 'walls-roof' ? 'active' : ''}" id="dc-space-walls" title="Walls & Roof Architecture: Lay Custom Walls, Perimeter Walls, Transparent Roof & Equipment">🧱 Walls & Roof</button>
-        <button class="dc-space-toggle-btn ${curSpace === 'all' ? 'active' : ''}" id="dc-space-all" title="View all equipment domains">All</button>
+      <div style="padding: 10px 10px 6px;">
+        <input type="text" class="dc-catalog-search-box" id="dc-cat-search-input" placeholder="Search components..." value="${this.catalogSearchQuery}" style="width: 100%; background: #0d1117; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 7px 12px; color: #f0f6fc; font-size: 12px; outline: none; box-sizing: border-box;" />
       </div>
-
-      <div class="dc-category-scroll">
-        ${categoriesForSpace.map(c => `
-          <button class="dc-cat-pill ${curCat === c.id ? 'active' : ''}" data-cat="${c.id}" title="${(c as any).desc || c.label}">
-            <span>${c.icon}</span> <span>${c.label}</span>
-          </button>
-        `).join('')}
-      </div>
-
-      ${showArchitectureCard ? `
-        <!-- Prominent Architecture & Wall/Roof Builder Card -->
-        <div class="dc-architecture-builder-card" style="background:linear-gradient(135deg,rgba(15,23,42,0.95) 0%,rgba(30,41,59,0.95) 100%); border:1px solid rgba(56,189,248,0.4); border-radius:8px; padding:12px; margin-bottom:10px; box-shadow:0 4px 14px rgba(0,0,0,0.4);">
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span style="font-size:18px;">🧱</span>
-              <span style="font-weight:700; font-size:12px; color:#38bdf8; letter-spacing:0.3px;">DATA HALL ARCHITECTURE</span>
-            </div>
-            <span style="font-size:10px; font-weight:600; background:rgba(56,189,248,0.15); color:#38bdf8; padding:2px 6px; border-radius:4px; border:1px solid rgba(56,189,248,0.3);">2D / 3D</span>
-          </div>
-          <p style="font-size:11px; color:#94a3b8; margin:0 0 10px 0; line-height:1.4;">
-            Build transparent perimeter borders, draw custom glass partitions with drag coordinates, or configure the transparent carpet-area roof.
-          </p>
-          <div style="display:flex; flex-direction:column; gap:6px;">
-            <button class="dc-btn dc-btn-primary dc-btn-full" id="dc-cat-btn-lay-wall" style="justify-content:center; font-weight:600;">
-              🧱 Lay Custom Wall (Drag Coordinates)
-            </button>
-            <button class="dc-btn dc-btn-secondary dc-btn-full" id="dc-cat-btn-perimeter-walls" style="justify-content:center;">
-              🏛 Configure Perimeter Walls (N/S/E/W)
-            </button>
-            <button class="dc-btn dc-btn-secondary dc-btn-full" id="dc-cat-btn-roof-settings" style="justify-content:center;">
-              🏠 Configure Transparent Roof (Height & Trusses)
-            </button>
-            <div style="display:flex; gap:6px; margin-top:2px;">
-              <button class="dc-btn dc-btn-sm dc-btn-secondary" id="dc-cat-btn-toggle-walls" style="flex:1; justify-content:center;">
-                ${s.wallsVisible !== false ? '👁 Hide Walls' : '👁 Show Walls'}
-              </button>
-              <button class="dc-btn dc-btn-sm dc-btn-secondary" id="dc-cat-btn-toggle-roof" style="flex:1; justify-content:center;">
-                ${s.roofVisible !== false ? '👁 Hide Roof' : '👁 Show Roof'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ` : ''}
-
-      <div class="dc-catalog-search-wrap">
-        <span class="dc-catalog-search-icon">🔍</span>
-        <input type="text" class="dc-catalog-search-input" id="dc-catalog-search" placeholder="Search equipment, mfr, A/C, extinguisher, EPO..." value="${this.catalogSearchQuery}"/>
-      </div>
-
-      <div class="dc-catalog-list">
-        ${filteredFloorPresets.length === 0 && filteredWallPresets.length === 0 ? '<div class="dc-muted" style="text-align:center;padding:20px 0;">No matching equipment found.</div>' : ''}
-        
-        <!-- Floor Mounted Equipment Cards -->
-        ${filteredFloorPresets.map(p => {
-          const specBadges: string[] = [];
-          specBadges.push(`${p.widthMm}×${p.depthMm}mm`);
-          if (p.heightU) specBadges.push(`${p.heightU}U`);
-          if (p.coolingCapacityKw) specBadges.push(`❄️ ${p.coolingCapacityKw}kW`);
-          if (p.upsCapacityKva) specBadges.push(`🔋 ${p.upsCapacityKva}kVA`);
-          if (p.maxPowerKw && !p.upsCapacityKva && !p.coolingCapacityKw) specBadges.push(`⚡ ${p.maxPowerKw}kW`);
-          if (p.pduVoltage) specBadges.push(`⚡ ${p.pduVoltage}`);
-          if (p.busbarAmps) specBadges.push(`⚡ ${p.busbarAmps}A`);
-          if (p.transformerKva) specBadges.push(`🎛️ ${p.transformerKva}kVA`);
-          if (p.securityLock && p.securityLock !== 'none') specBadges.push(`🔒 ${p.securityLock}`);
-
-          return `
-            <div class="dc-catalog-card" data-preset="${p.id}">
-              <div class="dc-card-top">
-                <div class="dc-card-title-wrap">
-                  <span class="dc-card-icon">${p.icon}</span>
-                  <span class="dc-card-name">${p.name}</span>
-                </div>
-                <span class="dc-card-tag ${p.category}">${p.category}</span>
-              </div>
-              <div class="dc-card-desc">${p.description}</div>
-              <div class="dc-card-specs">
-                ${specBadges.map(b => `<span class="dc-spec-badge">${b}</span>`).join('')}
-              </div>
-              <button class="dc-card-btn-add" data-add="${p.id}">＋ Add to Floor</button>
-            </div>
-          `;
-        }).join('')}
-
-        <!-- Wall Mounted Infrastructure Cards -->
-        ${filteredWallPresets.map(w => {
-          const specBadges: string[] = [];
-          specBadges.push(`${w.widthMm}×${w.heightMm}×${w.depthMm}mm`);
-          specBadges.push(`Mount: ${w.defaultHeightOffsetM}m`);
-          if (w.manufacturer) specBadges.push(`${w.manufacturer}`);
-
-          return `
-            <div class="dc-catalog-card wall-card" data-wall-preset="${w.id}">
-              <div class="dc-card-top">
-                <div class="dc-card-title-wrap">
-                  <span class="dc-card-icon">${w.icon}</span>
-                  <span class="dc-card-name">${w.name}</span>
-                </div>
-                <span class="dc-card-tag wall-mount">Wall Mount</span>
-              </div>
-              <div class="dc-card-desc">${w.description}</div>
-              <div class="dc-card-specs">
-                ${specBadges.map(b => `<span class="dc-spec-badge">${b}</span>`).join('')}
-              </div>
-              <button class="dc-card-btn-add dc-btn-place-wall" data-place-wall="${w.id}">🧱 Place on Wall</button>
-            </div>
-          `;
-        }).join('')}
-      </div>
+      <div id="dc-cat-accordion-list" style="overflow-y: auto; flex: 1;"></div>
     `;
 
-    // Bind Space toggle
-    el.querySelector('#dc-space-white')?.addEventListener('click', () => {
-      dcState.setState({ activeSpaceTab: 'white-space', activeCatalogCategory: 'all' });
-      this.renderCatalogPanel();
-    });
-    el.querySelector('#dc-space-grey')?.addEventListener('click', () => {
-      dcState.setState({ activeSpaceTab: 'grey-space', activeCatalogCategory: 'all' });
-      this.renderCatalogPanel();
-    });
-    el.querySelector('#dc-space-walls')?.addEventListener('click', () => {
-      dcState.setState({ activeSpaceTab: 'walls-roof', activeCatalogCategory: 'wall-equipment' });
-      this.renderCatalogPanel();
-    });
-    el.querySelector('#dc-space-all')?.addEventListener('click', () => {
-      dcState.setState({ activeSpaceTab: 'all', activeCatalogCategory: 'all' });
-      this.renderCatalogPanel();
-    });
+    const accordionContainer = el.querySelector('#dc-cat-accordion-list') as HTMLElement;
+    if (!accordionContainer) return;
 
-    // Bind Architecture Builder card buttons
-    el.querySelector('#dc-cat-btn-lay-wall')?.addEventListener('click', () => this.startLayingWall());
-    el.querySelector('#dc-cat-btn-perimeter-walls')?.addEventListener('click', () => this.showPerimeterWallsModal());
-    el.querySelector('#dc-cat-btn-roof-settings')?.addEventListener('click', () => this.showRoofConfigModal());
-    el.querySelector('#dc-cat-btn-toggle-walls')?.addEventListener('click', () => {
-      const visible = dcState.toggleWallsVisibility();
-      this.refresh();
-      eventBus.emit('notification', { message: `🧱 Walls ${visible ? 'Visible' : 'Hidden'}`, type: 'info' });
-    });
-    el.querySelector('#dc-cat-btn-toggle-roof')?.addEventListener('click', () => {
-      const visible = dcState.toggleRoofVisibility();
-      this.refresh();
-      eventBus.emit('notification', { message: `🏠 Roof ${visible ? 'Visible' : 'Hidden'}`, type: 'info' });
-    });
+    for (const cat of CATEGORIES) {
+      let itemEls: HTMLElement[] = [];
 
-    // Bind Category pills
-    el.querySelectorAll('.dc-cat-pill').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const cat = btn.getAttribute('data-cat') as any;
-        dcState.setState({ activeCatalogCategory: cat });
-        this.renderCatalogPanel();
+      if (cat.id === 'housing') {
+        // Special: Custom Rack Builder Configurator button
+        if (!query || 'custom rack builder configurator'.includes(query)) {
+          const customRackBtn = document.createElement('div');
+          customRackBtn.className = 'cat-item';
+          customRackBtn.setAttribute('draggable', 'true');
+          customRackBtn.draggable = true;
+          customRackBtn.style.cssText = 'border: 1px dashed rgba(0,229,255,0.4); background: rgba(0,229,255,0.06); font-weight: 600; color: #00e5ff; cursor: pointer;';
+          customRackBtn.innerHTML = `
+            <div class="cat-item-dot" style="background: #00e5ff;"></div>
+            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">+ Custom Rack Builder…</div>
+            <span class="cat-item-meta" style="color: #00e5ff;">Configurator</span>
+          `;
+          customRackBtn.onclick = () => this.showAddRackDialog();
+          itemEls.push(customRackBtn);
+        }
+
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'housing').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.shortLabel.toLowerCase().includes(query);
+        });
+
+        presets.forEach(p => {
+          const itemEl = document.createElement('div');
+          itemEl.className = 'cat-item';
+          itemEl.draggable = true;
+          itemEl.title = `${p.name}\nDimensions: ${p.widthMm}×${p.depthMm}mm (${p.heightU}U)\n${p.description}`;
+          itemEl.innerHTML = `
+            <div class="cat-item-dot" style="background: ${cat.accent};"></div>
+            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name}</div>
+            <span class="cat-item-meta">${p.heightU ? `${p.heightU}U • ` : ''}${p.depthMm}mm</span>
+          `;
+          itemEl.ondragstart = (e) => {
+            e.dataTransfer?.setData('application/json', JSON.stringify({ dcCatalogPresetId: p.id }));
+          };
+          itemEl.onclick = () => this.addEquipmentFromCatalog(p.id);
+          itemEls.push(itemEl);
+        });
+      } else if (cat.isArchitecture) {
+        const archActions = [
+          { id: 'lay-wall', name: '+ Lay Custom Wall (Coordinates)', meta: 'Draw', desc: 'Click and drag on floor canvas to lay custom transparent walls', fn: () => this.startLayingWall() },
+          { id: 'perimeter-walls', name: 'Perimeter Walls (N/S/E/W)', meta: 'Config', desc: 'Configure transparent perimeter walls for all 4 boundaries', fn: () => this.showPerimeterWallsModal() },
+          { id: 'roof-config', name: 'Configure Transparent Roof', meta: 'Roof', desc: 'Configure transparent roof height, opacity & structural trusses', fn: () => this.showRoofConfigModal() },
+          { id: 'toggle-walls', name: s.wallsVisible !== false ? 'Hide Walls (Perimeter & Partitions)' : 'Show Walls (Perimeter & Partitions)', meta: 'Toggle', desc: 'Toggle visibility of walls', fn: () => { const v = dcState.toggleWallsVisibility(); this.refresh(); eventBus.emit('notification', { message: `🧱 Walls ${v ? 'Visible' : 'Hidden'}`, type: 'info' }); } },
+          { id: 'toggle-roof', name: s.roofVisible !== false ? 'Hide Transparent Roof' : 'Show Transparent Roof', meta: 'Toggle', desc: 'Toggle visibility of roof', fn: () => { const v = dcState.toggleRoofVisibility(); this.refresh(); eventBus.emit('notification', { message: `🏠 Roof ${v ? 'Visible' : 'Hidden'}`, type: 'info' }); } },
+        ];
+
+        const matched = archActions.filter(a => !query || a.name.toLowerCase().includes(query) || a.desc.toLowerCase().includes(query));
+        matched.forEach(a => {
+          const itemEl = document.createElement('div');
+          itemEl.className = 'cat-item';
+          itemEl.title = a.desc;
+          itemEl.style.cursor = 'pointer';
+          itemEl.innerHTML = `
+            <div class="cat-item-dot" style="background: ${cat.accent};"></div>
+            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #38bdf8;">${a.name}</div>
+            <span class="cat-item-meta" style="color: #38bdf8;">${a.meta}</span>
+          `;
+          itemEl.onclick = a.fn;
+          itemEls.push(itemEl);
+        });
+      } else if (cat.isWallEquipment) {
+        const presets = WALL_EQUIPMENT_CATALOG.filter(w => {
+          if (!query) return true;
+          return w.name.toLowerCase().includes(query) || w.description.toLowerCase().includes(query) || w.manufacturer.toLowerCase().includes(query);
+        });
+
+        presets.forEach(w => {
+          const itemEl = document.createElement('div');
+          itemEl.className = 'cat-item';
+          itemEl.title = `${w.name}\nDimensions: ${w.widthMm}×${w.heightMm}×${w.depthMm}mm\nMount Height: ${w.defaultHeightOffsetM}m\n${w.description}`;
+          itemEl.innerHTML = `
+            <div class="cat-item-dot" style="background: ${cat.accent};"></div>
+            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${w.name}</div>
+            <span class="cat-item-meta">Wall Mount</span>
+          `;
+          itemEl.onclick = () => this.startPlacingWallItem(w);
+          itemEls.push(itemEl);
+        });
+      } else if (cat.id === 'pathways') {
+        // Special custom pathway draw action
+        if (!query || 'draw custom cable pathway tray duct runway'.includes(query)) {
+          const drawAction = document.createElement('div');
+          drawAction.className = 'cat-item';
+          drawAction.style.cssText = 'border: 1px dashed rgba(148,163,184,0.4); background: rgba(148,163,184,0.06); font-weight: 600; color: #94a3b8; cursor: pointer;';
+          drawAction.innerHTML = `
+            <div class="cat-item-dot" style="background: #94a3b8;"></div>
+            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">+ Draw Pathway (Click & Drag)…</div>
+            <span class="cat-item-meta" style="color: #94a3b8;">Route</span>
+          `;
+          drawAction.onclick = () => this.startLayingPathway({ name: 'Cable Runway', layer: 'overhead', widthMm: 400, heightMm: 100 });
+          itemEls.push(drawAction);
+        }
+
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'pathways').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        presets.forEach(p => {
+          const itemEl = document.createElement('div');
+          itemEl.className = 'cat-item';
+          itemEl.draggable = true;
+          const meta = `${p.pathwayLayer === 'overhead' ? 'Overhead' : 'Underfloor'} • ${p.pathwayWidthMm || p.widthMm}mm`;
+
+          itemEl.title = `${p.name}\n${p.description}\nClick to start continuous pathway laying or drag to floor.`;
+          itemEl.innerHTML = `
+            <div class="cat-item-dot" style="background: ${cat.accent};"></div>
+            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name}</div>
+            <span class="cat-item-meta">${meta}</span>
+          `;
+          itemEl.ondragstart = (e) => {
+            e.dataTransfer?.setData('application/json', JSON.stringify({ dcCatalogPresetId: p.id }));
+          };
+          itemEl.onclick = () => this.addEquipmentFromCatalog(p.id);
+          itemEls.push(itemEl);
+        });
+      } else if (cat.id === 'flooring') {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === 'flooring').filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        presets.forEach(p => {
+          const itemEl = document.createElement('div');
+          itemEl.className = 'cat-item';
+          itemEl.draggable = true;
+          let meta = `${p.widthMm}×${p.depthMm}mm`;
+          if (p.tileType) {
+            if (p.tileType === 'perforated') meta = 'Perforated';
+            else if (p.tileType === 'air-channel') meta = 'High Airflow';
+            else if (p.tileType === 'ventilated') meta = 'Grille';
+            else if (p.tileType === 'cutout') meta = 'Cutout';
+            else meta = 'Solid Tile';
+          }
+
+          itemEl.title = `${p.name}\n${p.description}\nClick to apply to selected tiles or drag onto floor.`;
+          itemEl.innerHTML = `
+            <div class="cat-item-dot" style="background: ${cat.accent};"></div>
+            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name}</div>
+            <span class="cat-item-meta">${meta}</span>
+          `;
+          itemEl.ondragstart = (e) => {
+            e.dataTransfer?.setData('application/json', JSON.stringify({ dcCatalogPresetId: p.id }));
+          };
+          itemEl.onclick = () => this.addEquipmentFromCatalog(p.id);
+          itemEls.push(itemEl);
+        });
+      } else if (cat.category) {
+        const presets = DATACENTER_CATALOG.filter(p => p.category === cat.category).filter(p => {
+          if (!query) return true;
+          return p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || p.manufacturer.toLowerCase().includes(query) || p.model.toLowerCase().includes(query);
+        });
+
+        presets.forEach(p => {
+          const itemEl = document.createElement('div');
+          itemEl.className = 'cat-item';
+          itemEl.draggable = true;
+          let meta = `${p.depthMm}mm`;
+          if (p.heightU) meta = `${p.heightU}U • ${p.depthMm}mm`;
+          else if (p.coolingCapacityKw) meta = `${p.coolingCapacityKw} kW`;
+          else if (p.upsCapacityKva) meta = `${p.upsCapacityKva} kVA`;
+          else if (p.maxPowerKw) meta = `${p.maxPowerKw} kW`;
+          else if (p.busbarAmps) meta = `${p.busbarAmps} A`;
+          else if (p.transformerKva) meta = `${p.transformerKva} kVA`;
+
+          itemEl.title = `${p.name}\n${p.description}`;
+          itemEl.innerHTML = `
+            <div class="cat-item-dot" style="background: ${cat.accent};"></div>
+            <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name}</div>
+            <span class="cat-item-meta">${meta}</span>
+          `;
+          itemEl.ondragstart = (e) => {
+            e.dataTransfer?.setData('application/json', JSON.stringify({ dcCatalogPresetId: p.id }));
+          };
+          itemEl.onclick = () => this.addEquipmentFromCatalog(p.id);
+          itemEls.push(itemEl);
+        });
+      }
+
+      if (query && itemEls.length === 0) continue;
+
+      const isInitiallyOpen = query ? true : (this.openCatalogFolders.has(cat.id) || cat.id === 'housing');
+
+      const row = document.createElement('div');
+      row.className = `cat-row${isInitiallyOpen ? ' open' : ''}`;
+      row.innerHTML = `
+        <div class="cat-accent" style="background:${cat.accent}"></div>
+        <div class="cat-icon" style="color:${cat.accent}">${cat.svgHtml}</div>
+        <span class="cat-label">${cat.label}</span>
+        <span class="cat-count">${itemEls.length}</span>
+        <div class="cat-chevron">${svg('<path d="M9 18l6-6-6-6"/>')}</div>
+      `;
+
+      const itemsEl = document.createElement('div');
+      itemsEl.className = `cat-items${isInitiallyOpen ? ' open' : ''}`;
+      itemEls.forEach(el => itemsEl.appendChild(el));
+
+      row.addEventListener('click', () => {
+        const isOpen = row.classList.contains('open');
+        row.classList.toggle('open', !isOpen);
+        itemsEl.classList.toggle('open', !isOpen);
+        if (isOpen) {
+          this.openCatalogFolders.delete(cat.id);
+        } else {
+          this.openCatalogFolders.add(cat.id);
+        }
       });
-    });
 
-    // Bind Search input
-    const searchInput = el.querySelector('#dc-catalog-search') as HTMLInputElement;
+      accordionContainer.appendChild(row);
+      accordionContainer.appendChild(itemsEl);
+    }
+
+    // Search input listener
+    const searchInput = el.querySelector('#dc-cat-search-input') as HTMLInputElement;
     searchInput?.addEventListener('input', (e: any) => {
       this.catalogSearchQuery = e.target.value;
       this.renderCatalogPanel();
-      // Keep focus
-      const updatedInput = this.container.querySelector('#dc-catalog-search') as HTMLInputElement;
+      const updatedInput = this.container.querySelector('#dc-cat-search-input') as HTMLInputElement;
       if (updatedInput) {
         updatedInput.focus();
         updatedInput.setSelectionRange(updatedInput.value.length, updatedInput.value.length);
       }
-    });
-
-    // Bind Floor Add buttons
-    el.querySelectorAll('[data-add]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const presetId = btn.getAttribute('data-add');
-        if (presetId) this.addEquipmentFromCatalog(presetId);
-      });
-    });
-
-    // Bind Wall Place buttons
-    el.querySelectorAll('[data-place-wall]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const presetId = btn.getAttribute('data-place-wall');
-        const preset = WALL_EQUIPMENT_CATALOG.find(w => w.id === presetId);
-        if (preset) this.startPlacingWallItem(preset);
-      });
     });
   }
 

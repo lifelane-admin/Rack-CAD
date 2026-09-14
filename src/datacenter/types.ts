@@ -16,22 +16,57 @@ export interface DcFloorTile {
   airChannelHeightMm?: number; // default 300mm to prevent obstruction of underfloor raceways
 }
 
-export type DcSpaceType = 'white-space' | 'grey-space' | 'walls-roof';
+export type DcSpaceType =
+  | 'white-space'
+  | 'grey-space'
+  | 'electrical-room'
+  | 'mechanical-room'
+  | 'generator-area'
+  | 'battery-room'
+  | 'network-room'
+  | 'control-room'
+  | 'loading-utility'
+  | 'walls-roof';
 
 export type DcEquipmentCategory =
   | 'housing'
-  | 'cooling'
-  | 'micro-dc'
+  | 'compute'
+  | 'storage'
+  | 'network'
   | 'structured-cabling'
   | 'power-distribution'
+  | 'backup-generation'
+  | 'cooling'
+  | 'pathways'
+  | 'flooring'
+  | 'containment'
+  | 'fire-safety'
   | 'security'
+  | 'bms-dcim'
+  | 'architecture'
+  | 'plumbing'
+  | 'earthing'
+  | 'operations'
+  | 'facility-plant'
+  | 'micro-dc'
   | 'ups'
   | 'busbars-transformers'
   | 'cable-management'
-  | 'facility-plant'
   | 'wall-equipment';
 
-export type DcInfraCategory = 'cable-tray' | 'cable-duct' | 'power-cable' | 'data-cable' | 'conduit' | 'riser' | 'busway' | 'fiber-raceway' | 'containment';
+export type DcInfraCategory =
+  | 'cable-tray'
+  | 'cable-duct'
+  | 'power-cable'
+  | 'data-cable'
+  | 'conduit'
+  | 'riser'
+  | 'busway'
+  | 'fiber-raceway'
+  | 'containment'
+  | 'chilled-water-pipe'
+  | 'drain-pipe';
+
 export type DcInfraLayer = 'underfloor' | 'ceiling' | 'overhead';
 
 export type DcRacewayFittingType =
@@ -89,6 +124,8 @@ export interface DcInfrastructureItem {
 export type DcRackType =
   | 'server'
   | 'network'
+  | 'storage'
+  | 'gpu-ai'
   | 'open-frame'
   | 'wall-mount'
   | 'inrow-cooling'
@@ -100,9 +137,40 @@ export type DcRackType =
   | 'transformer'
   | 'switchgear'
   | 'chiller-plant'
-  | 'generator';
+  | 'cooling-tower'
+  | 'chilled-water-pump'
+  | 'generator'
+  | 'fire-suppression-bank'
+  | 'cduhx'
+  | 'security-portal'
+  | 'operation-station'
+  | 'flooring-element'
+  | 'pathway-segment'
+  | 'earthing-bar';
 
-export type DcDoorStyle = 'perforated' | 'glass' | 'solid' | 'none' | 'split-perforated' | 'multi-compartment-2' | 'multi-compartment-4' | 'smart-lcd' | 'containment-sliding' | 'louvred';
+export type DcDoorStyle =
+  | 'perforated'
+  | 'split-perforated'
+  | 'solid'
+  | 'glass'
+  | 'hexa'
+  | 'round-hole'
+  | 'mesh'
+  | 'acrylic'
+  | 'none'
+  | 'multi-compartment-2'
+  | 'multi-compartment-4'
+  | 'smart-lcd'
+  | 'containment-sliding'
+  | 'louvred';
+
+export type DcDoorOperation =
+  | 'swing-left'
+  | 'swing-right'
+  | 'split-swing'
+  | 'sliding'
+  | 'lift-off'
+  | 'interlock';
 export type DcMounting = 'floor' | 'wall-mount' | 'pad-mount';
 export type DcSpacingStandard =
   | 'bayed-0mm'
