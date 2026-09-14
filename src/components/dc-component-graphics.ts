@@ -124,7 +124,21 @@ export interface DcComponentItem {
   id: string;
   code: string;
   name: string;
-  category: 'racks' | 'pathways' | 'power' | 'cooling' | 'monitoring' | 'security' | 'grounding' | 'patching';
+  category:
+    | 'racks'
+    | 'pathways'
+    | 'power'
+    | 'cooling'
+    | 'monitoring'
+    | 'security'
+    | 'grounding'
+    | 'patching'
+    | 'compute'
+    | 'storage'
+    | 'network'
+    | 'facility'
+    | 'operations'
+    | 'containment';
   subCategory?: string;
   pathwayLevel?: 'underfloor' | 'overhead';
   presetId?: string;
@@ -1928,6 +1942,470 @@ export const ALL_DC_COMPONENTS: DcComponentItem[] = [
       <circle cx="26" cy="16" r="2.5" fill="#FDE047" stroke="#9A3412" stroke-width="0.8" />
       <circle cx="58" cy="16" r="2.5" fill="#FDE047" stroke="#9A3412" stroke-width="0.8" />
     `
+  },
+
+  // ── 9. ACTIVE COMPUTE (SERVERS, GPU CLUSTERS & BLADES) ──
+  {
+    id: 'comp-node-1u',
+    code: 'SRV-1U',
+    name: '1U High-Density Compute Node (Dual CPU, NVMe)',
+    category: 'compute',
+    subCategory: 'servers',
+    badgeType: 'rack',
+    presetId: 'compute-1u-server',
+    widthMm: 600,
+    depthMm: 800,
+    heightU: 42,
+    description: '1U dual-socket enterprise server with 10x NVMe U.3 drive bays and redundant PSUs.',
+    viewBox: '0 0 76 32',
+    svgInner: `
+      <rect x="4" y="8" width="68" height="16" rx="1.5" fill="url(#dc-chassis-dark)" stroke="#334155" stroke-width="1" />
+      <rect x="8" y="11" width="36" height="10" rx="0.5" fill="#0B0F17" stroke="#475569" stroke-width="0.5" />
+      <line x1="14" y1="11" x2="14" y2="21" stroke="#334155" stroke-width="0.5" />
+      <line x1="20" y1="11" x2="20" y2="21" stroke="#334155" stroke-width="0.5" />
+      <line x1="26" y1="11" x2="26" y2="21" stroke="#334155" stroke-width="0.5" />
+      <line x1="32" y1="11" x2="32" y2="21" stroke="#334155" stroke-width="0.5" />
+      <line x1="38" y1="11" x2="38" y2="21" stroke="#334155" stroke-width="0.5" />
+      <circle cx="50" cy="16" r="1.5" fill="#10B981" />
+      <circle cx="56" cy="16" r="1.5" fill="#38BDF8" />
+      <rect x="62" y="11" width="7" height="10" rx="0.5" fill="#1E293B" stroke="#0284C7" stroke-width="0.5" />
+    `
+  },
+  {
+    id: 'comp-enterprise-2u',
+    code: 'SRV-2U',
+    name: '2U Enterprise Multi-Workload Server (24x SAS/NVMe)',
+    category: 'compute',
+    subCategory: 'servers',
+    badgeType: 'rack',
+    presetId: 'compute-2u-enterprise',
+    widthMm: 600,
+    depthMm: 850,
+    heightU: 42,
+    description: '2U flagship dual-socket server supporting up to 24x 2.5" SAS4/NVMe drives and 2x double-width GPUs.',
+    viewBox: '0 0 76 36',
+    svgInner: `
+      <rect x="4" y="6" width="68" height="24" rx="1.5" fill="url(#dc-chassis-dark)" stroke="#334155" stroke-width="1" />
+      <rect x="8" y="9" width="46" height="18" fill="#090D16" stroke="#475569" stroke-width="0.5" />
+      <line x1="8" y1="18" x2="54" y2="18" stroke="#334155" stroke-width="0.5" />
+      <line x1="16" y1="9" x2="16" y2="27" stroke="#334155" stroke-width="0.5" />
+      <line x1="24" y1="9" x2="24" y2="27" stroke="#334155" stroke-width="0.5" />
+      <line x1="32" y1="9" x2="32" y2="27" stroke="#334155" stroke-width="0.5" />
+      <line x1="40" y1="9" x2="40" y2="27" stroke="#334155" stroke-width="0.5" />
+      <line x1="48" y1="9" x2="48" y2="27" stroke="#334155" stroke-width="0.5" />
+      <circle cx="60" cy="13" r="1.5" fill="#10B981" />
+      <circle cx="60" cy="18" r="1.5" fill="#38BDF8" />
+      <circle cx="60" cy="23" r="1.5" fill="#F59E0B" />
+    `
+  },
+  {
+    id: 'comp-ai-gpu-4u',
+    code: 'GPU-4U',
+    name: '4U AI Training & GPU Accelerator Server (8x GPU)',
+    category: 'compute',
+    subCategory: 'gpu_ai',
+    badgeType: 'rack',
+    presetId: 'compute-4u-gpu-server',
+    widthMm: 600,
+    depthMm: 950,
+    heightU: 42,
+    description: '4U AI/LLM accelerator chassis accommodating 8x full-height double-width PCIe Gen5 GPUs.',
+    viewBox: '0 0 76 44',
+    svgInner: `
+      <rect x="4" y="4" width="68" height="36" rx="2" fill="url(#dc-chassis-dark)" stroke="#4338CA" stroke-width="1.2" />
+      <rect x="8" y="7" width="40" height="30" fill="#0B0F17" stroke="#6366F1" stroke-width="0.6" />
+      <line x1="8" y1="17" x2="48" y2="17" stroke="#334155" stroke-width="0.5" />
+      <line x1="8" y1="27" x2="48" y2="27" stroke="#334155" stroke-width="0.5" />
+      <rect x="52" y="7" width="16" height="30" fill="#0F172A" stroke="#475569" stroke-width="0.5" />
+      <circle cx="60" cy="14" r="4" fill="#090D16" stroke="#818CF8" stroke-width="0.8" />
+      <circle cx="60" cy="26" r="4" fill="#090D16" stroke="#818CF8" stroke-width="0.8" />
+    `
+  },
+  {
+    id: 'comp-dgx-super-8u',
+    code: 'DGX-8U',
+    name: '8U AI Supercomputer Cluster (NVIDIA HGX/DGX H100)',
+    category: 'compute',
+    subCategory: 'gpu_ai',
+    badgeType: 'rack',
+    presetId: 'compute-8u-ai-supercomputer',
+    widthMm: 750,
+    depthMm: 1200,
+    heightU: 48,
+    description: '8U 32-PFLOPS AI supercomputing node with 8x NVIDIA SXM5 GPUs and NVSwitch fabric.',
+    viewBox: '0 0 76 54',
+    svgInner: `
+      <rect x="4" y="4" width="68" height="46" rx="2" fill="#064E3B" stroke="#10B981" stroke-width="1.2" />
+      <rect x="8" y="8" width="60" height="24" fill="#022C22" stroke="#059669" stroke-width="0.6" />
+      <rect x="12" y="11" width="10" height="18" fill="#065F46" stroke="#34D399" stroke-width="0.5" />
+      <rect x="25" y="11" width="10" height="18" fill="#065F46" stroke="#34D399" stroke-width="0.5" />
+      <rect x="38" y="11" width="10" height="18" fill="#065F46" stroke="#34D399" stroke-width="0.5" />
+      <rect x="51" y="11" width="10" height="18" fill="#065F46" stroke="#34D399" stroke-width="0.5" />
+      <rect x="8" y="35" width="60" height="11" fill="#0B0F17" stroke="#475569" stroke-width="0.5" />
+      <circle cx="16" cy="40.5" r="2" fill="#10B981" />
+      <circle cx="26" cy="40.5" r="2" fill="#10B981" />
+      <circle cx="36" cy="40.5" r="2" fill="#10B981" />
+      <circle cx="46" cy="40.5" r="2" fill="#10B981" />
+      <circle cx="56" cy="40.5" r="2" fill="#10B981" />
+    `
+  },
+
+  // ── 10. ACTIVE STORAGE (SAN ALL-FLASH, JBOD, TAPE) ──
+  {
+    id: 'stor-nvme-allflash-2u',
+    code: 'SAN-2U',
+    name: '2U All-Flash NVMe Storage Array (Pure/NetApp)',
+    category: 'storage',
+    subCategory: 'all_flash',
+    badgeType: 'rack',
+    presetId: 'storage-2u-allflash-nvme',
+    widthMm: 600,
+    depthMm: 850,
+    heightU: 42,
+    description: 'Active-active dual controller 2U array with 24x DirectFlash NVMe modules and 400Gb/s NVMe-oF.',
+    viewBox: '0 0 76 34',
+    svgInner: `
+      <rect x="4" y="6" width="68" height="22" rx="1.5" fill="#7C2D12" stroke="#EA580C" stroke-width="1.2" />
+      <rect x="8" y="9" width="60" height="16" fill="#180A04" stroke="#9A3412" stroke-width="0.6" />
+      <line x1="8" y1="17" x2="68" y2="17" stroke="#EA580C" stroke-width="0.5" stroke-dasharray="2 1" />
+      <circle cx="14" cy="13" r="1.5" fill="#F97316" />
+      <circle cx="20" cy="13" r="1.5" fill="#F97316" />
+      <circle cx="26" cy="13" r="1.5" fill="#F97316" />
+      <circle cx="32" cy="13" r="1.5" fill="#F97316" />
+      <circle cx="38" cy="13" r="1.5" fill="#F97316" />
+      <circle cx="44" cy="13" r="1.5" fill="#F97316" />
+      <circle cx="50" cy="13" r="1.5" fill="#F97316" />
+      <circle cx="56" cy="13" r="1.5" fill="#F97316" />
+      <circle cx="62" cy="13" r="1.5" fill="#F97316" />
+    `
+  },
+  {
+    id: 'stor-jbod-density-4u',
+    code: 'JBOD-4U',
+    name: '4U Ultra-Density Storage Enclosure / JBOD (102 Drives)',
+    category: 'storage',
+    subCategory: 'jbod',
+    badgeType: 'rack',
+    presetId: 'storage-4u-jbod-density',
+    widthMm: 600,
+    depthMm: 1050,
+    heightU: 42,
+    description: 'Top-loading 4U high-density expansion chassis holding 102x 3.5" enterprise SAS drives up to 2.4PB.',
+    viewBox: '0 0 76 44',
+    svgInner: `
+      <rect x="4" y="4" width="68" height="36" rx="2" fill="url(#dc-chassis-dark)" stroke="#EA580C" stroke-width="1.2" />
+      <rect x="8" y="7" width="60" height="30" fill="#0C0A09" stroke="#78350F" stroke-width="0.5" />
+      <line x1="8" y1="14" x2="68" y2="14" stroke="#475569" stroke-width="0.5" />
+      <line x1="8" y1="21" x2="68" y2="21" stroke="#475569" stroke-width="0.5" />
+      <line x1="8" y1="28" x2="68" y2="28" stroke="#475569" stroke-width="0.5" />
+      <circle cx="16" cy="33" r="1.2" fill="#10B981" />
+      <circle cx="22" cy="33" r="1.2" fill="#10B981" />
+      <circle cx="28" cy="33" r="1.2" fill="#10B981" />
+      <circle cx="34" cy="33" r="1.2" fill="#10B981" />
+    `
+  },
+  {
+    id: 'stor-lto-tape-6u',
+    code: 'TAPE-6U',
+    name: '6U Automated Enterprise LTO-9 Tape Library',
+    category: 'storage',
+    subCategory: 'tape',
+    badgeType: 'rack',
+    presetId: 'storage-6u-lto-tape-library',
+    widthMm: 600,
+    depthMm: 900,
+    heightU: 42,
+    description: 'Robotic cartridge tape library with 80 slots and dual LTO-9 Fibre Channel tape drives.',
+    viewBox: '0 0 76 48',
+    svgInner: `
+      <rect x="4" y="4" width="68" height="40" rx="2" fill="url(#dc-chassis-dark)" stroke="#334155" stroke-width="1" />
+      <rect x="8" y="7" width="38" height="34" fill="#0B0F17" stroke="#475569" stroke-width="0.5" />
+      <rect x="12" y="10" width="12" height="6" rx="0.5" fill="#1E293B" stroke="#64748B" stroke-width="0.5" />
+      <rect x="28" y="10" width="12" height="6" rx="0.5" fill="#1E293B" stroke="#64748B" stroke-width="0.5" />
+      <rect x="12" y="18" width="12" height="6" rx="0.5" fill="#1E293B" stroke="#64748B" stroke-width="0.5" />
+      <rect x="28" y="18" width="12" height="6" rx="0.5" fill="#1E293B" stroke="#64748B" stroke-width="0.5" />
+      <rect x="12" y="26" width="12" height="6" rx="0.5" fill="#1E293B" stroke="#64748B" stroke-width="0.5" />
+      <rect x="28" y="26" width="12" height="6" rx="0.5" fill="#1E293B" stroke="#64748B" stroke-width="0.5" />
+      <rect x="48" y="7" width="20" height="34" fill="#0284C7" fill-opacity="0.1" stroke="#0284C7" stroke-width="0.8" />
+      <circle cx="58" cy="24" r="5" fill="#0B0F17" stroke="#38BDF8" stroke-width="0.8" />
+    `
+  },
+
+  // ── 11. ACTIVE NETWORKING (SWITCHES, ROUTERS, FIREWALLS) ──
+  {
+    id: 'net-tor-switch-1u',
+    code: 'TOR-1U',
+    name: '1U Top-of-Rack Switch (48x 25G + 6x 100G)',
+    category: 'network',
+    subCategory: 'switches',
+    badgeType: 'rack',
+    presetId: 'net-1u-tor-switch',
+    widthMm: 600,
+    depthMm: 600,
+    heightU: 42,
+    description: 'Sub-microsecond latency 1U ToR switch with 48x 25GbE SFP28 and 6x 100GbE QSFP28 ports.',
+    viewBox: '0 0 76 30',
+    svgInner: `
+      <rect x="4" y="8" width="68" height="14" rx="1" fill="#1E3A8A" stroke="#3B82F6" stroke-width="1" />
+      <rect x="8" y="11" width="44" height="8" fill="#090D16" stroke="#1D4ED8" stroke-width="0.5" />
+      <line x1="8" y1="15" x2="52" y2="15" stroke="#3B82F6" stroke-width="0.5" stroke-dasharray="1 1" />
+      <rect x="54" y="11" width="14" height="8" fill="#172554" stroke="#60A5FA" stroke-width="0.5" />
+      <circle cx="58" cy="15" r="1.2" fill="#10B981" />
+      <circle cx="64" cy="15" r="1.2" fill="#38BDF8" />
+    `
+  },
+  {
+    id: 'net-spine-switch-2u',
+    code: 'SPN-2U',
+    name: '2U Backbone Spine Switch (64x 100G / 32x 400G)',
+    category: 'network',
+    subCategory: 'switches',
+    badgeType: 'rack',
+    presetId: 'net-2u-spine-switch',
+    widthMm: 600,
+    depthMm: 700,
+    heightU: 42,
+    description: '2U non-blocking spine switch with deep dynamic packet buffers for EVPN-VXLAN cloud datacenter.',
+    viewBox: '0 0 76 34',
+    svgInner: `
+      <rect x="4" y="6" width="68" height="22" rx="1.5" fill="#1E40AF" stroke="#60A5FA" stroke-width="1.2" />
+      <rect x="8" y="9" width="60" height="16" fill="#0B0F17" stroke="#2563EB" stroke-width="0.6" />
+      <line x1="8" y1="17" x2="68" y2="17" stroke="#60A5FA" stroke-width="0.6" stroke-dasharray="1.5 1.5" />
+      <circle cx="12" cy="13" r="1.2" fill="#10B981" /><circle cx="16" cy="13" r="1.2" fill="#10B981" />
+      <circle cx="20" cy="13" r="1.2" fill="#10B981" /><circle cx="24" cy="13" r="1.2" fill="#10B981" />
+    `
+  },
+  {
+    id: 'net-core-chassis-14u',
+    code: 'DIR-14U',
+    name: '14U Terabit Enterprise Core Modular Director Chassis',
+    category: 'network',
+    subCategory: 'chassis',
+    badgeType: 'rack',
+    presetId: 'net-14u-core-chassis',
+    widthMm: 800,
+    depthMm: 900,
+    heightU: 42,
+    description: 'High-availability core director with dual redundant supervisors, 8x high-density line cards and 57.6 Tbps capacity.',
+    viewBox: '0 0 76 56',
+    svgInner: `
+      <rect x="4" y="4" width="68" height="48" rx="2" fill="#0F172A" stroke="#1D4ED8" stroke-width="1.2" />
+      <rect x="8" y="7" width="60" height="8" fill="#1E293B" stroke="#3B82F6" stroke-width="0.5" />
+      <rect x="8" y="17" width="60" height="24" fill="#0B0F17" stroke="#475569" stroke-width="0.5" />
+      <line x1="8" y1="23" x2="68" y2="23" stroke="#334155" stroke-width="0.5" />
+      <line x1="8" y1="29" x2="68" y2="29" stroke="#334155" stroke-width="0.5" />
+      <line x1="8" y1="35" x2="68" y2="35" stroke="#334155" stroke-width="0.5" />
+      <rect x="8" y="43" width="60" height="6" fill="#1E293B" stroke="#334155" stroke-width="0.5" />
+      <circle cx="14" cy="46" r="1.2" fill="#10B981" />
+      <circle cx="20" cy="46" r="1.2" fill="#10B981" />
+      <circle cx="26" cy="46" r="1.2" fill="#38BDF8" />
+    `
+  },
+  {
+    id: 'net-ngfw-firewall-2u',
+    code: 'FW-2U',
+    name: '2U Next-Gen Carrier-Grade Firewall (80Gbps NGFW)',
+    category: 'network',
+    subCategory: 'security_net',
+    badgeType: 'rack',
+    presetId: 'net-2u-ngfw-firewall',
+    widthMm: 600,
+    depthMm: 700,
+    heightU: 42,
+    description: 'Enterprise perimeter security appliance with 80 Gbps threat prevention and deep SSL inspection.',
+    viewBox: '0 0 76 34',
+    svgInner: `
+      <rect x="4" y="6" width="68" height="22" rx="1.5" fill="#7F1D1D" stroke="#DC2626" stroke-width="1.2" />
+      <rect x="8" y="9" width="46" height="16" fill="#1C0808" stroke="#991B1B" stroke-width="0.6" />
+      <line x1="8" y1="17" x2="54" y2="17" stroke="#EF4444" stroke-width="0.5" stroke-dasharray="2 1" />
+      <rect x="56" y="9" width="12" height="16" fill="#2E0C0C" stroke="#B91C1C" stroke-width="0.5" />
+      <path d="M 62 13 L 59 15 L 59 19 C 59 21 62 23 62 23 C 62 23 65 21 65 19 L 65 15 Z" fill="#EF4444" />
+    `
+  },
+
+  // ── 12. FACILITY, PLANT & GREY SPACE ──
+  {
+    id: 'pwr-transformer-dry',
+    code: 'XFR-2M',
+    name: '2000kVA Cast Resin Dry-Type Step-Down Transformer',
+    category: 'facility',
+    subCategory: 'transformers',
+    badgeType: 'power',
+    presetId: 'transformer-dry-2000kva',
+    widthMm: 2200,
+    depthMm: 1400,
+    heightU: 48,
+    description: 'Dry-type 11kV to 415V step-down transformer with temperature monitoring and louvred enclosure.',
+    viewBox: '0 0 96 60',
+    svgInner: `
+      <rect x="8" y="8" width="80" height="44" rx="3" fill="#78350F" stroke="#D97706" stroke-width="1.5" />
+      <rect x="14" y="14" width="20" height="32" rx="1" fill="#451A03" stroke="#B45309" stroke-width="0.8" />
+      <rect x="38" y="14" width="20" height="32" rx="1" fill="#451A03" stroke="#B45309" stroke-width="0.8" />
+      <rect x="62" y="14" width="20" height="32" rx="1" fill="#451A03" stroke="#B45309" stroke-width="0.8" />
+      <circle cx="24" cy="30" r="6" fill="none" stroke="#F59E0B" stroke-width="1.5" />
+      <circle cx="48" cy="30" r="6" fill="none" stroke="#F59E0B" stroke-width="1.5" />
+      <circle cx="72" cy="30" r="6" fill="none" stroke="#F59E0B" stroke-width="1.5" />
+    `
+  },
+  {
+    id: 'pwr-generator-standby',
+    code: 'GEN-1.5M',
+    name: '1500kVA Standby Diesel Generator Set (Canopy)',
+    category: 'facility',
+    subCategory: 'generators',
+    badgeType: 'power',
+    presetId: 'genset-standby-1500kva',
+    widthMm: 3500,
+    depthMm: 1600,
+    heightU: 48,
+    description: 'Mission-critical standby diesel generator with sound-attenuated canopy and 72-hour base fuel tank.',
+    viewBox: '0 0 100 50',
+    svgInner: `
+      <rect x="6" y="8" width="88" height="34" rx="2" fill="#991B1B" stroke="#DC2626" stroke-width="1.5" />
+      <rect x="12" y="12" width="24" height="26" fill="#450A0A" stroke="#7F1D1D" stroke-width="0.8" />
+      <line x1="16" y1="16" x2="32" y2="16" stroke="#EF4444" stroke-width="1" />
+      <line x1="16" y1="20" x2="32" y2="20" stroke="#EF4444" stroke-width="1" />
+      <line x1="16" y1="24" x2="32" y2="24" stroke="#EF4444" stroke-width="1" />
+      <line x1="16" y1="28" x2="32" y2="28" stroke="#EF4444" stroke-width="1" />
+      <rect x="40" y="12" width="30" height="26" fill="#1C1917" stroke="#44403C" stroke-width="0.8" />
+      <rect x="74" y="12" width="14" height="26" fill="#292524" stroke="#57534E" stroke-width="0.8" />
+      <circle cx="81" cy="20" r="3" fill="#10B981" />
+      <rect x="78" y="27" width="6" height="8" rx="0.5" fill="#EF4444" />
+    `
+  },
+  {
+    id: 'cool-chiller-water-plant',
+    code: 'CHL-1M',
+    name: '1000kW Industrial Centrifugal Water Chiller Plant',
+    category: 'facility',
+    subCategory: 'chillers',
+    badgeType: 'cooling',
+    presetId: 'cooling-chiller-water-1000kw',
+    widthMm: 3600,
+    depthMm: 1600,
+    heightU: 48,
+    description: 'Central mechanical cooling plant generating 6°C chilled water loop with oil-free magnetic bearings.',
+    viewBox: '0 0 100 50',
+    svgInner: `
+      <rect x="6" y="8" width="88" height="34" rx="3" fill="#0E7490" stroke="#06B6D4" stroke-width="1.5" />
+      <rect x="12" y="12" width="46" height="26" rx="1" fill="#083344" stroke="#155E75" stroke-width="0.8" />
+      <ellipse cx="35" cy="25" rx="14" ry="8" fill="#0E7490" stroke="#22D3EE" stroke-width="1" />
+      <rect x="62" y="12" width="26" height="26" rx="1" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <circle cx="75" cy="25" r="7" fill="#083344" stroke="#06B6D4" stroke-width="1.2" />
+    `
+  },
+  {
+    id: 'cool-cdu-liquid-rack',
+    code: 'CDU-150',
+    name: '42U Direct-to-Chip Liquid Cooling Distribution Unit (150kW)',
+    category: 'cooling',
+    subCategory: 'liquid_direct',
+    badgeType: 'cooling',
+    presetId: 'cooling-cdu-rack-150kw',
+    widthMm: 600,
+    depthMm: 1000,
+    heightU: 42,
+    description: 'Direct-to-chip secondary loop liquid cooling distribution manifold for extreme density AI GPU racks.',
+    viewBox: '0 0 76 130',
+    svgInner: `
+      <polygon points="6,8 14,3 62,3 54,8" fill="url(#dc-3d-top)" stroke="#0284C7" stroke-width="0.8" />
+      <polygon points="54,8 62,3 62,119 54,122" fill="url(#dc-3d-side)" stroke="#0369A1" stroke-width="0.8" />
+      <rect x="6" y="8" width="48" height="114" rx="2" fill="#082F49" stroke="#0284C7" stroke-width="1.2" />
+      <rect x="12" y="16" width="36" height="20" rx="1" fill="#0C4A6E" stroke="#38BDF8" stroke-width="0.8" />
+      <circle cx="30" cy="26" r="5" fill="#0284C7" stroke="#7DD3FC" stroke-width="1" />
+      <rect x="12" y="42" width="36" height="50" rx="1" fill="#0369A1" fill-opacity="0.3" stroke="#0EA5E9" stroke-width="0.8" />
+      <line x1="20" y1="42" x2="20" y2="92" stroke="#38BDF8" stroke-width="1.5" />
+      <line x1="40" y1="42" x2="40" y2="92" stroke="#EF4444" stroke-width="1.5" />
+      <rect x="12" y="98" width="36" height="18" fill="#0F172A" stroke="#334155" stroke-width="0.8" />
+      <circle cx="22" cy="107" r="2.5" fill="#10B981" />
+      <circle cx="38" cy="107" r="2.5" fill="#38BDF8" />
+    `
+  },
+
+  // ── 13. FIRE, SECURITY & OPERATIONS ──
+  {
+    id: 'sec-vesda-panel',
+    code: 'VESDA-E',
+    name: 'VESDA Laser Aspirating Early Smoke Detector',
+    category: 'security',
+    subCategory: 'fire_safety',
+    badgeType: 'fire',
+    presetId: 'fire-vesda-laser-panel',
+    widthMm: 450,
+    depthMm: 200,
+    heightU: 12,
+    description: 'Continuous 4-pipe air sampling laser detector providing early warning alerts hours before visible smoke.',
+    viewBox: '0 0 76 36',
+    svgInner: `
+      <rect x="8" y="6" width="60" height="24" rx="2" fill="#991B1B" stroke="#EF4444" stroke-width="1.2" />
+      <rect x="14" y="10" width="28" height="16" rx="1" fill="#450A0A" stroke="#B91C1C" stroke-width="0.6" />
+      <circle cx="20" cy="18" r="1.5" fill="#10B981" /><circle cx="26" cy="18" r="1.5" fill="#38BDF8" />
+      <rect x="46" y="10" width="16" height="16" fill="#18181B" stroke="#3F3F46" stroke-width="0.6" />
+      <circle cx="54" cy="18" r="4" fill="#09090B" stroke="#EF4444" stroke-width="0.8" />
+    `
+  },
+  {
+    id: 'sec-speedgate-turnstile',
+    code: 'GATE-360',
+    name: 'Biometric Optical Speed Gate Turnstile',
+    category: 'security',
+    subCategory: 'access_control',
+    badgeType: 'security',
+    presetId: 'security-speed-gate-turnstile',
+    widthMm: 1400,
+    depthMm: 1000,
+    heightU: 42,
+    description: 'Glass-wing optical turnstile speed gate with dual-factor facial recognition and anti-tailgating sensors.',
+    viewBox: '0 0 76 44',
+    svgInner: `
+      <rect x="8" y="6" width="16" height="32" rx="1.5" fill="#1E293B" stroke="#38BDF8" stroke-width="1" />
+      <rect x="52" y="6" width="16" height="32" rx="1.5" fill="#1E293B" stroke="#38BDF8" stroke-width="1" />
+      <rect x="24" y="16" width="28" height="12" fill="#38BDF8" fill-opacity="0.3" stroke="#38BDF8" stroke-width="1" />
+      <circle cx="16" cy="12" r="2" fill="#10B981" />
+      <circle cx="60" cy="12" r="2" fill="#10B981" />
+    `
+  },
+  {
+    id: 'ops-server-lifter',
+    code: 'LIFT-500',
+    name: 'Motorized Server Lifter & Battery Extractor (400kg)',
+    category: 'operations',
+    subCategory: 'lifts',
+    badgeType: 'rack',
+    presetId: 'ops-server-lift-motorized',
+    widthMm: 800,
+    depthMm: 1000,
+    heightU: 42,
+    description: 'Electric winch server lift allowing single-technician installation of heavy 4U-8U servers up to 52U.',
+    viewBox: '0 0 76 48',
+    svgInner: `
+      <rect x="8" y="8" width="12" height="32" fill="#EAB308" stroke="#CA8A04" stroke-width="1" />
+      <rect x="20" y="20" width="42" height="8" fill="#1E293B" stroke="#475569" stroke-width="0.8" />
+      <circle cx="14" cy="42" r="3" fill="#0F172A" stroke="#475569" stroke-width="1" />
+      <circle cx="58" cy="42" r="3" fill="#0F172A" stroke="#475569" stroke-width="1" />
+    `
+  },
+  {
+    id: 'ops-crash-cart-mobile',
+    code: 'CART-KVM',
+    name: 'Mobile Diagnostic Datacenter Crash Cart (KVM + 24" LCD)',
+    category: 'operations',
+    subCategory: 'carts',
+    badgeType: 'rack',
+    presetId: 'ops-mobile-crash-cart',
+    widthMm: 700,
+    depthMm: 700,
+    heightU: 36,
+    description: 'Rolling workstation with smooth antistatic castors, full keyboard tray and 24" LED display.',
+    viewBox: '0 0 76 48',
+    svgInner: `
+      <rect x="24" y="6" width="28" height="18" rx="1" fill="#0F172A" stroke="#38BDF8" stroke-width="1" />
+      <rect x="27" y="9" width="22" height="12" fill="#0284C7" fill-opacity="0.2" />
+      <line x1="38" y1="24" x2="38" y2="34" stroke="#64748B" stroke-width="2" />
+      <rect x="18" y="34" width="40" height="6" rx="1" fill="#334155" stroke="#475569" stroke-width="0.8" />
+      <circle cx="22" cy="42" r="2.5" fill="#0F172A" stroke="#64748B" stroke-width="0.8" />
+      <circle cx="54" cy="42" r="2.5" fill="#0F172A" stroke="#64748B" stroke-width="0.8" />
+    `
   }
 ];
 
@@ -1950,9 +2428,44 @@ export const DC_COMPONENT_CATEGORIES: DcComponentCategoryGroup[] = [
     items: ALL_DC_COMPONENTS.filter(c => c.category === 'racks')
   },
   {
+    id: 'compute',
+    label: 'Active Compute & AI',
+    icon: '⚡',
+    subCategories: [
+      { id: 'all', label: 'All Compute' },
+      { id: 'servers', label: '1U-2U Standard Servers' },
+      { id: 'gpu_ai', label: '4U-8U AI Supercomputers' }
+    ],
+    items: ALL_DC_COMPONENTS.filter(c => c.category === 'compute')
+  },
+  {
+    id: 'storage',
+    label: 'Active Storage',
+    icon: '💾',
+    subCategories: [
+      { id: 'all', label: 'All Storage' },
+      { id: 'all_flash', label: 'SAN All-Flash NVMe' },
+      { id: 'jbod', label: 'Ultra-Density JBODs' },
+      { id: 'tape', label: 'Automated LTO Tape' }
+    ],
+    items: ALL_DC_COMPONENTS.filter(c => c.category === 'storage')
+  },
+  {
+    id: 'network',
+    label: 'Active Networking',
+    icon: '🌐',
+    subCategories: [
+      { id: 'all', label: 'All Networking' },
+      { id: 'switches', label: 'ToR & Spine Switches' },
+      { id: 'chassis', label: 'Core Modular Director' },
+      { id: 'security_net', label: 'NGFW & Firewalls' }
+    ],
+    items: ALL_DC_COMPONENTS.filter(c => c.category === 'network')
+  },
+  {
     id: 'pathways',
     label: 'Cable Ducts & Pathways',
-    icon: '⚡',
+    icon: '🛤️',
     subCategories: [
       { id: 'all', label: 'All Pathways' },
       { id: 'underfloor', label: '▼ Under ESD Floor' },
@@ -2030,6 +2543,29 @@ export const DC_COMPONENT_CATEGORIES: DcComponentCategoryGroup[] = [
       { id: 'signal_grid', label: 'Signal Reference Grid (SRG)' }
     ],
     items: ALL_DC_COMPONENTS.filter(c => c.category === 'grounding')
+  },
+  {
+    id: 'facility',
+    label: 'Facility Plant & Heavy M&E',
+    icon: '🏭',
+    subCategories: [
+      { id: 'all', label: 'All Facility Plant' },
+      { id: 'transformers', label: 'Transformers & Substations' },
+      { id: 'generators', label: 'Diesel Generators' },
+      { id: 'chillers', label: 'Centrifugal Chillers' }
+    ],
+    items: ALL_DC_COMPONENTS.filter(c => c.category === 'facility')
+  },
+  {
+    id: 'operations',
+    label: 'Operations & Tooling',
+    icon: '🧰',
+    subCategories: [
+      { id: 'all', label: 'All Operations' },
+      { id: 'lifts', label: 'Server Lifters' },
+      { id: 'carts', label: 'Crash Carts & Tools' }
+    ],
+    items: ALL_DC_COMPONENTS.filter(c => c.category === 'operations')
   }
 ];
 
