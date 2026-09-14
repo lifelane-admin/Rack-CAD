@@ -149,47 +149,78 @@ export type DcRackType =
   | 'earthing-bar';
 
 export type DcDoorStyle =
+  // Single leaf doors
+  | 'glass'
+  | 'acrylic'
+  | 'solid'
+  | 'louvered'
+  | 'louvred'
   | 'perforated'
   | 'perforated-large'
   | 'perforated-medium'
   | 'perforated-small'
   | 'perforated-tiny'
+  | 'round-hole'
+  | 'round-hole-large'
+  | 'round-hole-small'
   | 'honeycomb-large'
   | 'honeycomb-medium'
   | 'honeycomb-small'
   | 'honeycomb-tiny'
-  | 'solid'
-  | 'glass'
+  | 'hexa'
+  | 'hexa-large'
+  | 'hexa-small'
+  | 'wire-mesh'
+  | 'mesh'
+  // Dual leaf doors (50/50 split)
   | 'split-perforated'
   | 'split-perforated-large'
   | 'split-perforated-medium'
   | 'split-perforated-small'
   | 'split-perforated-tiny'
+  | 'split-round-hole'
   | 'split-honeycomb'
   | 'split-honeycomb-large'
   | 'split-honeycomb-medium'
   | 'split-honeycomb-small'
   | 'split-honeycomb-tiny'
+  | 'split-hexa'
   | 'split-solid'
   | 'split-glass'
-  | 'hexa'
-  | 'round-hole'
-  | 'mesh'
-  | 'acrylic'
-  | 'none'
+  | 'split-acrylic'
+  | 'split-wire-mesh'
+  | 'split-mesh'
+  // Asymmetric dual leaf doors (60/40 split)
+  | 'asym-split-perforated'
+  | 'asym-split-honeycomb'
+  | 'asym-split-hexa'
+  | 'asym-split-solid'
+  | 'asym-split-glass'
+  | 'asym-split-acrylic'
+  | 'asym-split-wire-mesh'
+  // Multi-leaf / Bi-fold doors
+  | 'bifold-perforated'
+  | 'bifold-honeycomb'
+  | 'bifold-hexa'
+  | 'bifold-solid'
+  | 'bifold-glass'
+  | 'bifold-acrylic'
+  | 'bifold-wire-mesh'
+  // Colocation compartment doors
   | 'multi-compartment-2'
   | 'multi-compartment-4'
   | 'smart-lcd'
   | 'containment-sliding'
-  | 'louvred'
-  | 'louvered';
+  | 'none';
 
 export type DcDoorOperation =
   | 'swing-left'
   | 'swing-right'
+  | 'swing-dual'
   | 'split-swing'
   | 'sliding'
   | 'lift-off'
+  | 'bifold'
   | 'interlock';
 export type DcMounting = 'floor' | 'wall-mount' | 'pad-mount';
 export type DcSpacingStandard =
@@ -216,6 +247,7 @@ export interface DcRack {
   model?: string;
   mounting?: DcMounting;
   doorStyle?: DcDoorStyle;
+  doorOperation?: DcDoorOperation;
   position: { x: number; y: number; z: number }; // real-world meters
   rotation: 0 | 90 | 180 | 270;  // degrees
   color?: string;

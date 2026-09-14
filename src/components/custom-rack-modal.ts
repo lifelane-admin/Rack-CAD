@@ -6,6 +6,7 @@ import {
   STANDARD_RACK_DEPTHS,
   RackType,
   RackDoorType,
+  RackDoorOperation,
   RackMounting,
   RackWidthOption,
   VcmWidth,
@@ -28,6 +29,7 @@ export class CustomRackModal {
     const depthMm = initial?.depthMm ?? 1000;
     const rackType: RackType = initial?.rackType ?? 'server';
     const frontDoor: RackDoorType = initial?.frontDoor ?? 'perforated';
+    const doorOperation: RackDoorOperation = initial?.doorOperation ?? 'swing-left';
     const sidePanels = initial?.sidePanels ?? true;
     const rackColor = initial?.rackColor ?? '#0c0e12';
     const mounting: RackMounting = initial?.mounting ?? 'floor';
@@ -48,65 +50,52 @@ export class CustomRackModal {
         width: 620px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column;
         box-shadow: 0 24px 64px rgba(0,0,0,0.8), 0 0 0 1px rgba(0,229,255,0.15); overflow: hidden;
       ">
-        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between;">
+        <div style="padding: 18px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: #0c0e14;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="width: 28px; height: 28px; border-radius: 6px; background: rgba(0,229,255,0.15); color: #00e5ff; display: flex; align-items: center; justify-content: center; font-size: 14px;">🏗️</div>
+            <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(0,229,255,0.1); border: 1px solid rgba(0,229,255,0.3); display: flex; align-items: center; justify-content: center; color: #00e5ff; font-weight: bold;">⚙</div>
             <div>
-              <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: #fff;">Custom Rack & VCM Builder</h3>
-              <p style="margin: 2px 0 0; font-size: 11px; color: #8b949e;">Configure custom dimensions, enclosure specs, and vertical cable routing channels</p>
+              <h2 style="margin: 0; font-size: 16px; font-weight: 700; color: #fff;">${initial?.id ? 'Edit Rack Properties' : 'Deploy Custom Rack Enclosure'}</h2>
+              <p style="margin: 2px 0 0 0; font-size: 12px; color: #8b949e;">Configure ANSI/EIA-310-D standard physical dimensions and structural accessories</p>
             </div>
           </div>
-          <button id="crm-close" style="background: none; border: none; color: #8b949e; font-size: 18px; cursor: pointer; padding: 4px;">✕</button>
+          <button id="crm-close" style="background: transparent; border: none; color: #8b949e; font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: 4px;">✕</button>
         </div>
 
-        <div style="padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; font-family: Inter, sans-serif; font-size: 12px; color: #c9d1d9;">
-          
-          <!-- Rack Name -->
-          <div>
-            <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #8b949e; margin-bottom: 6px;">Cabinet Name</label>
-            <input type="text" id="crm-name" value="${name}" style="width: 100%; box-sizing: border-box; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 8px 12px; color: #fff; font-size: 13px;" />
-          </div>
-
-          <!-- Section 1: Dimensions & Mounting -->
-          <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div style="padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; flex: 1;">
+          <!-- Basic Identifiers -->
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+            <div>
+              <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #00e5ff; margin-bottom: 6px;">Rack Label / Name</label>
+              <input id="crm-name" type="text" value="${name}" placeholder="e.g. CORE-RACK-01" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px; box-sizing: border-box;" />
+            </div>
             <div>
               <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #00e5ff; margin-bottom: 6px;">Rack Height</label>
               <select id="crm-units" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px;">
-                <optgroup label="Standard Heights">
-                  ${STANDARD_RACK_HEIGHTS.map(u => `<option value="${u}" ${u === units ? 'selected' : ''}>${u}U (${Math.round(u * 44.45)}mm / ${Math.round(u * 1.75)}" space)</option>`).join('')}
-                </optgroup>
-                <optgroup label="All Sizing (2U to 54U)">
-                  ${RACK_UNIT_SIZES.filter(u => !(STANDARD_RACK_HEIGHTS as readonly number[]).includes(u)).map(u => `<option value="${u}" ${u === units ? 'selected' : ''}>${u}U Custom</option>`).join('')}
-                </optgroup>
-              </select>
-            </div>
-
-            <div>
-              <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #00e5ff; margin-bottom: 6px;">Rack Width</label>
-              <select id="crm-width" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px;">
-                <option value="19-inch" ${rackWidth === '19-inch' ? 'selected' : ''}>19" EIA Standard (482.6 mm)</option>
-                <option value="23-inch" ${rackWidth === '23-inch' ? 'selected' : ''}>23" Telecom Standard (584.2 mm)</option>
-                <option value="custom" ${rackWidth === 'custom' ? 'selected' : ''}>Custom Width</option>
-              </select>
-            </div>
-
-            <div>
-              <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #00e5ff; margin-bottom: 6px;">Cabinet Depth</label>
-              <select id="crm-depth" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px;">
-                ${STANDARD_RACK_DEPTHS.map(d => `<option value="${d}" ${d === depthMm ? 'selected' : ''}>${d} mm (${d >= 1000 ? 'Deep Server' : d >= 800 ? 'Standard Server' : d >= 600 ? 'Network/Wall' : 'Shallow Edge'})</option>`).join('')}
-              </select>
-            </div>
-
-            <div>
-              <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #00e5ff; margin-bottom: 6px;">Mounting Style</label>
-              <select id="crm-mounting" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px;">
-                <option value="floor" ${mounting === 'floor' ? 'selected' : ''}>Floor Mount (Free Standing / Data Center)</option>
-                <option value="wall-mount" ${mounting === 'wall-mount' ? 'selected' : ''}>Wall Mount (Bracket / Telecom Closet)</option>
+                ${STANDARD_RACK_HEIGHTS.map(h => `<option value="${h}" ${h === units ? 'selected' : ''}>${h}U (${(h * 44.45 / 1000).toFixed(2)}m Internal)</option>`).join('')}
+                ${!STANDARD_RACK_HEIGHTS.includes(units as any) ? `<option value="${units}" selected>${units}U (Custom Height)</option>` : ''}
               </select>
             </div>
           </div>
 
-          <!-- Section 2: Enclosure, Doors & Color -->
+          <!-- Physical Dimensions -->
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #00e5ff; margin-bottom: 6px;">Internal Rail Width</label>
+              <select id="crm-width" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px;">
+                <option value="19-inch" ${rackWidth === '19-inch' ? 'selected' : ''}>19-Inch Standard (482.6 mm)</option>
+                <option value="23-inch" ${rackWidth === '23-inch' ? 'selected' : ''}>23-Inch Telco Standard (584.2 mm)</option>
+              </select>
+            </div>
+            <div>
+              <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #00e5ff; margin-bottom: 6px;">Frame External Depth</label>
+              <select id="crm-depth" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px;">
+                ${STANDARD_RACK_DEPTHS.map(d => `<option value="${d}" ${d === depthMm ? 'selected' : ''}>${d} mm (${d >= 1000 ? 'Server Depth' : 'Network/Patch Depth'})</option>`).join('')}
+                ${!STANDARD_RACK_DEPTHS.includes(depthMm as any) ? `<option value="${depthMm}" selected>${depthMm} mm (Custom Depth)</option>` : ''}
+              </select>
+            </div>
+          </div>
+
+          <!-- Enclosure Type & Door Styles -->
           <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
             <div>
               <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #fb8c00; margin-bottom: 6px;">Rack Type</label>
@@ -121,46 +110,74 @@ export class CustomRackModal {
             <div>
               <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #fb8c00; margin-bottom: 6px;">Front Door Style</label>
               <select id="crm-door" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px;">
-                <optgroup label="Twin Doors - Perforated Round Mesh (4 Levels)">
+                <optgroup label="Twin Doors - Dual Split 50/50">
                   <option value="split-perforated-large" ${frontDoor === 'split-perforated-large' ? 'selected' : ''}>Twin Door - Perforated (Large Round Holes)</option>
-                  <option value="split-perforated" ${frontDoor === 'split-perforated' || frontDoor === 'split-perforated-medium' ? 'selected' : ''}>Twin Door - Perforated (Medium Round Holes)</option>
+                  <option value="split-perforated" ${frontDoor === 'split-perforated' || frontDoor === 'split-perforated-medium' || frontDoor === 'split-round-hole' ? 'selected' : ''}>Twin Door - Perforated (Medium Round Holes)</option>
                   <option value="split-perforated-small" ${frontDoor === 'split-perforated-small' ? 'selected' : ''}>Twin Door - Perforated (Small Round Holes)</option>
                   <option value="split-perforated-tiny" ${frontDoor === 'split-perforated-tiny' ? 'selected' : ''}>Twin Door - Perforated (Tiny / Micro-Mesh)</option>
-                </optgroup>
-                <optgroup label="Twin Doors - Honeycomb Hex Mesh (4 Levels)">
                   <option value="split-honeycomb-large" ${frontDoor === 'split-honeycomb-large' ? 'selected' : ''}>Twin Door - Honeycomb (Large Hex Mesh)</option>
-                  <option value="split-honeycomb" ${frontDoor === 'split-honeycomb' || frontDoor === 'split-honeycomb-medium' ? 'selected' : ''}>Twin Door - Honeycomb (Medium Hex Mesh)</option>
+                  <option value="split-honeycomb" ${frontDoor === 'split-honeycomb' || frontDoor === 'split-honeycomb-medium' || frontDoor === 'split-hexa' ? 'selected' : ''}>Twin Door - Honeycomb (Medium Hex Mesh)</option>
                   <option value="split-honeycomb-small" ${frontDoor === 'split-honeycomb-small' ? 'selected' : ''}>Twin Door - Honeycomb (Small Hex Mesh)</option>
                   <option value="split-honeycomb-tiny" ${frontDoor === 'split-honeycomb-tiny' ? 'selected' : ''}>Twin Door - Honeycomb (Tiny / Micro-Hex)</option>
-                </optgroup>
-                <optgroup label="Twin Doors - Glass & Solid">
+                  <option value="split-wire-mesh" ${frontDoor === 'split-wire-mesh' || frontDoor === 'split-mesh' ? 'selected' : ''}>Twin Door - Heavy-Duty Wire Mesh Grid</option>
                   <option value="split-glass" ${frontDoor === 'split-glass' ? 'selected' : ''}>Twin Door - Observation Glass (Dual Split)</option>
+                  <option value="split-acrylic" ${frontDoor === 'split-acrylic' ? 'selected' : ''}>Twin Door - Tinted Acrylic (Dual Split)</option>
                   <option value="split-solid" ${frontDoor === 'split-solid' ? 'selected' : ''}>Twin Door - Solid Steel Security (Dual Split)</option>
                 </optgroup>
-                <optgroup label="Single Doors - Perforated Round Mesh (4 Levels)">
-                  <option value="perforated-large" ${frontDoor === 'perforated-large' ? 'selected' : ''}>Single Door - Perforated (Large Round Holes)</option>
-                  <option value="perforated" ${frontDoor === 'perforated' || frontDoor === 'perforated-medium' || !frontDoor ? 'selected' : ''}>Single Door - Perforated (Medium Round Holes)</option>
-                  <option value="perforated-small" ${frontDoor === 'perforated-small' ? 'selected' : ''}>Single Door - Perforated (Small Round Holes)</option>
+                <optgroup label="Asymmetric Dual Doors (60/40 Split)">
+                  <option value="asym-split-perforated" ${frontDoor === 'asym-split-perforated' ? 'selected' : ''}>Asymmetric Dual - Perforated Round (60/40)</option>
+                  <option value="asym-split-honeycomb" ${frontDoor === 'asym-split-honeycomb' || frontDoor === 'asym-split-hexa' ? 'selected' : ''}>Asymmetric Dual - Honeycomb Hex (60/40)</option>
+                  <option value="asym-split-wire-mesh" ${frontDoor === 'asym-split-wire-mesh' ? 'selected' : ''}>Asymmetric Dual - Wire Mesh Grid (60/40)</option>
+                  <option value="asym-split-glass" ${frontDoor === 'asym-split-glass' ? 'selected' : ''}>Asymmetric Dual - Glass Window (60/40)</option>
+                  <option value="asym-split-acrylic" ${frontDoor === 'asym-split-acrylic' ? 'selected' : ''}>Asymmetric Dual - Tinted Acrylic (60/40)</option>
+                  <option value="asym-split-solid" ${frontDoor === 'asym-split-solid' ? 'selected' : ''}>Asymmetric Dual - Solid Steel (60/40)</option>
+                </optgroup>
+                <optgroup label="Multi-Leaf / Bi-Fold Doors">
+                  <option value="bifold-perforated" ${frontDoor === 'bifold-perforated' ? 'selected' : ''}>Bi-Fold Folding - Perforated Round Mesh</option>
+                  <option value="bifold-honeycomb" ${frontDoor === 'bifold-honeycomb' || frontDoor === 'bifold-hexa' ? 'selected' : ''}>Bi-Fold Folding - Honeycomb Hex Mesh</option>
+                  <option value="bifold-wire-mesh" ${frontDoor === 'bifold-wire-mesh' ? 'selected' : ''}>Bi-Fold Folding - Wire Mesh Grid</option>
+                  <option value="bifold-glass" ${frontDoor === 'bifold-glass' ? 'selected' : ''}>Bi-Fold Folding - Tempered Glass</option>
+                  <option value="bifold-acrylic" ${frontDoor === 'bifold-acrylic' ? 'selected' : ''}>Bi-Fold Folding - Tinted Acrylic</option>
+                  <option value="bifold-solid" ${frontDoor === 'bifold-solid' ? 'selected' : ''}>Bi-Fold Folding - Solid Steel</option>
+                </optgroup>
+                <optgroup label="Single Doors - Perforated Round (4 Levels)">
+                  <option value="perforated-large" ${frontDoor === 'perforated-large' || frontDoor === 'round-hole-large' ? 'selected' : ''}>Single Door - Perforated (Large Round Holes)</option>
+                  <option value="perforated" ${frontDoor === 'perforated' || frontDoor === 'perforated-medium' || frontDoor === 'round-hole' || !frontDoor ? 'selected' : ''}>Single Door - Perforated (Medium Round Holes)</option>
+                  <option value="perforated-small" ${frontDoor === 'perforated-small' || frontDoor === 'round-hole-small' ? 'selected' : ''}>Single Door - Perforated (Small Round Holes)</option>
                   <option value="perforated-tiny" ${frontDoor === 'perforated-tiny' ? 'selected' : ''}>Single Door - Perforated (Tiny / Micro-Mesh)</option>
                 </optgroup>
-                <optgroup label="Single Doors - Honeycomb Hex Mesh (4 Levels)">
-                  <option value="honeycomb-large" ${frontDoor === 'honeycomb-large' ? 'selected' : ''}>Single Door - Honeycomb (Large Hex Mesh)</option>
-                  <option value="honeycomb-medium" ${frontDoor === 'honeycomb-medium' ? 'selected' : ''}>Single Door - Honeycomb (Medium Hex Mesh)</option>
-                  <option value="honeycomb-small" ${frontDoor === 'honeycomb-small' ? 'selected' : ''}>Single Door - Honeycomb (Small Hex Mesh)</option>
+                <optgroup label="Single Doors - Honeycomb Hex (4 Levels)">
+                  <option value="honeycomb-large" ${frontDoor === 'honeycomb-large' || frontDoor === 'hexa-large' ? 'selected' : ''}>Single Door - Honeycomb (Large Hex Mesh)</option>
+                  <option value="honeycomb-medium" ${frontDoor === 'honeycomb-medium' || frontDoor === 'hexa' ? 'selected' : ''}>Single Door - Honeycomb (Medium Hex Mesh)</option>
+                  <option value="honeycomb-small" ${frontDoor === 'honeycomb-small' || frontDoor === 'hexa-small' ? 'selected' : ''}>Single Door - Honeycomb (Small Hex Mesh)</option>
                   <option value="honeycomb-tiny" ${frontDoor === 'honeycomb-tiny' ? 'selected' : ''}>Single Door - Honeycomb (Tiny / Micro-Hex)</option>
                 </optgroup>
-                <optgroup label="Single Doors - Glass, Solid & Louvered">
+                <optgroup label="Single Doors - Mesh, Glass, Acrylic & Solid">
+                  <option value="wire-mesh" ${frontDoor === 'wire-mesh' || frontDoor === 'mesh' ? 'selected' : ''}>Single Heavy-Duty Wire Mesh Grid</option>
                   <option value="glass" ${frontDoor === 'glass' ? 'selected' : ''}>Single Tempered Glass Door</option>
+                  <option value="acrylic" ${frontDoor === 'acrylic' ? 'selected' : ''}>Single Tinted Acrylic Door</option>
                   <option value="solid" ${frontDoor === 'solid' ? 'selected' : ''}>Single Solid Steel Door</option>
-                  <option value="louvered" ${frontDoor === 'louvered' ? 'selected' : ''}>Louvered / Vented Steel Door</option>
+                  <option value="louvered" ${frontDoor === 'louvered' ? 'selected' : ''}>Single Louvered / Vented Steel Door</option>
                 </optgroup>
                 <optgroup label="Colocation Compartment Doors">
                   <option value="multi-compartment-2" ${frontDoor === 'multi-compartment-2' ? 'selected' : ''}>2-Compartment Colo Doors (Dual-Tier)</option>
                   <option value="multi-compartment-4" ${frontDoor === 'multi-compartment-4' ? 'selected' : ''}>4-Compartment Colo Doors (Multi-Tenant)</option>
                 </optgroup>
                 <optgroup label="Open Enclosure">
-                  <option value="none" ${frontDoor === 'none' ? 'selected' : ''}>None (Open Frame / No Door)</option>
+                  <option value="none" ${frontDoor === 'none' ? 'selected' : ''}>None (Open Front / No Door)</option>
                 </optgroup>
+              </select>
+            </div>
+
+            <div>
+              <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #fb8c00; margin-bottom: 6px;">Door Operation</label>
+              <select id="crm-door-op" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px;">
+                <option value="swing-left" ${doorOperation === 'swing-left' || !doorOperation ? 'selected' : ''}>Swing - Left Hinged</option>
+                <option value="swing-right" ${doorOperation === 'swing-right' ? 'selected' : ''}>Swing - Right Hinged</option>
+                <option value="swing-dual" ${doorOperation === 'swing-dual' || doorOperation === 'split-swing' ? 'selected' : ''}>Swing - Dual Leaf (Wardrobe)</option>
+                <option value="sliding" ${doorOperation === 'sliding' ? 'selected' : ''}>Sliding Track (Manual / Auto)</option>
+                <option value="lift-off" ${doorOperation === 'lift-off' ? 'selected' : ''}>Lift-Off (Quick-Release Panel)</option>
+                <option value="bifold" ${doorOperation === 'bifold' ? 'selected' : ''}>Bi-Fold (Folding Hinge)</option>
               </select>
             </div>
 
@@ -271,6 +288,7 @@ export class CustomRackModal {
       const depthVal = parseInt((overlay.querySelector('#crm-depth') as HTMLSelectElement)?.value, 10) || 1000;
       const typeVal = (overlay.querySelector('#crm-type') as HTMLSelectElement)?.value as RackType;
       const doorVal = (overlay.querySelector('#crm-door') as HTMLSelectElement)?.value as RackDoorType;
+      const doorOpVal = (overlay.querySelector('#crm-door-op') as HTMLSelectElement)?.value as RackDoorOperation;
       const sidePanelsVal = (overlay.querySelector('#crm-side-panels') as HTMLSelectElement)?.value === 'true';
       const colorVal = (overlay.querySelector('#crm-color') as HTMLSelectElement)?.value || '#0c0e12';
       const mountVal = (overlay.querySelector('#crm-mounting') as HTMLSelectElement)?.value as RackMounting;
@@ -288,6 +306,7 @@ export class CustomRackModal {
         depthMm: depthVal,
         rackType: typeVal,
         frontDoor: doorVal,
+        doorOperation: doorOpVal,
         sidePanels: sidePanelsVal,
         rackColor: colorVal,
         mounting: mountVal,

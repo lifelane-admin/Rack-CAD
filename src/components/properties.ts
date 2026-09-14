@@ -649,46 +649,74 @@ export class PropertiesPanel {
           <div class="form-group" style="margin-bottom: 0;">
             <label style="font-size: 10px;">Front Door Style</label>
             <select id="prop-rack-door" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
-              <optgroup label="Twin Doors - Perforated Round (4 Levels)">
-                <option value="split-perforated-large" ${rack.frontDoor === 'split-perforated-large' ? 'selected' : ''}>Twin Door - Perforated (Large Holes)</option>
-                <option value="split-perforated" ${rack.frontDoor === 'split-perforated' || rack.frontDoor === 'split-perforated-medium' ? 'selected' : ''}>Twin Door - Perforated (Medium Holes)</option>
-                <option value="split-perforated-small" ${rack.frontDoor === 'split-perforated-small' ? 'selected' : ''}>Twin Door - Perforated (Small Holes)</option>
+              <optgroup label="Twin Doors - Dual Split 50/50">
+                <option value="split-perforated-large" ${rack.frontDoor === 'split-perforated-large' ? 'selected' : ''}>Twin Door - Perforated (Large Round Holes)</option>
+                <option value="split-perforated" ${rack.frontDoor === 'split-perforated' || rack.frontDoor === 'split-perforated-medium' || rack.frontDoor === 'split-round-hole' ? 'selected' : ''}>Twin Door - Perforated (Medium Round Holes)</option>
+                <option value="split-perforated-small" ${rack.frontDoor === 'split-perforated-small' ? 'selected' : ''}>Twin Door - Perforated (Small Round Holes)</option>
                 <option value="split-perforated-tiny" ${rack.frontDoor === 'split-perforated-tiny' ? 'selected' : ''}>Twin Door - Perforated (Tiny / Micro-Mesh)</option>
-              </optgroup>
-              <optgroup label="Twin Doors - Honeycomb Hex (4 Levels)">
-                <option value="split-honeycomb-large" ${rack.frontDoor === 'split-honeycomb-large' ? 'selected' : ''}>Twin Door - Honeycomb (Large Hex)</option>
-                <option value="split-honeycomb" ${rack.frontDoor === 'split-honeycomb' || rack.frontDoor === 'split-honeycomb-medium' ? 'selected' : ''}>Twin Door - Honeycomb (Medium Hex)</option>
-                <option value="split-honeycomb-small" ${rack.frontDoor === 'split-honeycomb-small' ? 'selected' : ''}>Twin Door - Honeycomb (Small Hex)</option>
+                <option value="split-honeycomb-large" ${rack.frontDoor === 'split-honeycomb-large' ? 'selected' : ''}>Twin Door - Honeycomb (Large Hex Mesh)</option>
+                <option value="split-honeycomb" ${rack.frontDoor === 'split-honeycomb' || rack.frontDoor === 'split-honeycomb-medium' || rack.frontDoor === 'split-hexa' ? 'selected' : ''}>Twin Door - Honeycomb (Medium Hex Mesh)</option>
+                <option value="split-honeycomb-small" ${rack.frontDoor === 'split-honeycomb-small' ? 'selected' : ''}>Twin Door - Honeycomb (Small Hex Mesh)</option>
                 <option value="split-honeycomb-tiny" ${rack.frontDoor === 'split-honeycomb-tiny' ? 'selected' : ''}>Twin Door - Honeycomb (Tiny / Micro-Hex)</option>
+                <option value="split-wire-mesh" ${rack.frontDoor === 'split-wire-mesh' || rack.frontDoor === 'split-mesh' ? 'selected' : ''}>Twin Door - Heavy-Duty Wire Mesh Grid</option>
+                <option value="split-glass" ${rack.frontDoor === 'split-glass' ? 'selected' : ''}>Twin Door - Observation Glass (Dual Split)</option>
+                <option value="split-acrylic" ${rack.frontDoor === 'split-acrylic' ? 'selected' : ''}>Twin Door - Tinted Acrylic (Dual Split)</option>
+                <option value="split-solid" ${rack.frontDoor === 'split-solid' ? 'selected' : ''}>Twin Door - Solid Steel Security (Dual Split)</option>
               </optgroup>
-              <optgroup label="Twin Doors - Glass & Solid">
-                <option value="split-glass" ${rack.frontDoor === 'split-glass' ? 'selected' : ''}>Twin Door - Glass</option>
-                <option value="split-solid" ${rack.frontDoor === 'split-solid' ? 'selected' : ''}>Twin Door - Solid Steel</option>
+              <optgroup label="Asymmetric Dual Doors (60/40 Split)">
+                <option value="asym-split-perforated" ${rack.frontDoor === 'asym-split-perforated' ? 'selected' : ''}>Asymmetric Dual - Perforated Round (60/40)</option>
+                <option value="asym-split-honeycomb" ${rack.frontDoor === 'asym-split-honeycomb' || rack.frontDoor === 'asym-split-hexa' ? 'selected' : ''}>Asymmetric Dual - Honeycomb Hex (60/40)</option>
+                <option value="asym-split-wire-mesh" ${rack.frontDoor === 'asym-split-wire-mesh' ? 'selected' : ''}>Asymmetric Dual - Wire Mesh Grid (60/40)</option>
+                <option value="asym-split-glass" ${rack.frontDoor === 'asym-split-glass' ? 'selected' : ''}>Asymmetric Dual - Glass Window (60/40)</option>
+                <option value="asym-split-acrylic" ${rack.frontDoor === 'asym-split-acrylic' ? 'selected' : ''}>Asymmetric Dual - Tinted Acrylic (60/40)</option>
+                <option value="asym-split-solid" ${rack.frontDoor === 'asym-split-solid' ? 'selected' : ''}>Asymmetric Dual - Solid Steel (60/40)</option>
+              </optgroup>
+              <optgroup label="Multi-Leaf / Bi-Fold Doors">
+                <option value="bifold-perforated" ${rack.frontDoor === 'bifold-perforated' ? 'selected' : ''}>Bi-Fold Folding - Perforated Round Mesh</option>
+                <option value="bifold-honeycomb" ${rack.frontDoor === 'bifold-honeycomb' || rack.frontDoor === 'bifold-hexa' ? 'selected' : ''}>Bi-Fold Folding - Honeycomb Hex Mesh</option>
+                <option value="bifold-wire-mesh" ${rack.frontDoor === 'bifold-wire-mesh' ? 'selected' : ''}>Bi-Fold Folding - Wire Mesh Grid</option>
+                <option value="bifold-glass" ${rack.frontDoor === 'bifold-glass' ? 'selected' : ''}>Bi-Fold Folding - Tempered Glass</option>
+                <option value="bifold-acrylic" ${rack.frontDoor === 'bifold-acrylic' ? 'selected' : ''}>Bi-Fold Folding - Tinted Acrylic</option>
+                <option value="bifold-solid" ${rack.frontDoor === 'bifold-solid' ? 'selected' : ''}>Bi-Fold Folding - Solid Steel</option>
               </optgroup>
               <optgroup label="Single Doors - Perforated Round (4 Levels)">
-                <option value="perforated-large" ${rack.frontDoor === 'perforated-large' ? 'selected' : ''}>Single Door - Perforated (Large Holes)</option>
-                <option value="perforated" ${rack.frontDoor === 'perforated' || rack.frontDoor === 'perforated-medium' || !rack.frontDoor ? 'selected' : ''}>Single Door - Perforated (Medium Holes)</option>
-                <option value="perforated-small" ${rack.frontDoor === 'perforated-small' ? 'selected' : ''}>Single Door - Perforated (Small Holes)</option>
+                <option value="perforated-large" ${rack.frontDoor === 'perforated-large' || rack.frontDoor === 'round-hole-large' ? 'selected' : ''}>Single Door - Perforated (Large Round Holes)</option>
+                <option value="perforated" ${rack.frontDoor === 'perforated' || rack.frontDoor === 'perforated-medium' || rack.frontDoor === 'round-hole' || !rack.frontDoor ? 'selected' : ''}>Single Door - Perforated (Medium Round Holes)</option>
+                <option value="perforated-small" ${rack.frontDoor === 'perforated-small' || rack.frontDoor === 'round-hole-small' ? 'selected' : ''}>Single Door - Perforated (Small Round Holes)</option>
                 <option value="perforated-tiny" ${rack.frontDoor === 'perforated-tiny' ? 'selected' : ''}>Single Door - Perforated (Tiny / Micro-Mesh)</option>
               </optgroup>
               <optgroup label="Single Doors - Honeycomb Hex (4 Levels)">
-                <option value="honeycomb-large" ${rack.frontDoor === 'honeycomb-large' ? 'selected' : ''}>Single Door - Honeycomb (Large Hex)</option>
-                <option value="honeycomb-medium" ${rack.frontDoor === 'honeycomb-medium' ? 'selected' : ''}>Single Door - Honeycomb (Medium Hex)</option>
-                <option value="honeycomb-small" ${rack.frontDoor === 'honeycomb-small' ? 'selected' : ''}>Single Door - Honeycomb (Small Hex)</option>
+                <option value="honeycomb-large" ${rack.frontDoor === 'honeycomb-large' || rack.frontDoor === 'hexa-large' ? 'selected' : ''}>Single Door - Honeycomb (Large Hex Mesh)</option>
+                <option value="honeycomb-medium" ${rack.frontDoor === 'honeycomb-medium' || rack.frontDoor === 'hexa' ? 'selected' : ''}>Single Door - Honeycomb (Medium Hex Mesh)</option>
+                <option value="honeycomb-small" ${rack.frontDoor === 'honeycomb-small' || rack.frontDoor === 'hexa-small' ? 'selected' : ''}>Single Door - Honeycomb (Small Hex Mesh)</option>
                 <option value="honeycomb-tiny" ${rack.frontDoor === 'honeycomb-tiny' ? 'selected' : ''}>Single Door - Honeycomb (Tiny / Micro-Hex)</option>
               </optgroup>
-              <optgroup label="Single Doors - Glass & Solid">
-                <option value="glass" ${rack.frontDoor === 'glass' ? 'selected' : ''}>Single Glass Door</option>
-                <option value="solid" ${rack.frontDoor === 'solid' ? 'selected' : ''}>Single Solid Steel</option>
-                <option value="louvered" ${rack.frontDoor === 'louvered' ? 'selected' : ''}>Louvered / Vented Door</option>
+              <optgroup label="Single Doors - Mesh, Glass, Acrylic & Solid">
+                <option value="wire-mesh" ${rack.frontDoor === 'wire-mesh' || rack.frontDoor === 'mesh' ? 'selected' : ''}>Single Heavy-Duty Wire Mesh Grid</option>
+                <option value="glass" ${rack.frontDoor === 'glass' ? 'selected' : ''}>Single Tempered Glass Door</option>
+                <option value="acrylic" ${rack.frontDoor === 'acrylic' ? 'selected' : ''}>Single Tinted Acrylic Door</option>
+                <option value="solid" ${rack.frontDoor === 'solid' ? 'selected' : ''}>Single Solid Steel Door</option>
+                <option value="louvered" ${rack.frontDoor === 'louvered' ? 'selected' : ''}>Single Louvered / Vented Steel Door</option>
               </optgroup>
               <optgroup label="Colocation Compartment Doors">
-                <option value="multi-compartment-2" ${rack.frontDoor === 'multi-compartment-2' ? 'selected' : ''}>2-Compartment Colo Doors</option>
-                <option value="multi-compartment-4" ${rack.frontDoor === 'multi-compartment-4' ? 'selected' : ''}>4-Compartment Colo Doors</option>
+                <option value="multi-compartment-2" ${rack.frontDoor === 'multi-compartment-2' ? 'selected' : ''}>2-Compartment Colo Doors (Dual-Tier)</option>
+                <option value="multi-compartment-4" ${rack.frontDoor === 'multi-compartment-4' ? 'selected' : ''}>4-Compartment Colo Doors (Multi-Tenant)</option>
               </optgroup>
               <optgroup label="Open Enclosure">
-                <option value="none" ${rack.frontDoor === 'none' ? 'selected' : ''}>None (Open Front)</option>
+                <option value="none" ${rack.frontDoor === 'none' ? 'selected' : ''}>None (Open Front / No Door)</option>
               </optgroup>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 10px;">Door Operation</label>
+            <select id="prop-rack-door-op" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
+              <option value="swing-left" ${rack.doorOperation === 'swing-left' || !rack.doorOperation ? 'selected' : ''}>Swing - Left Hinged</option>
+              <option value="swing-right" ${rack.doorOperation === 'swing-right' ? 'selected' : ''}>Swing - Right Hinged</option>
+              <option value="swing-dual" ${rack.doorOperation === 'swing-dual' || rack.doorOperation === 'split-swing' ? 'selected' : ''}>Swing - Dual Leaf (Wardrobe)</option>
+              <option value="sliding" ${rack.doorOperation === 'sliding' ? 'selected' : ''}>Sliding Track (Manual / Auto)</option>
+              <option value="lift-off" ${rack.doorOperation === 'lift-off' ? 'selected' : ''}>Lift-Off (Quick-Release Panel)</option>
+              <option value="bifold" ${rack.doorOperation === 'bifold' ? 'selected' : ''}>Bi-Fold (Folding Hinge)</option>
             </select>
           </div>
 
@@ -813,6 +841,9 @@ export class PropertiesPanel {
     });
     container.querySelector('#prop-rack-door')?.addEventListener('change', (e: any) => {
       EventBus.emit('rack:update', { id, data: { frontDoor: e.target.value } });
+    });
+    container.querySelector('#prop-rack-door-op')?.addEventListener('change', (e: any) => {
+      EventBus.emit('rack:update', { id, data: { doorOperation: e.target.value } });
     });
     container.querySelector('#prop-rack-side-panels')?.addEventListener('change', (e: any) => {
       EventBus.emit('rack:update', { id, data: { sidePanels: e.target.value === 'true' } });

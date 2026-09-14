@@ -19,33 +19,79 @@ export const STANDARD_RACK_HEIGHTS = [6, 9, 12, 18, 24, 27, 36, 42, 45, 48] as c
 export const STANDARD_RACK_DEPTHS = [450, 600, 800, 1000, 1200] as const;
 export type VcmWidth = '2-inch' | '4-inch' | '6-inch' | '8-inch' | 'none';
 export type RackType = 'server' | 'network' | 'wall-mount' | 'open-frame';
+export type RackDoorOperation =
+  | 'swing-left'
+  | 'swing-right'
+  | 'swing-dual'
+  | 'split-swing'
+  | 'sliding'
+  | 'lift-off'
+  | 'bifold';
+
 export type RackDoorType =
+  // Single leaf doors
   | 'glass'
+  | 'acrylic'
+  | 'solid'
+  | 'louvered'
   | 'perforated'
   | 'perforated-large'
   | 'perforated-medium'
   | 'perforated-small'
   | 'perforated-tiny'
+  | 'round-hole'
+  | 'round-hole-large'
+  | 'round-hole-small'
   | 'honeycomb-large'
   | 'honeycomb-medium'
   | 'honeycomb-small'
   | 'honeycomb-tiny'
-  | 'solid'
+  | 'hexa'
+  | 'hexa-large'
+  | 'hexa-small'
+  | 'wire-mesh'
+  | 'mesh'
+  // Dual leaf doors (50/50 split)
   | 'split-perforated'
   | 'split-perforated-large'
   | 'split-perforated-medium'
   | 'split-perforated-small'
   | 'split-perforated-tiny'
+  | 'split-round-hole'
   | 'split-honeycomb'
   | 'split-honeycomb-large'
   | 'split-honeycomb-medium'
   | 'split-honeycomb-small'
   | 'split-honeycomb-tiny'
+  | 'split-hexa'
   | 'split-solid'
   | 'split-glass'
+  | 'split-acrylic'
+  | 'split-wire-mesh'
+  | 'split-mesh'
+  // Asymmetric dual leaf doors (60/40 split)
+  | 'asym-split-perforated'
+  | 'asym-split-honeycomb'
+  | 'asym-split-hexa'
+  | 'asym-split-solid'
+  | 'asym-split-glass'
+  | 'asym-split-acrylic'
+  | 'asym-split-wire-mesh'
+  // Multi-leaf / Bi-fold doors
+  | 'bifold-perforated'
+  | 'bifold-honeycomb'
+  | 'bifold-hexa'
+  | 'bifold-solid'
+  | 'bifold-glass'
+  | 'bifold-acrylic'
+  | 'bifold-wire-mesh'
+  // Colocation compartment doors
   | 'multi-compartment-2'
   | 'multi-compartment-4'
+  | 'smart-lcd'
+  | 'containment-sliding'
   | 'louvered'
+  | 'louvred'
   | 'none';
 export type RackMounting = 'floor' | 'wall-mount';
 export type RackWidthOption = '19-inch' | '23-inch' | 'custom';
@@ -61,6 +107,7 @@ export interface RackData {
   depthMm?: number;
   rackType?: RackType;
   frontDoor?: RackDoorType;
+  doorOperation?: RackDoorOperation;
   sidePanels?: boolean;
   rackColor?: string;
   mounting?: RackMounting;

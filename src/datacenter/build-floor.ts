@@ -5215,6 +5215,7 @@ export class BuildFloorView {
       rackWidth: rack.widthMm === 800 ? '23-inch' : '19-inch',
       rackType: (rack.type === 'open-frame' ? 'open-frame' : rack.type === 'network' ? 'network' : rack.type === 'wall-mount' ? 'wall-mount' : 'server') as any,
       frontDoor: rack.doorStyle as any,
+      doorOperation: rack.doorOperation as any,
       mounting: rack.mounting === 'wall-mount' ? 'wall-mount' : 'floor',
       rackColor: rack.color ?? '#1e3a5f',
       x: posX,
@@ -6191,38 +6192,54 @@ export class BuildFloorView {
         <label>Height (U)<input id="dr-height" type="number" value="42" min="2" max="54" step="2" class="dc-input"/></label>
         <label>Door Style
           <select id="dr-door" class="dc-input">
-            <optgroup label="Twin Doors - Perforated Round Mesh (4 Levels)">
+            <optgroup label="Twin Doors - Dual Split 50/50">
               <option value="split-perforated-large">Twin Door - Perforated (Large Round Holes)</option>
               <option value="split-perforated">Twin Door - Perforated (Medium Round Holes)</option>
               <option value="split-perforated-small">Twin Door - Perforated (Small Round Holes)</option>
               <option value="split-perforated-tiny">Twin Door - Perforated (Tiny / Micro-Mesh)</option>
-            </optgroup>
-            <optgroup label="Twin Doors - Honeycomb Hex Mesh (4 Levels)">
               <option value="split-honeycomb-large">Twin Door - Honeycomb (Large Hex Mesh)</option>
               <option value="split-honeycomb">Twin Door - Honeycomb (Medium Hex Mesh)</option>
               <option value="split-honeycomb-small">Twin Door - Honeycomb (Small Hex Mesh)</option>
               <option value="split-honeycomb-tiny">Twin Door - Honeycomb (Tiny / Micro-Hex)</option>
-            </optgroup>
-            <optgroup label="Twin Doors - Glass & Solid">
+              <option value="split-wire-mesh">Twin Door - Heavy-Duty Wire Mesh Grid</option>
               <option value="split-glass">Twin Door - Observation Glass (Dual Split)</option>
+              <option value="split-acrylic">Twin Door - Tinted Acrylic (Dual Split)</option>
               <option value="split-solid">Twin Door - Solid Steel Security (Dual Split)</option>
             </optgroup>
-            <optgroup label="Single Doors - Perforated Round Mesh (4 Levels)">
+            <optgroup label="Asymmetric Dual Doors (60/40 Split)">
+              <option value="asym-split-perforated">Asymmetric Dual - Perforated Round (60/40)</option>
+              <option value="asym-split-honeycomb">Asymmetric Dual - Honeycomb Hex (60/40)</option>
+              <option value="asym-split-wire-mesh">Asymmetric Dual - Wire Mesh Grid (60/40)</option>
+              <option value="asym-split-glass">Asymmetric Dual - Glass Window (60/40)</option>
+              <option value="asym-split-acrylic">Asymmetric Dual - Tinted Acrylic (60/40)</option>
+              <option value="asym-split-solid">Asymmetric Dual - Solid Steel (60/40)</option>
+            </optgroup>
+            <optgroup label="Multi-Leaf / Bi-Fold Doors">
+              <option value="bifold-perforated">Bi-Fold Folding - Perforated Round Mesh</option>
+              <option value="bifold-honeycomb">Bi-Fold Folding - Honeycomb Hex Mesh</option>
+              <option value="bifold-wire-mesh">Bi-Fold Folding - Wire Mesh Grid</option>
+              <option value="bifold-glass">Bi-Fold Folding - Tempered Glass</option>
+              <option value="bifold-acrylic">Bi-Fold Folding - Tinted Acrylic</option>
+              <option value="bifold-solid">Bi-Fold Folding - Solid Steel</option>
+            </optgroup>
+            <optgroup label="Single Doors - Perforated Round (4 Levels)">
               <option value="perforated-large">Single Door - Perforated (Large Round Holes)</option>
               <option value="perforated" selected>Single Door - Perforated (Medium Round Holes)</option>
               <option value="perforated-small">Single Door - Perforated (Small Round Holes)</option>
               <option value="perforated-tiny">Single Door - Perforated (Tiny / Micro-Mesh)</option>
             </optgroup>
-            <optgroup label="Single Doors - Honeycomb Hex Mesh (4 Levels)">
+            <optgroup label="Single Doors - Honeycomb Hex (4 Levels)">
               <option value="honeycomb-large">Single Door - Honeycomb (Large Hex Mesh)</option>
               <option value="honeycomb-medium">Single Door - Honeycomb (Medium Hex Mesh)</option>
               <option value="honeycomb-small">Single Door - Honeycomb (Small Hex Mesh)</option>
               <option value="honeycomb-tiny">Single Door - Honeycomb (Tiny / Micro-Hex)</option>
             </optgroup>
-            <optgroup label="Single Doors - Glass, Solid & Louvered">
+            <optgroup label="Single Doors - Mesh, Glass, Acrylic & Solid">
+              <option value="wire-mesh">Single Heavy-Duty Wire Mesh Grid</option>
               <option value="glass">Single Tempered Glass Door</option>
+              <option value="acrylic">Single Tinted Acrylic Door</option>
               <option value="solid">Single Solid Steel Door</option>
-              <option value="louvered">Louvered / Vented Steel Door</option>
+              <option value="louvered">Single Louvered / Vented Steel Door</option>
             </optgroup>
             <optgroup label="Colocation Compartment Doors">
               <option value="multi-compartment-2">2-Compartment Colo Doors (Dual-Tier)</option>
@@ -6231,6 +6248,16 @@ export class BuildFloorView {
             <optgroup label="Open Enclosure">
               <option value="none">None (Open Frame / No Door)</option>
             </optgroup>
+          </select>
+        </label>
+        <label>Door Operation
+          <select id="dr-door-op" class="dc-input">
+            <option value="swing-left" selected>Swing - Left Hinged</option>
+            <option value="swing-right">Swing - Right Hinged</option>
+            <option value="swing-dual">Swing - Dual Leaf (Wardrobe)</option>
+            <option value="sliding">Sliding Track (Manual / Auto)</option>
+            <option value="lift-off">Lift-Off (Quick-Release Panel)</option>
+            <option value="bifold">Bi-Fold (Folding Hinge)</option>
           </select>
         </label>
         <label>Mounting Style
@@ -6252,6 +6279,7 @@ export class BuildFloorView {
       const d = parseFloat((document.getElementById('dr-depth') as HTMLInputElement).value) || 1200;
       const h = parseFloat((document.getElementById('dr-height') as HTMLInputElement).value) || 42;
       const door = (document.getElementById('dr-door') as HTMLSelectElement).value as DcDoorStyle;
+      const doorOp = (document.getElementById('dr-door-op') as HTMLSelectElement).value as any;
       const mounting = (document.getElementById('dr-mounting') as HTMLSelectElement).value as DcMounting;
       const mfr = (document.getElementById('dr-mfr') as HTMLInputElement).value.trim();
       const model = (document.getElementById('dr-model') as HTMLInputElement).value.trim();
@@ -6269,6 +6297,7 @@ export class BuildFloorView {
         depthMm: d,
         heightU: h,
         doorStyle: door,
+        doorOperation: doorOp,
         mounting,
         manufacturer: mfr || undefined,
         model: model || undefined,
@@ -6320,38 +6349,54 @@ export class BuildFloorView {
         <label>Height (U)<input id="dr-height" type="number" value="${rack.heightU}" min="2" max="54" step="2" class="dc-input"/></label>
         <label>Door Style
           <select id="dr-door" class="dc-input">
-            <optgroup label="Twin Doors - Perforated Round Mesh (4 Levels)">
+            <optgroup label="Twin Doors - Dual Split 50/50">
               <option value="split-perforated-large"${rack.doorStyle === 'split-perforated-large' ? ' selected' : ''}>Twin Door - Perforated (Large Round Holes)</option>
-              <option value="split-perforated"${rack.doorStyle === 'split-perforated' || rack.doorStyle === 'split-perforated-medium' ? ' selected' : ''}>Twin Door - Perforated (Medium Round Holes)</option>
+              <option value="split-perforated"${rack.doorStyle === 'split-perforated' || rack.doorStyle === 'split-perforated-medium' || rack.doorStyle === 'split-round-hole' ? ' selected' : ''}>Twin Door - Perforated (Medium Round Holes)</option>
               <option value="split-perforated-small"${rack.doorStyle === 'split-perforated-small' ? ' selected' : ''}>Twin Door - Perforated (Small Round Holes)</option>
               <option value="split-perforated-tiny"${rack.doorStyle === 'split-perforated-tiny' ? ' selected' : ''}>Twin Door - Perforated (Tiny / Micro-Mesh)</option>
-            </optgroup>
-            <optgroup label="Twin Doors - Honeycomb Hex Mesh (4 Levels)">
               <option value="split-honeycomb-large"${rack.doorStyle === 'split-honeycomb-large' ? ' selected' : ''}>Twin Door - Honeycomb (Large Hex Mesh)</option>
-              <option value="split-honeycomb"${rack.doorStyle === 'split-honeycomb' || rack.doorStyle === 'split-honeycomb-medium' ? ' selected' : ''}>Twin Door - Honeycomb (Medium Hex Mesh)</option>
+              <option value="split-honeycomb"${rack.doorStyle === 'split-honeycomb' || rack.doorStyle === 'split-honeycomb-medium' || rack.doorStyle === 'split-hexa' ? ' selected' : ''}>Twin Door - Honeycomb (Medium Hex Mesh)</option>
               <option value="split-honeycomb-small"${rack.doorStyle === 'split-honeycomb-small' ? ' selected' : ''}>Twin Door - Honeycomb (Small Hex Mesh)</option>
               <option value="split-honeycomb-tiny"${rack.doorStyle === 'split-honeycomb-tiny' ? ' selected' : ''}>Twin Door - Honeycomb (Tiny / Micro-Hex)</option>
-            </optgroup>
-            <optgroup label="Twin Doors - Glass & Solid">
+              <option value="split-wire-mesh"${rack.doorStyle === 'split-wire-mesh' || rack.doorStyle === 'split-mesh' ? ' selected' : ''}>Twin Door - Heavy-Duty Wire Mesh Grid</option>
               <option value="split-glass"${rack.doorStyle === 'split-glass' ? ' selected' : ''}>Twin Door - Observation Glass (Dual Split)</option>
+              <option value="split-acrylic"${rack.doorStyle === 'split-acrylic' ? ' selected' : ''}>Twin Door - Tinted Acrylic (Dual Split)</option>
               <option value="split-solid"${rack.doorStyle === 'split-solid' ? ' selected' : ''}>Twin Door - Solid Steel Security (Dual Split)</option>
             </optgroup>
-            <optgroup label="Single Doors - Perforated Round Mesh (4 Levels)">
-              <option value="perforated-large"${rack.doorStyle === 'perforated-large' ? ' selected' : ''}>Single Door - Perforated (Large Round Holes)</option>
-              <option value="perforated"${rack.doorStyle === 'perforated' || rack.doorStyle === 'perforated-medium' || !rack.doorStyle ? ' selected' : ''}>Single Door - Perforated (Medium Round Holes)</option>
-              <option value="perforated-small"${rack.doorStyle === 'perforated-small' ? ' selected' : ''}>Single Door - Perforated (Small Round Holes)</option>
+            <optgroup label="Asymmetric Dual Doors (60/40 Split)">
+              <option value="asym-split-perforated"${rack.doorStyle === 'asym-split-perforated' ? ' selected' : ''}>Asymmetric Dual - Perforated Round (60/40)</option>
+              <option value="asym-split-honeycomb"${rack.doorStyle === 'asym-split-honeycomb' || rack.doorStyle === 'asym-split-hexa' ? ' selected' : ''}>Asymmetric Dual - Honeycomb Hex (60/40)</option>
+              <option value="asym-split-wire-mesh"${rack.doorStyle === 'asym-split-wire-mesh' ? ' selected' : ''}>Asymmetric Dual - Wire Mesh Grid (60/40)</option>
+              <option value="asym-split-glass"${rack.doorStyle === 'asym-split-glass' ? ' selected' : ''}>Asymmetric Dual - Glass Window (60/40)</option>
+              <option value="asym-split-acrylic"${rack.doorStyle === 'asym-split-acrylic' ? ' selected' : ''}>Asymmetric Dual - Tinted Acrylic (60/40)</option>
+              <option value="asym-split-solid"${rack.doorStyle === 'asym-split-solid' ? ' selected' : ''}>Asymmetric Dual - Solid Steel (60/40)</option>
+            </optgroup>
+            <optgroup label="Multi-Leaf / Bi-Fold Doors">
+              <option value="bifold-perforated"${rack.doorStyle === 'bifold-perforated' ? ' selected' : ''}>Bi-Fold Folding - Perforated Round Mesh</option>
+              <option value="bifold-honeycomb"${rack.doorStyle === 'bifold-honeycomb' || rack.doorStyle === 'bifold-hexa' ? ' selected' : ''}>Bi-Fold Folding - Honeycomb Hex Mesh</option>
+              <option value="bifold-wire-mesh"${rack.doorStyle === 'bifold-wire-mesh' ? ' selected' : ''}>Bi-Fold Folding - Wire Mesh Grid</option>
+              <option value="bifold-glass"${rack.doorStyle === 'bifold-glass' ? ' selected' : ''}>Bi-Fold Folding - Tempered Glass</option>
+              <option value="bifold-acrylic"${rack.doorStyle === 'bifold-acrylic' ? ' selected' : ''}>Bi-Fold Folding - Tinted Acrylic</option>
+              <option value="bifold-solid"${rack.doorStyle === 'bifold-solid' ? ' selected' : ''}>Bi-Fold Folding - Solid Steel</option>
+            </optgroup>
+            <optgroup label="Single Doors - Perforated Round (4 Levels)">
+              <option value="perforated-large"${rack.doorStyle === 'perforated-large' || rack.doorStyle === 'round-hole-large' ? ' selected' : ''}>Single Door - Perforated (Large Round Holes)</option>
+              <option value="perforated"${rack.doorStyle === 'perforated' || rack.doorStyle === 'perforated-medium' || rack.doorStyle === 'round-hole' || !rack.doorStyle ? ' selected' : ''}>Single Door - Perforated (Medium Round Holes)</option>
+              <option value="perforated-small"${rack.doorStyle === 'perforated-small' || rack.doorStyle === 'round-hole-small' ? ' selected' : ''}>Single Door - Perforated (Small Round Holes)</option>
               <option value="perforated-tiny"${rack.doorStyle === 'perforated-tiny' ? ' selected' : ''}>Single Door - Perforated (Tiny / Micro-Mesh)</option>
             </optgroup>
-            <optgroup label="Single Doors - Honeycomb Hex Mesh (4 Levels)">
-              <option value="honeycomb-large"${rack.doorStyle === 'honeycomb-large' ? ' selected' : ''}>Single Door - Honeycomb (Large Hex Mesh)</option>
-              <option value="honeycomb-medium"${rack.doorStyle === 'honeycomb-medium' ? ' selected' : ''}>Single Door - Honeycomb (Medium Hex Mesh)</option>
-              <option value="honeycomb-small"${rack.doorStyle === 'honeycomb-small' ? ' selected' : ''}>Single Door - Honeycomb (Small Hex Mesh)</option>
+            <optgroup label="Single Doors - Honeycomb Hex (4 Levels)">
+              <option value="honeycomb-large"${rack.doorStyle === 'honeycomb-large' || rack.doorStyle === 'hexa-large' ? ' selected' : ''}>Single Door - Honeycomb (Large Hex Mesh)</option>
+              <option value="honeycomb-medium"${rack.doorStyle === 'honeycomb-medium' || rack.doorStyle === 'hexa' ? ' selected' : ''}>Single Door - Honeycomb (Medium Hex Mesh)</option>
+              <option value="honeycomb-small"${rack.doorStyle === 'honeycomb-small' || rack.doorStyle === 'hexa-small' ? ' selected' : ''}>Single Door - Honeycomb (Small Hex Mesh)</option>
               <option value="honeycomb-tiny"${rack.doorStyle === 'honeycomb-tiny' ? ' selected' : ''}>Single Door - Honeycomb (Tiny / Micro-Hex)</option>
             </optgroup>
-            <optgroup label="Single Doors - Glass, Solid & Louvered">
+            <optgroup label="Single Doors - Mesh, Glass, Acrylic & Solid">
+              <option value="wire-mesh"${rack.doorStyle === 'wire-mesh' || rack.doorStyle === 'mesh' ? ' selected' : ''}>Single Heavy-Duty Wire Mesh Grid</option>
               <option value="glass"${rack.doorStyle === 'glass' ? ' selected' : ''}>Single Tempered Glass Door</option>
+              <option value="acrylic"${rack.doorStyle === 'acrylic' ? ' selected' : ''}>Single Tinted Acrylic Door</option>
               <option value="solid"${rack.doorStyle === 'solid' ? ' selected' : ''}>Single Solid Steel Door</option>
-              <option value="louvered"${rack.doorStyle === 'louvered' || rack.doorStyle === 'louvred' ? ' selected' : ''}>Louvered / Vented Steel Door</option>
+              <option value="louvered"${rack.doorStyle === 'louvered' || rack.doorStyle === 'louvred' ? ' selected' : ''}>Single Louvered / Vented Steel Door</option>
             </optgroup>
             <optgroup label="Colocation Compartment Doors">
               <option value="multi-compartment-2"${rack.doorStyle === 'multi-compartment-2' ? ' selected' : ''}>2-Compartment Colo Doors (Dual-Tier)</option>
@@ -6360,6 +6405,16 @@ export class BuildFloorView {
             <optgroup label="Open Enclosure">
               <option value="none"${rack.doorStyle === 'none' ? ' selected' : ''}>None (Open Frame / No Door)</option>
             </optgroup>
+          </select>
+        </label>
+        <label>Door Operation
+          <select id="dr-door-op" class="dc-input">
+            <option value="swing-left"${rack.doorOperation === 'swing-left' || !rack.doorOperation ? ' selected' : ''}>Swing - Left Hinged</option>
+            <option value="swing-right"${rack.doorOperation === 'swing-right' ? ' selected' : ''}>Swing - Right Hinged</option>
+            <option value="swing-dual"${rack.doorOperation === 'swing-dual' || rack.doorOperation === 'split-swing' ? ' selected' : ''}>Swing - Dual Leaf (Wardrobe)</option>
+            <option value="sliding"${rack.doorOperation === 'sliding' ? ' selected' : ''}>Sliding Track (Manual / Auto)</option>
+            <option value="lift-off"${rack.doorOperation === 'lift-off' ? ' selected' : ''}>Lift-Off (Quick-Release Panel)</option>
+            <option value="bifold"${rack.doorOperation === 'bifold' ? ' selected' : ''}>Bi-Fold (Folding Hinge)</option>
           </select>
         </label>
         <label>Mounting Style
@@ -6390,6 +6445,7 @@ export class BuildFloorView {
       const d = parseFloat((document.getElementById('dr-depth') as HTMLInputElement).value) || rack.depthMm;
       const h = parseFloat((document.getElementById('dr-height') as HTMLInputElement).value) || rack.heightU;
       const door = (document.getElementById('dr-door') as HTMLSelectElement).value as DcDoorStyle;
+      const doorOp = (document.getElementById('dr-door-op') as HTMLSelectElement).value as any;
       const mounting = (document.getElementById('dr-mounting') as HTMLSelectElement).value as DcMounting;
       const mfr = (document.getElementById('dr-mfr') as HTMLInputElement).value.trim();
       const model = (document.getElementById('dr-model') as HTMLInputElement).value.trim();
@@ -6405,6 +6461,7 @@ export class BuildFloorView {
         depthMm: d,
         heightU: h,
         doorStyle: door,
+        doorOperation: doorOp,
         mounting,
         manufacturer: mfr || undefined,
         model: model || undefined,
@@ -8202,6 +8259,7 @@ export class BuildFloorView {
         mounting: dcRack.mounting === 'wall-mount' ? 'wall-mount' : 'floor',
         rackColor: dcRack.color ?? '#0c0e12',
         frontDoor: (dcRack.doorStyle || 'perforated') as any,
+        doorOperation: (dcRack.doorOperation || stateRack?.doorOperation) as any,
         sidePanels: dcRack.type !== 'open-frame',
         leftCableManagerWidth: dcRack.leftCableManagerWidth || stateRack?.leftCableManagerWidth || 'none',
         rightCableManagerWidth: dcRack.rightCableManagerWidth || stateRack?.rightCableManagerWidth || 'none',

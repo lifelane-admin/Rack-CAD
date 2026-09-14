@@ -117,7 +117,8 @@ function drawHex(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: numbe
 }
 
 function makePerforatedMat(panelW: number, panelH: number, style = 'perforated'): THREE.MeshStandardMaterial {
-  const isHoneycomb = style.includes('honeycomb');
+  const isWireMesh = style.includes('mesh') || style.includes('wire');
+  const isHoneycomb = style.includes('honeycomb') || style.includes('hexa');
 
   // Canvas size configured to tile seamlessly
   const TW = 1024, TH = 1024;
@@ -126,13 +127,48 @@ function makePerforatedMat(panelW: number, panelH: number, style = 'perforated')
   const ctx = canvas.getContext('2d');
   if (!ctx) return new THREE.MeshStandardMaterial({ color: 0x141820, metalness: 0.35, roughness: 0.55 });
 
-  // 1. Dark structural enterprise steel plate background
-  ctx.fillStyle = '#1c222b';
-  ctx.fillRect(0, 0, TW, TH);
-
   let unitMM = 70; // physical millimeter size of one 1024x1024 texture tile
 
-  if (isHoneycomb) {
+  if (isWireMesh) {
+    // Heavy duty welded wire mesh grid with steel wire crosshatch and square transparent cutouts
+    unitMM = 40;
+    const wireSpacing = 64;
+    const wireW = 12;
+
+    ctx.clearRect(0, 0, TW, TH);
+
+    // 1. Draw outer wire shadow/border
+    ctx.fillStyle = '#1e2632';
+    for (let x = 0; x <= TW; x += wireSpacing) {
+      ctx.fillRect(x - wireW / 2 - 2, 0, wireW + 4, TH);
+    }
+    for (let y = 0; y <= TH; y += wireSpacing) {
+      ctx.fillRect(0, y - wireW / 2 - 2, TW, wireW + 4);
+    }
+
+    // 2. Draw metallic steel wires
+    ctx.fillStyle = '#4b5563';
+    for (let x = 0; x <= TW; x += wireSpacing) {
+      ctx.fillRect(x - wireW / 2, 0, wireW, TH);
+    }
+    for (let y = 0; y <= TH; y += wireSpacing) {
+      ctx.fillRect(0, y - wireW / 2, TW, wireW);
+    }
+
+    // 3. Draw metallic rounded highlight core
+    ctx.fillStyle = '#9ca3af';
+    for (let x = 0; x <= TW; x += wireSpacing) {
+      ctx.fillRect(x - 2, 0, 4, TH);
+    }
+    for (let y = 0; y <= TH; y += wireSpacing) {
+      ctx.fillRect(0, y - 2, TW, 4);
+    }
+
+  } else if (isHoneycomb) {
+    // 1. Dark structural enterprise steel plate background
+    ctx.fillStyle = '#1c222b';
+    ctx.fillRect(0, 0, TW, TH);
+
     // Pointy-topped honeycomb hex with thick, strong structural walls matching reference pattern
     let cellPitchR = 45;      // outer cell radius defining the grid pitch
     let wallThickness = 8.5;  // thick steel wall between neighboring hexagons
@@ -187,6 +223,10 @@ function makePerforatedMat(panelW: number, panelH: number, style = 'perforated')
     ctx.globalCompositeOperation = 'source-over';
 
   } else {
+    // 1. Dark structural enterprise steel plate background
+    ctx.fillStyle = '#1c222b';
+    ctx.fillRect(0, 0, TW, TH);
+
     // Round hole perforations with strong solid steel webbing across all 4 tiers
     let holeR_px = 35;
     let spacingX = 100, spacingY = 86.60;
@@ -607,12 +647,25 @@ export function buildRackGroup(
     color: 0x0d2035, transparent: true, opacity: 0.20,
     metalness: 0.04, roughness: 0.04, side: THREE.DoubleSide,
   });
+  const acrylicMat = new THREE.MeshStandardMaterial({
+    color: 0x0f2438, transparent: true, opacity: 0.35,
+    metalness: 0.08, roughness: 0.06, side: THREE.DoubleSide,
+  });
   const redMat    = new THREE.MeshStandardMaterial({
     color: 0xcc1a00, metalness: 0.25, roughness: 0.5,
     emissive: 0x440500, emissiveIntensity: 0.35,
   });
   const handleMat = new THREE.MeshStandardMaterial({ color: 0x6080a0, metalness: 0.55, roughness: 0.45 });
   const hingeMat  = new THREE.MeshStandardMaterial({ color: 0x708090, metalness: 0.50, roughness: 0.50 });
+  const trackMat  = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.65, roughness: 0.35 });
+
+  const resolveDoorInsertMat = (styleStr: string, winW: number, winH: number) => {
+    if (styleStr.includes('solid')) return bodyMat;
+    if (styleStr.includes('acrylic')) return acrylicMat;
+    if (styleStr.includes('glass')) return glassMat;
+    if (styleStr.includes('louvered') || styleStr.includes('louvred')) return bodyMat;
+    return makePerforatedMat(winW, winH, styleStr);
+  };
 
   // Side walls and the back panel fill exactly the "body" zone between the top cap and bottom
   // plinth — NOT the full totalH. Both of those already own the top/bottom edge slices (see
@@ -679,69 +732,88 @@ export function buildRackGroup(
     group.add(frontHeader);
   }
 
-  // ── Door groups (Single, Split / Dual Wardrobe, Multi-Compartment) ────────────
+  // ── Door groups (Single, Split / Dual 50-50, Asymmetric 60/40, Bi-Fold, Multi-Compartment) ────────────
   const hasDoor = (rack.frontDoor !== 'none') && (rack.rackType !== 'open-frame');
-  if (hasDoor) {
-    if (doorStyle.startsWith('split-')) {
-      // ── Twin Doors (Dual / Split Doors) ──
-      const leafW = PERF_END - 1.5; // width of each door leaf
-      const frameBorder = 16;       // perimeter steel frame border width
-      const windowW = leafW - frameBorder * 2;
-      const windowH = bodyH - frameBorder * 2;
-      const frameD = 4.0;           // frame depth
-      const insertD = 1.6;          // mesh / window insert depth
+  const doorOp = rack.doorOperation || (doorStyle.startsWith('split-') || doorStyle.startsWith('asym-') ? 'split-swing' : doorStyle.startsWith('bifold-') ? 'bifold' : 'swing-left');
 
-      const splitMat = doorStyle === 'split-solid' ? bodyMat : doorStyle === 'split-glass' ? glassMat : makePerforatedMat(windowW, windowH, doorStyle);
+  if (hasDoor) {
+    const isAsym = doorStyle.startsWith('asym-split-') || doorStyle.includes('asym');
+    const isBifold = doorStyle.startsWith('bifold-') || doorStyle.includes('bifold') || doorOp === 'bifold';
+    const isSplit = doorStyle.startsWith('split-') || isAsym || isBifold;
+    const isColo = doorStyle === 'multi-compartment-2' || doorStyle === 'multi-compartment-4';
+
+    if (isSplit && !isColo) {
+      // ── Dual / Split / Asymmetric / Bi-Fold Doors ──
+      const totalDoorW = PERF_END * 2 - 3;
+      const leftRatio = isAsym ? 0.60 : 0.50;
+      const rightRatio = isAsym ? 0.40 : 0.50;
+
+      const leftLeafW = totalDoorW * leftRatio;
+      const rightLeafW = totalDoorW * rightRatio;
+      const frameBorder = 14;
+      const frameD = 4.0;
+      const insertD = 1.6;
+
+      const isSolid = doorStyle.includes('solid');
+      const isGlass = doorStyle.includes('glass') || doorStyle.includes('acrylic');
 
       // 1. Left Door Leaf (Hinged at left outer edge x = -PERF_END)
       const leftDoorGroup = new THREE.Group();
       leftDoorGroup.name = 'rack-door-left';
       leftDoorGroup.position.set(-PERF_END, 0, fz + 1.5);
 
-      if (doorStyle === 'split-solid') {
-        // Solid split door: single clean steel panel
-        const solidPanel = new THREE.Mesh(new THREE.BoxGeometry(leafW, bodyH, frameD), bodyMat);
-        solidPanel.position.set(leafW / 2, 0, 0);
+      const leftWinW = Math.max(10, leftLeafW - frameBorder * 2);
+      const leftWinH = Math.max(10, bodyH - frameBorder * 2);
+      const leftSplitMat = resolveDoorInsertMat(doorStyle, leftWinW, leftWinH);
+
+      if (isSolid) {
+        const solidPanel = new THREE.Mesh(new THREE.BoxGeometry(leftLeafW, bodyH, frameD), bodyMat);
+        solidPanel.position.set(leftLeafW / 2, 0, 0);
         leftDoorGroup.add(solidPanel);
       } else {
-        // Hollow perimeter frame: 4 individual steel border beams
-        // Left vertical beam
+        // Perimeter frame
         const leftBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
         leftBeam.position.set(frameBorder / 2, 0, 0);
         leftDoorGroup.add(leftBeam);
 
-        // Right vertical beam
         const rightBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
-        rightBeam.position.set(leafW - frameBorder / 2, 0, 0);
+        rightBeam.position.set(leftLeafW - frameBorder / 2, 0, 0);
         leftDoorGroup.add(rightBeam);
 
-        // Top horizontal beam
-        const topBeam = new THREE.Mesh(new THREE.BoxGeometry(windowW, frameBorder, frameD), bodyMat);
-        topBeam.position.set(leafW / 2, bodyH / 2 - frameBorder / 2, 0);
+        const topBeam = new THREE.Mesh(new THREE.BoxGeometry(leftWinW, frameBorder, frameD), bodyMat);
+        topBeam.position.set(leftLeafW / 2, bodyH / 2 - frameBorder / 2, 0);
         leftDoorGroup.add(topBeam);
 
-        // Bottom horizontal beam
-        const botBeam = new THREE.Mesh(new THREE.BoxGeometry(windowW, frameBorder, frameD), bodyMat);
-        botBeam.position.set(leafW / 2, -bodyH / 2 + frameBorder / 2, 0);
+        const botBeam = new THREE.Mesh(new THREE.BoxGeometry(leftWinW, frameBorder, frameD), bodyMat);
+        botBeam.position.set(leftLeafW / 2, -bodyH / 2 + frameBorder / 2, 0);
         leftDoorGroup.add(botBeam);
 
-        // Recessed Center Insert (Perforated Mesh / Glass) — 1 single thin layer, 0 double-mesh ghosting, fully covering top to bottom
-        const insertGeo = doorStyle === 'split-glass' ? new THREE.BoxGeometry(windowW, windowH, insertD) : new THREE.PlaneGeometry(windowW, windowH);
-        const leftInsert = new THREE.Mesh(insertGeo, splitMat);
-        leftInsert.position.set(leafW / 2, 0, 0);
+        // Center insert
+        const insertGeo = isGlass ? new THREE.BoxGeometry(leftWinW, leftWinH, insertD) : new THREE.PlaneGeometry(leftWinW, leftWinH);
+        const leftInsert = new THREE.Mesh(insertGeo, leftSplitMat);
+        leftInsert.position.set(leftLeafW / 2, 0, 0);
         leftDoorGroup.add(leftInsert);
       }
 
-      // Left Center Swing-Handle Lock with Escutcheon Plate
+      // Bi-fold knuckle center hinge if bifold
+      if (isBifold) {
+        for (const hingeY of [-bodyH * 0.35, 0, bodyH * 0.35]) {
+          const bifoldHinge = new THREE.Mesh(new THREE.BoxGeometry(4, 18, 5), hingeMat);
+          bifoldHinge.position.set(leftLeafW / 2, hingeY, 2);
+          leftDoorGroup.add(bifoldHinge);
+        }
+      }
+
+      // Left Escutcheon & Handle
       const leftEscutcheon = new THREE.Mesh(new THREE.BoxGeometry(7, 70, 4.5), bodyMat);
-      leftEscutcheon.position.set(leafW - 7, 0, 2);
+      leftEscutcheon.position.set(leftLeafW - 7, 0, 2);
       leftDoorGroup.add(leftEscutcheon);
 
       const leftHandle = new THREE.Mesh(new THREE.BoxGeometry(4, 55, 9), handleMat);
-      leftHandle.position.set(leafW - 7, 0, 4);
+      leftHandle.position.set(leftLeafW - 7, 0, 4);
       leftDoorGroup.add(leftHandle);
 
-      // Left Hinges (Top & Bottom)
+      // Left Hinges
       for (const hingeY of [-bodyH * 0.38, bodyH * 0.38]) {
         const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 16, 5), hingeMat);
         hinge.position.set(0, hingeY, -1);
@@ -754,50 +826,56 @@ export function buildRackGroup(
       rightDoorGroup.name = 'rack-door-right';
       rightDoorGroup.position.set(PERF_END, 0, fz + 1.5);
 
-      if (doorStyle === 'split-solid') {
-        // Solid split door: single clean steel panel
-        const solidPanel = new THREE.Mesh(new THREE.BoxGeometry(leafW, bodyH, frameD), bodyMat);
-        solidPanel.position.set(-leafW / 2, 0, 0);
+      const rightWinW = Math.max(10, rightLeafW - frameBorder * 2);
+      const rightWinH = Math.max(10, bodyH - frameBorder * 2);
+      const rightSplitMat = resolveDoorInsertMat(doorStyle, rightWinW, rightWinH);
+
+      if (isSolid) {
+        const solidPanel = new THREE.Mesh(new THREE.BoxGeometry(rightLeafW, bodyH, frameD), bodyMat);
+        solidPanel.position.set(-rightLeafW / 2, 0, 0);
         rightDoorGroup.add(solidPanel);
       } else {
-        // Hollow perimeter frame: 4 individual steel border beams
-        // Right vertical beam (at outer hinge edge)
         const rightBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
         rightBeam.position.set(-frameBorder / 2, 0, 0);
         rightDoorGroup.add(rightBeam);
 
-        // Left vertical beam (at inner meeting edge)
         const leftBeam = new THREE.Mesh(new THREE.BoxGeometry(frameBorder, bodyH, frameD), bodyMat);
-        leftBeam.position.set(-leafW + frameBorder / 2, 0, 0);
+        leftBeam.position.set(-rightLeafW + frameBorder / 2, 0, 0);
         rightDoorGroup.add(leftBeam);
 
-        // Top horizontal beam
-        const topBeam = new THREE.Mesh(new THREE.BoxGeometry(windowW, frameBorder, frameD), bodyMat);
-        topBeam.position.set(-leafW / 2, bodyH / 2 - frameBorder / 2, 0);
+        const topBeam = new THREE.Mesh(new THREE.BoxGeometry(rightWinW, frameBorder, frameD), bodyMat);
+        topBeam.position.set(-rightLeafW / 2, bodyH / 2 - frameBorder / 2, 0);
         rightDoorGroup.add(topBeam);
 
-        // Bottom horizontal beam
-        const botBeam = new THREE.Mesh(new THREE.BoxGeometry(windowW, frameBorder, frameD), bodyMat);
-        botBeam.position.set(-leafW / 2, -bodyH / 2 + frameBorder / 2, 0);
+        const botBeam = new THREE.Mesh(new THREE.BoxGeometry(rightWinW, frameBorder, frameD), bodyMat);
+        botBeam.position.set(-rightLeafW / 2, -bodyH / 2 + frameBorder / 2, 0);
         rightDoorGroup.add(botBeam);
 
-        // Recessed Center Insert (Perforated Mesh / Glass) — 1 single thin layer, 0 double-mesh ghosting, fully covering top to bottom
-        const insertGeo = doorStyle === 'split-glass' ? new THREE.BoxGeometry(windowW, windowH, insertD) : new THREE.PlaneGeometry(windowW, windowH);
-        const rightInsert = new THREE.Mesh(insertGeo, splitMat);
-        rightInsert.position.set(-leafW / 2, 0, 0);
+        const insertGeo = isGlass ? new THREE.BoxGeometry(rightWinW, rightWinH, insertD) : new THREE.PlaneGeometry(rightWinW, rightWinH);
+        const rightInsert = new THREE.Mesh(insertGeo, rightSplitMat);
+        rightInsert.position.set(-rightLeafW / 2, 0, 0);
         rightDoorGroup.add(rightInsert);
       }
 
-      // Right Center Swing-Handle Lock with Escutcheon Plate
+      // Bi-fold knuckle center hinge if bifold
+      if (isBifold) {
+        for (const hingeY of [-bodyH * 0.35, 0, bodyH * 0.35]) {
+          const bifoldHinge = new THREE.Mesh(new THREE.BoxGeometry(4, 18, 5), hingeMat);
+          bifoldHinge.position.set(-rightLeafW / 2, hingeY, 2);
+          rightDoorGroup.add(bifoldHinge);
+        }
+      }
+
+      // Right Escutcheon & Handle
       const rightEscutcheon = new THREE.Mesh(new THREE.BoxGeometry(7, 70, 4.5), bodyMat);
-      rightEscutcheon.position.set(-leafW + 7, 0, 2);
+      rightEscutcheon.position.set(-rightLeafW + 7, 0, 2);
       rightDoorGroup.add(rightEscutcheon);
 
       const rightHandle = new THREE.Mesh(new THREE.BoxGeometry(4, 55, 9), handleMat);
-      rightHandle.position.set(-leafW + 7, 0, 4);
+      rightHandle.position.set(-rightLeafW + 7, 0, 4);
       rightDoorGroup.add(rightHandle);
 
-      // Right Hinges (Top & Bottom)
+      // Right Hinges
       for (const hingeY of [-bodyH * 0.38, bodyH * 0.38]) {
         const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 16, 5), hingeMat);
         hinge.position.set(0, hingeY, -1);
@@ -805,7 +883,7 @@ export function buildRackGroup(
       }
       group.add(rightDoorGroup);
 
-    } else if (doorStyle === 'multi-compartment-2' || doorStyle === 'multi-compartment-4') {
+    } else if (isColo) {
       // ── Multi-Compartment Colocation Doors ──
       const numCompartments = doorStyle === 'multi-compartment-4' ? 4 : 2;
       const compH = (bodyH - (numCompartments - 1) * 6) / numCompartments;
@@ -859,15 +937,14 @@ export function buildRackGroup(
       }
 
     } else {
-      // ── Single Door Styles (glass, perforated, solid, louvered) ──
+      // ── Single Door Styles (glass, acrylic, perforated, solid, louvered, wire-mesh, hexa, round-hole) ──
       const doorGroup = new THREE.Group();
       doorGroup.name  = 'rack-door';
       doorGroup.position.set(PERF_END, 0, fz);
 
-      const isMeshDoor = doorStyle.includes('perforated') || doorStyle.includes('honeycomb');
-      const doorMeshMat = makePerforatedMat(GLASS_HW * 2, bodyH, doorStyle);
+      const isMeshDoor = doorStyle.includes('perforated') || doorStyle.includes('honeycomb') || doorStyle.includes('hexa') || doorStyle.includes('mesh') || doorStyle.includes('round-hole');
+      const activeDoorMat = resolveDoorInsertMat(doorStyle, GLASS_HW * 2, bodyH);
       const wingMat = makePerforatedMat(PERF_W, bodyH, doorStyle);
-      const activeDoorMat = doorStyle === 'solid' ? bodyMat : doorStyle === 'glass' ? glassMat : doorStyle === 'louvered' ? bodyMat : doorMeshMat;
       const glassGeo  = isMeshDoor ? new THREE.PlaneGeometry(GLASS_HW * 2, bodyH) : new THREE.BoxGeometry(GLASS_HW * 2, bodyH, 4);
       const glassDoor = new THREE.Mesh(glassGeo, activeDoorMat);
       glassDoor.name  = 'rack-glass';
@@ -875,7 +952,7 @@ export function buildRackGroup(
       doorGroup.add(glassDoor);
 
       // Louvered slats for louvered door
-      if (doorStyle === 'louvered') {
+      if (doorStyle === 'louvered' || doorStyle === 'louvred') {
         const slatGeo = new THREE.BoxGeometry(GLASS_HW * 1.8, 3, 2);
         const numSlats = Math.floor(bodyH / 18);
         for (let s = 0; s < numSlats; s++) {
@@ -887,43 +964,71 @@ export function buildRackGroup(
         }
       }
 
+      // Handle & Hinges
       const handleGeo = new THREE.BoxGeometry(5, 65, 10);
       const handle    = new THREE.Mesh(handleGeo, handleMat);
       handle.name     = 'rack-handle';
-      handle.position.set(-PERF_END - GLASS_HW + 10, 0, 3);           // world -85
+      handle.position.set(-PERF_END - GLASS_HW + 10, 0, 3);
       doorGroup.add(handle);
 
+      const hingePosX = doorOp === 'swing-left' ? -PERF_END * 2 : 0;
       for (const hingeY of [-bodyH * 0.35, bodyH * 0.35]) {
         const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 14, 5), hingeMat);
-        hinge.position.set(0, hingeY, -1);                             // world PERF_END
+        hinge.position.set(hingePosX, hingeY, -1);
         doorGroup.add(hinge);
       }
 
-      // Red accent strips — local x = world_x - PERF_END
+      // Red accent strips
       const redGeo  = new THREE.BoxGeometry(RED_W, bodyH, 11);
       const leftRed = new THREE.Mesh(redGeo, redMat);
       leftRed.name  = 'rack-red-L';
-      leftRed.position.set(-(PERF_END + GLASS_HW + RED_W / 2), 0, -5.5); // world -97.5
+      leftRed.position.set(-(PERF_END + GLASS_HW + RED_W / 2), 0, -5.5);
       doorGroup.add(leftRed);
 
       const rightRed = new THREE.Mesh(redGeo, redMat);
       rightRed.name  = 'rack-red-R';
-      rightRed.position.set(GLASS_HW + RED_W / 2 - PERF_END, 0, -5.5);   // world 97.5
+      rightRed.position.set(GLASS_HW + RED_W / 2 - PERF_END, 0, -5.5);
       doorGroup.add(rightRed);
 
-      // Perforated mesh wings (single plane to eliminate any 2-layer ghosting, full body height)
+      // Perforated mesh wings
       const perfGeo  = new THREE.PlaneGeometry(PERF_W, bodyH);
       const leftPerf = new THREE.Mesh(perfGeo, wingMat);
       leftPerf.name  = 'rack-perf-L';
-      leftPerf.position.set(-(PERF_END + PERF_CX), 0, 0);    // world -150
+      leftPerf.position.set(-(PERF_END + PERF_CX), 0, 0);
       doorGroup.add(leftPerf);
 
       const rightPerf = new THREE.Mesh(perfGeo, wingMat);
       rightPerf.name  = 'rack-perf-R';
-      rightPerf.position.set(PERF_CX - PERF_END, 0, 0);      // world 150
+      rightPerf.position.set(PERF_CX - PERF_END, 0, 0);
       doorGroup.add(rightPerf);
 
       group.add(doorGroup);
+    }
+
+    // ── Door Operation Hardware Visual Cues (Sliding Track / Lift-off Pins) ──
+    if (doorOp === 'sliding' || doorStyle.includes('sliding')) {
+      // Top sliding track guide rail
+      const trackGeo = new THREE.BoxGeometry(RACK_INNER_WIDTH + 10, 10, 12);
+      const topTrack = new THREE.Mesh(trackGeo, trackMat);
+      topTrack.position.set(0, bodyH / 2 + 5, fz + 4);
+      group.add(topTrack);
+
+      // Bottom sliding track guide rail
+      const botTrack = new THREE.Mesh(trackGeo, trackMat);
+      botTrack.position.set(0, -bodyH / 2 - 5, fz + 4);
+      group.add(botTrack);
+    } else if (doorOp === 'lift-off') {
+      // Quick-release ball-detent lift pins
+      for (const px of [-PERF_END + 15, PERF_END - 15]) {
+        const pinGeo = new THREE.CylinderGeometry(3, 3, 14, 12);
+        const topPin = new THREE.Mesh(pinGeo, handleMat);
+        topPin.position.set(px, bodyH / 2 + 3, fz + 2);
+        group.add(topPin);
+
+        const botPin = new THREE.Mesh(pinGeo, handleMat);
+        botPin.position.set(px, -bodyH / 2 - 3, fz + 2);
+        group.add(botPin);
+      }
     }
   }
 
