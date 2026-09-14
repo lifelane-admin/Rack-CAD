@@ -27,7 +27,7 @@ import {
   getDcComponentBadgeSvg,
   ensureDcSvgDefs
 } from './dc-component-graphics';
-import { DATACENTER_CATALOG } from '../datacenter/catalog';
+import { DATACENTER_CATALOG, WALL_EQUIPMENT_CATALOG } from '../datacenter/catalog';
 
 const DC_FT_STORAGE_X = 'dc_ft_pos_x';
 const DC_FT_STORAGE_Y = 'dc_ft_pos_y';
@@ -196,6 +196,9 @@ export class DcFloatingToolbar {
     const isSnap = s.snapEnabled !== false;
     const isLabels = s.labelsVisible !== false;
     const isXray = !!s.xrayMode;
+    const isWallsVisible = s.wallsVisible !== false;
+    const isRoofVisible = s.roofVisible !== false;
+    const isWallToolActive = (this.activeToolInfo as any)?.mode === 'lay-wall';
 
     const selectedRack = (s.selectedRackId && floor) ? floor.racks.find(r => r.id === s.selectedRackId) : null;
     const selectedTileIds = Array.isArray(s.selectedTileIds) ? s.selectedTileIds : (s.selectedTileId ? [s.selectedTileId] : []);
@@ -232,6 +235,10 @@ export class DcFloatingToolbar {
     let row2Html = '';
     const selectedInfra = (s.selectedInfraId && floor?.infrastructure)
       ? floor.infrastructure.find(i => i.id === s.selectedInfraId)
+      : null;
+
+    const selectedWall = (s.selectedWallId && floor?.walls)
+      ? floor.walls.find(w => w.id === s.selectedWallId)
       : null;
 
     if (selectedRack) {
@@ -292,15 +299,41 @@ export class DcFloatingToolbar {
           </button>
         </div>
       `;
+    } else if (selectedWall) {
+      const lenM = Math.hypot(selectedWall.end.x - selectedWall.start.x, selectedWall.end.y - selectedWall.start.y);
+      row2Html = `
+        <div class="dc-ft-context-group">
+          <div class="dc-ft-item-badge">
+            <span class="dc-ft-badge-dot" style="background:#38bdf8;"></span>
+            <span class="dc-ft-badge-title">🧱 ${selectedWall.name || 'Wall Partition'}</span>
+            <span class="dc-ft-badge-sub">${lenM.toFixed(1)}m • Opacity ${Math.round(selectedWall.opacity * 100)}%</span>
+          </div>
+
+          <div class="ft-separator"></div>
+
+          <button class="dc-ft-pill-btn" id="dc-ft-wall-attach-ac" title="Attach Precision Split A/C">❄️ Attach A/C</button>
+          <button class="dc-ft-pill-btn" id="dc-ft-wall-attach-fe" title="Attach Clean Agent Fire Extinguisher">🧯 Extinguisher</button>
+          <button class="dc-ft-pill-btn" id="dc-ft-wall-attach-ems" title="Attach Environmental Sensor">🌡️ Sensor</button>
+          <button class="dc-ft-pill-btn" id="dc-ft-wall-attach-cctv" title="Attach CCTV Camera">📹 CCTV</button>
+          <button class="dc-ft-pill-btn" id="dc-ft-wall-attach-epo" title="Attach Emergency Power Off Button">🛑 EPO</button>
+
+          <button class="ft-btn ft-btn-danger" id="dc-ft-wall-delete" title="Delete Wall Segment">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
+      `;
     } else if (this.activeToolInfo) {
       const isLaying = this.activeToolInfo.mode === 'lay-pathway';
+      const isWall = (this.activeToolInfo as any).mode === 'lay-wall';
       row2Html = `
         <div class="dc-ft-context-group dc-active-tool-banner">
           <div class="dc-active-tool-pill">
             <span class="dc-active-tool-icon">${this.activeToolInfo.icon || '⚡'}</span>
             <div class="dc-active-tool-texts">
-              <span class="dc-active-tool-title">${isLaying ? 'LAYING PATHWAY CHANNEL' : 'PLACING EQUIPMENT'}</span>
-              <span class="dc-active-tool-name">${this.activeToolInfo.compName}</span>
+              <span class="dc-active-tool-title">${isWall ? 'LAYING TRANSPARENT WALL' : (isLaying ? 'LAYING PATHWAY CHANNEL' : 'PLACING EQUIPMENT')}</span>
+              <span class="dc-active-tool-name">${this.activeToolInfo.compName || (this.activeToolInfo as any).name || 'Wall Partition'}</span>
             </div>
           </div>
           ${isLaying ? `
@@ -380,11 +413,12 @@ export class DcFloatingToolbar {
           <div class="ft-separator"></div>
 
           <!-- Quick Shortcuts -->
+          <button class="dc-ft-quick-btn" id="dc-ft-quick-lay-wall" title="Lay Custom Transparent Wall (Click & Drag Coordinates, Hotkey: W)">🧱 Lay Wall</button>
+          <button class="dc-ft-quick-btn" id="dc-ft-quick-perimeter-walls" title="Configure Transparent Perimeter Walls (N/S/E/W)">🏛 Perimeter Walls</button>
+          <button class="dc-ft-quick-btn" id="dc-ft-quick-roof-settings" title="Configure Transparent Carpet-Area Roof">🏠 Roof</button>
           <button class="dc-ft-quick-btn" data-preset="rack-server-42u-std" title="Add 42U Server Rack (600×1200mm)">＋ Server Rack</button>
           <button class="dc-ft-quick-btn" data-preset="duct-uf-cable" title="Draw Underfloor Cable Duct Pathway">＋ UF Duct</button>
-          <button class="dc-ft-quick-btn" data-preset="duct-oh-ladder" title="Draw Overhead Ladder Rack">＋ OH Ladder</button>
           <button class="dc-ft-quick-btn" data-preset="cooling-inrow-dx-300" title="Add In-Row Precision Cooling Unit">＋ In-Row Cooling</button>
-          <button class="dc-ft-quick-btn" data-preset="ups-inrow-50kva" title="Add In-Row Modular 3-Phase UPS">＋ Modular UPS</button>
           <button class="dc-ft-quick-btn" id="dc-ft-quick-addrow" title="Add Complete Bayed Row of Racks (Standards)">▤ Add Row</button>
         </div>
       `;
@@ -431,6 +465,17 @@ export class DcFloatingToolbar {
           <span class="ft-btn-label">Move (M)</span>
         </div>
 
+        <!-- Wall Laying Tool -->
+        <div class="ft-item-labeled">
+          <button class="ft-btn ${isWallToolActive ? 'active' : ''}" id="dc-ft-tool-wall" title="Lay Custom Wall Tool (Hotkey: W)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M3 9h18M3 15h18M9 3v6M15 9v6M9 15v6"/>
+            </svg>
+          </button>
+          <span class="ft-btn-label">Wall (W)</span>
+        </div>
+
         <div class="ft-separator"></div>
 
         <!-- 2D / 3D Switch Capsule -->
@@ -458,6 +503,21 @@ export class DcFloatingToolbar {
             </svg>
           </button>
           <span class="ft-btn-label">X-Ray</span>
+        </div>
+
+        <div class="ft-separator"></div>
+
+        <!-- Structure Visibility Group (Walls & Roof) -->
+        <div class="ft-group-container">
+          <span class="ft-group-header">STRUCTURE</span>
+          <div class="ft-group-buttons">
+            <button class="ft-btn ${isWallsVisible ? 'active' : ''}" id="dc-ft-toggle-walls" title="Show / Hide Transparent Walls (Hotkey: Shift+W)">
+              <span style="font-size: 13px; line-height: 1;">🧱</span>
+            </button>
+            <button class="ft-btn ${isRoofVisible ? 'active' : ''}" id="dc-ft-toggle-roof" title="Show / Hide Transparent Roof (Hotkey: Shift+R)">
+              <span style="font-size: 13px; line-height: 1;">🏠</span>
+            </button>
+          </div>
         </div>
 
         <div class="ft-separator"></div>
@@ -700,6 +760,10 @@ export class DcFloatingToolbar {
       EventBus.emit('dc:set-tool', 'pan');
     });
 
+    this.element.querySelector('#dc-ft-tool-wall')?.addEventListener('click', () => {
+      EventBus.emit('dc:start-lay-wall', {});
+    });
+
     // View mode toggle
     this.element.querySelector('#dc-ft-toggle-viewmode')?.addEventListener('click', () => {
       const is3D = dcState.getState().viewMode === '3d';
@@ -714,6 +778,23 @@ export class DcFloatingToolbar {
     // X-Ray
     this.element.querySelector('#dc-ft-toggle-xray')?.addEventListener('click', () => {
       EventBus.emit('dc:toggle-xray', undefined);
+    });
+
+    // Structure Visibility Toggles (Walls & Roof)
+    this.element.querySelector('#dc-ft-toggle-walls')?.addEventListener('click', () => {
+      const next = dcState.toggleWallsVisibility();
+      EventBus.emit('notification', {
+        message: next ? '🧱 Data hall walls visible.' : '🧱 Data hall walls hidden.',
+        type: 'info',
+      });
+    });
+
+    this.element.querySelector('#dc-ft-toggle-roof')?.addEventListener('click', () => {
+      const next = dcState.toggleRoofVisibility();
+      EventBus.emit('notification', {
+        message: next ? '🏠 Transparent roof visible.' : '🏠 Transparent roof hidden.',
+        type: 'info',
+      });
     });
 
     // Grid, Snap, Labels
@@ -971,7 +1052,58 @@ export class DcFloatingToolbar {
       });
     }
 
-    // Row 2 Quick Add Presets
+    // Row 2 Wall Actions
+    const selectedWall = (s.selectedWallId && floor?.walls)
+      ? floor.walls.find(w => w.id === s.selectedWallId)
+      : null;
+
+    if (selectedWall) {
+      this.element.querySelector('#dc-ft-wall-attach-ac')?.addEventListener('click', () => {
+        const preset = WALL_EQUIPMENT_CATALOG.find(w => w.id === 'wall-ac-split') || WALL_EQUIPMENT_CATALOG[0];
+        EventBus.emit('dc:start-place-wall-item', preset);
+      });
+
+      this.element.querySelector('#dc-ft-wall-attach-fe')?.addEventListener('click', () => {
+        const preset = WALL_EQUIPMENT_CATALOG.find(w => w.id === 'wall-fire-extinguisher-co2') || WALL_EQUIPMENT_CATALOG[2];
+        EventBus.emit('dc:start-place-wall-item', preset);
+      });
+
+      this.element.querySelector('#dc-ft-wall-attach-ems')?.addEventListener('click', () => {
+        const preset = WALL_EQUIPMENT_CATALOG.find(w => w.id === 'wall-env-sensor-ems') || WALL_EQUIPMENT_CATALOG[5];
+        EventBus.emit('dc:start-place-wall-item', preset);
+      });
+
+      this.element.querySelector('#dc-ft-wall-attach-cctv')?.addEventListener('click', () => {
+        const preset = WALL_EQUIPMENT_CATALOG.find(w => w.id === 'wall-cctv-camera-dome') || WALL_EQUIPMENT_CATALOG[9];
+        EventBus.emit('dc:start-place-wall-item', preset);
+      });
+
+      this.element.querySelector('#dc-ft-wall-attach-epo')?.addEventListener('click', () => {
+        const preset = WALL_EQUIPMENT_CATALOG.find(w => w.id === 'wall-epo-button') || WALL_EQUIPMENT_CATALOG[7];
+        EventBus.emit('dc:start-place-wall-item', preset);
+      });
+
+      this.element.querySelector('#dc-ft-wall-delete')?.addEventListener('click', () => {
+        if (confirm(`Delete wall segment "${selectedWall.name || 'Wall'}"?`)) {
+          dcState.deleteWall(selectedWall.id);
+          dcState.setState({ selectedWallId: null });
+        }
+      });
+    }
+
+    // Row 2 Quick Add Presets & Wall/Roof Shortcuts
+    this.element.querySelector('#dc-ft-quick-lay-wall')?.addEventListener('click', () => {
+      EventBus.emit('dc:start-lay-wall', {});
+    });
+
+    this.element.querySelector('#dc-ft-quick-perimeter-walls')?.addEventListener('click', () => {
+      EventBus.emit('dc:perimeter-walls', undefined);
+    });
+
+    this.element.querySelector('#dc-ft-quick-roof-settings')?.addEventListener('click', () => {
+      EventBus.emit('dc:roof-settings', undefined);
+    });
+
     this.element.querySelectorAll('.dc-ft-quick-btn[data-preset]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const presetId = (e.currentTarget as HTMLElement).getAttribute('data-preset');

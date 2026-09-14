@@ -54,6 +54,7 @@ describe('DcFloatingToolbar & View Swapping', () => {
   });
 
   it('renders swap button in Rack FloatingToolbar and clicking it switches view to datacenter', () => {
+    State.setState({ workflowMode: 'datacenter' });
     new FloatingToolbar();
     const swapBtn = document.querySelector('#ft-swap-datacenter') as HTMLButtonElement;
     expect(swapBtn).not.toBeNull();

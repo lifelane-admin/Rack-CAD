@@ -31,19 +31,23 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  background: linear-gradient(180deg,rgba(22,27,34,0.98) 0%,rgba(16,20,26,0.98) 100%);
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  padding: 6px 14px;
+  gap: 10px;
+  background: linear-gradient(180deg, rgba(22, 27, 34, 0.98) 0%, rgba(16, 20, 26, 0.98) 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 5px 12px;
   min-height: 44px;
   flex-shrink: 0;
   z-index: 10;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
 }
 
 .dc-topbar-left, .dc-topbar-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .dc-unit-selector-label {
@@ -75,7 +79,26 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 189, 248, 0.2) transparent;
+}
+
+.dc-btn-structure {
+  background: rgba(14, 116, 144, 0.45) !important;
+  border-color: rgba(56, 189, 248, 0.5) !important;
+  color: #38bdf8 !important;
+  font-weight: 600;
+}
+
+.dc-btn-structure:hover {
+  background: rgba(14, 116, 144, 0.75) !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
 }
 
 .dc-brand {
@@ -1122,6 +1145,158 @@
 
 .dc-nudge-btn:active {
   transform: scale(0.95);
+}
+
+/* ── Wall & Wall Equipment Styles ────────────────────────────────────────── */
+.dc-catalog-card.wall-card {
+  border-left: 3px solid #38bdf8;
+  background: rgba(14, 165, 233, 0.04);
+}
+
+.dc-card-tag.wall-mount {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.dc-btn-place-wall {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid #38bdf8 !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35) !important;
+}
+
+.dc-btn-place-wall:hover {
+  background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%) !important;
+  color: #0f172a !important;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5) !important;
+}
+
+.dc-wall-item-row:hover {
+  background: rgba(56, 189, 248, 0.12) !important;
+  border-color: #38bdf8 !important;
+}
+
+/* ── Slider Controls (Floor, Wall, Roof Opacity) ───────────────────────── */
+.dc-slider-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: #94a3b8;
+  user-select: none;
+}
+
+.dc-slider-control span {
+  font-weight: 600;
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+
+.dc-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 60px;
+  height: 4px;
+  border-radius: 2px;
+  background: #334155;
+  outline: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.dc-slider:hover {
+  background: #475569;
+}
+
+.dc-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #38bdf8;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
+  transition: transform 0.1s ease;
+}
+
+.dc-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.dc-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #38bdf8;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
+  border: none;
+}
+
+/* ── 3D Viewport & Floating Toolbar ────────────────────────────────────── */
+.dc-3d-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #090d13;
+  overflow: hidden;
+}
+
+.dc3d-controls {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(13, 17, 23, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 8px;
+  padding: 6px 12px;
+  z-index: 25;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.dc3d-ctrl-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.dc3d-viewport-inner {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+}
+
+.dc3d-label {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: rgba(13, 17, 23, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: #94a3b8;
+  z-index: 20;
+  pointer-events: none;
 }
 
 

@@ -1,4 +1,17 @@
-import { DcState, DcFloor, DcRack, DcFloorTile, DcUnit, DcAddressFormat, DcTileType, DcAirflowDirection, DcInfrastructureItem } from './types';
+import {
+  DcState,
+  DcFloor,
+  DcRack,
+  DcFloorTile,
+  DcUnit,
+  DcAddressFormat,
+  DcTileType,
+  DcAirflowDirection,
+  DcInfrastructureItem,
+  DcWallSegment,
+  DcWallItem,
+  DcWallSide,
+} from './types';
 
 const STORAGE_KEY = 'dc_state_v3';
 
@@ -75,12 +88,18 @@ const defaultState: DcState = {
   gridVisible: true,
   snapEnabled: true,
   labelsVisible: true,
+  wallsVisible: true,
+  roofVisible: true,
+  wallOpacity: 0.35,
+  roofOpacity: 0.30,
   floorOpacity: 1.0,
   xrayMode: false,
   selectedTileId: null,
   selectedTileIds: [],
   selectedRackId: null,
   selectedInfraId: null,
+  selectedWallId: null,
+  selectedWallItemId: null,
   activeCatalogCategory: 'all',
   activeSpaceTab: 'white-space',
   zoom: 1,
@@ -348,6 +367,216 @@ class DcStateManager {
     const floor = this.getActiveFloor();
     const count = (floor?.racks.length ?? 0) + 1;
     return 'RACK-' + String(count).padStart(3, '0');
+  }
+
+  // Wall operations
+  addWall(wall: DcWallSegment): void {
+    const floor = this.getActiveFloor();
+    if (!floor) return;
+    const walls = [...(floor.walls || []), wall];
+    this.updateFloor(floor.id, { walls });
+  }
+
+  updateWall(wallId: string, partial: Partial<DcWallSegment>): void {
+    const floor = this.getActiveFloor();
+    if (!floor || !floor.walls) return;
+    const walls = floor.walls.map(w => w.id === wallId ? { ...w, ...partial } : w);
+    this.updateFloor(floor.id, { walls });
+  }
+
+  deleteWall(wallId: string): void {
+    const floor = this.getActiveFloor();
+    if (!floor || !floor.walls) return;
+    const walls = floor.walls.filter(w => w.id !== wallId);
+    this.updateFloor(floor.id, { walls });
+    if (this.state.selectedWallId === wallId) {
+      this.setState({ selectedWallId: null, selectedWallItemId: null });
+    }
+  }
+
+  addWallItem(wallId: string, item: DcWallItem): void {
+    const floor = this.getActiveFloor();
+    if (!floor || !floor.walls) return;
+    const walls = floor.walls.map(w => {
+      if (w.id === wallId) {
+        return { ...w, items: [...(w.items || []), item] };
+      }
+      return w;
+    });
+    this.updateFloor(floor.id, { walls });
+  }
+
+  updateWallItem(wallId: string, itemId: string, partial: Partial<DcWallItem>): void {
+    const floor = this.getActiveFloor();
+    if (!floor || !floor.walls) return;
+    const walls = floor.walls.map(w => {
+      if (w.id === wallId && w.items) {
+        return {
+          ...w,
+          items: w.items.map(it => it.id === itemId ? { ...it, ...partial } : it),
+        };
+      }
+      return w;
+    });
+    this.updateFloor(floor.id, { walls });
+  }
+
+  deleteWallItem(wallId: string, itemId: string): void {
+    const floor = this.getActiveFloor();
+    if (!floor || !floor.walls) return;
+    const walls = floor.walls.map(w => {
+      if (w.id === wallId && w.items) {
+        return {
+          ...w,
+          items: w.items.filter(it => it.id !== itemId),
+        };
+      }
+      return w;
+    });
+    this.updateFloor(floor.id, { walls });
+    if (this.state.selectedWallItemId === itemId) {
+      this.setState({ selectedWallItemId: null });
+    }
+  }
+
+  setWallSegmentOpacity(wallId: string, opacity: number): void {
+    this.updateWall(wallId, { opacity: Math.max(0, Math.min(1, opacity)) });
+  }
+
+  setAllWallsOpacity(opacity: number): void {
+    const floor = this.getActiveFloor();
+    if (!floor || !floor.walls) return;
+    const clamped = Math.max(0, Math.min(1, opacity));
+    const walls = floor.walls.map(w => ({ ...w, opacity: clamped }));
+    this.updateFloor(floor.id, { walls });
+  }
+
+  generatePerimeterWalls(
+    sides: DcWallSide[] = ['north', 'south', 'east', 'west'],
+    opacity: number = 0.35,
+    heightM: number = 3.2,
+    thicknessMm: number = 150
+  ): DcWallSegment[] {
+    const floor = this.getActiveFloor();
+    if (!floor) return [];
+
+    const existingWalls = (floor.walls || []).filter(w => !w.side || !sides.includes(w.side));
+    const newWalls: DcWallSegment[] = [];
+
+    const L = floor.lengthM; // X dimension
+    const W = floor.widthM;  // Y dimension
+
+    if (sides.includes('north')) {
+      newWalls.push({
+        id: 'wall-north-' + generateId(),
+        name: 'North Wall (Top)',
+        side: 'north',
+        start: { x: 0, y: 0 },
+        end: { x: L, y: 0 },
+        heightM,
+        thicknessMm,
+        opacity,
+        color: '#38bdf8',
+        items: [],
+      });
+    }
+
+    if (sides.includes('east')) {
+      newWalls.push({
+        id: 'wall-east-' + generateId(),
+        name: 'East Wall (Right)',
+        side: 'east',
+        start: { x: L, y: 0 },
+        end: { x: L, y: W },
+        heightM,
+        thicknessMm,
+        opacity,
+        color: '#38bdf8',
+        items: [],
+      });
+    }
+
+    if (sides.includes('south')) {
+      newWalls.push({
+        id: 'wall-south-' + generateId(),
+        name: 'South Wall (Bottom)',
+        side: 'south',
+        start: { x: L, y: W },
+        end: { x: 0, y: W },
+        heightM,
+        thicknessMm,
+        opacity,
+        color: '#38bdf8',
+        items: [],
+      });
+    }
+
+    if (sides.includes('west')) {
+      newWalls.push({
+        id: 'wall-west-' + generateId(),
+        name: 'West Wall (Left)',
+        side: 'west',
+        start: { x: 0, y: W },
+        end: { x: 0, y: 0 },
+        heightM,
+        thicknessMm,
+        opacity,
+        color: '#38bdf8',
+        items: [],
+      });
+    }
+
+    const merged = [...existingWalls, ...newWalls];
+    this.updateFloor(floor.id, { walls: merged });
+    return newWalls;
+  }
+
+  setWallsVisible(visible: boolean) {
+    this.setState({ wallsVisible: visible });
+  }
+
+  toggleWallsVisibility(): boolean {
+    const next = !(this.state.wallsVisible ?? true);
+    this.setState({ wallsVisible: next });
+    return next;
+  }
+
+  setRoofVisible(visible: boolean) {
+    this.setState({ roofVisible: visible });
+  }
+
+  toggleRoofVisibility(): boolean {
+    const next = !(this.state.roofVisible ?? true);
+    this.setState({ roofVisible: next });
+    return next;
+  }
+
+  setWallOpacity(opacity: number) {
+    const clamped = Math.max(0, Math.min(1, opacity));
+    this.setState({ wallOpacity: clamped });
+    this.setAllWallsOpacity(clamped);
+  }
+
+  setRoofOpacity(opacity: number) {
+    const clamped = Math.max(0, Math.min(1, opacity));
+    this.setState({ roofOpacity: clamped });
+    const floor = this.getActiveFloor();
+    if (floor) {
+      this.updateFloor(floor.id, { roofOpacity: clamped });
+    }
+  }
+
+  setRoofConfig(config: { heightM?: number; opacity?: number; color?: string }) {
+    const floor = this.getActiveFloor();
+    if (!floor) return;
+    this.updateFloor(floor.id, {
+      roofHeightM: config.heightM !== undefined ? config.heightM : (floor.roofHeightM ?? 3.8),
+      roofOpacity: config.opacity !== undefined ? config.opacity : (floor.roofOpacity ?? 0.30),
+      roofColor: config.color !== undefined ? config.color : (floor.roofColor ?? '#38bdf8'),
+    });
+    if (config.opacity !== undefined) {
+      this.setState({ roofOpacity: config.opacity });
+    }
   }
 }
 

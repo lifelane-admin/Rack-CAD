@@ -16,7 +16,7 @@ export interface DcFloorTile {
   airChannelHeightMm?: number; // default 300mm to prevent obstruction of underfloor raceways
 }
 
-export type DcSpaceType = 'white-space' | 'grey-space';
+export type DcSpaceType = 'white-space' | 'grey-space' | 'walls-roof';
 
 export type DcEquipmentCategory =
   | 'housing'
@@ -28,7 +28,8 @@ export type DcEquipmentCategory =
   | 'ups'
   | 'busbars-transformers'
   | 'cable-management'
-  | 'facility-plant';
+  | 'facility-plant'
+  | 'wall-equipment';
 
 export type DcInfraCategory = 'cable-tray' | 'cable-duct' | 'power-cable' | 'data-cable' | 'conduit' | 'riser' | 'busway' | 'fiber-raceway' | 'containment';
 export type DcInfraLayer = 'underfloor' | 'ceiling' | 'overhead';
@@ -153,6 +154,50 @@ export interface DcRack {
   status?: 'normal' | 'warning' | 'critical' | 'offline';
 }
 
+export type DcWallSide = 'north' | 'south' | 'east' | 'west' | 'custom';
+
+export type DcWallItemType =
+  | 'ac-split'
+  | 'fire-extinguisher'
+  | 'fire-panel'
+  | 'env-sensor'
+  | 'epo-button'
+  | 'access-keypad'
+  | 'cctv-camera'
+  | 'pdp-panel'
+  | 'leak-detector'
+  | 'first-aid';
+
+export interface DcWallItem {
+  id: string;
+  wallId: string;
+  type: DcWallItemType;
+  name: string;
+  positionRatio: number;        // 0.0 to 1.0 along the wall segment length
+  heightOffsetM: number;        // Mounting height above raised floor in meters (e.g. 1.2m for extinguisher, 2.2m for A/C, 1.5m for EMS)
+  widthMm: number;
+  heightMm: number;
+  depthMm: number;
+  side?: 'inner' | 'outer';
+  model?: string;
+  manufacturer?: string;
+  color?: string;
+  notes?: string;
+}
+
+export interface DcWallSegment {
+  id: string;
+  start: { x: number; y: number }; // In meters
+  end: { x: number; y: number };   // In meters
+  heightM: number;               // default 3.2m
+  thicknessMm: number;           // default 150mm
+  opacity: number;               // 0.0 - 1.0 (default 0.35 glass / transparent boundary)
+  color?: string;                // default glass cyan/slate '#38bdf8'
+  side?: DcWallSide;
+  name?: string;
+  items?: DcWallItem[];          // Wall hanging items attached to this wall
+}
+
 export type DcUnit = 'm' | 'mm' | 'ft' | 'in';
 
 export type DcGridScheme = 'letters' | 'numbers';
@@ -166,12 +211,16 @@ export interface DcFloor {
   widthM: number;    // floor width in meters
   tileSizeMm: number; // square tile size in mm (e.g. 600)
   raisedFloorHeightMm?: number; // default 450mm
+  roofHeightM?: number; // ceiling / roof slab height above raised floor (e.g. 3.8m)
+  roofOpacity?: number; // 0.0 to 1.0 (default 0.30 glass)
+  roofColor?: string;   // default '#38bdf8'
   rowScheme?: DcGridScheme; // 'letters' (A-Z) or 'numbers' (01-99)
   colScheme?: DcGridScheme; // 'numbers' (01-99) or 'letters' (A-Z)
   addressFormat?: DcAddressFormat; // 'compact' (A1) or 'hyphen' (A-01)
   tiles: DcFloorTile[];
   racks: DcRack[];
   infrastructure?: DcInfrastructureItem[];
+  walls?: DcWallSegment[];
   createdAt: string;
   updatedAt: string;
 }
@@ -185,12 +234,18 @@ export interface DcState {
   gridVisible: boolean;
   snapEnabled: boolean;
   labelsVisible: boolean;
-  floorOpacity: number; // 0.0 to 1.0 (default 1.0)
-  xrayMode: boolean;    // default false
+  wallsVisible: boolean; // toggle visibility of all perimeter & partition walls (default true)
+  roofVisible: boolean;  // toggle visibility of transparent carpet-area roof (default true)
+  wallOpacity: number;   // 0.0 to 1.0 (default 0.35)
+  roofOpacity: number;   // 0.0 to 1.0 (default 0.30)
+  floorOpacity: number;  // 0.0 to 1.0 (default 1.0)
+  xrayMode: boolean;     // default false
   selectedTileId: string | null;
   selectedTileIds: string[]; // multi-tile selection (e.g. Ctrl+Select)
   selectedRackId: string | null;
   selectedInfraId: string | null;
+  selectedWallId: string | null;
+  selectedWallItemId: string | null;
   activeCatalogCategory: DcEquipmentCategory | 'all';
   activeSpaceTab: DcSpaceType | 'all';
   zoom: number;       // canvas zoom factor

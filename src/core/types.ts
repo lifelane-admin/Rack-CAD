@@ -886,6 +886,10 @@ export interface AppEvents {
   'dc:toggle-left-panel': void;
   'dc:start-lay-pathway': any;
   'dc:start-place-equipment': any;
+  'dc:start-lay-wall': any;
+  'dc:perimeter-walls': void;
+  'dc:roof-settings': void;
+  'dc:start-place-wall-item': any;
   'dc:cancel-tool': void;
   'dc:tool-started': any;
   'dc:tool-ended': void;

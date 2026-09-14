@@ -23,10 +23,10 @@ describe('Sidebar workspace tabs', () => {
     stateManager.setState({ activeView: 'rack', selection: [] });
   });
 
-  it('renders workspace tabs: Rack, Cloud, Hybrid, Datacenter', () => {
+  it('renders workspace tabs: Rack, Cloud, Hybrid', () => {
     mountSidebar();
     const tabs = [...document.querySelectorAll('.sb-tab')].map(el => el.textContent?.trim());
-    expect(tabs).toEqual(['Rack', 'Cloud', 'Hybrid', 'Datacenter']);
+    expect(tabs).toEqual(['Rack', 'Cloud', 'Hybrid']);
   });
 
   it('Rack tab is active by default when activeView is rack', () => {

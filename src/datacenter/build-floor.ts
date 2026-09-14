@@ -3,9 +3,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { MaterialManager } from '../three/MaterialManager';
 import { buildRackGroup } from '../three/rack-builder';
 import { dcState, getRowLabel, getColLabel } from './dc-state';
-import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacingStandard, DcAddressFormat, DcFloorTile, DcAirflowDirection, DcInfrastructureItem, DcInfraCategory, DcGaugeStyle, DcSpaceType, DcEquipmentCategory, DcRacewayFittingType, DcRacewayJunctionNode } from './types';
+import { DcFloor, DcRack, DcUnit, DcRackType, DcDoorStyle, DcMounting, DcSpacingStandard, DcAddressFormat, DcFloorTile, DcAirflowDirection, DcInfrastructureItem, DcInfraCategory, DcGaugeStyle, DcSpaceType, DcEquipmentCategory, DcRacewayFittingType, DcRacewayJunctionNode, DcWallSegment, DcWallItem, DcWallItemType, DcWallSide } from './types';
 import { RACK_PRESETS, SPACING_STANDARDS, RackPreset, SpacingStandardInfo } from './standards';
-import { DATACENTER_CATALOG, CATEGORY_DEFINITIONS, CatalogItemPreset } from './catalog';
+import { DATACENTER_CATALOG, CATEGORY_DEFINITIONS, WALL_EQUIPMENT_CATALOG, CatalogItemPreset, WallItemCatalogPreset } from './catalog';
 import { solveRacewayTopology, getRacewayTheme, getTruncatedInfraSegments } from './raceway-topology';
 import { createElbowMesh, createTeeMesh, createCrossMesh, createCouplingMesh } from './raceway-geometry';
 import { stateManager } from '../core/state';
@@ -135,6 +135,30 @@ export class BuildFloorView {
     previewPos: { x: number; y: number } | null;
   } | null = null;
 
+  // Interactive Transparent Wall Laying Mode (Drag Coordinates)
+  private activeWallTool: {
+    name: string;
+    opacity: number;
+    heightM: number;
+    thicknessMm: number;
+    color: string;
+    startPoint: { x: number; y: number } | null;
+    currentPoint: { x: number; y: number } | null;
+  } | null = null;
+
+  // Interactive Wall-Mounted Equipment Placement Mode
+  private activeWallItemPlacementTool: {
+    preset: WallItemCatalogPreset;
+    previewWallId: string | null;
+    previewRatio: number;
+  } | null = null;
+
+  // Dragging existing wall start/end coordinates in 2D
+  private isDraggingWallHandle: {
+    wallId: string;
+    handle: 'start' | 'end';
+  } | null = null;
+
   public startLayingPathway(data: {
     comp?: DcComponentItem;
     name?: string;
@@ -255,16 +279,162 @@ export class BuildFloorView {
     });
   }
 
-  public cancelActiveTools() {
-    const hadTool = this.activePathwayTool !== null || this.activePlacementTool !== null;
+  public startLayingWall(data: {
+    opacity?: number;
+    heightM?: number;
+    thicknessMm?: number;
+    color?: string;
+  } = {}) {
+    if (dcState.getState().viewMode === '3d') {
+      this.setViewMode('2d');
+    }
+
+    const opacity = data.opacity !== undefined ? data.opacity : 0.35;
+    const heightM = data.heightM || 3.2;
+    const thicknessMm = data.thicknessMm || 150;
+    const color = data.color || '#38bdf8';
+
     this.activePathwayTool = null;
     this.activePlacementTool = null;
+    this.activeWallItemPlacementTool = null;
+    this.activeWallTool = {
+      name: 'Custom Wall Partition',
+      opacity,
+      heightM,
+      thicknessMm,
+      color,
+      startPoint: null,
+      currentPoint: null,
+    };
+
+    this.canvas.style.cursor = 'crosshair';
+    this.draw();
+
+    eventBus.emit('dc:tool-started', {
+      mode: 'lay-wall',
+      name: 'Custom Wall Partition',
+      icon: '🧱',
+    });
+
+    eventBus.emit('notification', {
+      message: `🧱 Laying Wall: Click start coordinate, drag to end coordinate to create wall segment. [Esc] to cancel.`,
+      type: 'info',
+    });
+  }
+
+  public startPlacingWallItem(preset: WallItemCatalogPreset) {
+    if (dcState.getState().viewMode === '3d') {
+      this.setViewMode('2d');
+    }
+    this.activePathwayTool = null;
+    this.activePlacementTool = null;
+    this.activeWallTool = null;
+    this.activeWallItemPlacementTool = {
+      preset,
+      previewWallId: null,
+      previewRatio: 0.5,
+    };
+    this.canvas.style.cursor = 'crosshair';
+    this.draw();
+
+    eventBus.emit('notification', {
+      message: `${preset.icon} Click on any perimeter or custom wall to attach ${preset.name}. [Esc] to cancel.`,
+      type: 'info',
+    });
+  }
+
+  public cancelActiveTools() {
+    const hadTool = this.activePathwayTool !== null || this.activePlacementTool !== null || this.activeWallTool !== null || this.activeWallItemPlacementTool !== null;
+    this.activePathwayTool = null;
+    this.activePlacementTool = null;
+    this.activeWallTool = null;
+    this.activeWallItemPlacementTool = null;
+    this.isDraggingWallHandle = null;
     this.canvas.style.cursor = this.toolMode === 'pan' ? 'grab' : 'crosshair';
     this.draw();
     if (hadTool) {
       eventBus.emit('dc:tool-ended', undefined);
       eventBus.emit('notification', { message: 'Placement / Drawing mode exited.', type: 'info' });
     }
+  }
+
+  private commitWall(start: { x: number; y: number }, end: { x: number; y: number }) {
+    if (!this.activeWallTool) return;
+    const lenM = Math.hypot(end.x - start.x, end.y - start.y);
+    if (lenM < 0.2) return;
+
+    const floor = dcState.getActiveFloor();
+    if (!floor) return;
+
+    const id = 'wall-custom-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+    const wall: DcWallSegment = {
+      id,
+      name: `Custom Wall (${lenM.toFixed(1)}m)`,
+      start: { x: parseFloat(start.x.toFixed(3)), y: parseFloat(start.y.toFixed(3)) },
+      end: { x: parseFloat(end.x.toFixed(3)), y: parseFloat(end.y.toFixed(3)) },
+      heightM: this.activeWallTool.heightM || 3.2,
+      thicknessMm: this.activeWallTool.thicknessMm || 150,
+      opacity: this.activeWallTool.opacity !== undefined ? this.activeWallTool.opacity : 0.35,
+      color: this.activeWallTool.color || '#38bdf8',
+      side: 'custom',
+      items: [],
+    };
+
+    dcState.addWall(wall);
+    dcState.setState({ selectedWallId: id, selectedWallItemId: null, selectedRackId: null, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
+    const updatedFloor = dcState.getActiveFloor();
+    if (updatedFloor) {
+      this.rebuildThreeScene(updatedFloor);
+    }
+    this.renderPropsPanel();
+    this.draw();
+
+    eventBus.emit('notification', {
+      message: `🧱 Built Wall Segment: ${lenM.toFixed(2)}m long (Opacity: ${Math.round(wall.opacity * 100)}%).`,
+      type: 'info',
+    });
+  }
+
+  private commitWallItemPlacement(wallId: string, ratio: number) {
+    if (!this.activeWallItemPlacementTool) return;
+    const preset = this.activeWallItemPlacementTool.preset;
+    const floor = dcState.getActiveFloor();
+    if (!floor) return;
+    const wall = floor.walls?.find(w => w.id === wallId);
+    if (!wall) return;
+
+    const itemId = 'wallitem-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+    const item: DcWallItem = {
+      id: itemId,
+      wallId,
+      type: preset.type,
+      name: preset.name,
+      positionRatio: Math.max(0.05, Math.min(0.95, parseFloat(ratio.toFixed(3)))),
+      heightOffsetM: preset.defaultHeightOffsetM || 1.4,
+      widthMm: preset.widthMm,
+      heightMm: preset.heightMm,
+      depthMm: preset.depthMm,
+      side: 'inner',
+      manufacturer: preset.manufacturer,
+      model: preset.model,
+      color: preset.color,
+    };
+
+    dcState.addWallItem(wallId, item);
+    dcState.setState({ selectedWallId: wallId, selectedWallItemId: itemId, selectedRackId: null, selectedTileId: null, selectedInfraId: null });
+    
+    this.cancelActiveTools();
+    const updatedFloor = dcState.getActiveFloor();
+    if (updatedFloor) {
+      this.rebuildThreeScene(updatedFloor);
+    }
+    this.renderPropsPanel();
+    this.draw();
+
+    eventBus.emit('notification', {
+      message: `${preset.icon} Attached ${preset.name} to ${wall.name || 'Wall'} at ${(ratio * 100).toFixed(0)}% position.`,
+      type: 'info',
+    });
   }
 
   private createPathwaySegment(start: { x: number; y: number }, end: { x: number; y: number }): string | null {
@@ -599,21 +769,36 @@ export class BuildFloorView {
             <button class="dc-btn" id="dc-btn-newfloor" title="Create new floor">＋ New Floor</button>
             <button class="dc-btn dc-btn-secondary" id="dc-btn-resetfloor" title="Reset Datacenter Floor to empty layout">↺ Reset Floor</button>
             <button class="dc-btn dc-btn-primary" id="dc-btn-addrack-topbar" title="Add single rack to floor">＋ Add Rack</button>
-            <button class="dc-btn" id="dc-btn-addrow" title="Add Row of Racks (International Standard Spacing)">▤ Add Row (Standards)</button>
+            <button class="dc-btn" id="dc-btn-addrow" title="Add Row of Racks (International Standard Spacing)">▤ Add Row</button>
+            <button class="dc-btn dc-btn-primary dc-btn-structure" id="dc-btn-addwall-topbar" title="Add / Configure Transparent Walls (Perimeter & Partitions, Hotkey: W)">🧱 ＋ Wall</button>
+            <button class="dc-btn dc-btn-primary dc-btn-structure" id="dc-btn-addroof-topbar" title="Add / Configure Transparent Carpet-Area Roof (Hotkey: Shift+R)">🏠 ＋ Roof</button>
             <div class="dc-divider"></div>
             <!-- Mode switch -->
             <button class="dc-btn dc-btn-icon active" id="dc-btn-tool-select" title="Select Tool (Hotkey: S)">↖ Select (S)</button>
             <button class="dc-btn dc-btn-icon" id="dc-btn-tool-pan" title="Move/Pan Tool (Hotkey: M)">✋ Move (M)</button>
+            <button class="dc-btn dc-btn-icon" id="dc-btn-tool-wall" title="Lay Custom Transparent Wall (Click & Drag Coordinates, Hotkey: W)">🧱 Lay Wall (W)</button>
+            <button class="dc-btn dc-btn-secondary" id="dc-btn-perimeter-walls" title="Configure Transparent Perimeter Walls (North, South, East, West)">🏛 Perimeter Walls</button>
             <div class="dc-divider"></div>
             <!-- View switch -->
             <button class="dc-btn dc-btn-icon active" id="dc-btn-2d" title="2D Top View">2D (Top View)</button>
             <button class="dc-btn dc-btn-icon" id="dc-btn-3d" title="3D Isometric View">3D (Isometric)</button>
             <div class="dc-divider"></div>
-            <!-- Floor Transparency & X-Ray Mode -->
+            <!-- Floor, Wall & Roof Transparency & Visibility Controls -->
             <button class="dc-btn dc-btn-icon" id="dc-btn-xray" title="Toggle Under-Floor Infrastructure X-Ray Mode">🦴 X-Ray</button>
+            <button class="dc-btn dc-btn-icon active" id="dc-btn-toggle-walls" title="Show / Hide All Walls (Hotkey: Shift+W)">🧱 Walls</button>
+            <button class="dc-btn dc-btn-icon active" id="dc-btn-toggle-roof" title="Show / Hide Transparent Carpet-Area Roof (Hotkey: Shift+R)">🏠 Roof</button>
+            <button class="dc-btn dc-btn-secondary" id="dc-btn-roof-settings" title="Configure Transparent Roof Height, Opacity & Trusses">🏠 Roof Settings</button>
             <div class="dc-slider-control" title="Adjust Raised Floor Surface Opacity (0% - 100%)">
               <span>Floor:</span>
               <input type="range" id="dc-floor-opacity" class="dc-slider" min="0" max="100" value="100" />
+            </div>
+            <div class="dc-slider-control" title="Adjust Transparent Wall Opacity (0% - 100%)">
+              <span>Walls:</span>
+              <input type="range" id="dc-wall-opacity" class="dc-slider" min="0" max="100" value="35" />
+            </div>
+            <div class="dc-slider-control" title="Adjust Transparent Roof Opacity (0% - 100%)">
+              <span>Roof:</span>
+              <input type="range" id="dc-roof-opacity" class="dc-slider" min="0" max="100" value="30" />
             </div>
             <div class="dc-divider"></div>
             <!-- Grid & Labels -->
@@ -743,6 +928,10 @@ export class BuildFloorView {
     eventBus.on('dc:toggle-left-panel', () => this.toggleLeftPanel());
     eventBus.on('dc:start-lay-pathway' as any, (data) => this.startLayingPathway(data));
     eventBus.on('dc:start-place-equipment' as any, (data) => this.startPlacingEquipment(data));
+    eventBus.on('dc:start-lay-wall' as any, (data) => this.startLayingWall(data));
+    eventBus.on('dc:perimeter-walls' as any, () => this.showPerimeterWallsModal());
+    eventBus.on('dc:roof-settings' as any, () => this.showRoofConfigModal());
+    eventBus.on('dc:start-place-wall-item' as any, (preset) => this.startPlacingWallItem(preset));
     eventBus.on('dc:cancel-tool' as any, () => this.cancelActiveTools());
   }
 
@@ -835,6 +1024,8 @@ export class BuildFloorView {
     on('dc-btn-resetfloor', () => this.promptResetFloor());
     on('dc-btn-addrack-topbar', () => this.showAddRackDialog());
     on('dc-btn-addrow', () => this.showAddRowDialog());
+    on('dc-btn-addwall-topbar', () => this.showPerimeterWallsModal());
+    on('dc-btn-addroof-topbar', () => this.showRoofConfigModal());
     on('dc-btn-tool-select', () => this.setToolMode('select'));
     on('dc-btn-tool-pan', () => {
       const s = dcState.getState();
@@ -844,13 +1035,53 @@ export class BuildFloorView {
         this.setToolMode('pan');
       }
     });
+    on('dc-btn-tool-wall', () => this.startLayingWall());
+    on('dc-btn-perimeter-walls', () => this.showPerimeterWallsModal());
     on('dc-btn-2d', () => this.setViewMode('2d'));
     on('dc-btn-3d', () => this.setViewMode('3d'));
     on('dc-btn-rotate-2d', () => this.rotate2DView());
     on('dc-btn-xray', () => this.toggleXrayMode());
+    on('dc-btn-toggle-walls', () => {
+      const visible = dcState.toggleWallsVisibility();
+      this.refresh();
+      eventBus.emit('notification', {
+        message: `🧱 Walls ${visible ? 'Visible' : 'Hidden'}`,
+        type: 'info',
+      });
+    });
+    on('dc-btn-toggle-roof', () => {
+      const visible = dcState.toggleRoofVisibility();
+      this.refresh();
+      eventBus.emit('notification', {
+        message: `🏠 Roof ${visible ? 'Visible' : 'Hidden'}`,
+        type: 'info',
+      });
+    });
+    on('dc-btn-roof-settings', () => this.showRoofConfigModal());
     this.container.querySelector('#dc-floor-opacity')?.addEventListener('input', (e) => {
       const val = parseInt((e.target as HTMLInputElement).value, 10) / 100;
       this.setFloorOpacity(val);
+    });
+    this.container.querySelector('#dc-wall-opacity')?.addEventListener('input', (e) => {
+      const val = parseInt((e.target as HTMLInputElement).value, 10) / 100;
+      dcState.setWallOpacity(val);
+      const floor = dcState.getActiveFloor();
+      if (floor) {
+        if (dcState.getState().viewMode === '3d') {
+          this.rebuildThreeScene(floor);
+        } else {
+          this.draw();
+        }
+        this.renderPropsPanel();
+      }
+    });
+    this.container.querySelector('#dc-roof-opacity')?.addEventListener('input', (e) => {
+      const val = parseInt((e.target as HTMLInputElement).value, 10) / 100;
+      dcState.setRoofOpacity(val);
+      const floor = dcState.getActiveFloor();
+      if (floor && dcState.getState().viewMode === '3d') {
+        this.rebuildThreeScene(floor);
+      }
     });
     on('dc-btn-grid', () => { dcState.setState({ gridVisible: !dcState.getState().gridVisible }); });
     on('dc-btn-snap', () => { dcState.setState({ snapEnabled: !dcState.getState().snapEnabled }); });
@@ -1030,8 +1261,28 @@ export class BuildFloorView {
 
       const is3D = dcState.getState().viewMode === '3d';
       const key = e.key.toUpperCase();
-      if (key === 'S') this.setToolMode('select');
-      if (key === 'M') this.setToolMode('pan');
+      if (e.shiftKey && key === 'W') {
+        e.preventDefault();
+        const visible = dcState.toggleWallsVisibility();
+        this.refresh();
+        eventBus.emit('notification', {
+          message: `🧱 Walls ${visible ? 'Visible' : 'Hidden'}`,
+          type: 'info',
+        });
+        return;
+      }
+      if ((e.shiftKey && key === 'R') || key === 'O') {
+        e.preventDefault();
+        const visible = dcState.toggleRoofVisibility();
+        this.refresh();
+        eventBus.emit('notification', {
+          message: `🏠 Roof ${visible ? 'Visible' : 'Hidden'}`,
+          type: 'info',
+        });
+        return;
+      }
+      if (key === 'S' && !e.shiftKey) this.setToolMode('select');
+      if (key === 'M' && !e.shiftKey) this.setToolMode('pan');
       if (key === 'Z') {
         const s = dcState.getState();
         if (s.selectedRackId) {
@@ -1126,6 +1377,18 @@ export class BuildFloorView {
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const s = dcState.getState();
+        if (s.selectedWallItemId && s.selectedWallId) {
+          dcState.deleteWallItem(s.selectedWallId, s.selectedWallItemId);
+          this.refresh();
+          eventBus.emit('notification', { message: 'Wall-mounted equipment removed.', type: 'info' });
+          return;
+        }
+        if (s.selectedWallId) {
+          dcState.deleteWall(s.selectedWallId);
+          this.refresh();
+          eventBus.emit('notification', { message: 'Wall partition deleted.', type: 'info' });
+          return;
+        }
         if (s.selectedRackId) {
           dcState.deleteRack(s.selectedRackId);
           this.refresh();
@@ -1140,7 +1403,7 @@ export class BuildFloorView {
         }
       }
       if (e.key === 'Escape') {
-        if (this.activePathwayTool || this.activePlacementTool) {
+        if (this.activePathwayTool || this.activePlacementTool || this.activeWallTool || this.activeWallItemPlacementTool) {
           this.cancelActiveTools();
           return;
         }
@@ -1259,7 +1522,7 @@ export class BuildFloorView {
     });
 
     this.canvas.addEventListener('mousedown', (e) => {
-      if (this.activePathwayTool || this.activePlacementTool) {
+      if (this.activePathwayTool || this.activePlacementTool || this.activeWallTool || this.activeWallItemPlacementTool) {
         if (e.button === 0) this.handleMouseDown(e);
         return;
       }
@@ -1296,7 +1559,6 @@ export class BuildFloorView {
             sx = Math.max(0, Math.min(floor.lengthM, parseFloat(sx.toFixed(3))));
             sy = Math.max(0, Math.min(floor.widthM, parseFloat(sy.toFixed(3))));
           }
-          // Free 2D drag across both X and Y axes simultaneously
           this.activePathwayTool.currentPoint = { x: sx, y: sy };
 
           if (statusbar) {
@@ -1316,7 +1578,94 @@ export class BuildFloorView {
           return;
         }
 
-        // 2. Handling Active Equipment Placement
+        // 2. Handling Active Wall Laying
+        if (this.activeWallTool) {
+          const tileM = floor ? floor.tileSizeMm / 1000 : 0.6;
+          const snapStep = dcState.getState().snapEnabled ? tileM : 0.05;
+          let sx = dcState.getState().snapEnabled ? Math.round(xM / snapStep) * snapStep : xM;
+          let sy = dcState.getState().snapEnabled ? Math.round(yM / snapStep) * snapStep : yM;
+          if (floor) {
+            sx = Math.max(0, Math.min(floor.lengthM, parseFloat(sx.toFixed(3))));
+            sy = Math.max(0, Math.min(floor.widthM, parseFloat(sy.toFixed(3))));
+          }
+          this.activeWallTool.currentPoint = { x: sx, y: sy };
+
+          if (statusbar) {
+            if (this.activeWallTool.startPoint) {
+              const sp = this.activeWallTool.startPoint;
+              const lenM = Math.hypot(sx - sp.x, sy - sp.y);
+              const tiles = (lenM / tileM).toFixed(1);
+              statusbar.textContent = `🧱 LAYING WALL: Length: ${formatSingleDistance(lenM, primaryUnit)} (${tiles} tiles) | (${sp.x.toFixed(2)}, ${sp.y.toFixed(2)}) → (${sx.toFixed(2)}, ${sy.toFixed(2)}) | Click to Finish Segment | [Esc] Exit`;
+            } else {
+              statusbar.textContent = `🧱 LAYING WALL: Click start coordinate on floor grid to begin wall segment | [Esc] Exit`;
+            }
+          }
+          this.draw();
+          return;
+        }
+
+        // 3. Handling Active Wall Item Placement
+        if (this.activeWallItemPlacementTool && floor) {
+          const walls = floor.walls || [];
+          let bestWall: DcWallSegment | null = null;
+          let bestDist = Infinity;
+          let bestRatio = 0.5;
+
+          for (const wall of walls) {
+            const x1 = wall.start.x, y1 = wall.start.y;
+            const x2 = wall.end.x, y2 = wall.end.y;
+            const lenSq = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+            if (lenSq > 0) {
+              const t = Math.max(0.05, Math.min(0.95, ((xM - x1) * (x2 - x1) + (yM - y1) * (y2 - y1)) / lenSq));
+              const px = x1 + t * (x2 - x1);
+              const py = y1 + t * (y2 - y1);
+              const dist = Math.hypot(xM - px, yM - py);
+              if (dist < bestDist) {
+                bestDist = dist;
+                bestWall = wall;
+                bestRatio = t;
+              }
+            }
+          }
+
+          if (bestWall && bestDist <= 1.2) {
+            this.activeWallItemPlacementTool.previewWallId = bestWall.id;
+            this.activeWallItemPlacementTool.previewRatio = bestRatio;
+            if (statusbar) {
+              statusbar.textContent = `${this.activeWallItemPlacementTool.preset.icon} ATTACH TO WALL: ${bestWall.name || 'Wall'} at ${(bestRatio * 100).toFixed(0)}% (Mount Height: ${this.activeWallItemPlacementTool.preset.defaultHeightOffsetM}m) | Click to Mount | [Esc] Exit`;
+            }
+          } else {
+            this.activeWallItemPlacementTool.previewWallId = null;
+            if (statusbar) {
+              statusbar.textContent = `${this.activeWallItemPlacementTool.preset.icon} PLACING ${this.activeWallItemPlacementTool.preset.name}: Move cursor near any transparent wall to attach | [Esc] Exit`;
+            }
+          }
+          this.draw();
+          return;
+        }
+
+        // 4. Handling Dragging Existing Wall Handles
+        if (this.isDraggingWallHandle && floor) {
+          const wall = floor.walls?.find(w => w.id === this.isDraggingWallHandle!.wallId);
+          if (wall) {
+            const tileM = floor.tileSizeMm / 1000;
+            const snapStep = dcState.getState().snapEnabled ? tileM : 0.05;
+            let sx = dcState.getState().snapEnabled ? Math.round(xM / snapStep) * snapStep : xM;
+            let sy = dcState.getState().snapEnabled ? Math.round(yM / snapStep) * snapStep : yM;
+            sx = Math.max(0, Math.min(floor.lengthM, parseFloat(sx.toFixed(3))));
+            sy = Math.max(0, Math.min(floor.widthM, parseFloat(sy.toFixed(3))));
+
+            if (this.isDraggingWallHandle.handle === 'start') {
+              dcState.updateWall(wall.id, { start: { x: sx, y: sy } });
+            } else {
+              dcState.updateWall(wall.id, { end: { x: sx, y: sy } });
+            }
+            this.draw();
+            return;
+          }
+        }
+
+        // 5. Handling Active Equipment Placement
         if (this.activePlacementTool && floor) {
           const tileM = floor.tileSizeMm / 1000;
           const rot = this.activePlacementTool.rotation;
@@ -1341,7 +1690,7 @@ export class BuildFloorView {
           if (this.isMovingPlacementMode) {
             statusbar.textContent = `✋ MOVING RACK: Click on floor to drop & position | [R] Rotate 90° | [Esc] Cancel | X: ${formatSingleDistance(xM, primaryUnit)} | Y: ${formatSingleDistance(yM, primaryUnit)}`;
           } else {
-            statusbar.textContent = `Cursor: X: ${formatSingleDistance(xM, primaryUnit)} | Y: ${formatSingleDistance(yM, primaryUnit)} | [Z] Zoom to Rack / Fit | [S] Select | [M] Move | [R] Rotate`;
+            statusbar.textContent = `Cursor: X: ${formatSingleDistance(xM, primaryUnit)} | Y: ${formatSingleDistance(yM, primaryUnit)} | [Z] Zoom to Rack / Fit | [S] Select | [M] Move | [R] Rotate | [W] Lay Wall`;
           }
         }
       }
@@ -1376,7 +1725,6 @@ export class BuildFloorView {
           unrotDx = dx * cos - dy * sin;
           unrotDy = dx * sin + dy * cos;
         }
-        // Shifting mouse right moves view right -> camera center moves left (negative dx)
         this.camX = this.panStartCam.camX - unrotDx / this.ppm;
         this.camY = this.panStartCam.camY - unrotDy / this.ppm;
         this.draw();
@@ -1393,6 +1741,14 @@ export class BuildFloorView {
         this.canvas.style.cursor = this.toolMode === 'pan' ? 'grab' : 'default';
       }
 
+      if (this.isDraggingWallHandle) {
+        this.isDraggingWallHandle = null;
+        const currentFloor = dcState.getActiveFloor();
+        if (currentFloor) this.rebuildThreeScene(currentFloor);
+        this.renderPropsPanel();
+        this.draw();
+      }
+
       // Complete pathway laying on drag-release if distance >= 0.2m with continuity
       if (this.activePathwayTool && this.activePathwayTool.startPoint && this.activePathwayTool.currentPoint) {
         const start = this.activePathwayTool.startPoint;
@@ -1400,7 +1756,6 @@ export class BuildFloorView {
         const lenM = Math.hypot(end.x - start.x, end.y - start.y);
         if (lenM >= 0.2) {
           this.commitPathway(start, end);
-          // CONTINUITY: seamlessly keep the end point active as the new start point
           this.activePathwayTool.startPoint = { x: end.x, y: end.y };
           this.activePathwayTool.currentPoint = { x: end.x, y: end.y };
           this.draw();
@@ -1411,7 +1766,6 @@ export class BuildFloorView {
       if (this.isDraggingRack && !this.isMovingPlacementMode) {
         this.handleRackDrop(_e);
       } else if (!this.isMovingPlacementMode) {
-        // Simple click without exceeding drag threshold: cleanly reset drag state so no ghost drag remains
         this.draggingRackId = null;
         this.dragPos = null;
       }
@@ -1497,7 +1851,44 @@ export class BuildFloorView {
       return;
     }
 
-    // 2. Handling Equipment Placement Click
+    // 2. Handling Wall Laying Click
+    if (this.activeWallTool) {
+      const tileM = floor.tileSizeMm / 1000;
+      const snapStep = dcState.getState().snapEnabled ? tileM : 0.05;
+      let sx = dcState.getState().snapEnabled ? Math.round(xM / snapStep) * snapStep : xM;
+      let sy = dcState.getState().snapEnabled ? Math.round(yM / snapStep) * snapStep : yM;
+      sx = Math.max(0, Math.min(floor.lengthM, parseFloat(sx.toFixed(3))));
+      sy = Math.max(0, Math.min(floor.widthM, parseFloat(sy.toFixed(3))));
+
+      if (!this.activeWallTool.startPoint) {
+        this.activeWallTool.startPoint = { x: sx, y: sy };
+        this.activeWallTool.currentPoint = { x: sx, y: sy };
+        this.draw();
+      } else {
+        const start = this.activeWallTool.startPoint;
+        const end = { x: sx, y: sy };
+        const dist = Math.hypot(end.x - start.x, end.y - start.y);
+        if (dist >= 0.2) {
+          this.commitWall(start, end);
+          this.activeWallTool.startPoint = { x: end.x, y: end.y };
+          this.activeWallTool.currentPoint = { x: end.x, y: end.y };
+          this.draw();
+        } else if (dist < 0.05) {
+          this.cancelActiveTools();
+        }
+      }
+      return;
+    }
+
+    // 3. Handling Wall Item Placement Click
+    if (this.activeWallItemPlacementTool) {
+      if (this.activeWallItemPlacementTool.previewWallId) {
+        this.commitWallItemPlacement(this.activeWallItemPlacementTool.previewWallId, this.activeWallItemPlacementTool.previewRatio);
+      }
+      return;
+    }
+
+    // 4. Handling Equipment Placement Click
     if (this.activePlacementTool && this.activePlacementTool.previewPos) {
       this.commitPlacement();
       return;
@@ -1511,9 +1902,51 @@ export class BuildFloorView {
 
     this.mouseDownClientPos = { x: e.clientX, y: e.clientY };
 
+    // Check Wall Handle selection for dragging coordinates
+    if (dcState.getState().wallsVisible !== false && floor.walls && floor.walls.length > 0) {
+      for (const wall of floor.walls) {
+        const handle = this.hitTestWallHandle(wall, xM, yM);
+        if (handle) {
+          this.isDraggingWallHandle = { wallId: wall.id, handle };
+          dcState.setState({ selectedWallId: wall.id, selectedWallItemId: null, selectedRackId: null, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
+          this.renderPropsPanel();
+          this.draw();
+          return;
+        }
+      }
+    }
+
+    // Check Wall Item selection
+    if (dcState.getState().wallsVisible !== false && floor.walls && floor.walls.length > 0) {
+      for (const wall of floor.walls) {
+        if (wall.items && wall.items.length > 0) {
+          for (const item of wall.items) {
+            if (this.hitTestWallItem(wall, item, xM, yM)) {
+              dcState.setState({ selectedWallId: wall.id, selectedWallItemId: item.id, selectedRackId: null, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
+              this.renderPropsPanel();
+              this.draw();
+              return;
+            }
+          }
+        }
+      }
+    }
+
+    // Check Wall Body selection
+    if (dcState.getState().wallsVisible !== false && floor.walls && floor.walls.length > 0) {
+      for (const wall of floor.walls) {
+        if (this.hitTestWall(wall, xM, yM)) {
+          dcState.setState({ selectedWallId: wall.id, selectedWallItemId: null, selectedRackId: null, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
+          this.renderPropsPanel();
+          this.draw();
+          return;
+        }
+      }
+    }
+
     for (const rack of floor.racks) {
       if (this.hitTestRack(rack, xM, yM)) {
-        dcState.setState({ selectedRackId: rack.id, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
+        dcState.setState({ selectedRackId: rack.id, selectedWallId: null, selectedWallItemId: null, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
         this.pendingDragRack = true;
         this.isDraggingRack = false;
         this.draggingRackId = rack.id;
@@ -1529,7 +1962,7 @@ export class BuildFloorView {
     if (floor.infrastructure && floor.infrastructure.length > 0) {
       for (const item of floor.infrastructure) {
         if (this.hitTestInfrastructure(item, xM, yM)) {
-          dcState.setState({ selectedInfraId: item.id, selectedRackId: null, selectedTileId: null, selectedTileIds: [] });
+          dcState.setState({ selectedInfraId: item.id, selectedWallId: null, selectedWallItemId: null, selectedRackId: null, selectedTileId: null, selectedTileIds: [] });
           this.renderPropsPanel();
           this.draw();
           return;
@@ -2477,6 +2910,122 @@ export class BuildFloorView {
       this.ctx.restore();
     }
 
+    // 4.1.5 Draw Transparent Walls & Wall Equipment
+    this.drawWalls(floor);
+
+    // 4.1.6 Draw Active Wall Laying Rubberband Preview
+    if (this.activeWallTool) {
+      const tool = this.activeWallTool;
+      const curPt = tool.currentPoint;
+      const startPt = tool.startPoint;
+      const primaryUnit = floor.unit ?? 'm';
+
+      this.ctx.save();
+      if (startPt && curPt) {
+        const p1 = this.worldToScreen(startPt.x, startPt.y);
+        const p2 = this.worldToScreen(curPt.x, curPt.y);
+        const lenM = Math.hypot(curPt.x - startPt.x, curPt.y - startPt.y);
+        const tileCount = (lenM / tileM).toFixed(1);
+        const widthPx = Math.max(5, (tool.thicknessMm / 1000) * this.ppm);
+        const opacity = tool.opacity !== undefined ? tool.opacity : 0.35;
+
+        // Wall Body Preview
+        this.ctx.strokeStyle = tool.color || '#38bdf8';
+        this.ctx.lineWidth = widthPx;
+        this.ctx.globalAlpha = Math.max(0.15, opacity);
+        this.ctx.beginPath();
+        this.ctx.moveTo(p1.sx, p1.sy);
+        this.ctx.lineTo(p2.sx, p2.sy);
+        this.ctx.stroke();
+
+        // Glowing center dashed guide
+        this.ctx.globalAlpha = 1.0;
+        this.ctx.strokeStyle = '#38bdf8';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([6, 4]);
+        this.ctx.beginPath();
+        this.ctx.moveTo(p1.sx, p1.sy);
+        this.ctx.lineTo(p2.sx, p2.sy);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+
+        // Start anchor node
+        this.ctx.fillStyle = '#0284c7';
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(p1.sx, p1.sy, 6, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // End cursor node
+        this.ctx.fillStyle = '#38bdf8';
+        this.ctx.beginPath();
+        this.ctx.arc(p2.sx, p2.sy, 6, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Dimension Pill
+        const midX = (p1.sx + p2.sx) / 2;
+        const midY = (p1.sy + p2.sy) / 2;
+        const badgeText = `🧱 ${formatSingleDistance(lenM, primaryUnit)} (${tileCount} tiles) • ${Math.round(opacity * 100)}% Glass`;
+        this.ctx.font = 'bold 11px system-ui';
+        const txtW = this.ctx.measureText(badgeText).width;
+        this.ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+        this.ctx.fillRect(midX - txtW / 2 - 8, midY - 26, txtW + 16, 20);
+        this.ctx.strokeStyle = '#38bdf8';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(midX - txtW / 2 - 8, midY - 26, txtW + 16, 20);
+        this.ctx.fillStyle = '#38bdf8';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(badgeText, midX, midY - 16);
+      }
+      this.ctx.restore();
+    }
+
+    // 4.1.7 Draw Active Wall Item Placement Preview
+    if (this.activeWallItemPlacementTool && this.activeWallItemPlacementTool.previewWallId && floor) {
+      const tool = this.activeWallItemPlacementTool;
+      const wall = floor.walls?.find(w => w.id === tool.previewWallId);
+      if (wall) {
+        const p1 = this.worldToScreen(wall.start.x, wall.start.y);
+        const p2 = this.worldToScreen(wall.end.x, wall.end.y);
+        const segLenPx = Math.hypot(p2.sx - p1.sx, p2.sy - p1.sy) || 1;
+        const uX = (p2.sx - p1.sx) / segLenPx;
+        const uY = (p2.sy - p1.sy) / segLenPx;
+        const nX = -uY;
+        const nY = uX;
+        const widthPx = Math.max(5, (wall.thicknessMm / 1000) * this.ppm);
+        const ix = p1.sx + uX * (segLenPx * tool.previewRatio);
+        const iy = p1.sy + uY * (segLenPx * tool.previewRatio);
+        const itemPxX = ix + nX * (widthPx / 2 + 6);
+        const itemPxY = iy + nY * (widthPx / 2 + 6);
+
+        this.ctx.save();
+        this.ctx.fillStyle = '#0284c7';
+        this.ctx.strokeStyle = '#38bdf8';
+        this.ctx.lineWidth = 2;
+        this.ctx.shadowColor = '#38bdf8';
+        this.ctx.shadowBlur = 12;
+        this.ctx.beginPath();
+        this.ctx.arc(itemPxX, itemPxY, 14, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        this.ctx.font = '14px system-ui';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(tool.preset.icon, itemPxX, itemPxY);
+
+        this.ctx.shadowBlur = 0;
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = 'bold 10px system-ui';
+        this.ctx.fillText(`Click to attach ${tool.preset.shortLabel} (${tool.preset.defaultHeightOffsetM}m)`, itemPxX, itemPxY + 20);
+        this.ctx.restore();
+      }
+    }
+
     // 4.2 Draw Active Equipment Placement Preview Footprint
     if (this.activePlacementTool && this.activePlacementTool.previewPos) {
       const tool = this.activePlacementTool;
@@ -2715,6 +3264,155 @@ export class BuildFloorView {
     this.updateButtonStates();
   }
 
+  private drawWalls(floor: DcFloor) {
+    if (!floor.walls || floor.walls.length === 0 || dcState.getState().wallsVisible === false) return;
+    const s = dcState.getState();
+    const primaryUnit = floor.unit ?? 'm';
+
+    for (const wall of floor.walls) {
+      const isSelected = wall.id === s.selectedWallId;
+      const p1 = this.worldToScreen(wall.start.x, wall.start.y);
+      const p2 = this.worldToScreen(wall.end.x, wall.end.y);
+      const lenM = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+      if (lenM <= 0.05) continue;
+
+      const widthPx = Math.max(5, ((wall.thicknessMm || 150) / 1000) * this.ppm);
+      const opacity = wall.opacity !== undefined ? wall.opacity : 0.35;
+
+      this.ctx.save();
+
+      // Glass Wall Body Fill
+      this.ctx.strokeStyle = wall.color || '#38bdf8';
+      this.ctx.lineWidth = widthPx;
+      this.ctx.lineCap = 'butt';
+      this.ctx.globalAlpha = Math.max(0.12, opacity * 0.8);
+      this.ctx.beginPath();
+      this.ctx.moveTo(p1.sx, p1.sy);
+      this.ctx.lineTo(p2.sx, p2.sy);
+      this.ctx.stroke();
+
+      // Outer glass surface line accents
+      this.ctx.globalAlpha = Math.max(0.4, opacity);
+      this.ctx.lineWidth = 1.5;
+      this.ctx.strokeStyle = '#38bdf8';
+
+      const segLenPx = Math.hypot(p2.sx - p1.sx, p2.sy - p1.sy) || 1;
+      const uX = (p2.sx - p1.sx) / segLenPx;
+      const uY = (p2.sy - p1.sy) / segLenPx;
+      const nX = -uY;
+      const nY = uX;
+
+      // Top and bottom boundary edges
+      this.ctx.beginPath();
+      this.ctx.moveTo(p1.sx + nX * (widthPx / 2), p1.sy + nY * (widthPx / 2));
+      this.ctx.lineTo(p2.sx + nX * (widthPx / 2), p2.sy + nY * (widthPx / 2));
+      this.ctx.moveTo(p1.sx - nX * (widthPx / 2), p1.sy - nY * (widthPx / 2));
+      this.ctx.lineTo(p2.sx - nX * (widthPx / 2), p2.sy - nY * (widthPx / 2));
+      this.ctx.stroke();
+
+      // Selection glow & drag handles
+      if (isSelected) {
+        this.ctx.globalAlpha = 0.9;
+        this.ctx.strokeStyle = '#38bdf8';
+        this.ctx.lineWidth = widthPx + 6;
+        this.ctx.shadowColor = '#38bdf8';
+        this.ctx.shadowBlur = 12;
+        this.ctx.beginPath();
+        this.ctx.moveTo(p1.sx, p1.sy);
+        this.ctx.lineTo(p2.sx, p2.sy);
+        this.ctx.stroke();
+        this.ctx.shadowBlur = 0;
+
+        // Start & End coordinate drag handle dots
+        this.ctx.fillStyle = '#0284c7';
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(p1.sx, p1.sy, 7, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        this.ctx.beginPath();
+        this.ctx.arc(p2.sx, p2.sy, 7, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Coordinate readout labels
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = 'bold 9px system-ui';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(`(${wall.start.x.toFixed(2)}, ${wall.start.y.toFixed(2)})`, p1.sx, p1.sy - 14);
+        this.ctx.fillText(`(${wall.end.x.toFixed(2)}, ${wall.end.y.toFixed(2)})`, p2.sx, p2.sy - 14);
+      }
+
+      // Wall Dimension & Opacity Tag
+      const midX = (p1.sx + p2.sx) / 2;
+      const midY = (p1.sy + p2.sy) / 2;
+      const wallTag = `${wall.name || 'Glass Wall'} • ${formatSingleDistance(lenM, primaryUnit)} (${Math.round(opacity * 100)}% Glass)`;
+      this.ctx.globalAlpha = 1.0;
+      this.ctx.fillStyle = isSelected ? '#38bdf8' : '#cbd5e1';
+      this.ctx.font = 'bold 10px system-ui';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'bottom';
+      this.ctx.fillText(wallTag, midX, midY - widthPx / 2 - 3);
+
+      // Draw Wall-Mounted Equipment
+      if (wall.items && wall.items.length > 0) {
+        for (const item of wall.items) {
+          const isItemSel = s.selectedWallItemId === item.id;
+          const t = item.positionRatio;
+          const ix = p1.sx + uX * (segLenPx * t);
+          const iy = p1.sy + uY * (segLenPx * t);
+
+          const sideOffset = (item.side === 'outer' ? -1 : 1) * (widthPx / 2 + 6);
+          const itemPxX = ix + nX * sideOffset;
+          const itemPxY = iy + nY * sideOffset;
+
+          this.ctx.save();
+          if (isItemSel) {
+            this.ctx.shadowColor = '#38bdf8';
+            this.ctx.shadowBlur = 10;
+          }
+
+          // Item badge circle
+          this.ctx.fillStyle = isItemSel ? '#0284c7' : '#1e293b';
+          this.ctx.strokeStyle = isItemSel ? '#38bdf8' : (item.color || '#64748b');
+          this.ctx.lineWidth = isItemSel ? 2 : 1.5;
+          this.ctx.beginPath();
+          this.ctx.arc(itemPxX, itemPxY, 12, 0, Math.PI * 2);
+          this.ctx.fill();
+          this.ctx.stroke();
+
+          // Item Icon
+          const icon = item.type === 'ac-split' ? '❄️' :
+                       item.type === 'fire-extinguisher' ? '🧯' :
+                       item.type === 'fire-panel' ? '🚨' :
+                       item.type === 'env-sensor' ? '🌡️' :
+                       item.type === 'epo-button' ? '🛑' :
+                       item.type === 'access-keypad' ? '🔢' :
+                       item.type === 'cctv-camera' ? '📹' :
+                       item.type === 'pdp-panel' ? '⚡' :
+                       item.type === 'leak-detector' ? '💧' : '🩹';
+
+          this.ctx.font = '12px system-ui';
+          this.ctx.textAlign = 'center';
+          this.ctx.textBaseline = 'middle';
+          this.ctx.fillText(icon, itemPxX, itemPxY);
+
+          // Item name & height offset
+          this.ctx.fillStyle = isItemSel ? '#38bdf8' : '#f8fafc';
+          this.ctx.font = 'bold 9px system-ui';
+          this.ctx.fillText(`${item.name} (${item.heightOffsetM || 1.4}m)`, itemPxX, itemPxY + 16);
+
+          this.ctx.restore();
+        }
+      }
+
+      this.ctx.restore();
+    }
+  }
+
   private drawRack(rack: DcRack, xM: number, yM: number, isDragging: boolean) {
     const s = dcState.getState();
     const rW = rack.widthMm / 1000, rD = rack.depthMm / 1000;
@@ -2893,7 +3591,10 @@ export class BuildFloorView {
     const curCat = s.activeCatalogCategory || 'all';
 
     // Filter presets
-    const filtered = DATACENTER_CATALOG.filter(p => {
+    const isWallCat = curCat === 'wall-equipment' || curSpace === 'walls-roof';
+    const filteredFloorPresets = DATACENTER_CATALOG.filter(p => {
+      if (curSpace === 'walls-roof') return false;
+      if (isWallCat) return false;
       if (curSpace !== 'all' && p.spaceType !== curSpace) return false;
       if (curCat !== 'all' && p.category !== curCat) return false;
       if (this.catalogSearchQuery.trim()) {
@@ -2908,12 +3609,28 @@ export class BuildFloorView {
       return true;
     });
 
-    const categoriesForSpace = CATEGORY_DEFINITIONS.filter(c => c.space === 'all' || c.space === curSpace || curSpace === 'all');
+    const filteredWallPresets = WALL_EQUIPMENT_CATALOG.filter(w => {
+      if (curSpace !== 'all' && curSpace !== 'walls-roof' && curCat !== 'wall-equipment' && !isWallCat) return false;
+      if (this.catalogSearchQuery.trim()) {
+        const q = this.catalogSearchQuery.toLowerCase();
+        const match = w.name.toLowerCase().includes(q) ||
+                      w.manufacturer.toLowerCase().includes(q) ||
+                      w.model.toLowerCase().includes(q) ||
+                      w.description.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+
+    const categoriesForSpace = CATEGORY_DEFINITIONS.filter(c => c.space === 'all' || c.space === curSpace || curSpace === 'all' || (curSpace === 'walls-roof' && c.id === 'wall-equipment'));
+
+    const showArchitectureCard = curSpace === 'walls-roof' || curCat === 'wall-equipment' || curSpace === 'all';
 
     el.innerHTML = `
       <div class="dc-space-toggle">
         <button class="dc-space-toggle-btn ${curSpace === 'white-space' ? 'active' : ''}" id="dc-space-white" title="White Space: IT Equipment, Racks, In-Row Cooling, Cabling & PDUs">🌐 White Space</button>
         <button class="dc-space-toggle-btn grey ${curSpace === 'grey-space' ? 'active' : ''}" id="dc-space-grey" title="Grey Space: Facility Plant, Switchgear, Central UPS, Transformers & Chillers">🏭 Grey Space</button>
+        <button class="dc-space-toggle-btn walls ${curSpace === 'walls-roof' ? 'active' : ''}" id="dc-space-walls" title="Walls & Roof Architecture: Lay Custom Walls, Perimeter Walls, Transparent Roof & Equipment">🧱 Walls & Roof</button>
         <button class="dc-space-toggle-btn ${curSpace === 'all' ? 'active' : ''}" id="dc-space-all" title="View all equipment domains">All</button>
       </div>
 
@@ -2925,14 +3642,51 @@ export class BuildFloorView {
         `).join('')}
       </div>
 
+      ${showArchitectureCard ? `
+        <!-- Prominent Architecture & Wall/Roof Builder Card -->
+        <div class="dc-architecture-builder-card" style="background:linear-gradient(135deg,rgba(15,23,42,0.95) 0%,rgba(30,41,59,0.95) 100%); border:1px solid rgba(56,189,248,0.4); border-radius:8px; padding:12px; margin-bottom:10px; box-shadow:0 4px 14px rgba(0,0,0,0.4);">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:18px;">🧱</span>
+              <span style="font-weight:700; font-size:12px; color:#38bdf8; letter-spacing:0.3px;">DATA HALL ARCHITECTURE</span>
+            </div>
+            <span style="font-size:10px; font-weight:600; background:rgba(56,189,248,0.15); color:#38bdf8; padding:2px 6px; border-radius:4px; border:1px solid rgba(56,189,248,0.3);">2D / 3D</span>
+          </div>
+          <p style="font-size:11px; color:#94a3b8; margin:0 0 10px 0; line-height:1.4;">
+            Build transparent perimeter borders, draw custom glass partitions with drag coordinates, or configure the transparent carpet-area roof.
+          </p>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <button class="dc-btn dc-btn-primary dc-btn-full" id="dc-cat-btn-lay-wall" style="justify-content:center; font-weight:600;">
+              🧱 Lay Custom Wall (Drag Coordinates)
+            </button>
+            <button class="dc-btn dc-btn-secondary dc-btn-full" id="dc-cat-btn-perimeter-walls" style="justify-content:center;">
+              🏛 Configure Perimeter Walls (N/S/E/W)
+            </button>
+            <button class="dc-btn dc-btn-secondary dc-btn-full" id="dc-cat-btn-roof-settings" style="justify-content:center;">
+              🏠 Configure Transparent Roof (Height & Trusses)
+            </button>
+            <div style="display:flex; gap:6px; margin-top:2px;">
+              <button class="dc-btn dc-btn-sm dc-btn-secondary" id="dc-cat-btn-toggle-walls" style="flex:1; justify-content:center;">
+                ${s.wallsVisible !== false ? '👁 Hide Walls' : '👁 Show Walls'}
+              </button>
+              <button class="dc-btn dc-btn-sm dc-btn-secondary" id="dc-cat-btn-toggle-roof" style="flex:1; justify-content:center;">
+                ${s.roofVisible !== false ? '👁 Hide Roof' : '👁 Show Roof'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+
       <div class="dc-catalog-search-wrap">
         <span class="dc-catalog-search-icon">🔍</span>
-        <input type="text" class="dc-catalog-search-input" id="dc-catalog-search" placeholder="Search equipment, mfr, cooling kW, power..." value="${this.catalogSearchQuery}"/>
+        <input type="text" class="dc-catalog-search-input" id="dc-catalog-search" placeholder="Search equipment, mfr, A/C, extinguisher, EPO..." value="${this.catalogSearchQuery}"/>
       </div>
 
       <div class="dc-catalog-list">
-        ${filtered.length === 0 ? '<div class="dc-muted" style="text-align:center;padding:20px 0;">No matching equipment found.</div>' : ''}
-        ${filtered.map(p => {
+        ${filteredFloorPresets.length === 0 && filteredWallPresets.length === 0 ? '<div class="dc-muted" style="text-align:center;padding:20px 0;">No matching equipment found.</div>' : ''}
+        
+        <!-- Floor Mounted Equipment Cards -->
+        ${filteredFloorPresets.map(p => {
           const specBadges: string[] = [];
           specBadges.push(`${p.widthMm}×${p.depthMm}mm`);
           if (p.heightU) specBadges.push(`${p.heightU}U`);
@@ -2961,21 +3715,65 @@ export class BuildFloorView {
             </div>
           `;
         }).join('')}
+
+        <!-- Wall Mounted Infrastructure Cards -->
+        ${filteredWallPresets.map(w => {
+          const specBadges: string[] = [];
+          specBadges.push(`${w.widthMm}×${w.heightMm}×${w.depthMm}mm`);
+          specBadges.push(`Mount: ${w.defaultHeightOffsetM}m`);
+          if (w.manufacturer) specBadges.push(`${w.manufacturer}`);
+
+          return `
+            <div class="dc-catalog-card wall-card" data-wall-preset="${w.id}">
+              <div class="dc-card-top">
+                <div class="dc-card-title-wrap">
+                  <span class="dc-card-icon">${w.icon}</span>
+                  <span class="dc-card-name">${w.name}</span>
+                </div>
+                <span class="dc-card-tag wall-mount">Wall Mount</span>
+              </div>
+              <div class="dc-card-desc">${w.description}</div>
+              <div class="dc-card-specs">
+                ${specBadges.map(b => `<span class="dc-spec-badge">${b}</span>`).join('')}
+              </div>
+              <button class="dc-card-btn-add dc-btn-place-wall" data-place-wall="${w.id}">🧱 Place on Wall</button>
+            </div>
+          `;
+        }).join('')}
       </div>
     `;
 
     // Bind Space toggle
     el.querySelector('#dc-space-white')?.addEventListener('click', () => {
-      dcState.setState({ activeSpaceTab: 'white-space' });
+      dcState.setState({ activeSpaceTab: 'white-space', activeCatalogCategory: 'all' });
       this.renderCatalogPanel();
     });
     el.querySelector('#dc-space-grey')?.addEventListener('click', () => {
-      dcState.setState({ activeSpaceTab: 'grey-space' });
+      dcState.setState({ activeSpaceTab: 'grey-space', activeCatalogCategory: 'all' });
+      this.renderCatalogPanel();
+    });
+    el.querySelector('#dc-space-walls')?.addEventListener('click', () => {
+      dcState.setState({ activeSpaceTab: 'walls-roof', activeCatalogCategory: 'wall-equipment' });
       this.renderCatalogPanel();
     });
     el.querySelector('#dc-space-all')?.addEventListener('click', () => {
-      dcState.setState({ activeSpaceTab: 'all' });
+      dcState.setState({ activeSpaceTab: 'all', activeCatalogCategory: 'all' });
       this.renderCatalogPanel();
+    });
+
+    // Bind Architecture Builder card buttons
+    el.querySelector('#dc-cat-btn-lay-wall')?.addEventListener('click', () => this.startLayingWall());
+    el.querySelector('#dc-cat-btn-perimeter-walls')?.addEventListener('click', () => this.showPerimeterWallsModal());
+    el.querySelector('#dc-cat-btn-roof-settings')?.addEventListener('click', () => this.showRoofConfigModal());
+    el.querySelector('#dc-cat-btn-toggle-walls')?.addEventListener('click', () => {
+      const visible = dcState.toggleWallsVisibility();
+      this.refresh();
+      eventBus.emit('notification', { message: `🧱 Walls ${visible ? 'Visible' : 'Hidden'}`, type: 'info' });
+    });
+    el.querySelector('#dc-cat-btn-toggle-roof')?.addEventListener('click', () => {
+      const visible = dcState.toggleRoofVisibility();
+      this.refresh();
+      eventBus.emit('notification', { message: `🏠 Roof ${visible ? 'Visible' : 'Hidden'}`, type: 'info' });
     });
 
     // Bind Category pills
@@ -3000,12 +3798,22 @@ export class BuildFloorView {
       }
     });
 
-    // Bind Add buttons
+    // Bind Floor Add buttons
     el.querySelectorAll('[data-add]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const presetId = btn.getAttribute('data-add');
         if (presetId) this.addEquipmentFromCatalog(presetId);
+      });
+    });
+
+    // Bind Wall Place buttons
+    el.querySelectorAll('[data-place-wall]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const presetId = btn.getAttribute('data-place-wall');
+        const preset = WALL_EQUIPMENT_CATALOG.find(w => w.id === presetId);
+        if (preset) this.startPlacingWallItem(preset);
       });
     });
   }
@@ -3067,6 +3875,10 @@ export class BuildFloorView {
     setActive('dc-btn-labels', s.labelsVisible);
     setActive('dc-btn-xray', s.xrayMode);
     setActive('dc3d-btn-xray', s.xrayMode);
+    setActive('dc-btn-toggle-walls', s.wallsVisible !== false);
+    setActive('dc-btn-toggle-roof', s.roofVisible !== false);
+    setActive('dc3d-btn-walls', s.wallsVisible !== false);
+    setActive('dc3d-btn-roof', s.roofVisible !== false);
 
     const opacityVal = Math.round((s.floorOpacity ?? 1) * 100);
     const topbarSlider = this.container.querySelector('#dc-floor-opacity') as HTMLInputElement | null;
@@ -3076,6 +3888,22 @@ export class BuildFloorView {
     const threeSlider = this.container.querySelector('#dc3d-floor-opacity') as HTMLInputElement | null;
     if (threeSlider && parseInt(threeSlider.value, 10) !== opacityVal) {
       threeSlider.value = String(opacityVal);
+    }
+
+    const wallOpacityVal = Math.round((s.wallOpacity ?? 0.35) * 100);
+    const wallSlider = this.container.querySelector('#dc-wall-opacity') as HTMLInputElement | null;
+    if (wallSlider && parseInt(wallSlider.value, 10) !== wallOpacityVal) {
+      wallSlider.value = String(wallOpacityVal);
+    }
+
+    const roofOpacityVal = Math.round((s.roofOpacity ?? (floor?.roofOpacity ?? 0.30)) * 100);
+    const roofSlider = this.container.querySelector('#dc-roof-opacity') as HTMLInputElement | null;
+    if (roofSlider && parseInt(roofSlider.value, 10) !== roofOpacityVal) {
+      roofSlider.value = String(roofOpacityVal);
+    }
+    const threeRoofSlider = this.container.querySelector('#dc3d-roof-opacity') as HTMLInputElement | null;
+    if (threeRoofSlider && parseInt(threeRoofSlider.value, 10) !== roofOpacityVal) {
+      threeRoofSlider.value = String(roofOpacityVal);
     }
 
     if (floor) {
@@ -3539,7 +4367,159 @@ export class BuildFloorView {
         }
       }
 
-      el.innerHTML = '<div class="properties-empty">Select a rack, ESD tile, or under-floor pathway to view details.</div>';
+      if (s.selectedWallId && floor && floor.walls) {
+        const wall = floor.walls.find(w => w.id === s.selectedWallId);
+        if (wall) {
+          if (s.selectedWallItemId && wall.items) {
+            const item = wall.items.find(it => it.id === s.selectedWallItemId);
+            if (item) {
+              const pct = Math.round(item.positionRatio * 100);
+              el.innerHTML = `
+                <div class="dc-props-section">
+                  <div class="dc-props-title">🧱 Wall-Mounted Equipment</div>
+                  <div class="dc-info-row"><span class="dc-info-label">Item</span><span class="dc-info-val" style="color:#38bdf8;font-weight:700;">${item.name}</span></div>
+                  <div class="dc-info-row"><span class="dc-info-label">Type</span><span class="dc-info-val"><b>${item.type.toUpperCase()}</b></span></div>
+                  <div class="dc-info-row"><span class="dc-info-label">Attached To</span><span class="dc-info-val">${wall.name || 'Wall'}</span></div>
+                  <div class="dc-info-row"><span class="dc-info-label">Dimensions</span><span class="dc-info-val">${item.widthMm}×${item.heightMm}×${item.depthMm} mm</span></div>
+                  
+                  <div class="dc-info-row">
+                    <span class="dc-info-label">Mount Height</span>
+                    <input id="dc-wallitem-height" type="number" step="0.1" min="0.1" max="5.0" value="${item.heightOffsetM}" class="dc-input" style="width:70px;height:24px;padding:2px 4px;font-size:11px;background:#0d1520;color:#38bdf8;font-weight:600;"/> m
+                  </div>
+
+                  <div class="dc-info-row">
+                    <span class="dc-info-label">Position (${pct}%)</span>
+                    <input id="dc-wallitem-ratio" type="range" min="5" max="95" value="${pct}" class="dc-slider" style="flex:1;"/>
+                  </div>
+
+                  <div class="dc-info-row">
+                    <span class="dc-info-label">Mount Face</span>
+                    <select id="dc-wallitem-side" class="dc-input" style="width:90px;height:24px;padding:2px 4px;font-size:11px;background:#0d1520;color:#38bdf8;font-weight:600;">
+                      <option value="inner" ${item.side === 'inner' ? 'selected' : ''}>Inner Room</option>
+                      <option value="outer" ${item.side === 'outer' ? 'selected' : ''}>Outer Room</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="dc-props-actions">
+                  <button class="dc-btn dc-btn-sm dc-btn-secondary dc-btn-full" id="dc-wallitem-btn-back">← Select Wall</button>
+                  <button class="dc-btn dc-btn-sm dc-btn-danger dc-btn-full" id="dc-wallitem-btn-delete">🗑 Remove Equipment</button>
+                </div>
+              `;
+
+              el.querySelector('#dc-wallitem-height')?.addEventListener('change', (e: any) => {
+                const val = parseFloat(e.target.value) || 1.4;
+                dcState.updateWallItem(wall.id, item.id, { heightOffsetM: val });
+                this.refresh();
+              });
+
+              el.querySelector('#dc-wallitem-ratio')?.addEventListener('input', (e: any) => {
+                const ratio = parseFloat(e.target.value) / 100;
+                dcState.updateWallItem(wall.id, item.id, { positionRatio: ratio });
+                this.refresh();
+              });
+
+              el.querySelector('#dc-wallitem-side')?.addEventListener('change', (e: any) => {
+                const side = e.target.value as 'inner' | 'outer';
+                dcState.updateWallItem(wall.id, item.id, { side });
+                this.refresh();
+              });
+
+              el.querySelector('#dc-wallitem-btn-back')?.addEventListener('click', () => {
+                dcState.setState({ selectedWallItemId: null });
+                this.refresh();
+              });
+
+              el.querySelector('#dc-wallitem-btn-delete')?.addEventListener('click', () => {
+                if (confirm(`Remove "${item.name}" from wall?`)) {
+                  dcState.deleteWallItem(wall.id, item.id);
+                  dcState.setState({ selectedWallItemId: null });
+                  this.refresh();
+                }
+              });
+              return;
+            }
+          }
+
+          // Wall segment itself
+          const lenM = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+          const opacityPct = Math.round((wall.opacity !== undefined ? wall.opacity : 0.35) * 100);
+          const itemCount = wall.items?.length || 0;
+
+          el.innerHTML = `
+            <div class="dc-props-section">
+              <div class="dc-props-title">🏛 Transparent Perimeter Wall</div>
+              <div class="dc-info-row"><span class="dc-info-label">Name</span><span class="dc-info-val" style="color:#38bdf8;font-weight:700;">${wall.name}</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Side</span><span class="dc-info-val"><b>${(wall.side || 'custom').toUpperCase()}</b></span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Length</span><span class="dc-info-val">${lenM.toFixed(2)} m</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Thickness</span><span class="dc-info-val">${wall.thicknessMm} mm</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Height</span><span class="dc-info-val">${wall.heightM} m</span></div>
+              
+              <div class="dc-info-row">
+                <span class="dc-info-label">Opacity (${opacityPct}%)</span>
+                <input id="dc-wall-seg-opacity" type="range" min="0" max="100" value="${opacityPct}" class="dc-slider" style="flex:1;"/>
+              </div>
+
+              <div class="dc-info-row"><span class="dc-info-label">Start Coord</span><span class="dc-info-val">(${wall.start.x.toFixed(2)}m, ${wall.start.y.toFixed(2)}m)</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">End Coord</span><span class="dc-info-val">(${wall.end.x.toFixed(2)}m, ${wall.end.y.toFixed(2)}m)</span></div>
+              <div class="dc-info-row"><span class="dc-info-label">Wall Items</span><span class="dc-info-val" style="color:#38bdf8;font-weight:600;">${itemCount} mounted</span></div>
+            </div>
+
+            ${itemCount > 0 ? `
+              <div class="dc-props-section" style="margin-top:8px;">
+                <div class="dc-props-title" style="font-size:11px;">Mounted Equipment List</div>
+                <div style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;">
+                  ${wall.items!.map(it => `
+                    <div class="dc-wall-item-row" data-select-wallitem="${it.id}" style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:4px;cursor:pointer;font-size:11px;">
+                      <span style="color:#f0f6fc;">${it.name}</span>
+                      <span style="color:#38bdf8;">${Math.round(it.positionRatio * 100)}%</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            <div class="dc-props-actions">
+              <button class="dc-btn dc-btn-sm dc-btn-primary dc-btn-full" id="dc-wall-btn-add-item">＋ Attach Equipment (Catalog)</button>
+              <button class="dc-btn dc-btn-sm dc-btn-danger dc-btn-full" id="dc-wall-btn-delete">🗑 Delete Wall Segment</button>
+            </div>
+          `;
+
+          el.querySelector('#dc-wall-seg-opacity')?.addEventListener('input', (e: any) => {
+            const val = parseInt(e.target.value, 10) / 100;
+            dcState.updateWall(wall.id, { opacity: val });
+            this.refresh();
+          });
+
+          el.querySelectorAll('[data-select-wallitem]').forEach(row => {
+            row.addEventListener('click', () => {
+              const itemId = row.getAttribute('data-select-wallitem');
+              if (itemId) {
+                dcState.setState({ selectedWallItemId: itemId });
+                this.refresh();
+              }
+            });
+          });
+
+          el.querySelector('#dc-wall-btn-add-item')?.addEventListener('click', () => {
+            dcState.setState({ activeCatalogCategory: 'wall-equipment' as any });
+            const tabCatalog = this.container.querySelector('#dc-tab-btn-catalog') as HTMLElement;
+            tabCatalog?.click();
+            this.renderCatalogPanel();
+          });
+
+          el.querySelector('#dc-wall-btn-delete')?.addEventListener('click', () => {
+            if (confirm(`Delete wall segment "${wall.name}"?`)) {
+              dcState.deleteWall(wall.id);
+              dcState.setState({ selectedWallId: null, selectedWallItemId: null });
+              this.refresh();
+            }
+          });
+          return;
+        }
+      }
+
+      el.innerHTML = '<div class="properties-empty">Select a rack, ESD tile, pathway, or perimeter wall to view details.</div>';
     };
 
     if (internalEl) renderTo(internalEl, false);
@@ -4930,6 +5910,219 @@ export class BuildFloorView {
     });
   }
 
+  private hitTestWall(wall: DcWallSegment, xM: number, yM: number, hitThresholdM: number = 0.25): boolean {
+    const x1 = wall.start.x;
+    const y1 = wall.start.y;
+    const x2 = wall.end.x;
+    const y2 = wall.end.y;
+    const lenSq = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+    if (lenSq === 0) return Math.hypot(xM - x1, yM - y1) <= hitThresholdM;
+
+    const t = Math.max(0, Math.min(1, ((xM - x1) * (x2 - x1) + (yM - y1) * (y2 - y1)) / lenSq));
+    const projX = x1 + t * (x2 - x1);
+    const projY = y1 + t * (y2 - y1);
+    const dist = Math.hypot(xM - projX, yM - projY);
+    const wallThickM = (wall.thicknessMm || 150) / 1000;
+    return dist <= Math.max(hitThresholdM, wallThickM / 2 + 0.15);
+  }
+
+  private hitTestWallHandle(wall: DcWallSegment, xM: number, yM: number, radiusM: number = 0.3): 'start' | 'end' | null {
+    if (Math.hypot(xM - wall.start.x, yM - wall.start.y) <= radiusM) return 'start';
+    if (Math.hypot(xM - wall.end.x, yM - wall.end.y) <= radiusM) return 'end';
+    return null;
+  }
+
+  private hitTestWallItem(wall: DcWallSegment, item: DcWallItem, xM: number, yM: number, radiusM: number = 0.35): boolean {
+    const ix = wall.start.x + (wall.end.x - wall.start.x) * item.positionRatio;
+    const iy = wall.start.y + (wall.end.y - wall.start.y) * item.positionRatio;
+    return Math.hypot(xM - ix, yM - iy) <= radiusM;
+  }
+
+  public showPerimeterWallsModal() {
+    const floor = dcState.getActiveFloor();
+    if (!floor) return;
+
+    const currentWalls = floor.walls || [];
+    const hasNorth = currentWalls.some(w => w.side === 'north');
+    const hasSouth = currentWalls.some(w => w.side === 'south');
+    const hasEast = currentWalls.some(w => w.side === 'east');
+    const hasWest = currentWalls.some(w => w.side === 'west');
+    const defaultOpacity = currentWalls.length > 0 ? (currentWalls[0].opacity ?? 0.35) : 0.35;
+    const defaultHeight = currentWalls.length > 0 ? (currentWalls[0].heightM ?? 3.2) : 3.2;
+    const defaultThickness = currentWalls.length > 0 ? (currentWalls[0].thicknessMm ?? 150) : 150;
+
+    const html = `
+      <div class="dc-form">
+        <p class="dc-muted" style="margin-bottom:12px; font-size:12px; line-height:1.4;">
+          Configure transparent glass perimeter walls to define data hall borders. You can select individual sides, customize glass transparency, wall height, and thickness.
+        </p>
+        <div class="dc-wall-side-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+          <label class="dc-checkbox-label" style="display:flex; align-items:center; gap:8px; cursor:pointer; background:#1e293b; padding:8px 12px; border-radius:6px; border:1px solid #334155;">
+            <input type="checkbox" id="dc-wall-north" ${hasNorth || currentWalls.length === 0 ? 'checked' : ''} />
+            <span>⬆ North Wall (Top)</span>
+          </label>
+          <label class="dc-checkbox-label" style="display:flex; align-items:center; gap:8px; cursor:pointer; background:#1e293b; padding:8px 12px; border-radius:6px; border:1px solid #334155;">
+            <input type="checkbox" id="dc-wall-east" ${hasEast || currentWalls.length === 0 ? 'checked' : ''} />
+            <span>➡ East Wall (Right)</span>
+          </label>
+          <label class="dc-checkbox-label" style="display:flex; align-items:center; gap:8px; cursor:pointer; background:#1e293b; padding:8px 12px; border-radius:6px; border:1px solid #334155;">
+            <input type="checkbox" id="dc-wall-south" ${hasSouth || currentWalls.length === 0 ? 'checked' : ''} />
+            <span>⬇ South Wall (Bottom)</span>
+          </label>
+          <label class="dc-checkbox-label" style="display:flex; align-items:center; gap:8px; cursor:pointer; background:#1e293b; padding:8px 12px; border-radius:6px; border:1px solid #334155;">
+            <input type="checkbox" id="dc-wall-west" ${hasWest || currentWalls.length === 0 ? 'checked' : ''} />
+            <span>⬅ West Wall (Left)</span>
+          </label>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-bottom:14px;">
+          <button type="button" class="dc-btn dc-btn-sm dc-btn-secondary" id="dc-wall-preset-all" style="flex:1;">Select All 4</button>
+          <button type="button" class="dc-btn dc-btn-sm dc-btn-secondary" id="dc-wall-preset-3side" style="flex:1;">3 Sides (Open Front)</button>
+          <button type="button" class="dc-btn dc-btn-sm dc-btn-secondary" id="dc-wall-preset-clear" style="flex:1;">Clear All</button>
+        </div>
+
+        <div class="dc-form-row" style="margin-bottom:12px;">
+          <label>Glass Transparency / Opacity (<span id="dc-wall-modal-opacity-val">${Math.round(defaultOpacity * 100)}%</span>)</label>
+          <input type="range" id="dc-wall-modal-opacity" min="0" max="100" value="${Math.round(defaultOpacity * 100)}" class="dc-slider" style="width:100%;" />
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="dc-form-row">
+            <label>Wall Height (m)</label>
+            <input type="number" id="dc-wall-modal-height" step="0.1" min="2.0" max="6.0" value="${defaultHeight}" class="dc-input" />
+          </div>
+          <div class="dc-form-row">
+            <label>Wall Thickness (mm)</label>
+            <input type="number" id="dc-wall-modal-thickness" step="10" min="50" max="400" value="${defaultThickness}" class="dc-input" />
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.showModal('🏛 Configure Perimeter Walls', html, 'Apply Walls', () => {
+      const north = (document.getElementById('dc-wall-north') as HTMLInputElement)?.checked;
+      const east = (document.getElementById('dc-wall-east') as HTMLInputElement)?.checked;
+      const south = (document.getElementById('dc-wall-south') as HTMLInputElement)?.checked;
+      const west = (document.getElementById('dc-wall-west') as HTMLInputElement)?.checked;
+      const opacity = parseInt((document.getElementById('dc-wall-modal-opacity') as HTMLInputElement)?.value || '35', 10) / 100;
+      const heightM = parseFloat((document.getElementById('dc-wall-modal-height') as HTMLInputElement)?.value || '3.2');
+      const thicknessMm = parseFloat((document.getElementById('dc-wall-modal-thickness') as HTMLInputElement)?.value || '150');
+
+      const sides: DcWallSide[] = [];
+      if (north) sides.push('north');
+      if (east) sides.push('east');
+      if (south) sides.push('south');
+      if (west) sides.push('west');
+
+      dcState.generatePerimeterWalls(sides, opacity, heightM, thicknessMm);
+      const updatedFloor = dcState.getActiveFloor();
+      if (updatedFloor) {
+        this.rebuildThreeScene(updatedFloor);
+        this.draw();
+        this.renderPropsPanel();
+      }
+      return true;
+    });
+
+    const modalEl = document.getElementById('dc-modal-overlay');
+    if (modalEl) {
+      const opSlider = modalEl.querySelector('#dc-wall-modal-opacity') as HTMLInputElement;
+      const opVal = modalEl.querySelector('#dc-wall-modal-opacity-val') as HTMLElement;
+      opSlider?.addEventListener('input', () => {
+        if (opVal) opVal.textContent = `${opSlider.value}%`;
+      });
+      modalEl.querySelector('#dc-wall-preset-all')?.addEventListener('click', () => {
+        ['north', 'east', 'south', 'west'].forEach(s => {
+          const el = modalEl.querySelector(`#dc-wall-${s}`) as HTMLInputElement;
+          if (el) el.checked = true;
+        });
+      });
+      modalEl.querySelector('#dc-wall-preset-3side')?.addEventListener('click', () => {
+        ['north', 'east', 'west'].forEach(s => {
+          const el = modalEl.querySelector(`#dc-wall-${s}`) as HTMLInputElement;
+          if (el) el.checked = true;
+        });
+        const southEl = modalEl.querySelector('#dc-wall-south') as HTMLInputElement;
+        if (southEl) southEl.checked = false;
+      });
+      modalEl.querySelector('#dc-wall-preset-clear')?.addEventListener('click', () => {
+        ['north', 'east', 'south', 'west'].forEach(s => {
+          const el = modalEl.querySelector(`#dc-wall-${s}`) as HTMLInputElement;
+          if (el) el.checked = false;
+        });
+      });
+    }
+  }
+
+  public showRoofConfigModal() {
+    const floor = dcState.getActiveFloor();
+    if (!floor) return;
+
+    const defaultHeight = floor.roofHeightM ?? 3.8;
+    const defaultOpacity = floor.roofOpacity !== undefined ? floor.roofOpacity : (dcState.getState().roofOpacity ?? 0.30);
+    const defaultColor = floor.roofColor || '#38bdf8';
+
+    const html = `
+      <div class="dc-form">
+        <p class="dc-muted" style="margin-bottom:12px; font-size:12px; line-height:1.4;">
+          Configure the transparent data hall roof slab matching your carpet area (${formatDimensionsMeters(floor.lengthM, floor.widthM, floor.unit ?? 'm')}). Includes architectural structural T-bar ceiling grid and recessed daylight LED troffer luminaires.
+        </p>
+
+        <div class="dc-form-row" style="margin-bottom:12px;">
+          <label>Roof / Ceiling Height (m) above raised floor</label>
+          <input type="number" id="dc-roof-modal-height" step="0.1" min="2.4" max="8.0" value="${defaultHeight}" class="dc-input" />
+          <span class="dc-muted" style="font-size:11px;">Standard commercial data hall ceiling heights: 3.2m - 4.5m</span>
+        </div>
+
+        <div class="dc-form-row" style="margin-bottom:12px;">
+          <label>Glass Transparency / Opacity (<span id="dc-roof-modal-opacity-val">${Math.round(defaultOpacity * 100)}%</span>)</label>
+          <input type="range" id="dc-roof-modal-opacity" min="0" max="100" value="${Math.round(defaultOpacity * 100)}" class="dc-slider" style="width:100%;" />
+        </div>
+
+        <div class="dc-form-row" style="margin-bottom:12px;">
+          <label>Glass Tint Style & Color</label>
+          <select id="dc-roof-modal-color" class="dc-select">
+            <option value="#38bdf8" ${defaultColor === '#38bdf8' ? 'selected' : ''}>Cyan Glass (Architectural)</option>
+            <option value="#64748b" ${defaultColor === '#64748b' ? 'selected' : ''}>Smoked Slate Glass</option>
+            <option value="#e0f2fe" ${defaultColor === '#e0f2fe' ? 'selected' : ''}>Cleanroom Clear Crystal</option>
+            <option value="#0284c7" ${defaultColor === '#0284c7' ? 'selected' : ''}>Deep Blue Glass</option>
+            <option value="#10b981" ${defaultColor === '#10b981' ? 'selected' : ''}>Emerald Tint</option>
+          </select>
+        </div>
+      </div>
+    `;
+
+    this.showModal('🏠 Configure Data Hall Transparent Roof', html, 'Apply Roof Settings', () => {
+      const heightM = parseFloat((document.getElementById('dc-roof-modal-height') as HTMLInputElement)?.value || '3.8');
+      const opacity = parseInt((document.getElementById('dc-roof-modal-opacity') as HTMLInputElement)?.value || '30', 10) / 100;
+      const color = (document.getElementById('dc-roof-modal-color') as HTMLSelectElement)?.value || '#38bdf8';
+
+      dcState.setRoofConfig({ heightM, opacity, color });
+      const updatedFloor = dcState.getActiveFloor();
+      if (updatedFloor) {
+        if (dcState.getState().viewMode === '3d') {
+          this.rebuildThreeScene(updatedFloor);
+        }
+        this.renderPropsPanel();
+        this.updateButtonStates();
+      }
+      eventBus.emit('notification', {
+        message: `🏠 Updated Data Hall Roof: Height ${heightM}m, Opacity ${Math.round(opacity * 100)}%.`,
+        type: 'success',
+      });
+      return true;
+    });
+
+    const modalEl = document.getElementById('dc-modal-overlay');
+    if (modalEl) {
+      const opSlider = modalEl.querySelector('#dc-roof-modal-opacity') as HTMLInputElement;
+      const opVal = modalEl.querySelector('#dc-roof-modal-opacity-val') as HTMLElement;
+      opSlider?.addEventListener('input', () => {
+        if (opVal) opVal.textContent = `${opSlider.value}%`;
+      });
+    }
+  }
+
   private showModal(
     title: string,
     bodyHtml: string,
@@ -5023,11 +6216,22 @@ export class BuildFloorView {
         let clickedRackId: string | null = null;
         let clickedTileId: string | null = null;
         let clickedInfraId: string | null = null;
+        let clickedWallId: string | null = null;
+        let clickedWallItemId: string | null = null;
         for (const hit of intersects) {
           let cur: THREE.Object3D | null = hit.object;
           while (cur && cur !== this.threeScene) {
             if (this.rackMeshMap.has(cur)) {
               clickedRackId = this.rackMeshMap.get(cur)!;
+              break;
+            }
+            if (cur.userData?.wallItemId) {
+              clickedWallItemId = cur.userData.wallItemId;
+              clickedWallId = cur.userData.wallId;
+              break;
+            }
+            if (cur.userData?.wallId) {
+              clickedWallId = cur.userData.wallId;
               break;
             }
             if (cur.userData?.infraId) {
@@ -5041,16 +6245,27 @@ export class BuildFloorView {
             }
             cur = cur.parent;
           }
-          if (clickedRackId || clickedInfraId || clickedTileId) break;
+          if (clickedRackId || clickedWallItemId || clickedWallId || clickedInfraId || clickedTileId) break;
         }
 
         if (clickedRackId) {
-          dcState.setState({ selectedRackId: clickedRackId, selectedTileId: null, selectedTileIds: [], selectedInfraId: null });
+          dcState.setState({ selectedRackId: clickedRackId, selectedTileId: null, selectedTileIds: [], selectedInfraId: null, selectedWallId: null, selectedWallItemId: null });
           this.renderPropsPanel();
           this.update3DSelectionHighlight();
+        } else if (clickedWallItemId || clickedWallId) {
+          dcState.setState({
+            selectedWallId: clickedWallId,
+            selectedWallItemId: clickedWallItemId,
+            selectedRackId: null,
+            selectedTileId: null,
+            selectedTileIds: [],
+            selectedInfraId: null,
+          });
+          this.renderPropsPanel();
+          this.rebuildThreeScene(currentFloor);
         } else if (clickedInfraId) {
           const baseId = clickedInfraId.includes('_sub') ? clickedInfraId.split('_sub')[0] : clickedInfraId;
-          dcState.setState({ selectedInfraId: baseId, selectedRackId: null, selectedTileId: null, selectedTileIds: [] });
+          dcState.setState({ selectedInfraId: baseId, selectedRackId: null, selectedTileId: null, selectedTileIds: [], selectedWallId: null, selectedWallItemId: null });
           this.renderPropsPanel();
           this.rebuildThreeScene(currentFloor);
         } else if (clickedTileId) {
@@ -5068,12 +6283,12 @@ export class BuildFloorView {
             newIds = [clickedTileId];
           }
           const primaryId = newIds.length > 0 ? newIds[newIds.length - 1] : null;
-          dcState.setState({ selectedTileId: primaryId, selectedTileIds: newIds, selectedRackId: null, selectedInfraId: null });
+          dcState.setState({ selectedTileId: primaryId, selectedTileIds: newIds, selectedRackId: null, selectedInfraId: null, selectedWallId: null, selectedWallItemId: null });
           this.renderPropsPanel();
           this.rebuildThreeScene(currentFloor);
         } else {
           if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
-            dcState.setState({ selectedTileId: null, selectedTileIds: [], selectedRackId: null, selectedInfraId: null });
+            dcState.setState({ selectedTileId: null, selectedTileIds: [], selectedRackId: null, selectedInfraId: null, selectedWallId: null, selectedWallItemId: null });
             this.renderPropsPanel();
             this.update3DSelectionHighlight();
           }
@@ -6472,6 +7687,12 @@ export class BuildFloorView {
 
     });
 
+    // 5. 3D Transparent Perimeter & Custom Partition Walls with Wall-Mounted Equipment
+    this.buildWallMeshes3D(floor);
+
+    // 6. 3D Transparent Carpet-Area Glass Roof & Ceiling Suspension Trusses
+    this.buildRoofMesh3D(floor);
+
     // Add selection highlight on selected rack
     this.update3DSelectionHighlight();
 
@@ -7332,6 +8553,445 @@ export class BuildFloorView {
     return canvas;
   }
 
+  private buildWallMeshes3D(floor: DcFloor) {
+    if (!this.threeScene || !floor.walls || floor.walls.length === 0 || dcState.getState().wallsVisible === false) return;
+
+    const s = dcState.getState();
+    const wallsGroup = new THREE.Group();
+    wallsGroup.name = 'datacenter-walls';
+    wallsGroup.userData = { isDynamic: true };
+
+    const aluTrimMat = new THREE.MeshStandardMaterial({
+      color: 0x475569, // Architectural anodized aluminum
+      roughness: 0.35,
+      metalness: 0.85,
+    });
+
+    const aluPostMat = new THREE.MeshStandardMaterial({
+      color: 0x334155,
+      roughness: 0.40,
+      metalness: 0.80,
+    });
+
+    floor.walls.forEach(wall => {
+      const wallGroup = new THREE.Group();
+      wallGroup.name = `wall-${wall.id}`;
+      wallGroup.userData = { isDynamic: true, wallId: wall.id };
+
+      const dx = (wall.end.x - wall.start.x) * 1000;
+      const dz = (wall.end.y - wall.start.y) * 1000;
+      const lengthMm = Math.hypot(dx, dz);
+      if (lengthMm < 100) return;
+
+      const angleRad = Math.atan2(dz, dx);
+      const wallHeightMm = (wall.heightM || 3.2) * 1000;
+      const wallThickMm = wall.thicknessMm || 150;
+      const opacity = wall.opacity !== undefined ? wall.opacity : 0.35;
+      const isSelected = s.selectedWallId === wall.id;
+
+      const midX = (wall.start.x + wall.end.x) * 500;
+      const midZ = (wall.start.y + wall.end.y) * 500;
+
+      wallGroup.position.set(midX, 0, midZ);
+      wallGroup.rotation.y = -angleRad;
+
+      // 1. Transparent Architectural Glass Panel
+      const glassGeo = new THREE.BoxGeometry(lengthMm, wallHeightMm - 80, wallThickMm);
+      const glassMat = new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color(wall.color || '#38bdf8'),
+        transparent: true,
+        opacity: Math.max(0.08, opacity),
+        roughness: 0.08,
+        transmission: 0.88,
+        ior: 1.5,
+        metalness: 0.05,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+
+      const glassMesh = new THREE.Mesh(glassGeo, glassMat);
+      glassMesh.position.set(0, wallHeightMm / 2, 0);
+      glassMesh.userData = { isDynamic: true, wallId: wall.id };
+      wallGroup.add(glassMesh);
+
+      // 2. Base Floor Track & Top Ceiling Header Channel (Aluminum Extrusion)
+      const trimGeo = new THREE.BoxGeometry(lengthMm + 20, 40, wallThickMm + 14);
+      
+      const baseTrack = new THREE.Mesh(trimGeo, aluTrimMat);
+      baseTrack.position.set(0, 20, 0);
+      baseTrack.userData = { isDynamic: true, wallId: wall.id };
+      wallGroup.add(baseTrack);
+
+      const topHeader = new THREE.Mesh(trimGeo, aluTrimMat);
+      topHeader.position.set(0, wallHeightMm - 20, 0);
+      topHeader.userData = { isDynamic: true, wallId: wall.id };
+      wallGroup.add(topHeader);
+
+      // 3. Vertical Corner Posts & Intermediate Partition Mullions
+      const postGeo = new THREE.BoxGeometry(36, wallHeightMm, wallThickMm + 16);
+      
+      const postStart = new THREE.Mesh(postGeo, aluPostMat);
+      postStart.position.set(-lengthMm / 2, wallHeightMm / 2, 0);
+      postStart.userData = { isDynamic: true, wallId: wall.id };
+      wallGroup.add(postStart);
+
+      const postEnd = new THREE.Mesh(postGeo, aluPostMat);
+      postEnd.position.set(lengthMm / 2, wallHeightMm / 2, 0);
+      postEnd.userData = { isDynamic: true, wallId: wall.id };
+      wallGroup.add(postEnd);
+
+      // Mullions every 1.8m
+      const numMullions = Math.max(0, Math.floor(lengthMm / 1800));
+      for (let mi = 1; mi <= numMullions; mi++) {
+        const mx = -lengthMm / 2 + (mi / (numMullions + 1)) * lengthMm;
+        const mullion = new THREE.Mesh(new THREE.BoxGeometry(16, wallHeightMm - 80, wallThickMm + 8), aluTrimMat);
+        mullion.position.set(mx, wallHeightMm / 2, 0);
+        mullion.userData = { isDynamic: true, wallId: wall.id };
+        wallGroup.add(mullion);
+      }
+
+      // 4. Wall-Mounted Infrastructure Equipment
+      if (wall.items && wall.items.length > 0) {
+        wall.items.forEach(item => {
+          const itemGroup = this.buildWallEquipment3DMesh(item, wallThickMm, wall.id);
+          const itemX = (item.positionRatio - 0.5) * lengthMm;
+          const itemY = (item.heightOffsetM || 1.4) * 1000;
+          itemGroup.position.set(itemX, itemY, 0);
+          wallGroup.add(itemGroup);
+        });
+      }
+
+      // 5. Selection Wireframe Highlight
+      if (isSelected && !s.selectedWallItemId) {
+        const selBoxGeo = new THREE.BoxGeometry(lengthMm + 24, wallHeightMm + 20, wallThickMm + 24);
+        const selEdges = new THREE.EdgesGeometry(selBoxGeo);
+        const selLines = new THREE.LineSegments(selEdges, new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 2 }));
+        selLines.position.set(0, wallHeightMm / 2, 0);
+        selLines.userData = { isDynamic: true, wallId: wall.id };
+        wallGroup.add(selLines);
+      }
+
+      wallsGroup.add(wallGroup);
+    });
+
+    this.threeScene.add(wallsGroup);
+  }
+
+  private buildWallEquipment3DMesh(item: DcWallItem, wallThickMm: number, wallId: string): THREE.Group {
+    const group = new THREE.Group();
+    group.name = `wall-item-${item.id}`;
+    group.userData = { isDynamic: true, wallId, wallItemId: item.id };
+
+    const s = dcState.getState();
+    const isSelected = s.selectedWallItemId === item.id;
+    const isInner = (item.side || 'inner') === 'inner';
+    const faceZ = (isInner ? 1 : -1) * (wallThickMm / 2 + (item.depthMm || 150) / 2);
+    const itemW = item.widthMm || 400;
+    const itemH = item.heightMm || 300;
+    const itemD = item.depthMm || 150;
+
+    const plasticMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.35, metalness: 0.1 });
+    const darkGreyMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.40, metalness: 0.6 });
+    const redMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.30, metalness: 0.4 });
+    const yellowMat = new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.30, metalness: 0.3 });
+    const metalMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.25, metalness: 0.85 });
+    const ledCyanMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+    const ledGreenMat = new THREE.MeshBasicMaterial({ color: 0x22c55e });
+
+    if (item.type === 'ac-split') {
+      // 1. PRECISION WALL-MOUNTED SPLIT A/C EVAPORATOR UNIT
+      const body = new THREE.Mesh(new THREE.BoxGeometry(itemW, itemH, itemD), plasticMat);
+      body.position.set(0, 0, faceZ);
+      body.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(body);
+
+      // Louver discharge grill
+      const grill = new THREE.Mesh(new THREE.BoxGeometry(itemW * 0.9, itemH * 0.25, itemD + 4), darkGreyMat);
+      grill.position.set(0, -itemH * 0.25, faceZ);
+      grill.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(grill);
+
+      // Digital Temp Display (72°F / 22°C LED)
+      const display = new THREE.Mesh(new THREE.PlaneGeometry(60, 24), ledCyanMat);
+      display.position.set(itemW * 0.3, itemH * 0.2, faceZ + (isInner ? itemD / 2 + 1 : -itemD / 2 - 1));
+      if (!isInner) display.rotation.y = Math.PI;
+      display.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(display);
+
+    } else if (item.type === 'fire-extinguisher') {
+      // 2. CO2 / CLEAN AGENT FIRE EXTINGUISHER CYLINDER
+      const tankRadius = Math.min(itemW, itemD) * 0.35;
+      const tankHeight = itemH * 0.65;
+      const cylinder = new THREE.Mesh(new THREE.CylinderGeometry(tankRadius, tankRadius, tankHeight, 16), redMat);
+      cylinder.position.set(0, 0, faceZ);
+      cylinder.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(cylinder);
+
+      // Brass valve head & pressure gauge
+      const valve = new THREE.Mesh(new THREE.CylinderGeometry(14, 18, 30, 10), metalMat);
+      valve.position.set(0, tankHeight / 2 + 15, faceZ);
+      valve.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(valve);
+
+      // Black discharge hose
+      const hose = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, tankHeight * 0.8, 8), darkGreyMat);
+      hose.position.set(tankRadius + 8, -10, faceZ);
+      hose.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(hose);
+
+      // Wall bracket
+      const bracket = new THREE.Mesh(new THREE.BoxGeometry(tankRadius * 2.4, 20, Math.abs(faceZ) - tankRadius), metalMat);
+      bracket.position.set(0, 20, faceZ / 2);
+      bracket.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(bracket);
+
+    } else if (item.type === 'fire-panel') {
+      // 3. FM-200 / NOVEC 1230 FIRE SUPPRESSION RELEASE PANEL
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(itemW, itemH, itemD), redMat);
+      panel.position.set(0, 0, faceZ);
+      panel.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(panel);
+
+      // Glass inspection window / LCD
+      const lcd = new THREE.Mesh(new THREE.BoxGeometry(itemW * 0.7, itemH * 0.35, 6), darkGreyMat);
+      lcd.position.set(0, itemH * 0.2, faceZ + (isInner ? itemD / 2 + 2 : -itemD / 2 - 2));
+      lcd.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(lcd);
+
+      // Flashing Alarm Strobe Horn on top
+      const strobe = new THREE.Mesh(new THREE.CylinderGeometry(20, 28, 40, 12), yellowMat);
+      strobe.position.set(0, itemH / 2 + 20, faceZ);
+      strobe.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(strobe);
+
+    } else if (item.type === 'env-sensor') {
+      // 4. ENVIRONMENTAL MONITORING SENSOR POD (EMS)
+      const pod = new THREE.Mesh(new THREE.BoxGeometry(itemW, itemH, itemD), plasticMat);
+      pod.position.set(0, 0, faceZ);
+      pod.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(pod);
+
+      // Glowing Status Ring
+      const ring = new THREE.Mesh(new THREE.RingGeometry(18, 24, 16), ledGreenMat);
+      ring.position.set(0, 0, faceZ + (isInner ? itemD / 2 + 1 : -itemD / 2 - 1));
+      if (!isInner) ring.rotation.y = Math.PI;
+      ring.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(ring);
+
+    } else if (item.type === 'epo-button') {
+      // 5. EMERGENCY POWER OFF (EPO) MUSHROOM SWITCH
+      const epoBox = new THREE.Mesh(new THREE.BoxGeometry(itemW, itemH, itemD * 0.5), yellowMat);
+      epoBox.position.set(0, 0, faceZ);
+      epoBox.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(epoBox);
+
+      // Red mushroom button
+      const mushroom = new THREE.Mesh(new THREE.CylinderGeometry(28, 24, 25, 16), redMat);
+      mushroom.rotation.x = Math.PI / 2;
+      mushroom.position.set(0, 0, faceZ + (isInner ? itemD * 0.25 + 12 : -itemD * 0.25 - 12));
+      mushroom.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(mushroom);
+
+    } else if (item.type === 'access-keypad') {
+      // 6. BIOMETRIC / RFID ACCESS CONTROL KEYPAD
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(itemW, itemH, itemD), darkGreyMat);
+      pad.position.set(0, 0, faceZ);
+      pad.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(pad);
+
+      // RFID Reader Blue Circle
+      const rfidGlow = new THREE.Mesh(new THREE.CircleGeometry(18, 16), ledCyanMat);
+      rfidGlow.position.set(0, itemH * 0.22, faceZ + (isInner ? itemD / 2 + 1 : -itemD / 2 - 1));
+      if (!isInner) rfidGlow.rotation.y = Math.PI;
+      rfidGlow.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(rfidGlow);
+
+    } else if (item.type === 'cctv-camera') {
+      // 7. 4K SECURITY SURVEILLANCE CAMERA (DOME / BULLET)
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(30, 30, 14, 16), darkGreyMat);
+      base.rotation.x = Math.PI / 2;
+      base.position.set(0, 0, faceZ);
+      base.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(base);
+
+      // Smoked optical dome hemisphere
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(26, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.1, metalness: 0.9 }));
+      dome.rotation.x = isInner ? Math.PI / 2 : -Math.PI / 2;
+      dome.position.set(0, 0, faceZ + (isInner ? 14 : -14));
+      dome.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(dome);
+
+    } else if (item.type === 'pdp-panel') {
+      // 8. POWER DISTRIBUTION SUB-PANEL (PDP)
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(itemW, itemH, itemD), metalMat);
+      panel.position.set(0, 0, faceZ);
+      panel.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(panel);
+
+      // Rotary Breaker Disconnect Handle
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(20, 60, 25), darkGreyMat);
+      handle.position.set(itemW * 0.25, 0, faceZ + (isInner ? itemD / 2 + 12 : -itemD / 2 - 12));
+      handle.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(handle);
+
+    } else if (item.type === 'first-aid') {
+      // 9. FIRST AID & EMERGENCY EYEWASH STATION
+      const locker = new THREE.Mesh(new THREE.BoxGeometry(itemW, itemH, itemD), plasticMat);
+      locker.position.set(0, 0, faceZ);
+      locker.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(locker);
+
+      // Green Cross Medical Emblem
+      const crossV = new THREE.Mesh(new THREE.PlaneGeometry(16, 48), ledGreenMat);
+      crossV.position.set(0, 0, faceZ + (isInner ? itemD / 2 + 1 : -itemD / 2 - 1));
+      if (!isInner) crossV.rotation.y = Math.PI;
+      crossV.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(crossV);
+
+      const crossH = new THREE.Mesh(new THREE.PlaneGeometry(48, 16), ledGreenMat);
+      crossH.position.set(0, 0, faceZ + (isInner ? itemD / 2 + 1.2 : -itemD / 2 - 1.2));
+      if (!isInner) crossH.rotation.y = Math.PI;
+      crossH.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(crossH);
+
+    } else {
+      // 10. DEFAULT / WATER LEAK DETECTION PANEL
+      const genericBox = new THREE.Mesh(new THREE.BoxGeometry(itemW, itemH, itemD), plasticMat);
+      genericBox.position.set(0, 0, faceZ);
+      genericBox.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(genericBox);
+    }
+
+    // Selection Wireframe Outline on item
+    if (isSelected) {
+      const selBoxGeo = new THREE.BoxGeometry(itemW + 16, itemH + 16, itemD + 16);
+      const selEdges = new THREE.EdgesGeometry(selBoxGeo);
+      const selLines = new THREE.LineSegments(selEdges, new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 2 }));
+      selLines.position.set(0, 0, faceZ);
+      selLines.userData = { isDynamic: true, wallId, wallItemId: item.id };
+      group.add(selLines);
+    }
+
+    return group;
+  }
+
+  private buildRoofMesh3D(floor: DcFloor) {
+    if (!this.threeScene || dcState.getState().roofVisible === false) return;
+
+    const s = dcState.getState();
+    const floorLenMm = floor.lengthM * 1000;
+    const floorWidMm = floor.widthM * 1000;
+    const roofHMm = (floor.roofHeightM || 3.8) * 1000;
+    const opacity = Math.max(0.05, Math.min(1, s.roofOpacity ?? (floor.roofOpacity ?? 0.30)));
+    const color = floor.roofColor || '#38bdf8';
+
+    const roofGroup = new THREE.Group();
+    roofGroup.name = 'datacenter-roof';
+    roofGroup.userData = { isDynamic: true };
+
+    // 1. Transparent Architectural Glass Roof Slab covering Carpet Area
+    const glassSlabGeo = new THREE.BoxGeometry(floorLenMm, 30, floorWidMm);
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(color),
+      transparent: true,
+      opacity: opacity,
+      roughness: 0.08,
+      transmission: 0.88,
+      ior: 1.5,
+      metalness: 0.05,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+
+    const glassSlab = new THREE.Mesh(glassSlabGeo, glassMat);
+    glassSlab.position.set(floorLenMm / 2, roofHMm + 15, floorWidMm / 2);
+    glassSlab.userData = { isDynamic: true, isRoof: true };
+    roofGroup.add(glassSlab);
+
+    // 2. Perimeter Fascia Edge Channel (Anodized Aluminum)
+    const fasciaMat = new THREE.MeshStandardMaterial({
+      color: 0x334155,
+      roughness: 0.40,
+      metalness: 0.80,
+    });
+
+    const fasciaXGeo = new THREE.BoxGeometry(floorLenMm + 40, 50, 40);
+    const fasciaZGeo = new THREE.BoxGeometry(40, 50, floorWidMm + 40);
+
+    const fasciaNorth = new THREE.Mesh(fasciaXGeo, fasciaMat);
+    fasciaNorth.position.set(floorLenMm / 2, roofHMm + 15, 0);
+    fasciaNorth.userData = { isDynamic: true };
+    roofGroup.add(fasciaNorth);
+
+    const fasciaSouth = new THREE.Mesh(fasciaXGeo, fasciaMat);
+    fasciaSouth.position.set(floorLenMm / 2, roofHMm + 15, floorWidMm);
+    fasciaSouth.userData = { isDynamic: true };
+    roofGroup.add(fasciaSouth);
+
+    const fasciaWest = new THREE.Mesh(fasciaZGeo, fasciaMat);
+    fasciaWest.position.set(0, roofHMm + 15, floorWidMm / 2);
+    fasciaWest.userData = { isDynamic: true };
+    roofGroup.add(fasciaWest);
+
+    const fasciaEast = new THREE.Mesh(fasciaZGeo, fasciaMat);
+    fasciaEast.position.set(floorLenMm, roofHMm + 15, floorWidMm / 2);
+    fasciaEast.userData = { isDynamic: true };
+    roofGroup.add(fasciaEast);
+
+    // 3. Structural T-Bar Ceiling Suspension Grid
+    const trussMat = new THREE.MeshStandardMaterial({
+      color: 0x64748b,
+      roughness: 0.35,
+      metalness: 0.85,
+    });
+
+    // Primary trusses along X spaced every 2.4m
+    for (let z = 1200; z < floorWidMm; z += 2400) {
+      const trussGeo = new THREE.BoxGeometry(floorLenMm, 25, 20);
+      const truss = new THREE.Mesh(trussGeo, trussMat);
+      truss.position.set(floorLenMm / 2, roofHMm - 10, z);
+      truss.userData = { isDynamic: true };
+      roofGroup.add(truss);
+    }
+
+    // Secondary cross-tees along Z spaced every 1.2m
+    for (let x = 1200; x < floorLenMm; x += 1200) {
+      const teeGeo = new THREE.BoxGeometry(20, 20, floorWidMm);
+      const tee = new THREE.Mesh(teeGeo, trussMat);
+      tee.position.set(x, roofHMm - 10, floorWidMm / 2);
+      tee.userData = { isDynamic: true };
+      roofGroup.add(tee);
+    }
+
+    // 4. Cleanroom Recessed LED Troffers (1200mm x 600mm)
+    const trofferFrameMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.3, metalness: 0.5 });
+    const trofferPanelMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
+    const trofferGlowMat = new THREE.MeshBasicMaterial({ color: 0x93c5fd });
+
+    for (let x = 1200; x + 1200 <= floorLenMm; x += 2400) {
+      for (let z = 1200; z + 600 <= floorWidMm; z += 2400) {
+        const trofferGroup = new THREE.Group();
+        trofferGroup.position.set(x + 600, roofHMm - 10, z + 300);
+
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(1200, 16, 600), trofferFrameMat);
+        trofferGroup.add(frame);
+
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(1160, 4, 560), trofferPanelMat);
+        panel.position.set(0, -6, 0);
+        trofferGroup.add(panel);
+
+        const glow = new THREE.Mesh(new THREE.PlaneGeometry(1140, 540), trofferGlowMat);
+        glow.rotation.x = Math.PI / 2;
+        glow.position.set(0, -9, 0);
+        trofferGroup.add(glow);
+
+        trofferGroup.userData = { isDynamic: true };
+        roofGroup.add(trofferGroup);
+      }
+    }
+
+    this.threeScene.add(roofGroup);
+  }
 
   private update3DSelectionHighlight() {
     if (!this.threeScene) return;
@@ -7426,9 +9086,15 @@ export class BuildFloorView {
           <button class="dc-btn dc-btn-sm" id="dc3d-preset-front" title="Front Elevation View">Front View</button>
           <div class="dc-divider"></div>
           <button class="dc-btn dc-btn-sm" id="dc3d-btn-xray" title="Toggle Under-Floor Infrastructure X-Ray Mode">🦴 X-Ray</button>
+          <button class="dc-btn dc-btn-sm active" id="dc3d-btn-walls" title="Show / Hide Walls">🧱 Walls</button>
+          <button class="dc-btn dc-btn-sm active" id="dc3d-btn-roof" title="Show / Hide Roof">🏠 Roof</button>
           <div class="dc-slider-control" title="Adjust Raised Floor Surface Opacity (0% - 100%)">
             <span>Floor:</span>
             <input type="range" id="dc3d-floor-opacity" class="dc-slider" min="0" max="100" value="${Math.round((dcState.getState().floorOpacity ?? 1) * 100)}" />
+          </div>
+          <div class="dc-slider-control" title="Adjust Transparent Roof Opacity (0% - 100%)">
+            <span>Roof:</span>
+            <input type="range" id="dc3d-roof-opacity" class="dc-slider" min="0" max="100" value="${Math.round((dcState.getState().roofOpacity ?? (floor.roofOpacity ?? 0.30)) * 100)}" />
           </div>
           <div class="dc-divider"></div>
           <button class="dc-btn dc-btn-sm" id="dc3d-zoomin" title="Zoom In (+)">＋</button>
@@ -7444,9 +9110,33 @@ export class BuildFloorView {
       wrap3d.querySelector('#dc3d-preset-front')?.addEventListener('click', () => this.set3DCameraPreset('front'));
       wrap3d.querySelector('#dc3d-reset-cam')?.addEventListener('click', () => this.set3DCameraPreset('iso'));
       wrap3d.querySelector('#dc3d-btn-xray')?.addEventListener('click', () => this.toggleXrayMode());
+      wrap3d.querySelector('#dc3d-btn-walls')?.addEventListener('click', () => {
+        const visible = dcState.toggleWallsVisibility();
+        this.refresh();
+        eventBus.emit('notification', {
+          message: `🧱 Walls ${visible ? 'Visible' : 'Hidden'}`,
+          type: 'info',
+        });
+      });
+      wrap3d.querySelector('#dc3d-btn-roof')?.addEventListener('click', () => {
+        const visible = dcState.toggleRoofVisibility();
+        this.refresh();
+        eventBus.emit('notification', {
+          message: `🏠 Roof ${visible ? 'Visible' : 'Hidden'}`,
+          type: 'info',
+        });
+      });
       wrap3d.querySelector('#dc3d-floor-opacity')?.addEventListener('input', (e) => {
         const val = parseInt((e.target as HTMLInputElement).value, 10) / 100;
         this.setFloorOpacity(val);
+      });
+      wrap3d.querySelector('#dc3d-roof-opacity')?.addEventListener('input', (e) => {
+        const val = parseInt((e.target as HTMLInputElement).value, 10) / 100;
+        dcState.setRoofOpacity(val);
+        const currentFloor = dcState.getActiveFloor();
+        if (currentFloor) {
+          this.rebuildThreeScene(currentFloor);
+        }
       });
       wrap3d.querySelector('#dc3d-zoomin')?.addEventListener('click', () => this.zoom3D(0.8));
       wrap3d.querySelector('#dc3d-zoomout')?.addEventListener('click', () => this.zoom3D(1.25));
