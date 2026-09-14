@@ -4630,13 +4630,22 @@ export class BuildFloorView {
               ${rack.transformerKva ? `<div class="dc-info-row"><span class="dc-info-label">Transformer</span><span class="dc-info-val" style="color:#f97316;font-weight:700;">⚡ ${rack.transformerKva} kVA Step-Down</span></div>` : ''}
               ${rack.securityLock ? `<div class="dc-info-row"><span class="dc-info-label">Security</span><span class="dc-info-val" style="color:#a855f7;font-weight:600;">🔒 ${rack.securityLock.toUpperCase()} Access</span></div>` : ''}
               ${rack.containmentType && rack.containmentType !== 'none' ? `<div class="dc-info-row"><span class="dc-info-label">Containment</span><span class="dc-info-val" style="color:#38bdf8;font-weight:600;">🛡 ${rack.containmentType.toUpperCase()}</span></div>` : ''}
+              <div class="dc-info-row" style="margin-top:4px;padding-top:4px;border-top:1px solid #1e293b;">
+                <span class="dc-info-label" style="display:flex;align-items:center;gap:6px;">
+                  <input type="checkbox" id="${isGlobal ? 'g-dc-rack-show-gauge' : 'dc-rack-show-gauge'}" ${rack.showGauge ? 'checked' : ''} style="cursor:pointer;accent-color:#38bdf8;width:14px;height:14px;margin:0;"/>
+                  <label for="${isGlobal ? 'g-dc-rack-show-gauge' : 'dc-rack-show-gauge'}" style="cursor:pointer;color:#f0f6fc;font-weight:600;">3D Gauge HUD</label>
+                </span>
+                <span class="dc-info-val" style="color:${rack.showGauge ? '#38bdf8' : '#64748b'};font-weight:600;">${rack.showGauge ? 'Enabled' : 'Disabled'}</span>
+              </div>
+              ${rack.showGauge ? `
               <div class="dc-info-row">
-                <span class="dc-info-label" style="display:flex;align-items:center;gap:4px;">HUD Style</span>
+                <span class="dc-info-label" style="display:flex;align-items:center;gap:4px;padding-left:20px;font-size:11px;color:#94a3b8;">HUD Type</span>
                 <select id="${isGlobal ? 'g-dc-rack-gauge-style' : 'dc-rack-gauge-style'}" class="dc-input" style="width:138px;padding:2px 4px;font-size:11px;height:24px;background:#0d1520;color:#38bdf8;border:1px solid #304560;border-radius:4px;font-weight:600;">
                   <option value="radial" ${(rack.gaugeStyle ?? 'radial') === 'radial' ? 'selected' : ''}>Radial Dial (Classic)</option>
                   <option value="linear" ${rack.gaugeStyle === 'linear' ? 'selected' : ''}>2 Horizontal Bars (CSS)</option>
                 </select>
               </div>
+              ` : ''}
               <div class="dc-info-row"><span class="dc-info-label">Pos X</span><span class="dc-info-val">${posX}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Pos Y</span><span class="dc-info-val">${posY}</span></div>
               <div class="dc-info-row"><span class="dc-info-label">Rotation</span><span class="dc-info-val">${rack.rotation}°</span></div>
@@ -4687,6 +4696,13 @@ export class BuildFloorView {
             dcState.updateRack(rack.id, { rotation: rot });
             this.renderPropsPanel();
             if (dcState.getState().viewMode === '3d') this.render3D(); else this.draw();
+          });
+          el.querySelector(`${prefix}dc-rack-show-gauge`)?.addEventListener('change', (e: any) => {
+            const showGauge = !!e.target.checked;
+            dcState.updateRack(rack.id, { showGauge });
+            this.renderPropsPanel();
+            const activeFloor = dcState.getActiveFloor();
+            if (activeFloor) this.rebuildThreeScene(activeFloor);
           });
           el.querySelector(`${prefix}dc-rack-gauge-style`)?.addEventListener('change', (e: any) => {
             const newStyle = e.target.value as 'radial' | 'linear';
@@ -5602,21 +5618,6 @@ export class BuildFloorView {
       <div class="dc-menu-item primary" id="cm-work">⚙ Work on this Rack (Mount Devices)</div>
       
       <div class="dc-menu-separator"></div>
-      <div class="dc-menu-section-title">📊 3D HUD GAUGE DESIGN</div>
-      <div class="dc-menu-item ${(rack.gaugeStyle ?? 'radial') === 'radial' ? 'primary' : ''}" id="cm-gauge-radial">
-        ${(rack.gaugeStyle ?? 'radial') === 'radial' ? '● ' : '○ '}Radial Dual Arc Dial (Classic)
-      </div>
-      <div class="dc-menu-item ${rack.gaugeStyle === 'linear' ? 'primary' : ''}" id="cm-gauge-linear">
-        ${rack.gaugeStyle === 'linear' ? '● ' : '○ '}2 Horizontal Bars (CSS Style)
-      </div>
-      <div class="dc-menu-item" id="cm-gauge-all-radial">
-        ⚡ Apply Radial Dial to All Racks
-      </div>
-      <div class="dc-menu-item" id="cm-gauge-all-linear">
-        ⚡ Apply 2 Horizontal Bars to All Racks
-      </div>
-
-      <div class="dc-menu-separator"></div>
       <div class="dc-menu-item" id="cm-import-json">📥 Import Rack Config (.json)</div>
       <div class="dc-menu-item" id="cm-export-json">📤 Export Rack Config (.json)</div>
       <div class="dc-menu-item" id="cm-zoom">🔍 Zoom to Rack (Hotkey: Z)</div>
@@ -5632,40 +5633,6 @@ export class BuildFloorView {
     const close = () => menu.remove();
 
     menu.querySelector('#cm-work')?.addEventListener('click', () => { close(); this.workOnRack(rack); });
-    menu.querySelector('#cm-gauge-radial')?.addEventListener('click', () => {
-      close();
-      dcState.updateRack(rack.id, { gaugeStyle: 'radial' });
-      this.renderPropsPanel();
-      const currentFloor = dcState.getActiveFloor();
-      if (currentFloor) this.rebuildThreeScene(currentFloor);
-      eventBus.emit('notification', { message: `Set ${rack.name} HUD to Radial Dual Arc Dial`, type: 'info' });
-    });
-    menu.querySelector('#cm-gauge-linear')?.addEventListener('click', () => {
-      close();
-      dcState.updateRack(rack.id, { gaugeStyle: 'linear' });
-      this.renderPropsPanel();
-      const currentFloor = dcState.getActiveFloor();
-      if (currentFloor) this.rebuildThreeScene(currentFloor);
-      eventBus.emit('notification', { message: `Set ${rack.name} HUD to 2 Horizontal Bars (CSS Style)`, type: 'success' });
-    });
-    menu.querySelector('#cm-gauge-all-radial')?.addEventListener('click', () => {
-      close();
-      const currentFloor = dcState.getActiveFloor();
-      if (!currentFloor) return;
-      currentFloor.racks.forEach(r => dcState.updateRack(r.id, { gaugeStyle: 'radial' }));
-      this.renderPropsPanel();
-      this.rebuildThreeScene(currentFloor);
-      eventBus.emit('notification', { message: `Applied Radial Dial gauge style to all ${currentFloor.racks.length} racks`, type: 'info' });
-    });
-    menu.querySelector('#cm-gauge-all-linear')?.addEventListener('click', () => {
-      close();
-      const currentFloor = dcState.getActiveFloor();
-      if (!currentFloor) return;
-      currentFloor.racks.forEach(r => dcState.updateRack(r.id, { gaugeStyle: 'linear' }));
-      this.renderPropsPanel();
-      this.rebuildThreeScene(currentFloor);
-      eventBus.emit('notification', { message: `Applied 2 Horizontal Bars gauge style to all ${currentFloor.racks.length} racks`, type: 'success' });
-    });
     menu.querySelector('#cm-import-json')?.addEventListener('click', () => { close(); this.importRackJSON(rack.id); });
     menu.querySelector('#cm-export-json')?.addEventListener('click', () => { close(); this.exportRackJSON(rack.id); });
     menu.querySelector('#cm-zoom')?.addEventListener('click', () => { close(); this.zoomToSelectedRack(); });
@@ -6338,6 +6305,10 @@ export class BuildFloorView {
         <label>Manufacturer<input id="dr-mfr" type="text" value="${rack.manufacturer || ''}" class="dc-input"/></label>
         <label>Model Number<input id="dr-model" type="text" value="${rack.model || ''}" class="dc-input"/></label>
         <label>Max Power Load (kW)<input id="dr-power" type="number" value="${rack.maxPowerKw ?? 20}" min="1" max="200" step="1" class="dc-input"/></label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">
+          <input id="dr-show-gauge" type="checkbox" ${rack.showGauge ? 'checked' : ''} style="cursor:pointer;accent-color:#38bdf8;width:15px;height:15px;"/>
+          <span style="font-weight:600;">Enable 3D HUD Gauge Overlay</span>
+        </label>
         <label>3D HUD Gauge Design
           <select id="dr-gauge-style" class="dc-input">
             <option value="radial"${(rack.gaugeStyle ?? 'radial') === 'radial' ? ' selected' : ''}>Radial Dual Arc Dial (Classic)</option>
@@ -6357,6 +6328,7 @@ export class BuildFloorView {
       const mfr = (document.getElementById('dr-mfr') as HTMLInputElement).value.trim();
       const model = (document.getElementById('dr-model') as HTMLInputElement).value.trim();
       const maxPowerKw = parseFloat((document.getElementById('dr-power') as HTMLInputElement).value) || (rack.maxPowerKw ?? 20);
+      const showGauge = (document.getElementById('dr-show-gauge') as HTMLInputElement)?.checked ?? false;
       const gaugeStyle = (document.getElementById('dr-gauge-style') as HTMLSelectElement).value as DcGaugeStyle;
       const color = (document.getElementById('dr-color') as HTMLInputElement).value || rack.color;
 
@@ -6372,6 +6344,7 @@ export class BuildFloorView {
         model: model || undefined,
         color,
         maxPowerKw,
+        showGauge,
         gaugeStyle,
       });
       this.refresh();
@@ -8301,31 +8274,33 @@ export class BuildFloorView {
         rackGroup.updateMatrixWorld(true);
       }
 
-      // 3D Floating Gauge HUD (Radial Dial or Linear Telemetry Dashboard)
-      const gaugeStyle = dcRack.gaugeStyle || 'radial';
-      const hudCanvas = gaugeStyle === 'linear'
-        ? this.createRackHUDLinearDashboardCanvas(dcRack, rackDevices, rackData)
-        : this.createRackHUDGaugeCanvas(dcRack, rackDevices, rackData);
-      const labelTex = new THREE.CanvasTexture(hudCanvas);
-      labelTex.colorSpace = THREE.SRGBColorSpace;
-      labelTex.anisotropy = 16;
-      labelTex.generateMipmaps = true;
-      labelTex.minFilter = THREE.LinearMipmapLinearFilter;
-      labelTex.magFilter = THREE.LinearFilter;
-      const spriteMat = new THREE.SpriteMaterial({ map: labelTex, depthTest: false, transparent: true });
-      const sprite = new THREE.Sprite(spriteMat);
-      // Width in 3D world: 580mm for 2 horizontal bars or 490mm for radial dial, height proportional
-      const spriteW = gaugeStyle === 'linear' ? 580 : 490;
-      const spriteH = spriteW * (hudCanvas.height / hudCanvas.width);
-      sprite.scale.set(spriteW, spriteH, 1);
-      
-      // Anchor sprite at bottom center (0.5, 0) so the bottom sits flush just above the rack top
-      sprite.center.set(0.5, 0);
-      const topY = (isFinite(initBox.max.y) ? initBox.max.y : totalHMm / 2) + 15;
-      sprite.position.set(0, topY, 0);
-      sprite.userData = { isDynamic: true, rackId: dcRack.id, isGauge: true };
-      rackGroup.add(sprite);
-      this.rackMeshMap.set(sprite, dcRack.id);
+      // 3D Floating Gauge HUD (Radial Dial or Linear Telemetry Dashboard) - Optional, default unselected
+      if (dcRack.showGauge) {
+        const gaugeStyle = dcRack.gaugeStyle || 'radial';
+        const hudCanvas = gaugeStyle === 'linear'
+          ? this.createRackHUDLinearDashboardCanvas(dcRack, rackDevices, rackData)
+          : this.createRackHUDGaugeCanvas(dcRack, rackDevices, rackData);
+        const labelTex = new THREE.CanvasTexture(hudCanvas);
+        labelTex.colorSpace = THREE.SRGBColorSpace;
+        labelTex.anisotropy = 16;
+        labelTex.generateMipmaps = true;
+        labelTex.minFilter = THREE.LinearMipmapLinearFilter;
+        labelTex.magFilter = THREE.LinearFilter;
+        const spriteMat = new THREE.SpriteMaterial({ map: labelTex, depthTest: false, transparent: true });
+        const sprite = new THREE.Sprite(spriteMat);
+        // Width in 3D world: 580mm for 2 horizontal bars or 490mm for radial dial, height proportional
+        const spriteW = gaugeStyle === 'linear' ? 580 : 490;
+        const spriteH = spriteW * (hudCanvas.height / hudCanvas.width);
+        sprite.scale.set(spriteW, spriteH, 1);
+        
+        // Anchor sprite at bottom center (0.5, 0) so the bottom sits flush just above the rack top
+        sprite.center.set(0.5, 0);
+        const topY = (isFinite(initBox.max.y) ? initBox.max.y : totalHMm / 2) + 15;
+        sprite.position.set(0, topY, 0);
+        sprite.userData = { isDynamic: true, rackId: dcRack.id, isGauge: true };
+        rackGroup.add(sprite);
+        this.rackMeshMap.set(sprite, dcRack.id);
+      }
 
       this.threeScene!.add(rackGroup);
 

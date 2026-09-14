@@ -206,6 +206,7 @@ export interface DcRack {
   leftPduId?: string;
   rightPduId?: string;
   maxPowerKw?: number; // User-defined maximum power capacity in kW (default 20)
+  showGauge?: boolean; // 3D HUD Gauge overlay enabled/disabled (default false)
   gaugeStyle?: DcGaugeStyle; // 'radial' | 'linear'
   
   // Advanced Telemetry & Capabilities

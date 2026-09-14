@@ -286,7 +286,7 @@ export class DcFloatingToolbar {
             </svg>
           </button>
 
-          <button class="ft-btn" id="dc-ft-rack-hud" title="Toggle 3D Floating HUD Style (Radial Dial vs Linear 2-Bars)">
+          <button class="ft-btn" id="dc-ft-rack-hud" title="Toggle 3D Floating HUD Gauge Overlay">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
             </svg>
@@ -933,10 +933,10 @@ export class DcFloatingToolbar {
         });
 
         this.element.querySelector('#dc-ft-rack-hud')?.addEventListener('click', () => {
-          const newStyle = rack.gaugeStyle === 'linear' ? 'radial' : 'linear';
-          dcState.updateRack(rack.id, { gaugeStyle: newStyle });
+          const newShowGauge = !rack.showGauge;
+          dcState.updateRack(rack.id, { showGauge: newShowGauge });
           EventBus.emit('notification', {
-            message: `3D HUD switched to ${newStyle === 'linear' ? 'Horizontal Dual-Bar' : 'Radial Dial'}.`,
+            message: newShowGauge ? `3D HUD Gauge enabled for ${rack.name} (${rack.gaugeStyle === 'linear' ? 'Linear Bars' : 'Radial Dial'}).` : `3D HUD Gauge disabled for ${rack.name}.`,
             type: 'info',
           });
         });
