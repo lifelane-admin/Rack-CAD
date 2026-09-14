@@ -56,7 +56,7 @@ describe('Startup modal', () => {
     const modal = document.getElementById('startup-modal');
     expect(modal).not.toBeNull();
     const choices = [...modal!.querySelectorAll('.startup-card')].map(el => (el as HTMLElement).dataset.choice);
-    expect(choices).toEqual(['rack', 'datacenter', 'aws', 'azure', 'gcp', 'hybrid']);
+    expect(choices).toEqual(['rack', 'datacenter', 'flowchart', 'aws', 'azure', 'gcp', 'hybrid']);
   });
 
   it('picking "Rack Design" closes the modal and switches to the rack view', async () => {
@@ -70,6 +70,28 @@ describe('Startup modal', () => {
 
     expect(document.getElementById('startup-modal')).toBeNull();
     expect(stateManager.getState().activeView).toBe('rack');
+  });
+
+  it('picking "Flowchart" switches to cloud diagram and auto-expands the Flowchart category', async () => {
+    mountAppSkeleton();
+    const { App } = await import('../app');
+    const app = new App();
+    app.init();
+
+    document.querySelector<HTMLButtonElement>('.startup-card[data-choice="flowchart"]')!.click();
+
+    expect(stateManager.getState().activeView).toBe('cloud');
+    const searchInput = document.querySelector('.sidebar-search input') as HTMLInputElement;
+    expect(searchInput.placeholder).toBe('Search Flowchart components...');
+    const onpremSection = [...document.querySelectorAll('.sidebar-section-title')]
+      .find(el => el.textContent?.includes('Local Resources'))
+      ?.closest('.sidebar-section');
+    expect(onpremSection?.classList.contains('expanded')).toBe(true);
+
+    const flowchartCategory = [...document.querySelectorAll('.cloud-icon-category-title')]
+      .find(el => el.textContent?.includes('Flowchart'))
+      ?.closest('.cloud-icon-category');
+    expect(flowchartCategory?.classList.contains('collapsed')).toBe(false);
   });
 
   it('picking "AWS" switches to cloud and focuses the AWS palette section, same as the sidebar nav-tree click', async () => {

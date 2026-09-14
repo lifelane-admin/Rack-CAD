@@ -732,6 +732,12 @@ export class App {
         eventBus.emit('view:switch', 'datacenter');
         return;
       }
+      if (choice === 'flowchart') {
+        stateManager.setState({ workflowMode: 'cloud', activeElevationRackId: null });
+        this.sidebar.focusCloudProvider('onprem', 'Flowchart');
+        eventBus.emit('view:switch', 'cloud');
+        return;
+      }
       if (choice === 'hybrid') {
         // Lands unscoped (every provider section collapsed, search unscoped) so Local
         // Resources/On-Prem/AWS/Azure/GCP are all equally reachable in the cloud-side catalog

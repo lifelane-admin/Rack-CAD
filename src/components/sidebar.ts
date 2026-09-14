@@ -54,12 +54,15 @@ export class Sidebar {
     });
   }
 
+  private focusedCloudCategory: string | null = null;
+
   /** Sets which cloud provider's palette section auto-expands, from outside the nav-tree click
    *  itself — used by the startup screen (see startup-modal.ts) to land the sidebar in the same
-   *  state a manual Cloud > AWS/Azure/GCP/Local Resources click would, or fully unscoped (null)
+   *  state a manual Cloud > AWS/Azure/GCP/Local Resources/Flowchart click would, or fully unscoped (null)
    *  for the Hybrid choice, which shows every section collapsed with unscoped search. */
-  focusCloudProvider(provider: CloudProvider | null): void {
+  focusCloudProvider(provider: CloudProvider | null, category: string | null = null): void {
     this.focusedCloudProvider = provider;
+    this.focusedCloudCategory = category;
     this.searchTerm = '';
   }
 
@@ -99,10 +102,11 @@ export class Sidebar {
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
     const providerLabels: Record<CloudProvider, string> = { aws: 'AWS', azure: 'Azure', gcp: 'GCP', onprem: 'Local Resources' };
+    const categoryScope = this.focusedCloudCategory ? `Search ${this.focusedCloudCategory} components...` : null;
     searchInput.placeholder = isHybrid
       ? 'Search rack devices + cloud services...'
       : isCloud
-        ? (this.focusedCloudProvider ? `Search ${providerLabels[this.focusedCloudProvider]} services...` : 'Search AWS/Azure/GCP/Local services...')
+        ? (categoryScope || (this.focusedCloudProvider ? `Search ${providerLabels[this.focusedCloudProvider]} services...` : 'Search AWS/Azure/GCP/Local services...'))
         : 'Search components...';
     searchContainer.appendChild(searchInput);
 
@@ -253,6 +257,7 @@ export class Sidebar {
 
       el.addEventListener('click', () => {
         this.focusedCloudProvider = null;
+        this.focusedCloudCategory = null;
         this.searchTerm = '';
         const currentView = State.getState().activeView;
         const target = tab.view === 'cloud' && currentView !== 'cloud' ? 'hybrid' : tab.view;
@@ -608,8 +613,9 @@ export class Sidebar {
       const items = cloudIconManifest.filter(icon => icon.provider === provider.id);
       if (items.length === 0) continue;
 
+      const isProviderExpanded = provider.id === this.focusedCloudProvider || (Boolean(this.focusedCloudCategory) && provider.id === 'onprem');
       const section = document.createElement('div');
-      section.className = provider.id === this.focusedCloudProvider ? 'sidebar-section expanded' : 'sidebar-section';
+      section.className = isProviderExpanded ? 'sidebar-section expanded' : 'sidebar-section';
       const title = document.createElement('div');
       title.className = 'sidebar-section-title';
       title.innerHTML = `${provider.icon} ${provider.label} <span style="opacity:0.6;font-weight:normal;">(${items.length})</span>`;
@@ -635,8 +641,9 @@ export class Sidebar {
       // dump every one of its icons (up to 714 for Azure) into view at once, grouped under
       // always-visible plain labels. Now expanding e.g. "Compute" only reveals Compute's items.
       for (const [category, categoryItems] of [...byCategory.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+        const isCatExpanded = Boolean(this.focusedCloudCategory && category.toLowerCase() === this.focusedCloudCategory.toLowerCase());
         const catGroup = document.createElement('div');
-        catGroup.className = 'cloud-icon-category collapsed';
+        catGroup.className = isCatExpanded ? 'cloud-icon-category' : 'cloud-icon-category collapsed';
 
         const catTitle = document.createElement('div');
         catTitle.className = 'cloud-icon-category-title';

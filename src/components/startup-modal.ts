@@ -3,7 +3,7 @@
 // each choice does exactly what its equivalent sidebar nav-tree entry does (see sidebar.ts's
 // NAV_TREE + focusCloudProvider()), it doesn't touch or reset any existing project data.
 
-export type StartupChoice = 'rack' | 'datacenter' | 'aws' | 'azure' | 'gcp' | 'hybrid';
+export type StartupChoice = 'rack' | 'datacenter' | 'flowchart' | 'aws' | 'azure' | 'gcp' | 'hybrid';
 
 interface StartupOption {
   choice: StartupChoice;
@@ -27,6 +27,13 @@ const STARTUP_OPTIONS: StartupOption[] = [
     title: 'Datacenter',
     description: 'ESD raised-floor grid planner, data hall layout, 2D & 3D floor visualization.',
     accent: '#38bdf8',
+  },
+  {
+    choice: 'flowchart',
+    icon: '🔀',
+    title: 'Flowchart',
+    description: 'Process diagrams, workflow logic, decisions, connectors, and system state charts.',
+    accent: '#a855f7',
   },
   {
     choice: 'aws',
@@ -100,7 +107,7 @@ export function showStartupModal(onChoose: (choice: StartupChoice | null) => voi
   `).join('');
 
   modal.innerHTML = `
-    <div style="max-width: 900px; width: 90vw; text-align: center;">
+    <div style="max-width: 960px; width: 92vw; text-align: center;">
       <div style="display: flex; justify-content: flex-end;">
         <button id="startup-modal-close" title="Skip" style="background: none; border: none; color: #8b949e; font-size: 20px; cursor: pointer; padding: 4px 8px;">✕</button>
       </div>
