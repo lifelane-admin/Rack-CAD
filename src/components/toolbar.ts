@@ -224,17 +224,22 @@ export class Toolbar {
     if (State.getState().aiMode) aiBtn.classList.add('active');
     aiBtn.addEventListener('click', () => {
       const current = State.getState().aiMode;
-      if (!current && !ClaudeProvider.hasKey()) {
-        if (State.getState().aiProvider === 'claude') {
-          document.getElementById('ai-key-modal')?.classList.remove('hidden');
-          return;
-        }
-      }
       const newMode = !current;
       State.setState({ aiMode: newMode });
       EventBus.emit('ai:mode-changed', newMode);
     });
     right.appendChild(aiBtn);
+
+    const aiSettingsBtn = document.createElement('button');
+    aiSettingsBtn.className = 'toolbar-btn';
+    aiSettingsBtn.id = 'ai-settings-btn';
+    aiSettingsBtn.title = 'AI Settings (API Key & Model Selection)';
+    aiSettingsBtn.innerHTML = `⚙️`;
+    aiSettingsBtn.style.fontSize = '12px';
+    aiSettingsBtn.addEventListener('click', () => {
+      document.getElementById('ai-key-modal')?.classList.remove('hidden');
+    });
+    right.appendChild(aiSettingsBtn);
 
     inner.appendChild(right);
     this.container.appendChild(inner);

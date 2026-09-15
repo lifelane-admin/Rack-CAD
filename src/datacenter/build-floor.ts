@@ -17,9 +17,13 @@ import { buildCableMesh } from '../three/cable-builder';
 import { getDevicePowerWatts, getRackPowerCapacityWatts } from '../utils/power';
 
 import { getTemplate } from '../library/device-catalog';
-import { ALL_DC_COMPONENTS, DcComponentItem } from '../components/dc-component-graphics';
-
 import { DEVICE_FACE_Z } from '../three/rack-builder';
+import {
+  getDoorOperationOptions,
+  getDoorOpeningOptions,
+  sanitizeDoorConfiguration,
+} from '../utils/door-compatibility';
+import { DcComponentItem } from '../components/dc-component-graphics';
 import {
   formatSingleDistance,
   formatDimensionsMeters,
@@ -6253,18 +6257,20 @@ export class BuildFloorView {
         </label>
         <label>Door Operation
           <select id="dr-door-op" class="dc-input">
-            <option value="swing-left" selected>Swing - Left Hinged</option>
-            <option value="swing-right">Swing - Right Hinged</option>
-            <option value="swing-dual">Swing - Dual Leaf (Wardrobe)</option>
-            <option value="sliding">Sliding Track (Manual / Auto)</option>
-            <option value="lift-off">Lift-Off (Quick-Release Panel)</option>
-            <option value="bifold">Bi-Fold (Folding Hinge)</option>
+            ${getDoorOperationOptions('perforated', 'server').map(opt => `
+              <option value="${opt.value}" ${opt.value === 'swing-left' ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>
+                ${opt.displayLabel}
+              </option>
+            `).join('')}
           </select>
         </label>
         <label>Door Opening
           <select id="dr-door-opening" class="dc-input">
-            <option value="front-only" selected>Front Only (Single Access)</option>
-            <option value="front-rear">Front + Rear (Dual Access)</option>
+            ${getDoorOpeningOptions('perforated', 'server').map(opt => `
+              <option value="${opt.value}" ${opt.value === 'front-only' ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>
+                ${opt.displayLabel}
+              </option>
+            `).join('')}
           </select>
         </label>
         <label>Mounting Style
@@ -6296,17 +6302,24 @@ export class BuildFloorView {
 
       if (w <= 0 || d <= 0 || h <= 0) { alert('Invalid dimensions.'); return false; }
 
+      const sanitized = sanitizeDoorConfiguration({
+        rackType: type,
+        frontDoor: door,
+        doorOperation: doorOp,
+        doorOpening,
+      });
+
       const tileM = floor.tileSizeMm / 1000;
       const rack: DcRack = {
         id,
         name,
-        type,
+        type: sanitized.rackType as DcRackType,
         widthMm: w,
         depthMm: d,
         heightU: h,
-        doorStyle: door,
-        doorOperation: doorOp,
-        doorOpening,
+        doorStyle: sanitized.frontDoor as DcDoorStyle,
+        doorOperation: sanitized.doorOperation as DcDoorOperation,
+        doorOpening: sanitized.doorOpening as DcDoorOpening,
         mounting,
         manufacturer: mfr || undefined,
         model: model || undefined,
@@ -6321,7 +6334,54 @@ export class BuildFloorView {
     });
 
     setTimeout(() => {
+      const typeSel = document.getElementById('dr-type') as HTMLSelectElement;
+      const doorSel = document.getElementById('dr-door') as HTMLSelectElement;
+      const doorOpSel = document.getElementById('dr-door-op') as HTMLSelectElement;
+      const doorOpeningSel = document.getElementById('dr-door-opening') as HTMLSelectElement;
       const presetSel = document.getElementById('dr-preset') as HTMLSelectElement;
+
+      const refreshDcDoorCompatibility = () => {
+        const curType = typeSel?.value || 'server';
+        const curDoor = doorSel?.value || 'perforated';
+        const curOp = doorOpSel?.value || 'swing-left';
+        const curOpening = doorOpeningSel?.value || 'front-only';
+
+        if (doorOpSel) {
+          const opOptions = getDoorOperationOptions(curDoor, curType);
+          doorOpSel.innerHTML = opOptions.map(opt => `
+            <option value="${opt.value}" ${opt.value === curOp ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>
+              ${opt.displayLabel}
+            </option>
+          `).join('');
+          if (!opOptions.find(o => o.value === curOp && o.isApplicable)) {
+            doorOpSel.value = opOptions.find(o => o.isApplicable)?.value || 'swing-left';
+          }
+        }
+
+        if (doorOpeningSel) {
+          const openOptions = getDoorOpeningOptions(curDoor, curType);
+          doorOpeningSel.innerHTML = openOptions.map(opt => `
+            <option value="${opt.value}" ${opt.value === curOpening ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>
+              ${opt.displayLabel}
+            </option>
+          `).join('');
+          if (!openOptions.find(o => o.value === curOpening && o.isApplicable)) {
+            doorOpeningSel.value = openOptions.find(o => o.isApplicable)?.value || 'front-only';
+          }
+        }
+      };
+
+      typeSel?.addEventListener('change', () => {
+        if (typeSel.value === 'open-frame') {
+          if (doorSel) doorSel.value = 'none';
+        } else if (doorSel && doorSel.value === 'none') {
+          doorSel.value = 'perforated';
+        }
+        refreshDcDoorCompatibility();
+      });
+
+      doorSel?.addEventListener('change', refreshDcDoorCompatibility);
+
       presetSel?.addEventListener('change', () => {
         const val = presetSel.value;
         const preset = RACK_PRESETS.find(p => p.id === val);
@@ -6335,6 +6395,7 @@ export class BuildFloorView {
           (document.getElementById('dr-mfr') as HTMLInputElement).value = preset.manufacturer;
           (document.getElementById('dr-model') as HTMLInputElement).value = preset.model;
           (document.getElementById('dr-color') as HTMLInputElement).value = preset.color;
+          refreshDcDoorCompatibility();
         }
       });
     }, 50);
@@ -6418,18 +6479,20 @@ export class BuildFloorView {
         </label>
         <label>Door Operation
           <select id="dr-door-op" class="dc-input">
-            <option value="swing-left"${rack.doorOperation === 'swing-left' || !rack.doorOperation ? ' selected' : ''}>Swing - Left Hinged</option>
-            <option value="swing-right"${rack.doorOperation === 'swing-right' ? ' selected' : ''}>Swing - Right Hinged</option>
-            <option value="swing-dual"${rack.doorOperation === 'swing-dual' || rack.doorOperation === 'split-swing' ? ' selected' : ''}>Swing - Dual Leaf (Wardrobe)</option>
-            <option value="sliding"${rack.doorOperation === 'sliding' ? ' selected' : ''}>Sliding Track (Manual / Auto)</option>
-            <option value="lift-off"${rack.doorOperation === 'lift-off' ? ' selected' : ''}>Lift-Off (Quick-Release Panel)</option>
-            <option value="bifold"${rack.doorOperation === 'bifold' ? ' selected' : ''}>Bi-Fold (Folding Hinge)</option>
+            ${getDoorOperationOptions(rack.doorStyle, rack.type).map(opt => `
+              <option value="${opt.value}" ${(rack.doorOperation || 'swing-left') === opt.value ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>
+                ${opt.displayLabel}
+              </option>
+            `).join('')}
           </select>
         </label>
         <label>Door Opening
           <select id="dr-door-opening" class="dc-input">
-            <option value="front-only"${(rack.doorOpening ?? 'front-only') === 'front-only' ? ' selected' : ''}>Front Only (Single Access)</option>
-            <option value="front-rear"${rack.doorOpening === 'front-rear' ? ' selected' : ''}>Front + Rear (Dual Access)</option>
+            ${getDoorOpeningOptions(rack.doorStyle, rack.type).map(opt => `
+              <option value="${opt.value}" ${(rack.doorOpening || 'front-only') === opt.value ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>
+                ${opt.displayLabel}
+              </option>
+            `).join('')}
           </select>
         </label>
         <label>Mounting Style
@@ -6470,15 +6533,22 @@ export class BuildFloorView {
       const gaugeStyle = (document.getElementById('dr-gauge-style') as HTMLSelectElement).value as DcGaugeStyle;
       const color = (document.getElementById('dr-color') as HTMLInputElement).value || rack.color;
 
+      const sanitized = sanitizeDoorConfiguration({
+        rackType: type,
+        frontDoor: door,
+        doorOperation: doorOp,
+        doorOpening,
+      });
+
       dcState.updateRack(rack.id, {
         name,
-        type,
+        type: sanitized.rackType as DcRackType,
         widthMm: w,
         depthMm: d,
         heightU: h,
-        doorStyle: door,
-        doorOperation: doorOp,
-        doorOpening,
+        doorStyle: sanitized.frontDoor as DcDoorStyle,
+        doorOperation: sanitized.doorOperation as DcDoorOperation,
+        doorOpening: sanitized.doorOpening as DcDoorOpening,
         mounting,
         manufacturer: mfr || undefined,
         model: model || undefined,
@@ -6490,6 +6560,55 @@ export class BuildFloorView {
       this.refresh();
       return true;
     });
+
+    setTimeout(() => {
+      const typeSel = document.getElementById('dr-type') as HTMLSelectElement;
+      const doorSel = document.getElementById('dr-door') as HTMLSelectElement;
+      const doorOpSel = document.getElementById('dr-door-op') as HTMLSelectElement;
+      const doorOpeningSel = document.getElementById('dr-door-opening') as HTMLSelectElement;
+
+      const refreshDcDoorCompatibility = () => {
+        const curType = typeSel?.value || 'server';
+        const curDoor = doorSel?.value || 'perforated';
+        const curOp = doorOpSel?.value || 'swing-left';
+        const curOpening = doorOpeningSel?.value || 'front-only';
+
+        if (doorOpSel) {
+          const opOptions = getDoorOperationOptions(curDoor, curType);
+          doorOpSel.innerHTML = opOptions.map(opt => `
+            <option value="${opt.value}" ${opt.value === curOp ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>
+              ${opt.displayLabel}
+            </option>
+          `).join('');
+          if (!opOptions.find(o => o.value === curOp && o.isApplicable)) {
+            doorOpSel.value = opOptions.find(o => o.isApplicable)?.value || 'swing-left';
+          }
+        }
+
+        if (doorOpeningSel) {
+          const openOptions = getDoorOpeningOptions(curDoor, curType);
+          doorOpeningSel.innerHTML = openOptions.map(opt => `
+            <option value="${opt.value}" ${opt.value === curOpening ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>
+              ${opt.displayLabel}
+            </option>
+          `).join('');
+          if (!openOptions.find(o => o.value === curOpening && o.isApplicable)) {
+            doorOpeningSel.value = openOptions.find(o => o.isApplicable)?.value || 'front-only';
+          }
+        }
+      };
+
+      typeSel?.addEventListener('change', () => {
+        if (typeSel.value === 'open-frame') {
+          if (doorSel) doorSel.value = 'none';
+        } else if (doorSel && doorSel.value === 'none') {
+          doorSel.value = 'perforated';
+        }
+        refreshDcDoorCompatibility();
+      });
+
+      doorSel?.addEventListener('change', refreshDcDoorCompatibility);
+    }, 50);
   }
 
   private showAddRowDialog() {

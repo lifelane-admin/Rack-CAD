@@ -304,7 +304,7 @@ body.hybrid-merged #cloud-floating-toolbar {
 /* Cable Dropdown Menu */
 .ft-cable-menu {
   position: absolute;
-  bottom: 58px;
+  bottom: calc(100% + 8px);
   left: 14px;
   background: rgba(18, 22, 30, 0.98);
   backdrop-filter: blur(28px);
@@ -323,6 +323,16 @@ body.hybrid-merged #cloud-floating-toolbar {
   gap: 4px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.ft-cable-menu.open-down {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
+.ft-cable-menu.open-up {
+  bottom: calc(100% + 8px);
+  top: auto;
 }
 
 .ft-cable-menu-category {
@@ -507,6 +517,12 @@ body.hybrid-merged #cloud-floating-toolbar {
 .ft-ai-btn:hover {
   transform: scale(1.1);
   box-shadow: 0 0 24px rgba(240, 147, 251, 0.7), 0 0 14px rgba(0, 242, 254, 0.6);
+}
+
+.ft-ai-btn.active {
+  background-image: linear-gradient(#2e1065, #1e1b4b), linear-gradient(135deg, #00f2fe 0%, #a855f7 50%, #ec4899 100%);
+  box-shadow: 0 0 28px rgba(168, 85, 247, 0.8), 0 0 16px rgba(0, 242, 254, 0.7);
+  transform: scale(1.05);
 }
 
 .ft-ai-tooltip {

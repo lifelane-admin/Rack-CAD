@@ -31,8 +31,11 @@ export class AIPanel {
       <div class="ai-panel-header">
         <span class="provider-dot" id="ai-dot"></span>
         <span id="ai-panel-provider">&#x2699; Rules</span>
+        <button id="ai-panel-settings-btn" style="background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.3); border-radius:4px; padding:2px 7px; color:#38bdf8; font-size:11px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:4px; margin-left:6px;" title="AI Settings & API Key">
+          ⚙️ AI Settings
+        </button>
         <span style="flex:1"></span>
-        <button id="ai-panel-close" style="background:none;border:none;color:#888;cursor:pointer;font-size:16px">&#x2715;</button>
+        <button id="ai-panel-close" style="background:none;border:none;color:#888;cursor:pointer;font-size:16px" title="Close AI Panel">&#x2715;</button>
       </div>
       <div class="ai-messages"></div>
       <div class="ai-thinking" style="display:none">
@@ -48,6 +51,12 @@ export class AIPanel {
 
   private bindEvents(): void {
     this.el.querySelector('#ai-panel-close')!.addEventListener('click', () => this.close());
+    this.el.querySelector('#ai-panel-settings-btn')?.addEventListener('click', () => {
+      document.getElementById('ai-key-modal')?.classList.remove('hidden');
+    });
+    this.el.querySelector('#ai-panel-provider')?.addEventListener('click', () => {
+      document.getElementById('ai-key-modal')?.classList.remove('hidden');
+    });
 
     this.sendBtn.addEventListener('click', () => this.sendMessage());
     this.inputEl.addEventListener('keydown', (e) => {
@@ -59,18 +68,32 @@ export class AIPanel {
     });
 
     eventBus.on('ai:provider-changed', (name) => {
-      const labels: Record<string, string> = { claude: '&#x2601; Claude', local: '&#x26A1; Local', rules: '&#x2699; Rules' };
+      const labels: Record<string, string> = {
+        gemini: '✨ Gemini',
+        deepseek: '🐋 DeepSeek',
+        openrouter: '🌐 OpenRouter',
+        openai: '🟢 OpenAI',
+        claude: '☁ Claude',
+        local: '⚡ Local',
+        rules: '⚙ Rules',
+      };
       const el = document.getElementById('ai-panel-provider');
-      if (el) el.innerHTML = labels[name] ?? '&#x2699; Rules';
+      if (el) {
+        el.innerHTML = labels[name] ?? '⚙ Rules';
+        el.style.cursor = 'pointer';
+        el.title = 'Click to open AI Settings & Key';
+      }
     });
 
-    eventBus.on('ai:stream-chunk', (chunk) => {
+    eventBus.on('ai:stream-chunk', (_chunk) => {
       if (!this.currentAssistantEl) {
         this.currentAssistantEl = document.createElement('div');
         this.currentAssistantEl.className = 'ai-msg assistant';
+        this.currentAssistantEl.style.opacity = '0.7';
+        this.currentAssistantEl.style.fontStyle = 'italic';
+        this.currentAssistantEl.textContent = 'Analyzing layout & generating response...';
         this.messagesEl.appendChild(this.currentAssistantEl);
       }
-      this.currentAssistantEl.textContent += chunk;
       this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
     });
 
@@ -78,27 +101,91 @@ export class AIPanel {
       this.streaming = false;
       this.thinkingEl.style.display = 'none';
       this.sendBtn.disabled = false;
-      const assistantText = this.currentAssistantEl?.textContent ?? '';
-      this.currentAssistantEl = null;
-      if (assistantText) {
-        this.messages.push({ role: 'assistant', content: assistantText });
+
+      const explanation = rackDiff.explanation || '(no response)';
+
+      if (this.currentAssistantEl) {
+        this.currentAssistantEl.remove();
+        this.currentAssistantEl = null;
       }
-      if (!assistantText && rackDiff.diff === null) {
-        this.appendMessage('assistant', '(no response)');
-      }
+
+      const formattedEl = this.formatExplanation(explanation);
+      this.messagesEl.appendChild(formattedEl);
+      this.messages.push({ role: 'assistant', content: explanation });
 
       if (rackDiff.diff) {
         this.pendingDiff = rackDiff;
         this.showDiffCard(rackDiff);
       }
+      this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
     });
 
     eventBus.on('ai:error', (msg) => {
       this.streaming = false;
       this.thinkingEl.style.display = 'none';
       this.sendBtn.disabled = false;
+      if (this.currentAssistantEl) {
+        this.currentAssistantEl.remove();
+        this.currentAssistantEl = null;
+      }
       this.appendMessage('assistant', `⚠ Error: ${msg}`);
     });
+  }
+
+  private formatExplanation(raw: string): HTMLElement {
+    const container = document.createElement('div');
+    container.className = 'ai-msg assistant';
+
+    let text = raw;
+    try {
+      if (raw.trim().startsWith('{')) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.explanation === 'string') {
+          text = parsed.explanation;
+        }
+      }
+    } catch {
+      // not JSON
+    }
+
+    const enableMatch = text.includes('Enable Claude or Local AI for natural language requests');
+    const cleanText = text.replace(/\(Enable Claude or Local AI for natural language requests\.\)/g, '').trim();
+
+    const paragraphs = cleanText.split('\n');
+    paragraphs.forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        container.appendChild(document.createElement('br'));
+      } else if (trimmed.startsWith('•') || trimmed.startsWith('*') || trimmed.startsWith('-')) {
+        const li = document.createElement('div');
+        li.style.cssText = 'padding-left: 8px; margin-bottom: 4px; color: #e2e8f0; line-height: 1.4;';
+        li.textContent = trimmed;
+        container.appendChild(li);
+      } else {
+        const p = document.createElement('div');
+        p.style.cssText = 'margin-bottom: 6px; font-weight: 500; color: #f1f5f9;';
+        p.textContent = trimmed;
+        container.appendChild(p);
+      }
+    });
+
+    if (enableMatch) {
+      const banner = document.createElement('div');
+      banner.style.cssText = 'margin-top: 12px; padding: 10px 12px; background: rgba(56,189,248,0.08); border: 1px dashed rgba(56,189,248,0.35); border-radius: 6px; font-size: 11px;';
+      banner.innerHTML = `
+        <div style="color: #38bdf8; font-weight: 700; margin-bottom: 4px; font-size: 12px;">⚡ Connect Claude for Autonomous CAD Generation</div>
+        <div style="color: #94a3b8; margin-bottom: 8px; line-height: 1.4;">To automatically place Proxmox servers, Top-of-Rack switches, and route colored Ceph/migration cables from natural language, connect your personal Claude API Key.</div>
+        <button class="ai-connect-btn" style="background: #38bdf8; color: #0d1117; font-weight: 700; border: none; border-radius: 4px; padding: 6px 12px; font-size: 11px; cursor: pointer; transition: transform 0.15s ease;">
+          🔑 Connect Claude API Key
+        </button>
+      `;
+      banner.querySelector('.ai-connect-btn')?.addEventListener('click', () => {
+        document.getElementById('ai-key-modal')?.classList.remove('hidden');
+      });
+      container.appendChild(banner);
+    }
+
+    return container;
   }
 
   private showDiffCard(diff: RackDiff): void {

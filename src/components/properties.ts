@@ -17,11 +17,15 @@ import { showHierarchyInputModal } from './hierarchy-input-modal';
 const customAssetModal = new CustomAssetModal();
 
 // A device's manually-added/custom ports (Port Visual Calibration) are capped at this many real
-// jacks — the catalog's "Custom Layout" 1U/2U/4U templates ship with exactly this count too.
-import { computeSmartRouting, get3DefaultAnchors } from '../utils/routing';
-import { getDevicePowerWatts } from '../utils/power';
 import { aiService } from '../ai/ai-service';
 import { AIHint } from '../ai/types';
+import { getDevicePowerWatts } from '../utils/power';
+import { computeSmartRouting } from '../utils/routing';
+import {
+  getDoorOperationOptions,
+  getDoorOpeningOptions,
+  sanitizeDoorConfiguration,
+} from '../utils/door-compatibility';
 
 export class PropertiesPanel {
   private container: HTMLElement;
@@ -711,20 +715,18 @@ export class PropertiesPanel {
           <div class="form-group" style="margin-bottom: 0;">
             <label style="font-size: 10px;">Door Operation</label>
             <select id="prop-rack-door-op" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
-              <option value="swing-left" ${rack.doorOperation === 'swing-left' || !rack.doorOperation ? 'selected' : ''}>Swing - Left Hinged</option>
-              <option value="swing-right" ${rack.doorOperation === 'swing-right' ? 'selected' : ''}>Swing - Right Hinged</option>
-              <option value="swing-dual" ${rack.doorOperation === 'swing-dual' || rack.doorOperation === 'split-swing' ? 'selected' : ''}>Swing - Dual Leaf (Wardrobe)</option>
-              <option value="sliding" ${rack.doorOperation === 'sliding' ? 'selected' : ''}>Sliding Track (Manual / Auto)</option>
-              <option value="lift-off" ${rack.doorOperation === 'lift-off' ? 'selected' : ''}>Lift-Off (Quick-Release Panel)</option>
-              <option value="bifold" ${rack.doorOperation === 'bifold' ? 'selected' : ''}>Bi-Fold (Folding Hinge)</option>
+              ${getDoorOperationOptions(rack.frontDoor, rack.rackType).map(opt => `
+                <option value="${opt.value}" ${opt.value === rack.doorOperation || (!rack.doorOperation && opt.value === 'swing-left') ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>${opt.displayLabel}</option>
+              `).join('')}
             </select>
           </div>
 
           <div class="form-group" style="margin-bottom: 0;">
             <label style="font-size: 10px;">Door Opening</label>
             <select id="prop-rack-door-opening" style="background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 11px; padding: 4px; border-radius: 4px; width: 100%;">
-              <option value="front-only" ${rack.doorOpening === 'front-only' || !rack.doorOpening ? 'selected' : ''}>Front Only</option>
-              <option value="front-rear" ${rack.doorOpening === 'front-rear' ? 'selected' : ''}>Front + Rear</option>
+              ${getDoorOpeningOptions(rack.frontDoor, rack.rackType).map(opt => `
+                <option value="${opt.value}" ${opt.value === (rack.doorOpening ?? 'front-only') ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>${opt.displayLabel}</option>
+              `).join('')}
             </select>
           </div>
 
@@ -845,10 +847,36 @@ export class PropertiesPanel {
       EventBus.emit('rack:update', { id, data: { depthMm: parseInt(e.target.value, 10) } });
     });
     container.querySelector('#prop-rack-type')?.addEventListener('change', (e: any) => {
-      EventBus.emit('rack:update', { id, data: { rackType: e.target.value } });
+      const sanitized = sanitizeDoorConfiguration({
+        rackType: e.target.value,
+        frontDoor: rack.frontDoor,
+        doorOperation: rack.doorOperation,
+        doorOpening: rack.doorOpening,
+        sidePanels: rack.sidePanels,
+      });
+      EventBus.emit('rack:update', { id, data: {
+        rackType: sanitized.rackType,
+        frontDoor: sanitized.frontDoor,
+        doorOperation: sanitized.doorOperation,
+        doorOpening: sanitized.doorOpening,
+        sidePanels: sanitized.sidePanels,
+      } });
+      this.update(this.currentSelection);
     });
     container.querySelector('#prop-rack-door')?.addEventListener('change', (e: any) => {
-      EventBus.emit('rack:update', { id, data: { frontDoor: e.target.value } });
+      const sanitized = sanitizeDoorConfiguration({
+        rackType: rack.rackType,
+        frontDoor: e.target.value,
+        doorOperation: rack.doorOperation,
+        doorOpening: rack.doorOpening,
+        sidePanels: rack.sidePanels,
+      });
+      EventBus.emit('rack:update', { id, data: {
+        frontDoor: sanitized.frontDoor,
+        doorOperation: sanitized.doorOperation,
+        doorOpening: sanitized.doorOpening,
+      } });
+      this.update(this.currentSelection);
     });
     container.querySelector('#prop-rack-door-op')?.addEventListener('change', (e: any) => {
       EventBus.emit('rack:update', { id, data: { doorOperation: e.target.value } });

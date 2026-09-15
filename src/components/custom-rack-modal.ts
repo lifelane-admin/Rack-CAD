@@ -15,6 +15,11 @@ import {
   RACK_UNIT_SIZES,
 } from '../core/types';
 import { generateId } from '../utils/geometry';
+import {
+  getDoorOperationOptions,
+  getDoorOpeningOptions,
+  sanitizeDoorConfiguration,
+} from '../utils/door-compatibility';
 
 export class CustomRackModal {
   private overlay: HTMLElement | null = null;
@@ -28,11 +33,20 @@ export class CustomRackModal {
     const name = initial?.name ?? `${units}U Custom Cabinet`;
     const rackWidth: RackWidthOption = initial?.rackWidth ?? '19-inch';
     const depthMm = initial?.depthMm ?? 1000;
-    const rackType: RackType = initial?.rackType ?? 'server';
-    const frontDoor: RackDoorType = initial?.frontDoor ?? 'perforated';
-    const doorOperation: RackDoorOperation = initial?.doorOperation ?? 'swing-left';
-    const doorOpening: RackDoorOpening = initial?.doorOpening ?? 'front-only';
-    const sidePanels = initial?.sidePanels ?? true;
+    
+    const sanitized = sanitizeDoorConfiguration({
+      rackType: initial?.rackType ?? 'server',
+      frontDoor: initial?.frontDoor ?? 'perforated',
+      doorOperation: initial?.doorOperation ?? 'swing-left',
+      doorOpening: initial?.doorOpening ?? 'front-only',
+      sidePanels: initial?.sidePanels ?? true,
+    });
+
+    const rackType: RackType = sanitized.rackType;
+    const frontDoor: RackDoorType = sanitized.frontDoor;
+    const doorOperation: RackDoorOperation = sanitized.doorOperation;
+    const doorOpening: RackDoorOpening = sanitized.doorOpening;
+    const sidePanels = sanitized.sidePanels;
     const rackColor = initial?.rackColor ?? '#0c0e12';
     const mounting: RackMounting = initial?.mounting ?? 'floor';
     const leftVcm: VcmWidth = initial?.leftCableManagerWidth ?? '4-inch';
@@ -174,20 +188,18 @@ export class CustomRackModal {
             <div>
               <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #fb8c00; margin-bottom: 6px;">Door Operation</label>
               <select id="crm-door-op" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px;">
-                <option value="swing-left" ${doorOperation === 'swing-left' || !doorOperation ? 'selected' : ''}>Swing - Left Hinged</option>
-                <option value="swing-right" ${doorOperation === 'swing-right' ? 'selected' : ''}>Swing - Right Hinged</option>
-                <option value="swing-dual" ${doorOperation === 'swing-dual' || doorOperation === 'split-swing' ? 'selected' : ''}>Swing - Dual Leaf (Wardrobe)</option>
-                <option value="sliding" ${doorOperation === 'sliding' ? 'selected' : ''}>Sliding Track (Manual / Auto)</option>
-                <option value="lift-off" ${doorOperation === 'lift-off' ? 'selected' : ''}>Lift-Off (Quick-Release Panel)</option>
-                <option value="bifold" ${doorOperation === 'bifold' ? 'selected' : ''}>Bi-Fold (Folding Hinge)</option>
+                ${getDoorOperationOptions(frontDoor, rackType).map(opt => `
+                  <option value="${opt.value}" ${opt.value === doorOperation ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>${opt.displayLabel}</option>
+                `).join('')}
               </select>
             </div>
 
             <div>
               <label style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #fb8c00; margin-bottom: 6px;">Door Opening</label>
               <select id="crm-door-opening" style="width: 100%; background: #090b10; border: 1px solid #30363d; border-radius: 6px; padding: 7px 10px; color: #fff; font-size: 12px;">
-                <option value="front-only" ${doorOpening === 'front-only' || !doorOpening ? 'selected' : ''}>Front Only (Single Front Access)</option>
-                <option value="front-rear" ${doorOpening === 'front-rear' ? 'selected' : ''}>Front + Rear (Dual Front & Rear Access)</option>
+                ${getDoorOpeningOptions(frontDoor, rackType).map(opt => `
+                  <option value="${opt.value}" ${opt.value === doorOpening ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>${opt.displayLabel}</option>
+                `).join('')}
               </select>
             </div>
 
@@ -272,6 +284,69 @@ export class CustomRackModal {
 
     overlay.querySelector('#crm-close')?.addEventListener('click', () => this.close());
     overlay.querySelector('#crm-cancel')?.addEventListener('click', () => this.close());
+
+    const typeSelect = overlay.querySelector('#crm-type') as HTMLSelectElement;
+    const doorSelect = overlay.querySelector('#crm-door') as HTMLSelectElement;
+    const doorOpSelect = overlay.querySelector('#crm-door-op') as HTMLSelectElement;
+    const doorOpeningSelect = overlay.querySelector('#crm-door-opening') as HTMLSelectElement;
+    const sidePanelsSelect = overlay.querySelector('#crm-side-panels') as HTMLSelectElement;
+
+    const refreshDoorCompatibilityUI = () => {
+      const curType = typeSelect?.value || 'server';
+      const curDoor = doorSelect?.value || 'perforated';
+      const curDoorOp = doorOpSelect?.value || 'swing-left';
+      const curDoorOpening = doorOpeningSelect?.value || 'front-only';
+
+      const opOptions = getDoorOperationOptions(curDoor, curType);
+      if (doorOpSelect) {
+        doorOpSelect.innerHTML = opOptions.map(opt => `
+          <option value="${opt.value}" ${opt.value === curDoorOp ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>
+            ${opt.displayLabel}
+          </option>
+        `).join('');
+
+        const selectedOpValid = opOptions.find(o => o.value === curDoorOp && o.isApplicable);
+        if (!selectedOpValid) {
+          const fallback = opOptions.find(o => o.isApplicable)?.value || 'swing-left';
+          doorOpSelect.value = fallback;
+        }
+      }
+
+      const openOptions = getDoorOpeningOptions(curDoor, curType);
+      if (doorOpeningSelect) {
+        doorOpeningSelect.innerHTML = openOptions.map(opt => `
+          <option value="${opt.value}" ${opt.value === curDoorOpening ? 'selected' : ''} ${!opt.isApplicable ? 'disabled style="color:#64748b;font-style:italic;"' : ''}>
+            ${opt.displayLabel}
+          </option>
+        `).join('');
+
+        const selectedOpeningValid = openOptions.find(o => o.value === curDoorOpening && o.isApplicable);
+        if (!selectedOpeningValid) {
+          const fallback = openOptions.find(o => o.isApplicable)?.value || 'front-only';
+          doorOpeningSelect.value = fallback;
+        }
+      }
+
+      if (sidePanelsSelect) {
+        if (curType === 'open-frame') {
+          sidePanelsSelect.value = 'false';
+          sidePanelsSelect.disabled = true;
+        } else {
+          sidePanelsSelect.disabled = false;
+        }
+      }
+    };
+
+    typeSelect?.addEventListener('change', () => {
+      if (typeSelect.value === 'open-frame') {
+        if (doorSelect) doorSelect.value = 'none';
+      } else if (doorSelect && doorSelect.value === 'none') {
+        doorSelect.value = 'perforated';
+      }
+      refreshDoorCompatibilityUI();
+    });
+
+    doorSelect?.addEventListener('change', refreshDoorCompatibilityUI);
 
     const colorSelect = overlay.querySelector('#crm-color') as HTMLSelectElement;
     const colorPicker = overlay.querySelector('#crm-color-picker') as HTMLInputElement;

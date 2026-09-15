@@ -71,7 +71,7 @@ export interface AIMessage {
   content: string;
 }
 
-export type AIProviderName = 'claude' | 'local' | 'rules';
+export type AIProviderName = 'gemini' | 'deepseek' | 'openrouter' | 'openai' | 'claude' | 'local' | 'rules';
 
 export interface AIProvider {
   name: AIProviderName;

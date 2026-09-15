@@ -3,7 +3,18 @@ import { AIProvider, AIProviderName, AIHint, AIMessage, RackContext, RackDiff } 
 import { RuleEngine } from './rule-engine';
 
 const LS_KEY = 'rackcad_anthropic_key';
-const MODEL = 'claude-opus-4-7';
+const LS_MODEL_KEY = 'rackcad_anthropic_model';
+export const DEFAULT_CLAUDE_MODEL = 'claude-opus-5';
+
+export const AVAILABLE_CLAUDE_MODELS = [
+  { id: 'claude-opus-5', label: 'claude-opus-5 (Newest Flagship & Maximum Capability)' },
+  { id: 'claude-fable-5', label: 'claude-fable-5 (High-End Creative & Architecture)' },
+  { id: 'claude-sonnet-5', label: 'claude-sonnet-5 (Current Sonnet Generation)' },
+  { id: 'claude-opus-4-8', label: 'claude-opus-4-8 (Active Opus 4 Generation)' },
+  { id: 'claude-sonnet-4-6', label: 'claude-sonnet-4-6 (Active Sonnet 4 Generation)' },
+  { id: 'claude-haiku-4-5-20251001', label: 'claude-haiku-4-5-20251001 (Fast & Economical)' },
+  { id: 'claude-3-7-sonnet-20250219', label: 'claude-3-7-sonnet-20250219 (Hybrid Reasoning)' },
+];
 
 const SYSTEM_PROMPT = `You are an expert datacenter engineer assistant embedded in Rack Slicer, a professional rack design tool.
 You receive the current rack layout as JSON and a user request.
@@ -34,6 +45,14 @@ export class ClaudeProvider implements AIProvider {
 
   private getKey(): string | null {
     return localStorage.getItem(LS_KEY);
+  }
+
+  static getModel(): string {
+    return localStorage.getItem(LS_MODEL_KEY) || DEFAULT_CLAUDE_MODEL;
+  }
+
+  static saveModel(model: string): void {
+    localStorage.setItem(LS_MODEL_KEY, model);
   }
 
   private getClient(): Anthropic | null {
@@ -78,13 +97,12 @@ export class ClaudeProvider implements AIProvider {
     }
 
     const userMessage = buildUserMessage(context, messages);
+    const model = ClaudeProvider.getModel();
 
     try {
       const stream = client.messages.stream({
-        model: MODEL,
-        max_tokens: 2048,
-        thinking: { type: 'adaptive' },
-        output_config: { effort: 'medium' },
+        model,
+        max_tokens: 4096,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       });

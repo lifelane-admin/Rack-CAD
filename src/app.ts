@@ -4,7 +4,11 @@
  */
 import { eventBus } from './core/event-bus';
 import { stateManager } from './core/state';
-import { ClaudeProvider } from './ai/claude-provider';
+import { ClaudeProvider, AVAILABLE_CLAUDE_MODELS } from './ai/claude-provider';
+import { GeminiProvider, AVAILABLE_GEMINI_MODELS } from './ai/gemini-provider';
+import { DeepSeekProvider, AVAILABLE_DEEPSEEK_MODELS } from './ai/deepseek-provider';
+import { OpenRouterProvider, AVAILABLE_OPENROUTER_MODELS } from './ai/openrouter-provider';
+import { OpenAIProvider, AVAILABLE_OPENAI_MODELS } from './ai/openai-provider';
 import { CanvasManager } from './core/canvas';
 import { historyManager } from './core/history';
 import { Toolbar } from './components/toolbar';
@@ -1098,14 +1102,306 @@ export class App {
   private setupAiKeyModal(): void {
     const modal = document.getElementById('ai-key-modal');
     const input = document.getElementById('ai-key-input') as HTMLInputElement;
+    const modelSelect = document.getElementById('ai-model-select') as HTMLSelectElement;
+    const customModelInput = document.getElementById('ai-model-custom-input') as HTMLInputElement;
+    const fetchModelsBtn = document.getElementById('ai-model-fetch-btn');
     const toggleBtn = document.getElementById('ai-key-toggle');
     const skipBtn = document.getElementById('ai-key-skip');
     const connectBtn = document.getElementById('ai-key-connect');
+    const clearBtn = document.getElementById('ai-key-clear');
+    const closeBtn = document.getElementById('ai-modal-close');
+    const tabGemini = document.getElementById('ai-provider-tab-gemini');
+    const tabDeepseek = document.getElementById('ai-provider-tab-deepseek');
+    const tabOpenrouter = document.getElementById('ai-provider-tab-openrouter');
+    const tabOpenai = document.getElementById('ai-provider-tab-openai');
+    const tabClaude = document.getElementById('ai-provider-tab-claude');
+    const descEl = document.getElementById('ai-provider-desc');
+    const labelEl = document.getElementById('ai-key-label');
+    const getKeyLink = document.getElementById('ai-get-key-link') as HTMLAnchorElement;
 
     if (!modal || !input || !toggleBtn || !skipBtn || !connectBtn) return;
 
+    let activeProvider: 'gemini' | 'deepseek' | 'openrouter' | 'openai' | 'claude' = 
+      (localStorage.getItem('rackcad_active_provider') as any) || 
+      (GeminiProvider.hasKey() ? 'gemini' : (DeepSeekProvider.hasKey() ? 'deepseek' : (OpenRouterProvider.hasKey() ? 'openrouter' : (OpenAIProvider.hasKey() ? 'openai' : (ClaudeProvider.hasKey() ? 'claude' : 'gemini')))));
+
+    const getSavedModelForActive = (): string => {
+      switch (activeProvider) {
+        case 'gemini': return GeminiProvider.getModel();
+        case 'deepseek': return DeepSeekProvider.getModel();
+        case 'openrouter': return OpenRouterProvider.getModel();
+        case 'openai': return OpenAIProvider.getModel();
+        case 'claude': return ClaudeProvider.getModel();
+      }
+    };
+
+    const populateModelSelect = (models: { id: string; label: string }[], currentModel: string) => {
+      if (!modelSelect) return;
+      const isKnown = models.some(m => m.id === currentModel);
+      let html = models.map(m => 
+        `<option value="${m.id}" ${m.id === currentModel ? 'selected' : ''}>${m.label}</option>`
+      ).join('');
+      html += `<option value="__custom__" ${!isKnown ? 'selected' : ''}>✏ Custom Model Name...</option>`;
+      modelSelect.innerHTML = html;
+
+      if (customModelInput) {
+        if (!isKnown) {
+          customModelInput.style.display = 'block';
+          customModelInput.value = currentModel;
+        } else {
+          customModelInput.style.display = 'none';
+          customModelInput.value = '';
+        }
+      }
+    };
+
+    modelSelect?.addEventListener('change', () => {
+      if (customModelInput) {
+        if (modelSelect.value === '__custom__') {
+          customModelInput.style.display = 'block';
+          customModelInput.focus();
+        } else {
+          customModelInput.style.display = 'none';
+        }
+      }
+    });
+
+    const renderProviderUI = () => {
+      // reset tabs style
+      [tabGemini, tabDeepseek, tabOpenrouter, tabOpenai, tabClaude].forEach(tab => {
+        if (tab) {
+          tab.style.background = 'transparent';
+          tab.style.color = '#94a3b8';
+        }
+      });
+
+      if (activeProvider === 'gemini') {
+        if (tabGemini) {
+          tabGemini.style.background = '#38bdf8';
+          tabGemini.style.color = '#0b0f19';
+        }
+        if (descEl) {
+          descEl.innerHTML = 'Use <strong>Google Gemini API</strong> for ultra-fast generation with a generous <strong>Free Tier</strong> (No credit card needed).';
+        }
+        if (labelEl) labelEl.textContent = 'Gemini API Key';
+        if (getKeyLink) {
+          getKeyLink.href = 'https://aistudio.google.com/app/apikey';
+          getKeyLink.textContent = 'Get Free Key ↗';
+        }
+
+        populateModelSelect(AVAILABLE_GEMINI_MODELS, GeminiProvider.getModel());
+
+        input.value = '';
+        if (GeminiProvider.hasKey()) {
+          input.placeholder = '•••••••••••••••••••••••••••••••• (Saved)';
+          if (clearBtn) clearBtn.style.display = 'inline-block';
+        } else {
+          input.placeholder = 'AIzaSy... / AQ...';
+          if (clearBtn) clearBtn.style.display = 'none';
+        }
+      } else if (activeProvider === 'deepseek') {
+        if (tabDeepseek) {
+          tabDeepseek.style.background = '#0284c7';
+          tabDeepseek.style.color = '#ffffff';
+        }
+        if (descEl) {
+          descEl.innerHTML = 'Connect your <strong>DeepSeek API Key</strong> for DeepSeek-V3 and DeepSeek-R1 reasoning models (Extremely cost efficient).';
+        }
+        if (labelEl) labelEl.textContent = 'DeepSeek API Key';
+        if (getKeyLink) {
+          getKeyLink.href = 'https://platform.deepseek.com/api_keys';
+          getKeyLink.textContent = 'Get DeepSeek Key ↗';
+        }
+
+        populateModelSelect(AVAILABLE_DEEPSEEK_MODELS, DeepSeekProvider.getModel());
+
+        input.value = '';
+        if (DeepSeekProvider.hasKey()) {
+          input.placeholder = '•••••••••••••••••••••••••••••••• (Saved)';
+          if (clearBtn) clearBtn.style.display = 'inline-block';
+        } else {
+          input.placeholder = 'sk-...';
+          if (clearBtn) clearBtn.style.display = 'none';
+        }
+      } else if (activeProvider === 'openrouter') {
+        if (tabOpenrouter) {
+          tabOpenrouter.style.background = '#6366f1';
+          tabOpenrouter.style.color = '#ffffff';
+        }
+        if (descEl) {
+          descEl.innerHTML = 'Connect <strong>OpenRouter API Key</strong> to access <strong>Qwen 2.5 72B</strong>, DeepSeek R1, and Llama 3.3 with 1 single key.';
+        }
+        if (labelEl) labelEl.textContent = 'OpenRouter API Key';
+        if (getKeyLink) {
+          getKeyLink.href = 'https://openrouter.ai/keys';
+          getKeyLink.textContent = 'Get OpenRouter Key ↗';
+        }
+
+        populateModelSelect(AVAILABLE_OPENROUTER_MODELS, OpenRouterProvider.getModel());
+
+        input.value = '';
+        if (OpenRouterProvider.hasKey()) {
+          input.placeholder = '•••••••••••••••••••••••••••••••• (Saved)';
+          if (clearBtn) clearBtn.style.display = 'inline-block';
+        } else {
+          input.placeholder = 'sk-or-v1-...';
+          if (clearBtn) clearBtn.style.display = 'none';
+        }
+      } else if (activeProvider === 'openai') {
+        if (tabOpenai) {
+          tabOpenai.style.background = '#10b981';
+          tabOpenai.style.color = '#0b0f19';
+        }
+        if (descEl) {
+          descEl.innerHTML = 'Connect your <strong>OpenAI API Key</strong> for GPT-4.5 Preview, GPT-4o, and o3-mini reasoning models.';
+        }
+        if (labelEl) labelEl.textContent = 'OpenAI API Key';
+        if (getKeyLink) {
+          getKeyLink.href = 'https://platform.openai.com/api-keys';
+          getKeyLink.textContent = 'Get OpenAI Key ↗';
+        }
+
+        populateModelSelect(AVAILABLE_OPENAI_MODELS, OpenAIProvider.getModel());
+
+        input.value = '';
+        if (OpenAIProvider.hasKey()) {
+          input.placeholder = '•••••••••••••••••••••••••••••••• (Saved)';
+          if (clearBtn) clearBtn.style.display = 'inline-block';
+        } else {
+          input.placeholder = 'sk-proj-...';
+          if (clearBtn) clearBtn.style.display = 'none';
+        }
+      } else {
+        if (tabClaude) {
+          tabClaude.style.background = '#38bdf8';
+          tabClaude.style.color = '#0b0f19';
+        }
+        if (descEl) {
+          descEl.innerHTML = 'Connect your <strong>Anthropic Claude API Key</strong> (requires prepaid credits on Anthropic Console).';
+        }
+        if (labelEl) labelEl.textContent = 'Anthropic API Key';
+        if (getKeyLink) {
+          getKeyLink.href = 'https://console.anthropic.com/settings/keys';
+          getKeyLink.textContent = 'Get Claude Key ↗';
+        }
+
+        populateModelSelect(AVAILABLE_CLAUDE_MODELS, ClaudeProvider.getModel());
+
+        input.value = '';
+        if (ClaudeProvider.hasKey()) {
+          input.placeholder = '•••••••••••••••••••••••••••••••• (Saved)';
+          if (clearBtn) clearBtn.style.display = 'inline-block';
+        } else {
+          input.placeholder = 'sk-ant-api03-...';
+          if (clearBtn) clearBtn.style.display = 'none';
+        }
+      }
+    };
+
+    fetchModelsBtn?.addEventListener('click', async () => {
+      const enteredKey = input.value.trim();
+      let keyToUse = enteredKey;
+      if (!keyToUse) {
+        if (activeProvider === 'gemini') keyToUse = localStorage.getItem('rackcad_gemini_key') || '';
+        else if (activeProvider === 'openai') keyToUse = localStorage.getItem('rackcad_openai_key') || '';
+        else if (activeProvider === 'openrouter') keyToUse = localStorage.getItem('rackcad_openrouter_key') || '';
+        else if (activeProvider === 'deepseek') keyToUse = localStorage.getItem('rackcad_deepseek_key') || '';
+        else if (activeProvider === 'claude') keyToUse = localStorage.getItem('rackcad_anthropic_key') || '';
+      }
+
+      if (!keyToUse) {
+        eventBus.emit('notification', { message: 'Please paste your API Key first to detect available models', type: 'warning' });
+        return;
+      }
+
+      fetchModelsBtn.textContent = 'Detecting...';
+      try {
+        if (activeProvider === 'gemini') {
+          const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(keyToUse)}`);
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const data = await resp.json();
+          if (data.models && Array.isArray(data.models)) {
+            const detected = data.models
+              .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+              .map((m: any) => {
+                const id = m.name.replace(/^models\//, '');
+                return { id, label: `${m.displayName || id} (${id})` };
+              });
+            if (detected.length > 0) {
+              populateModelSelect(detected, detected[0].id);
+              eventBus.emit('notification', { message: `✓ Loaded ${detected.length} live models from Google Gemini API!`, type: 'success' });
+            }
+          }
+        } else if (activeProvider === 'openrouter') {
+          const resp = await fetch('https://openrouter.ai/api/v1/models');
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const data = await resp.json();
+          if (data.data && Array.isArray(data.data)) {
+            const detected = data.data.slice(0, 30).map((m: any) => ({ id: m.id, label: `${m.name || m.id}` }));
+            populateModelSelect(detected, detected[0].id);
+            eventBus.emit('notification', { message: `✓ Loaded ${detected.length} OpenRouter models!`, type: 'success' });
+          }
+        } else {
+          eventBus.emit('notification', { message: `All verified models are listed in the dropdown. You can also select "Custom Model Name" to type any ID.`, type: 'info' });
+        }
+      } catch (err) {
+        eventBus.emit('notification', { message: `Could not auto-detect: ${err instanceof Error ? err.message : String(err)}`, type: 'warning' });
+      } finally {
+        fetchModelsBtn.textContent = 'Auto-Detect Models ↻';
+      }
+    });
+
+    tabGemini?.addEventListener('click', () => {
+      activeProvider = 'gemini';
+      renderProviderUI();
+    });
+
+    tabDeepseek?.addEventListener('click', () => {
+      activeProvider = 'deepseek';
+      renderProviderUI();
+    });
+
+    tabOpenrouter?.addEventListener('click', () => {
+      activeProvider = 'openrouter';
+      renderProviderUI();
+    });
+
+    tabOpenai?.addEventListener('click', () => {
+      activeProvider = 'openai';
+      renderProviderUI();
+    });
+
+    tabClaude?.addEventListener('click', () => {
+      activeProvider = 'claude';
+      renderProviderUI();
+    });
+
+    renderProviderUI();
+
     toggleBtn.addEventListener('click', () => {
       input.type = input.type === 'password' ? 'text' : 'password';
+    });
+
+    closeBtn?.addEventListener('click', () => {
+      modal.classList.add('hidden');
+    });
+
+    clearBtn?.addEventListener('click', () => {
+      if (activeProvider === 'gemini') {
+        GeminiProvider.clearKey();
+      } else if (activeProvider === 'deepseek') {
+        DeepSeekProvider.clearKey();
+      } else if (activeProvider === 'openrouter') {
+        OpenRouterProvider.clearKey();
+      } else if (activeProvider === 'openai') {
+        OpenAIProvider.clearKey();
+      } else {
+        ClaudeProvider.clearKey();
+      }
+      input.value = '';
+      renderProviderUI();
+      const name = activeProvider === 'gemini' ? 'Gemini' : activeProvider === 'deepseek' ? 'DeepSeek' : activeProvider === 'openrouter' ? 'OpenRouter' : activeProvider === 'openai' ? 'OpenAI' : 'Claude';
+      eventBus.emit('notification', { message: `${name} key cleared.`, type: 'info' });
     });
 
     skipBtn.addEventListener('click', () => {
@@ -1116,10 +1412,50 @@ export class App {
 
     connectBtn.addEventListener('click', () => {
       const key = input.value.trim();
-      if (key) {
-        ClaudeProvider.saveKey(key);
-        eventBus.emit('notification', { message: 'Claude API key saved', type: 'success' });
+      localStorage.setItem('rackcad_active_provider', activeProvider);
+
+      let chosenModel = modelSelect ? modelSelect.value : '';
+      if (chosenModel === '__custom__' && customModelInput) {
+        chosenModel = customModelInput.value.trim();
       }
+
+      if (activeProvider === 'gemini') {
+        if (key) GeminiProvider.saveKey(key);
+        if (chosenModel) GeminiProvider.saveModel(chosenModel);
+        if (key || GeminiProvider.hasKey()) {
+          eventBus.emit('notification', { message: '✨ Google Gemini connected & enabled', type: 'success' });
+          eventBus.emit('ai:provider-changed', 'gemini');
+        }
+      } else if (activeProvider === 'deepseek') {
+        if (key) DeepSeekProvider.saveKey(key);
+        if (chosenModel) DeepSeekProvider.saveModel(chosenModel);
+        if (key || DeepSeekProvider.hasKey()) {
+          eventBus.emit('notification', { message: '🐋 DeepSeek connected & enabled', type: 'success' });
+          eventBus.emit('ai:provider-changed', 'deepseek');
+        }
+      } else if (activeProvider === 'openrouter') {
+        if (key) OpenRouterProvider.saveKey(key);
+        if (chosenModel) OpenRouterProvider.saveModel(chosenModel);
+        if (key || OpenRouterProvider.hasKey()) {
+          eventBus.emit('notification', { message: '🌐 OpenRouter (Qwen) connected & enabled', type: 'success' });
+          eventBus.emit('ai:provider-changed', 'openrouter');
+        }
+      } else if (activeProvider === 'openai') {
+        if (key) OpenAIProvider.saveKey(key);
+        if (chosenModel) OpenAIProvider.saveModel(chosenModel);
+        if (key || OpenAIProvider.hasKey()) {
+          eventBus.emit('notification', { message: '🟢 OpenAI connected & enabled', type: 'success' });
+          eventBus.emit('ai:provider-changed', 'openai');
+        }
+      } else {
+        if (key) ClaudeProvider.saveKey(key);
+        if (chosenModel) ClaudeProvider.saveModel(chosenModel);
+        if (key || ClaudeProvider.hasKey()) {
+          eventBus.emit('notification', { message: '☁ Claude AI connected & enabled', type: 'success' });
+          eventBus.emit('ai:provider-changed', 'claude');
+        }
+      }
+
       modal.classList.add('hidden');
       stateManager.setState({ aiMode: true });
       eventBus.emit('ai:mode-changed', true);
@@ -1128,8 +1464,6 @@ export class App {
     document.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
         modal.classList.add('hidden');
-        stateManager.setState({ aiMode: true });
-        eventBus.emit('ai:mode-changed', true);
       }
     });
   }

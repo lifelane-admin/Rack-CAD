@@ -67,6 +67,10 @@ export class FloatingToolbar {
       this.render();
     });
 
+    EventBus.on('ai:mode-changed', () => {
+      this.render();
+    });
+
     EventBus.on('view:toggle-floating-toolbar', () => {
       const newVisible = !State.getState().floatingToolbarVisible;
       State.setState({ floatingToolbarVisible: newVisible });
@@ -79,6 +83,10 @@ export class FloatingToolbar {
         this.isCableMenuOpen = false;
         this.render();
       }
+    });
+
+    window.addEventListener('resize', () => {
+      if (this.isCableMenuOpen) this.updateMenuPlacement();
     });
   }
 
@@ -144,6 +152,50 @@ export class FloatingToolbar {
       this.element.style.top = `${this.toolbarY}px`;
       this.element.style.bottom = 'auto';
       this.element.style.transform = 'none';
+    }
+    this.updateMenuPlacement();
+  }
+
+  private updateMenuPlacement() {
+    if (!this.element || !this.isCableMenuOpen) return;
+    const menu = this.element.querySelector('#ft-cable-menu') as HTMLElement;
+    if (!menu) return;
+
+    const toolbarRect = this.element.getBoundingClientRect();
+    const viewport = document.getElementById('canvas-viewport') || document.body;
+    const vpRect = viewport.getBoundingClientRect();
+
+    // Calculate available vertical space relative to viewport and window
+    const spaceAbove = toolbarRect.top - Math.max(0, vpRect.top);
+    const spaceBelow = Math.min(window.innerHeight, vpRect.bottom) - toolbarRect.bottom;
+
+    // If space above is constrained (< 340px) or space below is larger, open downwards; else upwards
+    const openDown = spaceAbove < 340 || (spaceBelow > spaceAbove && spaceAbove < 460);
+
+    if (openDown) {
+      menu.classList.add('open-down');
+      menu.classList.remove('open-up');
+      menu.style.top = 'calc(100% + 8px)';
+      menu.style.bottom = 'auto';
+      const maxH = Math.max(160, Math.min(480, Math.floor(spaceBelow - 20)));
+      menu.style.maxHeight = `${maxH}px`;
+    } else {
+      menu.classList.add('open-up');
+      menu.classList.remove('open-down');
+      menu.style.bottom = 'calc(100% + 8px)';
+      menu.style.top = 'auto';
+      const maxH = Math.max(160, Math.min(480, Math.floor(spaceAbove - 20)));
+      menu.style.maxHeight = `${maxH}px`;
+    }
+
+    // Horizontal edge safety check
+    const menuWidth = menu.offsetWidth || 340;
+    if (toolbarRect.left + menuWidth > vpRect.right - 10) {
+      menu.style.left = 'auto';
+      menu.style.right = '14px';
+    } else {
+      menu.style.left = '14px';
+      menu.style.right = 'auto';
     }
   }
 
@@ -222,6 +274,7 @@ export class FloatingToolbar {
     const isAirdropDestination = !!state.airdropDestination;
     const show3D = !!state.show3DPanel;
     const isDcWorkflow = state.workflowMode === 'datacenter' || Boolean(state.activeElevationRackId);
+    const isAiMode = !!state.aiMode;
 
     const activeColor = cable ? cable.color : (state.selectedCableColor || '#2563eb');
     const selectedType = state.selectedCableType || 'general';
@@ -429,10 +482,10 @@ export class FloatingToolbar {
         </div>
 
         <!-- AI Mode Button (Neon Gradient Ring) -->
-        <div class="ft-ai-btn" id="ft-ai-mode-btn" title="AI Autonomous Layout & Wiring Mode">
+        <div class="ft-ai-btn ${isAiMode ? 'active' : ''}" id="ft-ai-mode-btn" title="AI Autonomous Layout & Wiring Assistant">
           <span class="ft-ai-text">ai</span>
           <span class="ft-ai-sub">Mode</span>
-          <div class="ft-ai-tooltip">🤖 AI Mode — Coming Soon</div>
+          <div class="ft-ai-tooltip">⚡ AI Assistant & Auto-Layout</div>
         </div>
       </div>
 
@@ -456,6 +509,7 @@ export class FloatingToolbar {
 
     this.applyPosition();
     this.bindEvents();
+    requestAnimationFrame(() => this.updateMenuPlacement());
   }
 
   private bindEvents() {
@@ -553,10 +607,17 @@ export class FloatingToolbar {
 
     // AI Mode Button Click & Hover
     this.element.querySelector('#ft-ai-mode-btn')?.addEventListener('click', () => {
-      EventBus.emit('notification', {
-        message: '✨ AI Mode is coming soon! Automated rack layout and auto-wiring engine is in development.',
-        type: 'info'
-      });
+      const current = State.getState().aiMode;
+      const newMode = !current;
+      State.setState({ aiMode: newMode });
+      EventBus.emit('ai:mode-changed', newMode);
+      if (newMode) {
+        EventBus.emit('notification', {
+          message: '⚡ AI Assistant Panel Opened',
+          type: 'success'
+        });
+      }
+      this.render();
     });
 
     if (this.selectedCableId) {
