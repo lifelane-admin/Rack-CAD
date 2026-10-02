@@ -9,7 +9,7 @@ describe('SYSTEM_PROMPT', () => {
 
   it('contains the JSON output contract', () => {
     expect(SYSTEM_PROMPT).toContain('"explanation"');
-    expect(SYSTEM_PROMPT).toContain('"diff"');
+    expect(SYSTEM_PROMPT).toContain('"diff": <RackDiff');
   });
 
   it('maps Hyper-V host to server-2u-enterprise', () => {
@@ -36,7 +36,7 @@ describe('SYSTEM_PROMPT', () => {
   });
 
   it('maps heartbeat/cluster to general cable type', () => {
-    expect(SYSTEM_PROMPT).toContain('general');
+    expect(SYSTEM_PROMPT).toContain('| general |');
     expect(SYSTEM_PROMPT).toContain('#78909c');
   });
 
