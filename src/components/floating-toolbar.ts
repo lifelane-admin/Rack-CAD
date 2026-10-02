@@ -281,17 +281,20 @@ export class FloatingToolbar {
     const activeCatalogOption = ALL_CABLE_ITEMS.find(c => c.type === selectedType) || ALL_CABLE_ITEMS[0];
 
     const swatches = [
-      '#fb8c00', // Orange
-      '#f57c00', // Amber
-      '#fdd835', // Yellow
-      '#43a047', // Green
-      '#8e24aa', // Purple
-      '#1e88e5', // Blue
-      '#e53935', // Red
+      '#ef4444', // Red
+      '#f97316', // Orange
+      '#f59e0b', // Amber / Dark Yellow
+      '#eab308', // Bright Yellow
+      '#10b981', // Green
+      '#06b6d4', // Cyan / Teal
+      '#3b82f6', // Blue
+      '#8b5cf6', // Purple
+      '#1e293b', // Dark Navy
+      '#ffffff', // White
     ];
 
     this.element.innerHTML = `
-      <!-- Row 1: Drag handle, Swap to Datacenter (if DC workflow), Select, Rotate, Move, Undo, Redo, Delete, Anchors, Inserts, 2D/3D -->
+      <!-- Row 1: Drag handle, Select, Rotate, Move, Undo, Redo, Delete, Anchors, Inserts, 2D/3D, AI Mode -->
       <div class="ft-row" id="ft-row-1">
         <div class="ft-drag-handle" title="Drag to reposition toolbar">
           <span class="ft-drag-dots">⋮⋮</span>
@@ -435,9 +438,16 @@ export class FloatingToolbar {
           <div class="ft-toggle-knob"></div>
           <span class="ft-toggle-label ${show3D ? 'active' : ''}">3D</span>
         </div>
+
+        <!-- AI Mode Button (Neon Gradient Ring on Top Right) -->
+        <div class="ft-ai-btn ${isAiMode ? 'active' : ''}" id="ft-ai-mode-btn" title="AI Autonomous Layout & Wiring Assistant">
+          <span class="ft-ai-text">ai</span>
+          <span class="ft-ai-sub">Mode</span>
+          <div class="ft-ai-tooltip">⚡ AI Assistant & Auto-Layout</div>
+        </div>
       </div>
 
-      <!-- Row 2: Cable Type Selector Pill, AirDrop, Color Swatches Capsule, AI Mode -->
+      <!-- Row 2: Cable Type Selector Pill, AirDrop, Color Swatches Capsule -->
       <div class="ft-row" id="ft-row-2">
         <!-- Cable Selector Pill -->
         <div class="ft-cable-selector ${this.isCableMenuOpen ? 'menu-open' : ''} ${isCableMode ? 'active' : ''}" id="ft-cable-selector-btn" title="Click to choose cable type and start cabling">
@@ -460,32 +470,22 @@ export class FloatingToolbar {
               <path d="M8 11l4 4 4-4"/>
             </svg>
           </button>
-          <span class="ft-btn-label" style="color: ${isAirdropDestination ? '#58a6ff' : '#8b929d'}">AirDrop</span>
+          <span class="ft-btn-label" style="color: ${isAirdropDestination ? '#38bdf8' : '#8b929d'}">AirDrop</span>
         </div>
 
         <!-- Color Palette Swatches Capsule -->
         <div class="ft-colors-capsule" id="ft-cable-colors">
-          <div class="ft-colors-core-bubble">
-            ${['#fb8c00', '#f57c00', '#fdd835', '#43a047', '#8e24aa'].map(hex => `
-              <div class="ft-swatch ${activeColor.toLowerCase() === hex.toLowerCase() ? 'active' : ''}"
-                   style="background-color: ${hex}; color: ${hex};"
-                   data-color="${hex}"></div>
-            `).join('')}
-          </div>
-          ${['#1e88e5', '#e53935'].map(hex => `
+          ${swatches.map(hex => `
             <div class="ft-swatch ${activeColor.toLowerCase() === hex.toLowerCase() ? 'active' : ''}"
                  style="background-color: ${hex}; color: ${hex};"
                  data-color="${hex}"></div>
           `).join('')}
-          <button class="ft-color-add-btn" id="ft-color-add-btn" title="Add custom color">+</button>
+          <button class="ft-color-palette-btn" id="ft-color-add-btn" title="Choose custom color">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10c1.38 0 2.5-1.12 2.5-2.5 0-.61-.23-1.2-.64-1.67-.4-.46-.62-1.05-.62-1.71 0-1.38 1.12-2.5 2.5-2.5H18c2.21 0 4-1.79 4-4 0-4.97-4.46-9-10-9zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 8 6.5 8s1.5.67 1.5 1.5S7.33 11 6.5 11zm3-4c-.83 0-1.5-.67-1.5-1.5S8.67 4 9.5 4s1.5.67 1.5 1.5S10.33 7 9.5 7zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 4 14.5 4s1.5.67 1.5 1.5S15.33 7 14.5 7zm3 4c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+            </svg>
+          </button>
           <input type="color" id="ft-custom-color-input" style="position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0;" />
-        </div>
-
-        <!-- AI Mode Button (Neon Gradient Ring) -->
-        <div class="ft-ai-btn ${isAiMode ? 'active' : ''}" id="ft-ai-mode-btn" title="AI Autonomous Layout & Wiring Assistant">
-          <span class="ft-ai-text">ai</span>
-          <span class="ft-ai-sub">Mode</span>
-          <div class="ft-ai-tooltip">⚡ AI Assistant & Auto-Layout</div>
         </div>
       </div>
 

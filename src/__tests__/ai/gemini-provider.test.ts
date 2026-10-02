@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { GeminiProvider, DEFAULT_GEMINI_MODEL, AVAILABLE_GEMINI_MODELS } from '../../ai/gemini-provider';
+import { GeminiProvider, DEFAULT_GEMINI_MODEL, AVAILABLE_GEMINI_MODELS, normalizeGeminiModel, cleanJsonResponse } from '../../ai/gemini-provider';
 import { ProviderRegistry } from '../../ai/provider-registry';
 
 describe('GeminiProvider', () => {
@@ -24,12 +24,16 @@ describe('GeminiProvider', () => {
     expect(await provider.isAvailable()).toBe(false);
   });
 
-  it('supports model selection and defaults', () => {
+  it('supports model selection, normalization, and defaults', () => {
     expect(GeminiProvider.getModel()).toBe(DEFAULT_GEMINI_MODEL);
+    expect(DEFAULT_GEMINI_MODEL).toBe('gemini-3.6-flash');
     expect(AVAILABLE_GEMINI_MODELS.length).toBeGreaterThan(1);
 
-    GeminiProvider.saveModel('gemini-3.1-pro-preview');
-    expect(GeminiProvider.getModel()).toBe('gemini-3.1-pro-preview');
+    expect(normalizeGeminiModel('gemini-3.6')).toBe('gemini-3.6-flash');
+    expect(normalizeGeminiModel('gemini-3.8-flash')).toBe('gemini-3.6-flash');
+
+    GeminiProvider.saveModel('gemini-2.5-pro');
+    expect(GeminiProvider.getModel()).toBe('gemini-2.5-pro');
   });
 
   it('integrates with ProviderRegistry preference', async () => {
@@ -39,5 +43,24 @@ describe('GeminiProvider', () => {
 
     const detected = await registry.detect();
     expect(detected.name).toBe('gemini');
+  });
+
+  it('cleans json codeblocks and extracts diffs correctly', () => {
+    const provider = new GeminiProvider();
+    const rawMarkdown = `\`\`\`json
+{
+  "explanation": "Added 2 servers",
+  "diff": {
+    "addDevices": [{ "name": "Server 1", "ruStart": 5 }]
+  }
+}
+\`\`\``;
+
+    const cleaned = cleanJsonResponse(rawMarkdown);
+    expect(cleaned.startsWith('{')).toBe(true);
+
+    const parsed = provider.parseDiff(rawMarkdown);
+    expect(parsed.explanation).toBe('Added 2 servers');
+    expect(parsed.diff).not.toBeNull();
   });
 });

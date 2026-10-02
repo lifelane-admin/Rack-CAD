@@ -138,8 +138,12 @@ export class AIPanel {
 
     let text = raw;
     try {
-      if (raw.trim().startsWith('{')) {
-        const parsed = JSON.parse(raw);
+      let cleaned = raw.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+      }
+      if (cleaned.startsWith('{')) {
+        const parsed = JSON.parse(cleaned);
         if (parsed && typeof parsed.explanation === 'string') {
           text = parsed.explanation;
         }
@@ -148,8 +152,11 @@ export class AIPanel {
       // not JSON
     }
 
-    const enableMatch = text.includes('Enable Claude or Local AI for natural language requests');
-    const cleanText = text.replace(/\(Enable Claude or Local AI for natural language requests\.\)/g, '').trim();
+    const enableMatch = text.includes('Enable Claude or Local AI for natural language requests') || text.includes('No AI API Key connected');
+    const cleanText = text
+      .replace(/\(Enable Claude or Local AI for natural language requests\.\)/g, '')
+      .replace(/\(No AI API Key connected\. Click ⚙ AI Settings to connect Google Gemini, DeepSeek, OpenAI, or Claude for natural language CAD generation\.\)/g, '')
+      .trim();
 
     const paragraphs = cleanText.split('\n');
     paragraphs.forEach((line) => {
@@ -173,10 +180,10 @@ export class AIPanel {
       const banner = document.createElement('div');
       banner.style.cssText = 'margin-top: 12px; padding: 10px 12px; background: rgba(56,189,248,0.08); border: 1px dashed rgba(56,189,248,0.35); border-radius: 6px; font-size: 11px;';
       banner.innerHTML = `
-        <div style="color: #38bdf8; font-weight: 700; margin-bottom: 4px; font-size: 12px;">⚡ Connect Claude for Autonomous CAD Generation</div>
-        <div style="color: #94a3b8; margin-bottom: 8px; line-height: 1.4;">To automatically place Proxmox servers, Top-of-Rack switches, and route colored Ceph/migration cables from natural language, connect your personal Claude API Key.</div>
+        <div style="color: #38bdf8; font-weight: 700; margin-bottom: 4px; font-size: 12px;">✨ Connect Gemini or AI Provider for Autonomous CAD Generation</div>
+        <div style="color: #94a3b8; margin-bottom: 8px; line-height: 1.4;">To automatically place servers, Top-of-Rack switches, and route cables from natural language, connect your Google Gemini API Key or other preferred AI provider.</div>
         <button class="ai-connect-btn" style="background: #38bdf8; color: #0d1117; font-weight: 700; border: none; border-radius: 4px; padding: 6px 12px; font-size: 11px; cursor: pointer; transition: transform 0.15s ease;">
-          🔑 Connect Claude API Key
+          🔑 Connect AI API Key
         </button>
       `;
       banner.querySelector('.ai-connect-btn')?.addEventListener('click', () => {

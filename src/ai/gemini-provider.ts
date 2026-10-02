@@ -3,16 +3,24 @@ import { RuleEngine } from './rule-engine';
 
 const LS_KEY = 'rackcad_gemini_key';
 const LS_MODEL_KEY = 'rackcad_gemini_model';
-export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.6-flash';
 
 export const AVAILABLE_GEMINI_MODELS = [
-  { id: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Latest Stable High-Performance Flash)' },
-  { id: 'gemini-3.7-flash', label: 'gemini-3.7-flash (Strong Agentic & Coding Flash)' },
-  { id: 'gemini-3.6-flash', label: 'gemini-3.6-flash (Multimodal / General Purpose)' },
-  { id: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (High-Volume / Low-Cost)' },
-  { id: 'gemini-3.1-pro-preview', label: 'gemini-3.1-pro-preview (Advanced Reasoning)' },
+  { id: 'gemini-3.6-flash', label: 'gemini-3.6-flash (Fast & Intelligent Multimodal)' },
+  { id: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Ultra-Fast Flash)' },
+  { id: 'gemini-2.5-flash-lite', label: 'gemini-2.5-flash-lite (High-Volume / Low-Cost)' },
   { id: 'gemini-2.5-pro', label: 'gemini-2.5-pro (Advanced Reasoning)' },
+  { id: 'gemini-2.0-flash', label: 'gemini-2.0-flash (Fast Multimodal)' },
+  { id: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Legacy Flash)' },
 ];
+
+export function normalizeGeminiModel(model: string): string {
+  let clean = model.replace(/^models\//, '').trim();
+  if (!clean) return DEFAULT_GEMINI_MODEL;
+  if (clean === 'gemini-3.6') return 'gemini-3.6-flash';
+  if (clean === 'gemini-3.8-flash' || clean === 'gemini-3.7-flash') return 'gemini-3.6-flash';
+  return clean;
+}
 
 const SYSTEM_PROMPT = `You are an expert datacenter engineer assistant embedded in Rack Slicer, a professional rack design tool.
 You receive the current rack layout as JSON and a user request.
@@ -35,6 +43,19 @@ function buildUserMessage(context: RackContext, messages: AIMessage[]): string {
   return `[CONTEXT]\n${contextJson}\n\n${history ? `[HISTORY]\n${history}\n\n` : ''}[REQUEST]\n${last}`;
 }
 
+export function cleanJsonResponse(raw: string): string {
+  let cleaned = raw.trim();
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  }
+  const startIdx = cleaned.indexOf('{');
+  const endIdx = cleaned.lastIndexOf('}');
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    cleaned = cleaned.substring(startIdx, endIdx + 1);
+  }
+  return cleaned;
+}
+
 export class GeminiProvider implements AIProvider {
   readonly name: AIProviderName = 'gemini';
   private fallback = new RuleEngine();
@@ -44,11 +65,12 @@ export class GeminiProvider implements AIProvider {
   }
 
   static getModel(): string {
-    return localStorage.getItem(LS_MODEL_KEY) || DEFAULT_GEMINI_MODEL;
+    const raw = localStorage.getItem(LS_MODEL_KEY) || DEFAULT_GEMINI_MODEL;
+    return normalizeGeminiModel(raw);
   }
 
   static saveModel(model: string): void {
-    localStorage.setItem(LS_MODEL_KEY, model);
+    localStorage.setItem(LS_MODEL_KEY, normalizeGeminiModel(model));
   }
 
   static saveKey(key: string): void {
@@ -79,7 +101,7 @@ export class GeminiProvider implements AIProvider {
     }
 
     const model = GeminiProvider.getModel();
-    const cleanModel = model.replace(/^models\//, '');
+    const cleanModel = normalizeGeminiModel(model);
     const userPrompt = buildUserMessage(context, messages);
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:streamGenerateContent?alt=sse&key=${encodeURIComponent(key)}`;
@@ -109,10 +131,35 @@ export class GeminiProvider implements AIProvider {
         body: JSON.stringify(payload),
       });
 
-      // If requested model encounters high demand (503/429) or is not found (404/400), try fallback models
+      // If requested model streaming encounters errors (503/429/404/400), try non-streaming generateContent and fallback models
       if (!response.ok && (response.status === 503 || response.status === 429 || response.status === 404 || response.status === 400)) {
+        // Try non-streaming endpoint for primary model first
+        try {
+          const nonStreamEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${encodeURIComponent(key)}`;
+          const nsResp = await fetch(nonStreamEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': key,
+            },
+            body: JSON.stringify(payload),
+          });
+          if (nsResp.ok) {
+            const data = await nsResp.json();
+            const textPart = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (textPart) {
+              yield textPart;
+              return;
+            }
+          }
+        } catch {
+          // ignore
+        }
+
         const fallbackCandidates = [
+          'gemini-3.6-flash',
           'gemini-2.5-flash',
+          'gemini-2.5-flash-lite',
           'gemini-2.0-flash',
           'gemini-1.5-flash',
           'gemini-2.5-pro',
@@ -120,7 +167,7 @@ export class GeminiProvider implements AIProvider {
 
         for (const candidate of fallbackCandidates) {
           try {
-            const fallbackEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${candidate}:streamGenerateContent?alt=sse&key=${encodeURIComponent(key)}`;
+            const fallbackEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${candidate}:generateContent?key=${encodeURIComponent(key)}`;
             const fallbackResp = await fetch(fallbackEndpoint, {
               method: 'POST',
               headers: {
@@ -130,8 +177,12 @@ export class GeminiProvider implements AIProvider {
               body: JSON.stringify(payload),
             });
             if (fallbackResp.ok) {
-              response = fallbackResp;
-              break;
+              const data = await fallbackResp.json();
+              const textPart = data.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (textPart) {
+                yield textPart;
+                return;
+              }
             }
           } catch {
             // continue fallback search
@@ -151,7 +202,7 @@ export class GeminiProvider implements AIProvider {
           // ignore
         }
         yield JSON.stringify({ 
-          explanation: `Gemini error: ${errMsg}\n\n💡 **Tip**: Google's servers are temporarily experiencing high demand on this model. You can:\n1. Click **AI Settings (⚙)** and switch to another model (e.g., \`gemini-2.5-flash\` or \`gemini-2.0-flash\`).\n2. Or switch to **🐋 DeepSeek**, **🌐 OpenRouter**, or **🟢 OpenAI** in the AI Settings dialog.`, 
+          explanation: `Gemini error: ${errMsg}\n\n💡 **Tip**: Please verify your API key or try switching models in AI Settings (⚙). Recommended models: \`gemini-3.6-flash\` or \`gemini-2.5-flash\`.`, 
           diff: null 
         });
         return;
@@ -165,6 +216,7 @@ export class GeminiProvider implements AIProvider {
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
+      let hasYielded = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -184,6 +236,7 @@ export class GeminiProvider implements AIProvider {
             const data = JSON.parse(jsonStr);
             const textPart = data.candidates?.[0]?.content?.parts?.[0]?.text;
             if (textPart) {
+              hasYielded = true;
               yield textPart;
             }
           } catch {
@@ -198,11 +251,30 @@ export class GeminiProvider implements AIProvider {
           const data = JSON.parse(jsonStr);
           const textPart = data.candidates?.[0]?.content?.parts?.[0]?.text;
           if (textPart) {
+            hasYielded = true;
             yield textPart;
           }
         } catch {
           // ignore
         }
+      } else if (!hasYielded && buffer.trim()) {
+        try {
+          const data = JSON.parse(buffer.trim());
+          const textPart = data.candidates?.[0]?.content?.parts?.[0]?.text || (typeof data.explanation === 'string' ? JSON.stringify(data) : null);
+          if (textPart) {
+            hasYielded = true;
+            yield textPart;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!hasYielded) {
+        yield JSON.stringify({
+          explanation: 'Gemini returned an empty response. Please try rephrasing your request or checking your API key quota.',
+          diff: null,
+        });
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -211,6 +283,19 @@ export class GeminiProvider implements AIProvider {
   }
 
   parseDiff(raw: string): RackDiff {
+    const cleaned = cleanJsonResponse(raw);
+    try {
+      const parsed = JSON.parse(cleaned);
+      if (
+        parsed &&
+        typeof parsed.explanation === 'string' &&
+        (parsed.diff === null || (typeof parsed.diff === 'object' && !Array.isArray(parsed.diff)))
+      ) {
+        return parsed as RackDiff;
+      }
+    } catch {
+      // not direct JSON
+    }
     return this.fallback.parseDiff(raw);
   }
 }

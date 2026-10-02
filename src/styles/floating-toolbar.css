@@ -394,31 +394,19 @@ body.hybrid-merged #cloud-floating-toolbar {
 .ft-colors-capsule {
   display: flex;
   align-items: center;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 24px;
   padding: 4px 12px;
-  gap: 9px;
-  height: 46px;
+  gap: 8px;
+  height: 44px;
   box-sizing: border-box;
   position: relative;
 }
 
-/* Glass bubble pill around core swatches */
-.ft-colors-core-bubble {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 20px;
-  padding: 4px 8px;
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.15), 0 2px 6px rgba(0, 0, 0, 0.3);
-}
-
 .ft-swatch {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   cursor: pointer;
   border: 1.5px solid rgba(0, 0, 0, 0.35);
@@ -428,6 +416,7 @@ body.hybrid-merged #cloud-floating-toolbar {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .ft-swatch:hover {
@@ -443,41 +432,41 @@ body.hybrid-merged #cloud-floating-toolbar {
 
 .ft-swatch.active::after {
   content: '';
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   background-color: #ffffff;
   display: block;
 }
 
-.ft-color-add-btn {
-  width: 20px;
-  height: 20px;
+.ft-color-palette-btn {
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
-  border: 1px dashed rgba(255, 255, 255, 0.35);
-  color: #c9d1d9;
-  font-size: 14px;
-  font-weight: bold;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #38bdf8;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
   padding: 0;
+  margin-left: 2px;
+  flex-shrink: 0;
 }
 
-.ft-color-add-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: #ffffff;
+.ft-color-palette-btn:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
   color: #ffffff;
   transform: scale(1.15);
 }
 
-/* AI Mode Button (Neon Rainbow Ring) */
+/* AI Mode Button (Neon Rainbow Circling Ring) */
 .ft-ai-btn {
-  width: 46px;
-  height: 46px;
+  width: 62px;
+  height: 62px;
   border-radius: 50%;
   position: relative;
   display: flex;
@@ -486,48 +475,93 @@ body.hybrid-merged #cloud-floating-toolbar {
   justify-content: center;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow: 0 0 16px rgba(168, 85, 247, 0.4), 0 0 8px rgba(0, 242, 254, 0.3);
+  box-shadow: 0 0 22px rgba(168, 85, 247, 0.55), 0 0 12px rgba(0, 242, 254, 0.45);
   flex-shrink: 0;
-  border: 2.5px solid transparent;
-  background-image: linear-gradient(#15181e, #15181e), linear-gradient(135deg, #00f2fe 0%, #4facfe 40%, #f093fb 100%);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
+  background: #15181e;
+  overflow: hidden;
+  isolation: isolate;
+  margin-left: 2px;
+}
+
+/* Rotating Conic Gradient Ring */
+.ft-ai-btn::before {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  background: conic-gradient(from 0deg, #00f2fe 0%, #3b82f6 25%, #a855f7 50%, #ec4899 75%, #00f2fe 100%);
+  animation: ft-ai-rotate-ring 4s linear infinite;
+  z-index: 0;
+}
+
+/* Inner Solid Core */
+.ft-ai-btn::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: #15181e;
+  z-index: 1;
+  transition: background 0.3s ease;
 }
 
 .ft-ai-text {
-  font-size: 14px;
-  font-weight: 800;
-  background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%);
+  position: relative;
+  z-index: 2;
+  font-size: 23px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   line-height: 1;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.6px;
 }
 
 .ft-ai-sub {
-  font-size: 8px;
-  font-weight: 700;
+  position: relative;
+  z-index: 2;
+  font-size: 11px;
+  font-weight: 800;
   color: #d8b4fe;
   text-transform: capitalize;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.4px;
   line-height: 1;
   margin-top: 1px;
 }
 
 .ft-ai-btn:hover {
   transform: scale(1.1);
-  box-shadow: 0 0 24px rgba(240, 147, 251, 0.7), 0 0 14px rgba(0, 242, 254, 0.6);
+  box-shadow: 0 0 28px rgba(240, 147, 251, 0.75), 0 0 16px rgba(0, 242, 254, 0.65);
+}
+
+.ft-ai-btn:hover::before {
+  animation-duration: 2.2s;
 }
 
 .ft-ai-btn.active {
-  background-image: linear-gradient(#2e1065, #1e1b4b), linear-gradient(135deg, #00f2fe 0%, #a855f7 50%, #ec4899 100%);
-  box-shadow: 0 0 28px rgba(168, 85, 247, 0.8), 0 0 16px rgba(0, 242, 254, 0.7);
-  transform: scale(1.05);
+  box-shadow: 0 0 32px rgba(168, 85, 247, 0.9), 0 0 20px rgba(0, 242, 254, 0.8);
+  transform: scale(1.06);
+}
+
+.ft-ai-btn.active::after {
+  background: linear-gradient(135deg, #2e1065 0%, #1e1b4b 100%);
+}
+
+.ft-ai-btn.active::before {
+  animation-duration: 1.8s;
+}
+
+@keyframes ft-ai-rotate-ring {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .ft-ai-tooltip {
   position: absolute;
-  bottom: 52px;
+  bottom: 64px;
   right: -10px;
   background: rgba(22, 27, 34, 0.96);
   backdrop-filter: blur(14px);

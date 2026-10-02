@@ -52,7 +52,7 @@ export class RuleEngine implements AIProvider {
     const hints = await this.getHints(context);
     const summary = hints.map(h => `• ${h.message}`).join('\n');
     const response: RackDiff = {
-      explanation: `Rule-based analysis:\n${summary || 'No issues detected.'}\n\n(Enable Claude or Local AI for natural language requests.)`,
+      explanation: `Rule-based analysis:\n${summary || 'No issues detected.'}\n\n(No AI API Key connected. Click ⚙ AI Settings to connect Google Gemini, DeepSeek, OpenAI, or Claude for natural language CAD generation.)`,
       diff: null,
     };
     yield JSON.stringify(response);
