@@ -14,6 +14,7 @@ import './styles/canvas.css';
 import './styles/properties.css';
 import './styles/context-menu.css';
 import './styles/ai-panel.css';
+import './styles/color-picker-modal.css';
 
 import { App } from './app';
 

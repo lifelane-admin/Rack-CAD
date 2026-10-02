@@ -9,6 +9,7 @@ import {
   getPortBadgeSvg,
   PortBadgeType
 } from './cable-graphics';
+import { colorPickerModal } from './color-picker-modal';
 
 const ORIENTATION_CYCLE: Array<'up' | 'right' | 'down' | 'left'> = ['up', 'right', 'down', 'left'];
 
@@ -19,6 +20,9 @@ export class FloatingToolbar {
   private selectedPointerLabelId: string | null = null;
   private activeCableEnd: 'source' | 'dest' = 'dest';
   private isCableMenuOpen: boolean = false;
+  private isColorPickerOpen: boolean = false;
+  private colorInputRaf: number | null = null;
+  private pendingColorValue: string | null = null;
 
   // Toolbar position dragging states
   private toolbarX: number | null = null;
@@ -64,6 +68,9 @@ export class FloatingToolbar {
     });
 
     EventBus.on('state:changed', () => {
+      if (this.isColorPickerOpen || this.element?.contains(document.activeElement)) {
+        return;
+      }
       this.render();
     });
 
@@ -473,19 +480,18 @@ export class FloatingToolbar {
           <span class="ft-btn-label" style="color: ${isAirdropDestination ? '#38bdf8' : '#8b929d'}">AirDrop</span>
         </div>
 
-        <!-- Color Palette Swatches Capsule -->
+        <!-- Color Palette Swatches Capsule & Selection Library -->
         <div class="ft-colors-capsule" id="ft-cable-colors">
-          ${swatches.map(hex => `
-            <div class="ft-swatch ${activeColor.toLowerCase() === hex.toLowerCase() ? 'active' : ''}"
-                 style="background-color: ${hex}; color: ${hex};"
-                 data-color="${hex}"></div>
-          `).join('')}
-          <button class="ft-color-palette-btn" id="ft-color-add-btn" title="Choose custom color">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-              <path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10c1.38 0 2.5-1.12 2.5-2.5 0-.61-.23-1.2-.64-1.67-.4-.46-.62-1.05-.62-1.71 0-1.38 1.12-2.5 2.5-2.5H18c2.21 0 4-1.79 4-4 0-4.97-4.46-9-10-9zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 8 6.5 8s1.5.67 1.5 1.5S7.33 11 6.5 11zm3-4c-.83 0-1.5-.67-1.5-1.5S8.67 4 9.5 4s1.5.67 1.5 1.5S10.33 7 9.5 7zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 4 14.5 4s1.5.67 1.5 1.5S15.33 7 14.5 7zm3 4c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-            </svg>
-          </button>
-          <input type="color" id="ft-custom-color-input" style="position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0;" />
+          <div class="ft-colors-core-bubble">
+            ${swatches.map(hex => `
+              <div class="ft-swatch ${activeColor.toLowerCase() === hex.toLowerCase() ? 'active' : ''}"
+                   style="background-color: ${hex}; color: ${hex};"
+                   data-color="${hex}"
+                   title="Select color ${hex}"></div>
+            `).join('')}
+          </div>
+          <button class="ft-color-add-btn" id="ft-color-add-btn" title="Pick custom color" style="background:${activeColor}; border-color:${activeColor}; color:#fff; text-shadow:0 1px 2px #000;">🎨</button>
+          <input type="color" id="ft-custom-color-input" value="${activeColor.startsWith('#') ? activeColor : '#38bdf8'}" style="position: absolute; opacity: 0; width: 0; height: 0; border: 0; margin: 0; padding: 0;" />
         </div>
       </div>
 
@@ -587,23 +593,41 @@ export class FloatingToolbar {
       });
     });
 
-    // Custom color input trigger
-    const colorInput = this.element.querySelector('#ft-custom-color-input') as HTMLInputElement;
-    this.element.querySelector('#ft-color-add-btn')?.addEventListener('click', (e) => {
+    // Custom color picker modal trigger (Matching reference image media_1790913997759.png)
+    const colorAddBtn = this.element.querySelector('#ft-color-add-btn') as HTMLElement;
+
+    colorAddBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      colorInput?.click();
+      const rect = colorAddBtn.getBoundingClientRect();
+      const selectedCable = this.selectedCableId ? State.getCable(this.selectedCableId) : null;
+      const initial = selectedCable ? selectedCable.color : (State.getState().selectedCableColor || '#2563eb');
+
+      colorPickerModal.open({
+        initialColor: initial,
+        x: rect.left - 100,
+        y: rect.top - 470 > 10 ? rect.top - 470 : rect.bottom + 10,
+        onLiveChange: (color) => {
+          if (this.selectedCableId) {
+            EventBus.emit('cable:update', { id: this.selectedCableId, data: { color } });
+          } else {
+            State.setState({ selectedCableColor: color });
+          }
+          if (colorAddBtn) {
+            colorAddBtn.style.background = color;
+            colorAddBtn.style.borderColor = color;
+          }
+        },
+        onApply: (color) => {
+          if (this.selectedCableId) {
+            EventBus.emit('cable:update', { id: this.selectedCableId, data: { color } });
+          } else {
+            State.setState({ selectedCableColor: color });
+          }
+          this.render();
+        }
+      });
     });
 
-    colorInput?.addEventListener('input', (e: any) => {
-      const color = e.target.value;
-      if (this.selectedCableId) {
-        EventBus.emit('cable:update', { id: this.selectedCableId, data: { color } });
-      } else {
-        State.setState({ selectedCableColor: color });
-        EventBus.emit('notification', { message: `Active cable color changed to ${color}`, type: 'info' });
-      }
-      this.render();
-    });
 
     // AI Mode Button Click & Hover
     this.element.querySelector('#ft-ai-mode-btn')?.addEventListener('click', () => {
@@ -717,14 +741,19 @@ export class FloatingToolbar {
 
     this.element.querySelectorAll('.ft-swatch').forEach(swatch => {
       swatch.addEventListener('click', (e: any) => {
-        const color = e.target.getAttribute('data-color');
-        if (this.selectedCableId) {
-          EventBus.emit('cable:update', { id: this.selectedCableId, data: { color } });
-        } else {
-          State.setState({ selectedCableColor: color });
-          EventBus.emit('notification', { message: `Active cable color changed.`, type: 'info' });
+        const color = (e.target as HTMLElement).getAttribute('data-color');
+        if (color) {
+          if (this.selectedCableId) {
+            EventBus.emit('cable:update', { id: this.selectedCableId, data: { color } });
+          } else {
+            State.setState({ selectedCableColor: color });
+            EventBus.emit('notification', { message: `Active cable color changed.`, type: 'info' });
+          }
+          this.render();
         }
       });
     });
+
+
   }
 }

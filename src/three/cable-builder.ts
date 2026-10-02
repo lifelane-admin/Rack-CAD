@@ -1002,10 +1002,27 @@ export function buildCableMesh(cable: CableData, state: AppState): THREE.Mesh | 
   // Increase tubular segments to 256 and radial segments to 12 for perfectly smooth, round-edged turns
   const geo = new THREE.TubeGeometry(curve, 256, 2, 12, false);
 
+  const finish = cable.finish || state.selectedCableFinish || 'gloss';
+  let roughness = 0.65;
+  let metalness = 0.04;
+  if (finish === 'gloss') {
+    roughness = 0.12;
+    metalness = 0.25;
+  } else if (finish === 'bright') {
+    roughness = 0.28;
+    metalness = 0.35;
+  } else if (finish === 'satin') {
+    roughness = 0.48;
+    metalness = 0.10;
+  } else if (finish === 'matte') {
+    roughness = 0.88;
+    metalness = 0.02;
+  }
+
   const mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(cable.color),
-    roughness: 0.65,
-    metalness: 0.04,
+    roughness,
+    metalness,
     transparent: true,
     opacity: 0.96,
   });

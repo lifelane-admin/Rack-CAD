@@ -1,0 +1,377 @@
+/* Custom Color Picker Modal (Matching Reference Design media_1790913997759.png) */
+.cpm-modal {
+  position: absolute;
+  z-index: 9999;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  user-select: none;
+}
+
+.cpm-modal.hidden {
+  display: none !important;
+}
+
+.cpm-container {
+  width: 320px;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25), 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+  color: #1e293b;
+}
+
+/* Header */
+.cpm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.cpm-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.2px;
+}
+
+.cpm-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  color: #64748b;
+  cursor: pointer;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.cpm-close-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* 2D Spectrum Box & Vertical Hue Slider */
+.cpm-spectrum-row {
+  display: flex;
+  gap: 10px;
+  height: 150px;
+}
+
+.cpm-canvas-wrapper {
+  position: relative;
+  flex: 1;
+  height: 150px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  cursor: crosshair;
+}
+
+#cpm-sat-val-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cpm-canvas-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.8), inset 0 0 2px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.cpm-hue-bar-vertical {
+  width: 14px;
+  height: 150px;
+  border-radius: 8px;
+  background: linear-gradient(to bottom, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);
+  position: relative;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+}
+
+.cpm-hue-thumb {
+  position: absolute;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Custom Library Swatches Row with (+) Button */
+.cpm-library-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.cpm-add-lib-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.4);
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.cpm-add-lib-btn:hover {
+  transform: scale(1.1);
+  background: #0369a1;
+  box-shadow: 0 3px 8px rgba(2, 132, 199, 0.6);
+}
+
+.cpm-swatch-divider {
+  width: 1px;
+  height: 24px;
+  background: #cbd5e1;
+  flex-shrink: 0;
+}
+
+.cpm-swatches-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  flex: 1;
+}
+
+.cpm-swatch-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cpm-swatch-circle {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid #cbd5e1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: all 0.15s ease;
+}
+
+.cpm-swatch-slot:hover .cpm-swatch-circle {
+  transform: scale(1.15);
+  border-color: #0284c7;
+}
+
+.cpm-swatch-dashed {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px dashed #cbd5e1;
+  background: #ffffff;
+}
+
+.cpm-swatch-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+/* Tool & Preview Row */
+.cpm-tool-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cpm-eyedropper-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cpm-eyedropper-btn:hover {
+  background: #f1f5f9;
+  color: #0284c7;
+  border-color: #0284c7;
+}
+
+.cpm-preview-circle {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+}
+
+.cpm-hue-bar-horizontal {
+  flex: 1;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);
+  position: relative;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+}
+
+.cpm-hue-thumb-h {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Value Inputs Row */
+.cpm-inputs-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.cpm-input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.cpm-input-field label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.cpm-input-field input {
+  width: 100%;
+  padding: 5px 6px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  font-size: 11px;
+  font-weight: 600;
+  color: #0f172a;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.cpm-input-field.hex-field {
+  flex: 1.8;
+}
+
+.cpm-hex-wrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.cpm-hex-wrapper input {
+  text-align: left;
+  padding-right: 24px;
+  font-family: monospace;
+  font-weight: 700;
+}
+
+.cpm-copy-btn {
+  position: absolute;
+  right: 4px;
+  background: transparent;
+  border: none;
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+}
+
+.cpm-copy-btn:hover {
+  opacity: 1;
+}
+
+/* Mode Tabs Row */
+.cpm-tabs-row {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.cpm-tab-btn {
+  flex: 1;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cpm-tab-btn.active {
+  background: #0284c7;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(2, 132, 199, 0.3);
+}
+
+/* Footer Action */
+.cpm-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.cpm-apply-btn {
+  width: 100%;
+  padding: 8px 14px;
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.4);
+  transition: all 0.15s ease;
+}
+
+.cpm-apply-btn:hover {
+  background: #0369a1;
+  box-shadow: 0 3px 8px rgba(2, 132, 199, 0.6);
+}
