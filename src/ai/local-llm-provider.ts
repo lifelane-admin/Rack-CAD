@@ -1,5 +1,6 @@
 import { AIProvider, AIProviderName, AIHint, AIMessage, RackContext, RackDiff } from './types';
 import { RuleEngine } from './rule-engine';
+import { SYSTEM_PROMPT } from './system-prompt';
 
 const OLLAMA_BASE = 'http://localhost:11434';
 const DEFAULT_MODEL = 'llama3';
@@ -24,15 +25,10 @@ export class LocalLLMProvider implements AIProvider {
   async *chat(context: RackContext, messages: AIMessage[]): AsyncIterable<string> {
     const contextJson = JSON.stringify(context, null, 2);
 
-    const systemPrompt = `You are an expert datacenter engineer assistant. The current rack layout is:
-${contextJson}
+    const systemPrompt = `${SYSTEM_PROMPT}
 
-ALWAYS respond with valid JSON matching exactly this schema:
-{"explanation": "<markdown text to show the user>", "diff": <RackDiff object> | null}
-
-diff is null when no canvas change is needed (analysis, questions).
-For diffs, use minimal operations — only change what was explicitly requested.
-Check free RUs before adding devices. Verify ports are not connected before adding cables.`;
+## CURRENT RACK LAYOUT
+${contextJson}`;
 
     const body = {
       model: DEFAULT_MODEL,
