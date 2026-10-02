@@ -4,7 +4,7 @@ import { SYSTEM_PROMPT } from './system-prompt';
 
 const LS_KEY = 'rackcad_deepseek_key';
 const LS_MODEL_KEY = 'rackcad_deepseek_model';
-export const DEFAULT_DEEPSEEK_MODEL = 'deepseek-v4-pro';
+export const DEFAULT_DEEPSEEK_MODEL = 'deepseek-chat';
 
 export const AVAILABLE_DEEPSEEK_MODELS = [
   { id: 'deepseek-v4-pro', label: 'deepseek-v4-pro (Flagship Reasoning & Agentic)' },
