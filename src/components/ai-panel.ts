@@ -115,7 +115,8 @@ export class AIPanel {
 
       if (rackDiff.diff) {
         this.pendingDiff = rackDiff;
-        this.showDiffCard(rackDiff);
+        aiService.applyRackDiff(rackDiff);
+        this.showAppliedBadge(rackDiff);
       }
       this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
     });
@@ -195,50 +196,22 @@ export class AIPanel {
     return container;
   }
 
-  private showDiffCard(diff: RackDiff): void {
+  private showAppliedBadge(diff: RackDiff): void {
     const ops = diff.diff!;
-    const lines: string[] = [];
-    if (ops.addDevices?.length) lines.push(`• Add ${ops.addDevices.length} device(s)`);
-    if (ops.removeDevices?.length) lines.push(`• Remove ${ops.removeDevices.length} device(s)`);
-    if (ops.addCables?.length) lines.push(`• Add ${ops.addCables.length} cable(s)`);
-    if (ops.removeCables?.length) lines.push(`• Remove ${ops.removeCables.length} cable(s)`);
-    if (ops.updateAnchors?.length) lines.push(`• Re-route ${ops.updateAnchors.length} cable(s)`);
-    if (ops.addRacks?.length) lines.push(`• Add ${ops.addRacks.length} rack(s)`);
+    const parts: string[] = [];
+    if (ops.addRacks?.length) parts.push(`${ops.addRacks.length} rack${ops.addRacks.length > 1 ? 's' : ''}`);
+    if (ops.addDevices?.length) parts.push(`${ops.addDevices.length} device${ops.addDevices.length > 1 ? 's' : ''}`);
+    if (ops.addCables?.length) parts.push(`${ops.addCables.length} cable${ops.addCables.length > 1 ? 's' : ''}`);
+    if (ops.removeDevices?.length) parts.push(`removed ${ops.removeDevices.length} device${ops.removeDevices.length > 1 ? 's' : ''}`);
+    if (ops.removeCables?.length) parts.push(`removed ${ops.removeCables.length} cable${ops.removeCables.length > 1 ? 's' : ''}`);
 
-    const card = document.createElement('div');
-    card.className = 'ai-diff-card';
-    card.innerHTML = `
-      <div><strong>Suggested changes:</strong></div>
-      <div class="diff-summary"></div>
-      <div class="diff-actions">
-        <button class="btn-preview">Preview</button>
-        <button class="btn-apply">Apply</button>
-        <button class="btn-dismiss">&#x2715;</button>
-      </div>
-    `;
-    const summaryEl = card.querySelector('.diff-summary')!;
-    lines.forEach(line => {
-      const p = document.createElement('div');
-      p.textContent = line;
-      summaryEl.appendChild(p);
-    });
-    card.querySelector('.btn-preview')!.addEventListener('click', () => {
-      aiService.setPreviewDiff(diff);
-      eventBus.emit('ai:preview-diff', diff);
-    });
-    card.querySelector('.btn-apply')!.addEventListener('click', () => {
-      aiService.applyRackDiff(diff);
-      eventBus.emit('notification', { message: 'AI changes applied', type: 'success' });
-      card.remove();
-      this.pendingDiff = null;
-    });
-    card.querySelector('.btn-dismiss')!.addEventListener('click', () => {
-      aiService.setPreviewDiff(null);
-      card.remove();
-      this.pendingDiff = null;
-    });
-    this.messagesEl.appendChild(card);
-    this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+    const summary = parts.length ? parts.join(', ') : 'changes';
+    eventBus.emit('notification', { message: `✓ Applied: ${summary}`, type: 'success' });
+
+    const badge = document.createElement('div');
+    badge.className = 'ai-applied-badge';
+    badge.innerHTML = `<span style="color:#4ade80">✓ Applied to canvas:</span> ${summary}`;
+    this.messagesEl.appendChild(badge);
   }
 
   private appendMessage(role: 'user' | 'assistant', content: string): void {

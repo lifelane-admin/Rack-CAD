@@ -51,30 +51,15 @@
 .ai-msg.user { background: #2a2a4a; color: #ccc; align-self: flex-end; max-width: 85%; }
 .ai-msg.assistant { background: #1e1e3a; color: #bbb; align-self: flex-start; max-width: 95%; }
 
-.ai-diff-card {
+.ai-applied-badge {
   background: #12281f;
   border: 1px solid #2e7d52;
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 7px 10px;
   font-size: 12px;
   color: #9effc5;
   margin-top: 6px;
 }
-.ai-diff-card .diff-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-}
-.ai-diff-card button {
-  padding: 4px 10px;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  font-size: 11px;
-}
-.ai-diff-card .btn-preview { background: #2a5c3f; color: #9effc5; }
-.ai-diff-card .btn-apply { background: #2e7d52; color: #fff; }
-.ai-diff-card .btn-dismiss { background: #333; color: #aaa; }
 
 .ai-thinking {
   display: flex;
