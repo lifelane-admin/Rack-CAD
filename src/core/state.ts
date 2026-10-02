@@ -60,7 +60,7 @@ class StateManager {
       floatingToolbarVisible: true,
       presenterMode: false,
       cableRoutingTrayMode: 'overhead',
-      aiMode: false,
+      aiMode: true,
       aiProvider: 'rules',
       previewDiff: null,
       customTemplates: loadCustomTemplates(),
