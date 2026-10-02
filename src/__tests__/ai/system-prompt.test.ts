@@ -7,9 +7,19 @@ describe('SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT.length).toBeGreaterThan(100);
   });
 
-  it('contains the JSON output contract', () => {
+  it('contains the JSON output contract with correct field names', () => {
     expect(SYSTEM_PROMPT).toContain('"explanation"');
-    expect(SYSTEM_PROMPT).toContain('"diff": <RackDiff');
+    expect(SYSTEM_PROMPT).toContain('addDevices');
+    expect(SYSTEM_PROMPT).toContain('addCables');
+    expect(SYSTEM_PROMPT).toContain('addRacks');
+    expect(SYSTEM_PROMPT).toContain('sourcePortId');
+    expect(SYSTEM_PROMPT).toContain('destPortId');
+    expect(SYSTEM_PROMPT).toContain('startUnit');
+    expect(SYSTEM_PROMPT).toContain('templateId');
+  });
+
+  it('warns against wrong diff schema', () => {
+    expect(SYSTEM_PROMPT).toContain('NEVER use "action"');
   });
 
   it('maps Hyper-V host to server-2u-enterprise', () => {
