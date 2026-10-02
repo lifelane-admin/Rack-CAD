@@ -89,7 +89,7 @@ export class ClaudeProvider implements AIProvider {
     try {
       const stream = client.messages.stream({
         model,
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       });

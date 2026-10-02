@@ -59,8 +59,12 @@ export class RuleEngine implements AIProvider {
   }
 
   parseDiff(raw: string): RackDiff {
+    // Strip markdown code fences (```json ... ``` or ``` ... ```)
+    const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    const jsonStr = fenceMatch ? fenceMatch[1] : raw;
+
     try {
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(jsonStr);
       if (
         typeof parsed.explanation === 'string' &&
         (parsed.diff === null || (typeof parsed.diff === 'object' && !Array.isArray(parsed.diff)))
