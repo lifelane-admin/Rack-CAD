@@ -1,5 +1,6 @@
 import { AIProvider, AIProviderName, AIHint, AIMessage, RackContext, RackDiff } from './types';
 import { RuleEngine } from './rule-engine';
+import { SYSTEM_PROMPT } from './system-prompt';
 
 const LS_KEY = 'rackcad_openai_key';
 const LS_MODEL_KEY = 'rackcad_openai_model';
@@ -12,20 +13,6 @@ export const AVAILABLE_OPENAI_MODELS = [
   { id: 'gpt-4.5-preview', label: 'gpt-4.5-preview (Research Flagship)' },
   { id: 'o3-mini', label: 'o3-mini (Advanced STEM & Architecture)' },
 ];
-
-const SYSTEM_PROMPT = `You are an expert datacenter engineer assistant embedded in Rack Slicer, a professional rack design tool.
-You receive the current rack layout as JSON and a user request.
-
-ALWAYS respond with valid JSON matching exactly this schema:
-{"explanation": "<markdown text to show the user>", "diff": <RackDiff object> | null}
-
-diff is null when no canvas change is needed (analysis, questions, reports).
-For diffs, use minimal operations — only change what was explicitly requested.
-
-Before suggesting device placements: check for free RUs.
-Before suggesting cables: verify ports are not already connected.
-For cable routing: respect the current routingMode (overhead/underfloor).
-Validate: power draw <80% PDU capacity warning, <95% error; verify port type compatibility.`;
 
 function buildUserMessage(context: RackContext, messages: AIMessage[]): string {
   const contextJson = JSON.stringify(context, null, 2);
