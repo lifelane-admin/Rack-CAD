@@ -67,6 +67,7 @@ import { getCloudIcon, isBoundaryIcon, inferContainerKind, CLOUD_SHAPE_KINDS } f
 import { hierarchyLevelsToLine, hierarchyLevelIcon } from './library/hierarchy-parser';
 import { showHierarchyInputModal } from './components/hierarchy-input-modal';
 import { showStartupModal, StartupChoice } from './components/startup-modal';
+import { SaaSWorkspaceDashboard } from './components/saas-dashboard';
 
 type CloudConnectorSegmentKind = 'entryStub' | 'entry' | 'crossbar' | 'exit' | 'exitStub';
 /** Maps a dragged segment's `kind` (see routeHandlesFor() in cloud-connector-renderer.ts) to the
@@ -113,6 +114,7 @@ export class App {
   private hybridTransformSyncing = false;
   private hybridTransformUnsync: (() => void) | null = null;
   private presenterDashboard!: PresenterDashboard;
+  private saasDashboard!: SaaSWorkspaceDashboard;
 
   // Clipboard for copy/paste — one snapshot per currently-selected object, so a multi-select
   // copy pastes back as a group. Deliberately NOT a stack/history — pasting repeatedly re-clones
@@ -436,6 +438,28 @@ export class App {
     // Initialize Presenter Mode Dashboard
     this.presenterDashboard = new PresenterDashboard();
 
+    // Initialize SaaS Workspace Dashboard
+    this.saasDashboard = new SaaSWorkspaceDashboard((_project, category) => {
+      if (category) {
+        if (category === 'rack') {
+          stateManager.setState({ workflowMode: 'rack', activeElevationRackId: null });
+          eventBus.emit('view:switch', 'rack');
+        } else if (category === 'datacenter') {
+          stateManager.setState({ workflowMode: 'datacenter' });
+          eventBus.emit('view:switch', 'datacenter');
+        } else if (category.startsWith('cloud')) {
+          stateManager.setState({ workflowMode: 'cloud', activeElevationRackId: null });
+          eventBus.emit('view:switch', 'cloud');
+        }
+      }
+      this.renderAll();
+      this.renderCloudAll();
+    });
+
+    eventBus.on('saas:open-dashboard', () => {
+      this.saasDashboard.show();
+    });
+
     // Initialize toast notifications — every export/save/undo/redo/etc. success or failure is
     // emitted as a 'notification' event; without this listener they all resolved into silence.
     new NotificationCenter();
@@ -721,7 +745,7 @@ export class App {
 
     this.showStartupModal();
 
-    console.log('Rack Slicer initialized');
+    console.log('Rack Slicer SaaS Platform initialized');
   }
 
   /** Startup landing screen (see components/startup-modal.ts) — shown on every load, letting the

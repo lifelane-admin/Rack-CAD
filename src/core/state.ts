@@ -49,6 +49,7 @@ class StateManager {
       showLegends: true,
       selectedCableType: 'general',
       selectedCableColor: '#78909c',
+      selectedCableFinish: 'gloss',
       selectedCableBend: 10,
       selectedCableTermination: 'RJ45 Ethernet',
       cabinetViewMode: 'front',

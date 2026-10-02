@@ -441,6 +441,129 @@ body.hybrid-merged #cloud-floating-toolbar {
   box-shadow: 0 0 14px currentColor;
 }
 
+/* Selection Library Popover & 4x2 Grid */
+.ft-library-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f8fafc;
+  padding: 4px 9px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ft-library-btn:hover,
+.ft-library-btn.active {
+  background: #38bdf8;
+  color: #0b0f19;
+  border-color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+}
+
+.ft-lib-count {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.ft-library-popover {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  background: #0b0f19;
+  border: 1.5px solid rgba(56, 189, 248, 0.35);
+  border-radius: 12px;
+  padding: 10px;
+  width: 156px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.75), 0 0 14px rgba(56, 189, 248, 0.15);
+  z-index: 1000;
+  animation: ftFadeIn 0.2s ease;
+}
+
+.ft-library-header {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 6px;
+}
+
+.ft-library-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.3px;
+}
+
+.ft-library-sub {
+  font-size: 9.5px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* 4 Rows x 2 Columns Grid */
+.ft-library-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(4, 30px);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ft-library-swatch {
+  height: 30px;
+  border-radius: 6px;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.2), 0 2px 4px rgba(0, 0, 0, 0.4);
+  transition: all 0.18s ease;
+}
+
+.ft-library-swatch:hover {
+  transform: scale(1.08);
+  border-color: #ffffff;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.ft-library-swatch.active {
+  border-color: #38bdf8;
+  box-shadow: 0 0 10px #38bdf8;
+  outline: 2px solid #38bdf8;
+}
+
+.ft-library-add-current {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px dashed rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ft-library-add-current:hover {
+  background: #38bdf8;
+  color: #0b0f19;
+  border-style: solid;
+}
+
 .ft-swatch.active::after {
   content: '';
   width: 5px;

@@ -695,11 +695,14 @@ export interface ValidationAlert {
   targetType: 'cable' | 'port' | 'rack';
 }
 
+export type CableFinish = 'gloss' | 'bright' | 'satin' | 'matte';
+
 export interface CableData {
   id: string;
   name: string;
   type: CableType;
   color: string;
+  finish?: CableFinish;
   sourcePortId: string | null;
   destPortId: string | null;
   bendPoints: Point[];
@@ -793,6 +796,7 @@ export interface AppState {
   customLegendItems?: LegendItem[];
   selectedCableType: CableType;
   selectedCableColor: string;
+  selectedCableFinish?: CableFinish;
   selectedCableBend: number;
   selectedCableTermination: string;
   cabinetViewMode: 'front' | 'rear';
@@ -893,6 +897,7 @@ export interface AppEvents {
   'project:save': void;
   'project:load': string;
   'file:new': void;
+  'saas:open-dashboard': void;
   'file:save': void;
   'file:save-as': void;
   'file:open': void;

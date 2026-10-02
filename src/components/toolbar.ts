@@ -2,6 +2,10 @@ import EventBus from '../core/event-bus';
 import State from '../core/state';
 import { ToolMode } from '../core/types';
 import { ClaudeProvider } from '../ai/claude-provider';
+import { authStore } from '../auth/auth-store';
+import { showUserProfileModal } from './user-profile-modal';
+import { showSubscriptionModal } from './subscription-modal';
+import { showAuthModal } from './auth-modal';
 
 // ── Top Bar Tool definitions ────────────────────────────────────────────────
 const TOOLS: { id: string; tool: ToolMode; title: string; svg: string }[] = [
@@ -92,6 +96,15 @@ export class Toolbar {
 
     const inner = document.createElement('div');
     inner.className = 'toolbar-inner';
+
+    // SaaS Dashboard launcher button
+    const dashBtn = document.createElement('button');
+    dashBtn.className = 'toolbar-btn';
+    dashBtn.style.cssText = 'background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; font-weight: 700; font-size: 12px; border-radius: 6px; padding: 4px 10px; margin-right: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px;';
+    dashBtn.innerHTML = '<span style="font-size:14px;">🏢</span> <span>Dashboard</span>';
+    dashBtn.title = 'Open SaaS Workspace & Projects Dashboard';
+    dashBtn.addEventListener('click', () => EventBus.emit('saas:open-dashboard', undefined));
+    inner.appendChild(dashBtn);
 
     // ── Tool strip (segmented capsule group) ───────────────────────────────
     const strip = document.createElement('div');
@@ -240,6 +253,29 @@ export class Toolbar {
       document.getElementById('ai-key-modal')?.classList.remove('hidden');
     });
     right.appendChild(aiSettingsBtn);
+
+    // Cloud sync status indicator
+    const syncBadge = document.createElement('div');
+    syncBadge.style.cssText = 'font-size: 11px; color: #34d399; display: flex; align-items: center; gap: 4px; padding: 2px 8px; background: rgba(52, 211, 153, 0.1); border-radius: 12px; border: 1px solid rgba(52, 211, 153, 0.2); margin-left: 4px;';
+    syncBadge.innerHTML = '<span>☁</span> <span>Saved</span>';
+    right.appendChild(syncBadge);
+
+    // User Profile & Avatar Menu
+    const user = authStore.getCurrentUser();
+    const userMenuBtn = document.createElement('button');
+    userMenuBtn.className = 'toolbar-btn';
+    userMenuBtn.style.cssText = 'display: flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 2px 8px; cursor: pointer; color: #fff; font-size: 12px; margin-left: 4px;';
+    userMenuBtn.innerHTML = `
+      <div style="width:20px; height:20px; border-radius:50%; background:linear-gradient(135deg, #38bdf8, #818cf8); color:#0b0f19; font-weight:800; font-size:10px; display:flex; align-items:center; justify-content:center;">
+        ${user.name.charAt(0).toUpperCase()}
+      </div>
+      <span style="font-weight:600; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${user.name.split(' ')[0]}</span>
+      <span style="font-size:9px; background:rgba(56,189,248,0.2); color:#38bdf8; padding:1px 5px; border-radius:8px; font-weight:700;">${user.plan.toUpperCase()}</span>
+    `;
+    userMenuBtn.addEventListener('click', () => {
+      showUserProfileModal(() => this.render());
+    });
+    right.appendChild(userMenuBtn);
 
     inner.appendChild(right);
     this.container.appendChild(inner);

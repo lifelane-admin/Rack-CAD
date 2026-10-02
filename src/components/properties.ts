@@ -2509,6 +2509,15 @@ export class PropertiesPanel {
         <input type="color" id="prop-cab-color" value="${cable.color || '#000000'}" />
       </div>
       <div class="form-group">
+        <label>Cable Visual Finish (Sheen &amp; Reflection)</label>
+        <select id="prop-cab-finish">
+          <option value="gloss" ${(!cable.finish || cable.finish === 'gloss') ? 'selected' : ''}>✨ High Gloss (Vinyl 3D Shine)</option>
+          <option value="bright" ${cable.finish === 'bright' ? 'selected' : ''}>🌟 Bright Sheen (Vivid Contrast)</option>
+          <option value="satin" ${cable.finish === 'satin' ? 'selected' : ''}>🪶 Satin (Smooth Luster)</option>
+          <option value="matte" ${cable.finish === 'matte' ? 'selected' : ''}>🌫 Matte (Anti-Glare Flat)</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label>Thickness (px)</label>
         <input type="number" id="prop-cab-thick" value="${cable.thickness || 3}" />
       </div>
@@ -2698,6 +2707,9 @@ export class PropertiesPanel {
     });
     container.querySelector('#prop-cab-color')?.addEventListener('change', (e: any) => {
       EventBus.emit('cable:update', { id, data: { color: e.target.value } });
+    });
+    container.querySelector('#prop-cab-finish')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cable:update', { id, data: { finish: e.target.value } });
     });
     container.querySelector('#prop-cab-thick')?.addEventListener('change', (e: any) => {
       EventBus.emit('cable:update', { id, data: { thickness: parseInt(e.target.value) } });

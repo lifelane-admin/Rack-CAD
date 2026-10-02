@@ -201,29 +201,29 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   const effectiveThickness = isPowerCable ? 3.2 : (cable.thickness || mat.renderThicknessPx || 3.0);
   const baseColor = isPowerCable ? powerStrokeColor : (cable.color || mat.defaultColor);
 
-  // 1. Soft Ambient Depth Shadow (Separates overlapping cables with natural optical depth)
+  // 1. Soft Ambient Optical Drop Shadow (directional shadow onto rack background)
   const shadowPath = createPath(pathData, {
     fill: 'none',
-    stroke: 'rgba(0, 0, 0, 0.46)',
-    'stroke-width': effectiveThickness + 1.8,
+    stroke: 'rgba(0, 0, 0, 0.32)',
+    'stroke-width': effectiveThickness + 0.8,
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
-    style: 'transform: translate(0.8px, 1.6px); filter: blur(0.6px); pointer-events: none;'
+    style: 'transform: translate(0.8px, 1.2px); pointer-events: none;'
   });
   group.appendChild(shadowPath);
 
-  // 2. Darkened PVC Jacket Outer Rim (defines authentic cylindrical plastic boundary)
-  const outerRim = createPath(pathData, {
+  // 2. Darkened Underbelly / Self-Shading (creates 3D cylindrical roundness along lower edge)
+  const underbellyShading = createPath(pathData, {
     fill: 'none',
-    stroke: 'rgba(12, 16, 26, 0.78)',
-    'stroke-width': effectiveThickness + 0.6,
+    stroke: 'rgba(5, 8, 15, 0.55)',
+    'stroke-width': effectiveThickness,
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
-    'pointer-events': 'none'
+    style: 'transform: translate(0.3px, 0.4px); pointer-events: none;'
   });
-  group.appendChild(outerRim);
+  group.appendChild(underbellyShading);
 
-  // 3. Rich Saturated PVC Plastic Body (semi-translucent polymer core)
+  // 3. Rich Saturated PVC Cable Jacket Core (full vibrant cable color)
   const path = createPath(pathData, {
     fill: 'none',
     stroke: baseColor,
@@ -231,7 +231,7 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
     'pointer-events': 'none',
-    opacity: 0.95,
+    opacity: 1.0,
     ...(isPowerCable ? { 'stroke-dasharray': '6 3' } : {})
   });
   group.appendChild(path);
@@ -270,16 +270,64 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     }
   }
 
-  // 4. Subtle Matte Bevel (Very soft micro-sheen, no harsh white glare)
-  const subtleMatteBevel = createPath(pathData, {
-    fill: 'none',
-    stroke: 'rgba(255, 255, 255, 0.10)',
-    'stroke-width': effectiveThickness * 0.35,
-    'stroke-linecap': 'round',
-    'stroke-linejoin': 'round',
-    style: 'pointer-events: none;'
-  });
-  group.appendChild(subtleMatteBevel);
+  // 4. Photorealistic Cylindrical Specular Highlights (Top-Edge Reflection)
+  const finish = cable.finish || s.selectedCableFinish || 'gloss';
+
+  if (finish === 'gloss') {
+    // High-Gloss Polymer PVC: Soft top sheen + fine specular reflection ridge (NO white glow or core wash-out)
+    const glossSheen = createPath(pathData, {
+      fill: 'none',
+      stroke: 'rgba(255, 255, 255, 0.32)',
+      'stroke-width': effectiveThickness * 0.32,
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      style: 'transform: translate(-0.5px, -0.5px); pointer-events: none;'
+    });
+    group.appendChild(glossSheen);
+
+    const glossRidge = createPath(pathData, {
+      fill: 'none',
+      stroke: 'rgba(255, 255, 255, 0.65)',
+      'stroke-width': Math.max(0.5, effectiveThickness * 0.14),
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      style: 'transform: translate(-0.7px, -0.7px); pointer-events: none;'
+    });
+    group.appendChild(glossRidge);
+  } else if (finish === 'bright') {
+    // Bright Sheen: Smooth top-edge light reflection
+    const brightHighlight = createPath(pathData, {
+      fill: 'none',
+      stroke: 'rgba(255, 255, 255, 0.28)',
+      'stroke-width': effectiveThickness * 0.30,
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      style: 'transform: translate(-0.5px, -0.5px); pointer-events: none;'
+    });
+    group.appendChild(brightHighlight);
+  } else if (finish === 'satin') {
+    // Satin Finish: Soft diffuse top luster
+    const satinBevel = createPath(pathData, {
+      fill: 'none',
+      stroke: 'rgba(255, 255, 255, 0.16)',
+      'stroke-width': effectiveThickness * 0.32,
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      style: 'transform: translate(-0.4px, -0.4px); pointer-events: none;'
+    });
+    group.appendChild(satinBevel);
+  } else {
+    // Matte Finish: Flat anti-glare subtle top curve
+    const matteBevel = createPath(pathData, {
+      fill: 'none',
+      stroke: 'rgba(255, 255, 255, 0.06)',
+      'stroke-width': effectiveThickness * 0.25,
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      style: 'transform: translate(-0.3px, -0.3px); pointer-events: none;'
+    });
+    group.appendChild(matteBevel);
+  }
 
   // Animated Data Packet Flow Overlay
   if (cable.animatedFlow || cable.status === 'active') {
