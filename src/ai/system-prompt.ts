@@ -57,7 +57,12 @@ ALWAYS respond with a single JSON object with exactly two keys: "explanation" an
 }
 
 CRITICAL schema rules — violations will silently fail:
-- Top-level keys are ONLY "addRacks", "addDevices", "addCables", "removeDevices", "removeCables", "updateDevices", "updateCables". NEVER use "action", "devices", "cables", "racks" or any other structure.
+- Top-level diff keys are ONLY: "addRacks", "addDevices", "addCables", "removeDevices", "removeCables", "updateDevices", "updateCables".
+- NEVER invent keys. These are ALL forbidden: "racksToCreate", "devicesToCreate", "cablesToCreate", "networkPorts", "powerPorts", "action", "devices", "cables", "racks", "nodes", "connections", "links", "items", "height", "position", "deviceType", "vlan", "speed", "circuit".
+- Device fields are ONLY: id, templateId, rackId, startUnit, name, hostname, ports. No other fields.
+- Port fields are ONLY: id, name, type. No "speed", "vlan", "pduId", "circuit" or any other field.
+- Cable fields are ONLY: id, type, color, sourcePortId, destPortId, routingMode, anchorPoints. No "fromPort", "toPort", "from_device_id", "to_device_id".
+- Rack fields are ONLY: id, name, units. No "height", "rackPduA", "rackPduB", "routingMode".
 - "startUnit" is the bottom RU position, counted from 1 at the bottom of the rack.
 - Device port IDs MUST be unique across all devices — prefix every port id with its device id (e.g. "node1-nic1" not "nic1"). Two devices with the same templateId will have colliding port ids unless you prefix them.
 - Cable "sourcePortId" and "destPortId" must exactly match a port "id" defined in the same diff's addDevices, or a port id visible in the current context JSON.

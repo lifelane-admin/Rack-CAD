@@ -5,7 +5,7 @@ import { SYSTEM_PROMPT } from './system-prompt';
 
 const LS_KEY = 'rackcad_anthropic_key';
 const LS_MODEL_KEY = 'rackcad_anthropic_model';
-export const DEFAULT_CLAUDE_MODEL = 'claude-opus-5';
+export const DEFAULT_CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
 
 export const AVAILABLE_CLAUDE_MODELS = [
   { id: 'claude-opus-5', label: 'claude-opus-5 (Newest Flagship & Maximum Capability)' },
