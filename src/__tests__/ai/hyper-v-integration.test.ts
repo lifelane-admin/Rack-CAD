@@ -2,8 +2,8 @@
 //
 // Integration test — requires a live API key.
 // Run with:
-//   DEEPSEEK_API_KEY=<key>  npx vitest run src/__tests__/ai/hyper-v-integration.test.ts
-//   ANTHROPIC_API_KEY=<key> npx vitest run src/__tests__/ai/hyper-v-integration.test.ts
+//   $env:DEEPSEEK_API_KEY="<key>"   npx vitest run src/__tests__/ai/hyper-v-integration.test.ts
+//   $env:ANTHROPIC_API_KEY="<key>"  npx vitest run src/__tests__/ai/hyper-v-integration.test.ts
 //
 import { describe, it, expect } from 'vitest';
 import { SYSTEM_PROMPT } from '../../ai/system-prompt';
@@ -45,82 +45,85 @@ async function callAnthropic(apiKey: string): Promise<string> {
   const userMsg = `[CONTEXT]\n${EMPTY_CONTEXT}\n\n[REQUEST]\n${HYPER_V_PROMPT}`;
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 4096,
+    max_tokens: 8192,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userMsg }],
   });
   return message.content[0].type === 'text' ? message.content[0].text : '';
 }
 
+function assertSchema(raw: string, provider: string) {
+  const jsonMatch = raw.match(/```json\s*([\s\S]*?)\s*```/) ?? raw.match(/(\{[\s\S]*\})/);
+  const jsonStr = jsonMatch ? jsonMatch[1] : raw;
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch {
+    throw new Error(`${provider} response is not valid JSON.\n\nRaw:\n${raw}`);
+  }
+
+  console.log(`\n=== ${provider} Response ===`);
+  console.log(JSON.stringify(parsed, null, 2));
+
+  expect(parsed).toHaveProperty('explanation');
+  expect(parsed).toHaveProperty('diff');
+  expect(parsed.diff).not.toBeNull();
+
+  const diff = parsed.diff;
+  expect(diff).not.toHaveProperty('action');
+  expect(diff).not.toHaveProperty('devices');
+  expect(diff).not.toHaveProperty('cables');
+  expect(diff).toHaveProperty('addDevices');
+  expect(diff).toHaveProperty('addCables');
+  expect(Array.isArray(diff.addDevices)).toBe(true);
+  expect(Array.isArray(diff.addCables)).toBe(true);
+
+  for (const device of diff.addDevices) {
+    expect(device).toHaveProperty('id');
+    expect(device).toHaveProperty('templateId');
+    expect(device).toHaveProperty('rackId');
+    expect(device).toHaveProperty('startUnit');
+    expect(device).toHaveProperty('ports');
+    expect(Array.isArray(device.ports)).toBe(true);
+  }
+
+  for (const cable of diff.addCables) {
+    expect(cable).toHaveProperty('sourcePortId');
+    expect(cable).toHaveProperty('destPortId');
+    expect(cable).not.toHaveProperty('from_device_id');
+    expect(cable).not.toHaveProperty('to_device_id');
+    expect(cable).toHaveProperty('color');
+    expect(cable).toHaveProperty('type');
+  }
+
+  const templateIds = diff.addDevices.map((d: any) => d.templateId);
+  console.log(`\n=== Devices ===`, templateIds);
+  expect(templateIds).toContain('server-2u-enterprise');
+  expect(templateIds).toContain('rs-sw-32p');
+
+  const cableTypes = diff.addCables.map((c: any) => c.type);
+  console.log(`=== Cable types ===`, cableTypes);
+  expect(cableTypes).toContain('idrac');
+  expect(cableTypes).toContain('general-a');
+}
+
 const deepseekKey = process.env.DEEPSEEK_API_KEY;
+const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
-describe('Hyper-V integration (DeepSeek)', () => {
-  it.skipIf(!deepseekKey)('AI produces correct addDevices/addCables schema — not action-style', async () => {
+describe('Hyper-V integration', () => {
+  it.skipIf(!deepseekKey)('[DeepSeek] produces correct addDevices/addCables schema', async () => {
     const raw = await callDeepSeek(deepseekKey!);
+    assertSchema(raw, 'DeepSeek');
+  }, 90_000);
 
-    // Extract JSON block if wrapped in markdown fences
-    const jsonMatch = raw.match(/```json\s*([\s\S]*?)\s*```/) ?? raw.match(/(\{[\s\S]*\})/);
-    const jsonStr = jsonMatch ? jsonMatch[1] : raw;
-
-    let parsed: any;
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch {
-      throw new Error(`Response is not valid JSON.\n\nRaw:\n${raw}`);
-    }
-
-    console.log('\n=== AI Response ===');
-    console.log(JSON.stringify(parsed, null, 2));
-
-    expect(parsed).toHaveProperty('explanation');
-    expect(parsed).toHaveProperty('diff');
-    expect(parsed.diff).not.toBeNull();
-
-    const diff = parsed.diff;
-
-    // Wrong schema — must not be present
-    expect(diff).not.toHaveProperty('action');
-    expect(diff).not.toHaveProperty('devices');
-    expect(diff).not.toHaveProperty('cables');
-
-    // Correct schema keys
-    expect(diff).toHaveProperty('addDevices');
-    expect(diff).toHaveProperty('addCables');
-    expect(Array.isArray(diff.addDevices)).toBe(true);
-    expect(Array.isArray(diff.addCables)).toBe(true);
-
-    for (const device of diff.addDevices) {
-      expect(device).toHaveProperty('id');
-      expect(device).toHaveProperty('templateId');
-      expect(device).toHaveProperty('rackId');
-      expect(device).toHaveProperty('startUnit');
-      expect(device).toHaveProperty('ports');
-      expect(Array.isArray(device.ports)).toBe(true);
-    }
-
-    for (const cable of diff.addCables) {
-      expect(cable).toHaveProperty('sourcePortId');
-      expect(cable).toHaveProperty('destPortId');
-      expect(cable).not.toHaveProperty('from_device_id');
-      expect(cable).not.toHaveProperty('to_device_id');
-      expect(cable).toHaveProperty('color');
-      expect(cable).toHaveProperty('type');
-    }
-
-    const templateIds = diff.addDevices.map((d: any) => d.templateId);
-    console.log('\n=== Devices ===', templateIds);
-    expect(templateIds).toContain('server-2u-enterprise');
-    expect(templateIds).toContain('rs-sw-32p');
-
-    const cableTypes = diff.addCables.map((c: any) => c.type);
-    console.log('=== Cable types ===', cableTypes);
-    expect(cableTypes).toContain('idrac');
-    expect(cableTypes).toContain('general-a');
+  it.skipIf(!anthropicKey)('[Claude] produces correct addDevices/addCables schema', async () => {
+    const raw = await callAnthropic(anthropicKey!);
+    assertSchema(raw, 'Claude');
   }, 90_000);
 
   it('skips when no API key is set', () => {
-    if (deepseekKey) return;
-    console.log('DEEPSEEK_API_KEY not set — integration test skipped.');
-    console.log('Run with: $env:DEEPSEEK_API_KEY="<key>"; npx vitest run src/__tests__/ai/hyper-v-integration.test.ts');
+    if (deepseekKey || anthropicKey) return;
+    console.log('No API key found. Set DEEPSEEK_API_KEY or ANTHROPIC_API_KEY to run integration tests.');
   });
 });
