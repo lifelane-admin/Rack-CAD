@@ -904,6 +904,7 @@ export interface AppEvents {
   'file:demo': void;
   'view:zoom-in': void;
   'view:zoom-out': void;
+  'view:zoom-fit': void;
   'edit:undo': void;
   'edit:redo': void;
   'edit:delete': void;
@@ -982,6 +983,16 @@ export interface AppEvents {
   'ai:preview-diff': RackDiff | null;
   'ai:apply-diff': RackDiff;
   'ai:error': string;
+  'ai:open-model-selector': { tab?: 'models' | 'providers' | 'compare' | 'estimator' | 'admin' } | void;
+  'ai:model-registry-updated': { version: string; totalModels: number };
+  'ai:model-added': unknown;
+  'ai:model-deprecated': unknown;
+  'ai:model-retired': unknown;
+  'ai:model-pricing-updated': unknown;
+  'ai:credentials-updated': { providerId: string };
+  'ai:connection-tested': { providerId: string; result: any };
+  'ai:studio-open': void;
+  'ai:studio-close': void;
 }
 
 // === Constants ===

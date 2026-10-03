@@ -34,6 +34,9 @@ import { BuildFloorView } from './datacenter';
 import './styles/text-tool-panel.css';
 import './styles/reports-float.css';
 import { AIPanel } from './components/ai-panel';
+import { RackSlicerAIStudio } from './ai/studio/ai-studio';
+import { ModelSelectorModal } from './ai/registry/ui/model-selector-modal';
+import { modelRegistry } from './ai/registry/model-registry';
 import { runSelfTests } from './utils/self-test';
 import { renderRack } from './renderers/rack-renderer';
 import { renderDevice } from './renderers/device-renderer';
@@ -757,6 +760,11 @@ export class App {
   private showStartupModal(): void {
     showStartupModal((choice: StartupChoice | null) => {
       if (!choice) return;
+      if (choice === 'ai') {
+        stateManager.setState({ aiMode: true });
+        eventBus.emit('ai:mode-changed', true);
+        return;
+      }
       if (choice === 'rack') {
         stateManager.setState({ workflowMode: 'rack', activeElevationRackId: null });
         eventBus.emit('view:switch', 'rack');
@@ -1103,11 +1111,18 @@ export class App {
       }, 1000);
     }
 
+    // Initialize Dynamic AI Model Registry Selector Modal
+    const modelSelectorModal = new ModelSelectorModal();
+    eventBus.on('ai:open-model-selector', (options?: any) => {
+      modelSelectorModal.show(options);
+    });
+
     // Initialize AI Key Modal
     this.setupAiKeyModal();
 
-    // Initialize AI Chat Panel
+    // Initialize AI Chat Panel & Full-Screen AI Studio
     new AIPanel();
+    new RackSlicerAIStudio();
 
     // Initialize Port Hover Tooltip
     const portTooltip = new PortTooltip();
@@ -1375,6 +1390,11 @@ export class App {
       }
     });
 
+    document.getElementById('ai-open-registry-btn')?.addEventListener('click', () => {
+      modal.classList.add('hidden');
+      eventBus.emit('ai:open-model-selector');
+    });
+
     tabGemini?.addEventListener('click', () => {
       activeProvider = 'gemini';
       renderProviderUI();
@@ -1477,6 +1497,16 @@ export class App {
         if (key || ClaudeProvider.hasKey()) {
           eventBus.emit('notification', { message: '☁ Claude AI connected & enabled', type: 'success' });
           eventBus.emit('ai:provider-changed', 'claude');
+        }
+      }
+
+      if (key) {
+        modelRegistry.setCredentials(activeProvider, { apiKey: key });
+      }
+      if (chosenModel) {
+        const matching = modelRegistry.getModels().find(m => m.providerId === activeProvider && (m.modelId === chosenModel || m.id === chosenModel));
+        if (matching) {
+          modelRegistry.setActiveSelectedModel(matching.id);
         }
       }
 
@@ -3790,6 +3820,23 @@ export class App {
         eventBus.emit('file:save', undefined);
       }
 
+      // Zoom In (+ or = or Ctrl+=)
+      if (e.key === '+' || (!e.ctrlKey && e.key === '=') || (e.ctrlKey && (e.key === '=' || e.key === '+'))) {
+        e.preventDefault();
+        eventBus.emit('view:zoom-in', undefined);
+      }
+      // Zoom Out (- or _ or Ctrl+-)
+      if (e.key === '-' || e.key === '_' || (e.ctrlKey && (e.key === '-' || e.key === '_'))) {
+        e.preventDefault();
+        eventBus.emit('view:zoom-out', undefined);
+      }
+      // Zoom to Fit (Ctrl+0)
+      if (e.ctrlKey && e.key === '0') {
+        e.preventDefault();
+        this.canvas.fitToContent();
+        eventBus.emit('view:zoom-fit', undefined);
+      }
+
       // Escape = Deselect / Cancel cable / Cancel rubber-band / Cancel export-area draw
       if (e.key === 'Escape') {
         if (this.isRubberBanding) {
@@ -5823,9 +5870,9 @@ export class App {
 
     type DoorState = 'closed' | 'open' | 'removed';
     const states: { state: DoorState; label: string }[] = [
-      { state: 'closed',  label: 'Closed'  },
-      { state: 'open',    label: 'Open'    },
-      { state: 'removed', label: 'Removed' },
+      { state: 'closed',  label: 'Closed'   },
+      { state: 'open',    label: 'Open'     },
+      { state: 'removed', label: 'Disabled' },
     ];
 
     const BASE_BTN = [

@@ -17,9 +17,9 @@ class EventBus {
     this.listeners[event] = this.listeners[event]!.filter(cb => cb !== callback) as any;
   }
 
-  emit<K extends keyof AppEvents>(event: K, data: AppEvents[K]): void {
+  emit<K extends keyof AppEvents>(event: K, data?: AppEvents[K]): void {
     if (!this.listeners[event]) return;
-    this.listeners[event]!.forEach(callback => callback(data));
+    this.listeners[event]!.forEach(callback => callback(data as AppEvents[K]));
   }
 
   once<K extends keyof AppEvents>(event: K, callback: EventCallback<AppEvents[K]>): void {

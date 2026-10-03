@@ -3,7 +3,7 @@
 // each choice does exactly what its equivalent sidebar nav-tree entry does (see sidebar.ts's
 // NAV_TREE + focusCloudProvider()), it doesn't touch or reset any existing project data.
 
-export type StartupChoice = 'rack' | 'datacenter' | 'flowchart' | 'aws' | 'azure' | 'gcp' | 'hybrid';
+export type StartupChoice = 'ai' | 'rack' | 'datacenter' | 'flowchart' | 'aws' | 'azure' | 'gcp' | 'hybrid';
 
 interface StartupOption {
   choice: StartupChoice;
@@ -14,6 +14,13 @@ interface StartupOption {
 }
 
 const STARTUP_OPTIONS: StartupOption[] = [
+  {
+    choice: 'ai',
+    icon: '⚡',
+    title: 'AI Studio',
+    description: 'Autonomous AI infrastructure architect. 3D Avatars, dynamic BOM, and MCP control plane.',
+    accent: '#38bdf8',
+  },
   {
     choice: 'rack',
     icon: '📦',
@@ -120,6 +127,10 @@ export function showStartupModal(onChoose: (choice: StartupChoice | null) => voi
   `;
 
   document.body.appendChild(modal);
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal(null);
+  });
 
   modal.querySelector('#startup-modal-close')?.addEventListener('click', () => closeModal(null));
 

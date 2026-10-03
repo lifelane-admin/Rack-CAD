@@ -250,7 +250,7 @@ export class Toolbar {
     aiSettingsBtn.innerHTML = `⚙️`;
     aiSettingsBtn.style.fontSize = '12px';
     aiSettingsBtn.addEventListener('click', () => {
-      document.getElementById('ai-key-modal')?.classList.remove('hidden');
+      EventBus.emit('ai:open-model-selector');
     });
     right.appendChild(aiSettingsBtn);
 
@@ -332,7 +332,7 @@ export class Toolbar {
     EventBus.on('ai:mode-changed', (enabled: boolean) => {
       this.container.querySelector('#ai-toggle-btn')?.classList.toggle('active', enabled);
     });
-    EventBus.on('ai:provider-changed', (name) => {
+    EventBus.on('ai:provider-changed', (name: any) => {
       const badge = this.container.querySelector('#ai-provider-badge');
       if (badge) badge.textContent = aiLabels[name] ?? '⚙ Rules';
     });

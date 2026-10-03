@@ -1,6 +1,7 @@
 import { RackData, DeviceData, CableData, ValidationAlert, PortData } from './types';
 import { generateId } from '../utils/geometry';
-import { getRackPowerCapacityWatts, getRackPduLoadWatts } from '../utils/power';
+import { getRackPduLoadWatts, getPduConnectedLoadWatts, getPerPduCapacityWatts } from '../utils/power';
+import { getTemplate } from '../library/device-catalog';
 
 /**
  * Runs continuous background validation on the current rack configuration.
@@ -208,34 +209,45 @@ export function runValidationAlerts(
     }
   }
 
-  // Power draw validation per rack
+  // Power draw validation per rack — check each PDU individually
+  // Rationale: A device with 2 PSUs (dual-corded) plugs one cord into PDU-A and one into PDU-B.
+  // Each PDU meter shows the device's full wattage (not half), because from that PDU's perspective
+  // it IS supplying the full device load (the other cord is just redundancy, not load sharing).
+  // So we compare per-PDU load against per-PDU circuit capacity, never summing across PDUs.
   for (const rack of racks) {
-    const totalCapacity = getRackPowerCapacityWatts(rack, devices);
+    const pduDevices = devices.filter(
+      d => d.rackId === rack.id && getTemplate(d.templateId)?.category === 'pdu'
+    );
 
-    if (totalCapacity === 0) continue;
+    if (pduDevices.length === 0) continue;
 
-    const usedWatts = getRackPduLoadWatts(rack, devices, cables);
+    const perPduCapacity = getPerPduCapacityWatts(rack, devices);
 
-    const ratio = usedWatts / totalCapacity;
+    for (const pduDev of pduDevices) {
+      const { watts: pduLoad } = getPduConnectedLoadWatts(pduDev.id, cables, devices);
+      if (pduLoad === 0) continue; // nothing plugged in yet — skip
 
-    if (ratio >= 0.95) {
-      alerts.push({
-        id: generateId(),
-        type: 'error',
-        category: 'power',
-        message: `${rack.name}: power draw at ${Math.round(ratio * 100)}% of PDU capacity — critical`,
-        targetId: rack.id,
-        targetType: 'rack',
-      });
-    } else if (ratio >= 0.8) {
-      alerts.push({
-        id: generateId(),
-        type: 'warning',
-        category: 'power',
-        message: `${rack.name}: power draw at ${Math.round(ratio * 100)}% of PDU capacity`,
-        targetId: rack.id,
-        targetType: 'rack',
-      });
+      const ratio = pduLoad / perPduCapacity;
+
+      if (ratio >= 0.95) {
+        alerts.push({
+          id: generateId(),
+          type: 'error',
+          category: 'power',
+          message: `${rack.name}: ${pduDev.name} power draw at ${Math.round(ratio * 100)}% of PDU capacity — critical`,
+          targetId: pduDev.id,
+          targetType: 'rack',
+        });
+      } else if (ratio >= 0.8) {
+        alerts.push({
+          id: generateId(),
+          type: 'warning',
+          category: 'power',
+          message: `${rack.name}: ${pduDev.name} power draw at ${Math.round(ratio * 100)}% of PDU capacity`,
+          targetId: pduDev.id,
+          targetType: 'rack',
+        });
+      }
     }
   }
 

@@ -4,6 +4,7 @@ import { stateManager } from '../core/state';
 import { getTemplate } from '../library/device-catalog';
 
 export function renderPorts(ports: PortData[], deviceGroup: SVGGElement): void {
+  if (!ports || !Array.isArray(ports)) return;
   const state = stateManager.getState();
   const isRearView = state.cabinetViewMode === 'rear';
 

@@ -15,6 +15,7 @@ import './styles/properties.css';
 import './styles/context-menu.css';
 import './styles/ai-panel.css';
 import './styles/color-picker-modal.css';
+import './styles/model-registry.css';
 
 import { App } from './app';
 

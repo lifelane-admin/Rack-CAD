@@ -214,7 +214,9 @@ export function renderDevice(device: DeviceData, rackX: number, rackY: number, r
   }
 
   // Draw standard interactive port connectors on top of everything
-  renderPorts(device.ports, deviceGroup);
+  if (device.ports && Array.isArray(device.ports)) {
+    renderPorts(device.ports, deviceGroup);
+  }
 
   // Lock icon overlay
   if (device.locked) {

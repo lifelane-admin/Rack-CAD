@@ -3,11 +3,25 @@
 // `powerWatts` field) across validation.ts, report-builder.ts, and state-serializer.ts.
 import { RackData, DeviceData, CableData } from '../core/types';
 import { getTemplate } from '../library/device-catalog';
-import { stateManager } from '../core/state';
 
-/** Nameplate capacity of one rack-mount PDU circuit (matches the existing 7200W assumption
- *  used across validation/report/AI-serializer before this was consolidated). */
+/** Nameplate capacity of one rack-mount PDU circuit — this is the FALLBACK constant
+ *  used when no breaker/voltage configuration is available (30A × 240V = 7200W).
+ *  Real deployments should use getPduCapacityWattsFromConfig() with actual Stage 6 settings. */
 export const PDU_WATTS_PER_UNIT = 7200;
+
+/**
+ * Compute per-PDU capacity in Watts from the actual circuit configuration.
+ *   capacity = breakerAmps × voltage × (continuousLoadPercent / 100)
+ * e.g. 32A × 230V × 0.80 = 5,888W continuous safe load per feed.
+ * Default matches the legacy 30A × 240V assumption when called without arguments.
+ */
+export function getPduCapacityWattsFromConfig(
+  breakerAmps = 30,
+  voltage = 240,
+  continuousLoadPercent = 100,
+): number {
+  return Math.round(breakerAmps * voltage * (continuousLoadPercent / 100));
+}
 
 /** Counts actual PDU devices (horizontal rack-mount or vertical side-mount) placed in the rack —
  *  not the legacy `showPduLeft`/`showPduRight` rail checkboxes, which don't track real placement
@@ -16,8 +30,34 @@ export function getRackPduCount(rack: RackData, devices: DeviceData[]): number {
   return devices.filter(d => d.rackId === rack.id && getTemplate(d.templateId)?.category === 'pdu').length;
 }
 
+/**
+ * Total capacity across all PDUs in this rack.
+ * Uses the rack's stored powerConfig (breakerAmps, voltage, continuousLoadPercent) if present;
+ * falls back to the legacy PDU_WATTS_PER_UNIT constant otherwise.
+ */
 export function getRackPowerCapacityWatts(rack: RackData, devices: DeviceData[]): number {
-  return getRackPduCount(rack, devices) * PDU_WATTS_PER_UNIT;
+  const count = getRackPduCount(rack, devices);
+  if (count === 0) return 0;
+  const pc = (rack as any).powerConfig as { breakerAmps?: number; voltage?: number; continuousLoadPercent?: number } | undefined;
+  if (pc?.breakerAmps && pc?.voltage) {
+    return count * getPduCapacityWattsFromConfig(pc.breakerAmps, pc.voltage, pc.continuousLoadPercent ?? 100);
+  }
+  return count * PDU_WATTS_PER_UNIT;
+}
+
+/**
+ * Per-PDU capacity (single feed).
+ * Uses rack.powerConfig when available; falls back to PDU_WATTS_PER_UNIT / pduCount
+ * so callers can compare individual PDU meters against their own circuit limit.
+ */
+export function getPerPduCapacityWatts(rack: RackData, devices: DeviceData[]): number {
+  const count = getRackPduCount(rack, devices);
+  if (count === 0) return PDU_WATTS_PER_UNIT;
+  const pc = (rack as any).powerConfig as { breakerAmps?: number; voltage?: number; continuousLoadPercent?: number } | undefined;
+  if (pc?.breakerAmps && pc?.voltage) {
+    return getPduCapacityWattsFromConfig(pc.breakerAmps, pc.voltage, pc.continuousLoadPercent ?? 100);
+  }
+  return PDU_WATTS_PER_UNIT;
 }
 
 /** A device's real nameplate wattage — its own override if set, else the catalog template's,

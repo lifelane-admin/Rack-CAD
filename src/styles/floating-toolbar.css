@@ -397,11 +397,25 @@ body.hybrid-merged #cloud-floating-toolbar {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 24px;
-  padding: 4px 12px;
+  padding: 4px 10px;
   gap: 8px;
   height: 44px;
   box-sizing: border-box;
   position: relative;
+  flex-shrink: 0;
+}
+
+/* Glass bubble pill around core swatches */
+.ft-colors-core-bubble {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 4px 8px;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.15), 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 .ft-swatch {
@@ -562,7 +576,8 @@ body.hybrid-merged #cloud-floating-toolbar {
   display: block;
 }
 
-.ft-color-palette-btn {
+.ft-color-palette-btn,
+.ft-color-add-btn {
   width: 26px;
   height: 26px;
   border-radius: 50%;
@@ -577,9 +592,11 @@ body.hybrid-merged #cloud-floating-toolbar {
   padding: 0;
   margin-left: 2px;
   flex-shrink: 0;
+  font-size: 13px;
 }
 
-.ft-color-palette-btn:hover {
+.ft-color-palette-btn:hover,
+.ft-color-add-btn:hover {
   background: rgba(56, 189, 248, 0.2);
   border-color: #38bdf8;
   color: #ffffff;

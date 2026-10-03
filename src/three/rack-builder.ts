@@ -320,7 +320,11 @@ function makeVentHeaderMat(): THREE.MeshStandardMaterial {
   let tx = gap;
   while (tx + tw < TW - gap) {
     ctx.beginPath();
-    ctx.roundRect(tx, (TH - th) / 2, tw, th, 1.5);
+    if (typeof (ctx as any).roundRect === 'function') {
+      (ctx as any).roundRect(tx, (TH - th) / 2, tw, th, 1.5);
+    } else {
+      ctx.rect(tx, (TH - th) / 2, tw, th);
+    }
     ctx.fill();
     tx += tw + gap;
   }
@@ -964,9 +968,11 @@ export function buildRackGroup(
 
       } else {
         // ── Single Door Styles (glass, acrylic, perforated, solid, louvered, wire-mesh, hexa, round-hole) ──
+        const isSwingLeft = doorOp === 'swing-left';
         const doorGroup = new THREE.Group();
-        doorGroup.name  = prefix;
-        doorGroup.position.set(PERF_END, 0, faceZ);
+        doorGroup.name  = isSwingLeft ? `${prefix}-left` : prefix;
+        const pivotX = isSwingLeft ? -PERF_END : PERF_END;
+        doorGroup.position.set(pivotX, 0, faceZ);
 
         const isMeshDoor = doorStyle.includes('perforated') || doorStyle.includes('honeycomb') || doorStyle.includes('hexa') || doorStyle.includes('mesh') || doorStyle.includes('round-hole');
         const activeDoorMat = resolveDoorInsertMat(doorStyle, GLASS_HW * 2, bodyH);
@@ -974,7 +980,8 @@ export function buildRackGroup(
         const glassGeo  = isMeshDoor ? new THREE.PlaneGeometry(GLASS_HW * 2, bodyH) : new THREE.BoxGeometry(GLASS_HW * 2, bodyH, 4);
         const glassDoor = new THREE.Mesh(glassGeo, activeDoorMat);
         glassDoor.name  = isRear ? 'rack-rear-glass' : 'rack-glass';
-        glassDoor.position.set(-PERF_END, 0, isMeshDoor ? 0 : zDir * -2);
+        const centerRelX = isSwingLeft ? PERF_END : -PERF_END;
+        glassDoor.position.set(centerRelX, 0, isMeshDoor ? 0 : zDir * -2);
         doorGroup.add(glassDoor);
 
         // Louvered slats for louvered door
@@ -984,23 +991,23 @@ export function buildRackGroup(
           for (let s = 0; s < numSlats; s++) {
             const slat = new THREE.Mesh(slatGeo, handleMat);
             const slatY = -bodyH / 2 + 15 + s * 18;
-            slat.position.set(-PERF_END, slatY, zDir * 1);
+            slat.position.set(centerRelX, slatY, zDir * 1);
             slat.rotation.x = zDir * 0.4; // tilted louver slat
             doorGroup.add(slat);
           }
         }
 
-        // Handle & Hinges
+        // Handle & Hinges (handle on opposite edge of hinge)
         const handleGeo = new THREE.BoxGeometry(5, 65, 10);
         const handle    = new THREE.Mesh(handleGeo, handleMat);
         handle.name     = isRear ? 'rack-rear-handle' : 'rack-handle';
-        handle.position.set(-PERF_END - GLASS_HW + 10, 0, zDir * 3);
+        const handlePosX = isSwingLeft ? (centerRelX + GLASS_HW - 10) : (centerRelX - GLASS_HW + 10);
+        handle.position.set(handlePosX, 0, zDir * 3);
         doorGroup.add(handle);
 
-        const hingePosX = doorOp === 'swing-left' ? -PERF_END * 2 : 0;
         for (const hingeY of [-bodyH * 0.35, bodyH * 0.35]) {
           const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 14, 5), hingeMat);
-          hinge.position.set(hingePosX, hingeY, zDir * -1);
+          hinge.position.set(0, hingeY, zDir * -1);
           doorGroup.add(hinge);
         }
 
@@ -1008,24 +1015,24 @@ export function buildRackGroup(
         const redGeo  = new THREE.BoxGeometry(RED_W, bodyH, 11);
         const leftRed = new THREE.Mesh(redGeo, redMat);
         leftRed.name  = isRear ? 'rack-rear-red-L' : 'rack-red-L';
-        leftRed.position.set(-(PERF_END + GLASS_HW + RED_W / 2), 0, zDir * -5.5);
+        leftRed.position.set(centerRelX - (GLASS_HW + RED_W / 2), 0, zDir * -5.5);
         doorGroup.add(leftRed);
 
         const rightRed = new THREE.Mesh(redGeo, redMat);
         rightRed.name  = isRear ? 'rack-rear-red-R' : 'rack-red-R';
-        rightRed.position.set(GLASS_HW + RED_W / 2 - PERF_END, 0, zDir * -5.5);
+        rightRed.position.set(centerRelX + (GLASS_HW + RED_W / 2), 0, zDir * -5.5);
         doorGroup.add(rightRed);
 
         // Perforated mesh wings
         const perfGeo  = new THREE.PlaneGeometry(PERF_W, bodyH);
         const leftPerf = new THREE.Mesh(perfGeo, wingMat);
         leftPerf.name  = isRear ? 'rack-rear-perf-L' : 'rack-perf-L';
-        leftPerf.position.set(-(PERF_END + PERF_CX), 0, 0);
+        leftPerf.position.set(centerRelX - PERF_CX, 0, 0);
         doorGroup.add(leftPerf);
 
         const rightPerf = new THREE.Mesh(perfGeo, wingMat);
         rightPerf.name  = isRear ? 'rack-rear-perf-R' : 'rack-perf-R';
-        rightPerf.position.set(PERF_CX - PERF_END, 0, 0);
+        rightPerf.position.set(centerRelX + PERF_CX, 0, 0);
         doorGroup.add(rightPerf);
 
         group.add(doorGroup);

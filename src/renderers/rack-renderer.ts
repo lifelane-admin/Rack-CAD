@@ -1,4 +1,4 @@
-import { RackData, RACK_CONSTANTS, AppState } from '../core/types';
+import { RackData, DeviceData, RACK_CONSTANTS, AppState } from '../core/types';
 import { createGroup, createRect, createCircle, createText, createLinearGradient, createFilter, createSVGElement, setAttributes } from '../utils/svg-helpers';
 import { stateManager } from '../core/state';
 import { renderSidePdu } from './pdu-renderer';
@@ -77,7 +77,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
   const OUTER_W = RACK_CONSTANTS.RACK_OUTER_WIDTH;
 
   // PDU width computation from attached side-mount devices
-  const allDevices = stateManager.getState().devices;
+  const allDevices: DeviceData[] = (state as any).devices || stateManager.getState().devices;
   const leftPduDevice = rack.leftPduId ? allDevices.find(d => d.id === rack.leftPduId) : null;
   const rightPduDevice = rack.rightPduId ? allDevices.find(d => d.id === rack.rightPduId) : null;
   const leftPduTemplate = leftPduDevice ? getTemplate(leftPduDevice.templateId) : null;

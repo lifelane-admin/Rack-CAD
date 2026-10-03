@@ -1,5 +1,5 @@
 import { DeviceTemplate, DeviceData, DeviceCategory, SwitchConfig, FirewallConfig, NacConfig, AtsConfig } from '../core/types';
-import { switchPorts } from '../renderers/switch-renderer';
+import { switchPorts, torSwitchPorts } from '../renderers/switch-renderer';
 import { fortigatePorts, firewallPorts } from '../renderers/firewall-renderer';
 import { networkingPorts } from '../renderers/networking-renderer';
 import { nacPorts } from '../renderers/nac-renderer';
@@ -148,6 +148,8 @@ export const deviceCatalog: DeviceTemplate[] = [
       { id: 's2ue-nic3', name: '25G SFP28 3', type: 'sfp28', relativeX: 325, relativeY: 15, speed: '25 Gbps' },
       { id: 's2ue-nic4', name: '25G SFP28 4', type: 'sfp28', relativeX: 340, relativeY: 15, speed: '25 Gbps' },
       { id: 's2ue-mgmt', name: 'MGMT', type: 'management', relativeX: 340, relativeY: 28, speed: '1 Gbps' },
+      { id: 's2ue-psu1', name: 'PSU 1 (C14)', type: 'power', relativeX: 25, relativeY: 18, speed: '230V' },
+      { id: 's2ue-psu2', name: 'PSU 2 (C14)', type: 'power', relativeX: 50, relativeY: 18, speed: '230V' },
     ],
   },
   {
@@ -333,25 +335,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#1e3a8a',
     icon: '🌐',
     powerWatts: 450,
-    ports: [
-      ...Array.from({ length: 48 }, (_, i) => ({
-        id: `tor-sfp${i + 1}`,
-        name: `25G SFP ${i + 1}`,
-        type: 'sfp28' as const,
-        relativeX: 40 + (i % 24) * 11,
-        relativeY: i < 24 ? 6 : 18,
-        speed: '25 Gbps',
-      })),
-      ...Array.from({ length: 6 }, (_, i) => ({
-        id: `tor-qsfp${i + 1}`,
-        name: `100G QSFP ${i + 1}`,
-        type: 'qsfp28' as const,
-        relativeX: 310 + i * 15,
-        relativeY: 10,
-        speed: '100 Gbps',
-      })),
-      { id: 'tor-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 405, relativeY: 10, speed: '1 Gbps' },
-    ],
+    ports: torSwitchPorts(48, 6, 'tor-'),
   },
   {
     id: 'sw-1u-leaf-100g-400g',
@@ -1169,6 +1153,8 @@ export const deviceCatalog: DeviceTemplate[] = [
       { id: 'san-eth1', name: '100G NVMe-oF 1', type: 'qsfp28' as const, relativeX: 345, relativeY: 15, speed: '100 Gbps' },
       { id: 'san-eth2', name: '100G NVMe-oF 2', type: 'qsfp28' as const, relativeX: 345, relativeY: 30, speed: '100 Gbps' },
       { id: 'san-mgmt', name: 'Array MGMT', type: 'management' as const, relativeX: 360, relativeY: 15, speed: '1 Gbps' },
+      { id: 'san-psu1', name: 'PSU 1 (C14)', type: 'power' as const, relativeX: 25, relativeY: 18, speed: '230V' },
+      { id: 'san-psu2', name: 'PSU 2 (C14)', type: 'power' as const, relativeX: 50, relativeY: 18, speed: '230V' },
     ],
   },
   {

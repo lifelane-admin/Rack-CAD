@@ -58,7 +58,7 @@ ALWAYS respond with a single JSON object with exactly two keys: "explanation" an
 
 CRITICAL schema rules — violations will silently fail:
 - Top-level diff keys are ONLY: "addRacks", "addDevices", "addCables", "removeDevices", "removeCables", "updateDevices", "updateCables".
-- NEVER invent keys. These are ALL forbidden: "racksToCreate", "devicesToCreate", "cablesToCreate", "networkPorts", "powerPorts", "action", "devices", "cables", "racks", "nodes", "connections", "links", "items", "height", "position", "deviceType", "vlan", "speed", "circuit".
+- NEVER invent keys (NEVER use "action"). These are ALL forbidden: "racksToCreate", "devicesToCreate", "cablesToCreate", "networkPorts", "powerPorts", "action", "devices", "cables", "racks", "nodes", "connections", "links", "items", "height", "position", "deviceType", "vlan", "speed", "circuit".
 - Device fields are ONLY: id, templateId, rackId, startUnit, name, hostname, ports. No other fields.
 - Port fields are ONLY: id, name, type. No "speed", "vlan", "pduId", "circuit" or any other field.
 - Cable fields are ONLY: id, type, color, sourcePortId, destPortId, routingMode, anchorPoints. No "fromPort", "toPort", "from_device_id", "to_device_id".

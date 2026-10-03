@@ -167,9 +167,11 @@ export function getSidePdu3DMaterial(
   canvas.width = W;
   canvas.height = H;
 
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#16191f';
-  ctx.fillRect(0, 0, W, H);
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#16191f';
+    ctx.fillRect(0, 0, W, H);
+  }
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;

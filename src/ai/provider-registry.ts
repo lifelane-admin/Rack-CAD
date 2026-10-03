@@ -19,6 +19,19 @@ export class ProviderRegistry {
   ];
 
   async detect(): Promise<AIProvider> {
+    try {
+      const { modelRegistry } = await import('./registry/model-registry');
+      const activeModel = modelRegistry.getActiveSelectedModel();
+      if (activeModel) {
+        const preferred = this.providers.find(p => p.name === activeModel.providerId);
+        if (preferred && await preferred.isAvailable()) {
+          return preferred;
+        }
+      }
+    } catch {
+      // Fallback to local storage if registry not yet initialized
+    }
+
     const activePref = localStorage.getItem('rackcad_active_provider') as AIProviderName | null;
     if (activePref) {
       const preferred = this.providers.find(p => p.name === activePref);

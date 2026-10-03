@@ -28,6 +28,34 @@ const MIN_CONSOLE_W = 170, MAX_CONSOLE_W = 250;
 // reset button stay small decorative elements (never real connectable ports).
 const USB_W = 24, RST_W = 10, TRAIL_GAP = 14;
 
+// ── Photorealistic ToR Switch Constants (48x 25G SFP28 + 6x 100G QSFP28) ───────
+export const TOR_RW = 1240;
+export const TOR_U1 = 132;
+export const TOR_BLADE_W = 26;
+export const TOR_CHASSIS_W = TOR_RW - TOR_BLADE_W * 2; // 1188
+export const TOR_CHASSIS_X = TOR_BLADE_W; // 26
+export const TOR_CONS_X = TOR_CHASSIS_X + 16; // 42
+export const TOR_CONSOLE_W = 150;
+export const TOR_MGMT_X = 204;
+export const TOR_CONSOLE_JACK_X = 242;
+export const TOR_USB_X = 280;
+export const TOR_RST_X = 310;
+export const TOR_SEP1_X = 328;
+export const TOR_SFP_X = 338;
+export const TOR_SFP_W = 26;
+export const TOR_SFP_H = 34;
+export const TOR_SFP_COL_GAP = 3.8;
+export const TOR_SFP_BLK_GAP = 7.5;
+export const TOR_SFP_TOP0 = 26;
+export const TOR_SFP_TOP1 = 68;
+export const TOR_SEP2_X = 1074;
+export const TOR_QSFP_X = 1084;
+export const TOR_QSFP_W = 34;
+export const TOR_QSFP_H = 34;
+export const TOR_QSFP_COL_GAP = 5;
+export const TOR_QSFP_TOP0 = 26;
+export const TOR_QSFP_TOP1 = 68;
+
 interface SwitchLayout {
   totRjW: number; sfpRowW: number; stackRowW: number; trailW: number; consoleW: number;
   chassisW: number; bladeW: number; totW: number;
@@ -207,6 +235,474 @@ function switchLed(
   parent.appendChild(grp);
 }
 
+/** High-density Top-of-Rack (ToR) switch port generator (48x 25G SFP28 + 6x 100G QSFP28). */
+export function torSwitchPorts(
+  sfp28Count = 48,
+  qsfp28Count = 6,
+  idPfx = 'tor-',
+): DeviceTemplate['ports'] {
+  const W = 350, H = 28.5;
+  const sx = W / TOR_RW;
+  const sy = H / TOR_U1;
+
+  type PortEntry = Omit<PortData, 'deviceId' | 'connected' | 'cableId'>;
+  const out: PortEntry[] = [];
+
+  // SFP28 25G Ports (Odd top row, Even bottom row)
+  for (let n = 1; n <= sfp28Count; n++) {
+    const isOdd = n % 2 === 1;
+    const col = Math.floor((n - 1) / 2);
+    const row = isOdd ? 0 : 1;
+    const b = Math.floor(col / 4);
+    const ci = col % 4;
+    const jx = TOR_SFP_X + b * (4 * TOR_SFP_W + 3 * TOR_SFP_COL_GAP + TOR_SFP_BLK_GAP) + ci * (TOR_SFP_W + TOR_SFP_COL_GAP);
+    const jy = row === 0 ? TOR_SFP_TOP0 : TOR_SFP_TOP1;
+
+    out.push({
+      id: `${idPfx}sfp${n}`,
+      name: `25G SFP28 ${n}`,
+      type: 'sfp28',
+      speed: '25 Gbps',
+      relativeX: (jx + TOR_SFP_W / 2) * sx,
+      relativeY: (jy + TOR_SFP_H / 2) * sy,
+      portW: TOR_SFP_W * sx,
+      portH: TOR_SFP_H * sy,
+      group: 'DATA',
+    });
+  }
+
+  // QSFP28 100G Uplink Ports (Q1, Q3, Q5 top row; Q2, Q4, Q6 bottom row)
+  for (let n = 1; n <= qsfp28Count; n++) {
+    const isOdd = n % 2 === 1;
+    const col = Math.floor((n - 1) / 2);
+    const row = isOdd ? 0 : 1;
+    const jx = TOR_QSFP_X + col * (TOR_QSFP_W + TOR_QSFP_COL_GAP);
+    const jy = row === 0 ? TOR_QSFP_TOP0 : TOR_QSFP_TOP1;
+
+    out.push({
+      id: `${idPfx}qsfp${n}`,
+      name: `100G QSFP28 ${n}`,
+      type: 'qsfp28',
+      speed: '100 Gbps',
+      relativeX: (jx + TOR_QSFP_W / 2) * sx,
+      relativeY: (jy + TOR_QSFP_H / 2) * sy,
+      portW: TOR_QSFP_W * sx,
+      portH: TOR_QSFP_H * sy,
+      group: 'UPLINK',
+    });
+  }
+
+  // Out-of-band MGMT RJ45 Port
+  out.push({
+    id: `${idPfx}mgmt`,
+    name: 'MGMT',
+    type: 'management',
+    speed: '1 Gbps',
+    relativeX: (TOR_MGMT_X + RJ_W / 2) * sx,
+    relativeY: (TOR_U1 / 2) * sy,
+    portW: RJ_W * sx,
+    portH: RJ_H * sy,
+    group: 'MGMT',
+  });
+
+  // Console Serial RJ45 Port
+  out.push({
+    id: `${idPfx}console`,
+    name: 'Console',
+    type: 'console',
+    speed: '115.2 Kbps',
+    relativeX: (TOR_CONSOLE_JACK_X + RJ_W / 2) * sx,
+    relativeY: (TOR_U1 / 2) * sy,
+    portW: RJ_W * sx,
+    portH: RJ_H * sy,
+    group: 'MGMT',
+  });
+
+  // Power inlets in rear
+  out.push({
+    id: `${idPfx}psu1`,
+    name: 'PSU 1 (C14)',
+    type: 'power',
+    speed: '230V',
+    relativeX: 15,
+    relativeY: 10,
+  });
+
+  out.push({
+    id: `${idPfx}psu2`,
+    name: 'PSU 2 (C14)',
+    type: 'power',
+    speed: '230V',
+    relativeX: 30,
+    relativeY: 10,
+  });
+
+  return out;
+}
+
+/**
+ * Photorealistic Faceplate Renderer for 1U Top-of-Rack / High-Density Switches.
+ * Displays 48x 25G SFP28 optical cages (2 stacked rows of 24) and 6x 100G QSFP28 cages (2 stacked rows of 3),
+ * with live link/activity LEDs, metallic bezels, status LCD banner, and out-of-band MGMT/console ports.
+ */
+function renderTorSwitchPanel(
+  template: DeviceTemplate | null,
+  W: number,
+  H: number,
+  connectedPortIndices: Set<number>,
+  deviceData: DeviceData | undefined,
+  ports: (PortData | Omit<PortData, 'deviceId' | 'connected' | 'cableId'>)[],
+  uplinkPorts: (PortData | Omit<PortData, 'deviceId' | 'connected' | 'cableId'>)[],
+  config: SwitchConfig | undefined,
+  skin: ReturnType<typeof switchVendorSkin>,
+): SVGGElement {
+  const group = g('switch-panel tor-switch-panel');
+  const uid = `torsw${Math.random().toString(36).slice(2, 7)}`;
+
+  const brandRaw = config?.brandName || (template?.manufacturer ? template.manufacturer.split('/')[0].trim() : 'Cisco');
+  const brandLabel = brandRaw.toUpperCase();
+  const modelRaw = config?.modelName || (template?.model ? template.model.split('/')[0].trim() : 'Nexus 93180YC-FX3');
+  const model = modelRaw.toUpperCase();
+
+  const isLight = !!config && skin.tone === 'light';
+  const accent = config?.accentColor || (config ? skin.accent : '#38bdf8');
+  const linkOn = config?.ledTheme ?? 'green';
+  const actOn = `${linkOn}Blink`;
+
+  const sfp28Ports = uplinkPorts.filter(p => p.type !== 'qsfp' && p.type !== 'qsfp28' && p.type !== 'qsfp-dd');
+  const qsfpPorts = uplinkPorts.filter(p => p.type === 'qsfp' || p.type === 'qsfp28' || p.type === 'qsfp-dd');
+  const sfpCount = sfp28Ports.length > 0 ? sfp28Ports.length : 48;
+  const qsfpCount = qsfpPorts.length > 0 ? qsfpPorts.length : 6;
+
+  const connectedCount = connectedPortIndices.size;
+  const totalPortCount = ports.filter(p => p.type !== 'power').length || (sfpCount + qsfpCount + 2);
+
+  const ns = el('svg', { width: W, height: H });
+  ns.setAttribute('viewBox', `0 0 ${TOR_RW} ${TOR_U1}`);
+  ns.setAttribute('preserveAspectRatio', 'none');
+  ns.setAttribute('role', 'img');
+  ns.setAttribute('aria-label', `${brandLabel} ${model} 1U High-Density ToR Switch`);
+
+  const defs = el('defs');
+
+  // Linear gradients
+  function linGrad(id: string, x2: string, y2: string, stops: [string, string][]) {
+    const gr = el('linearGradient', { id, x1: '0', y1: '0', x2, y2 });
+    for (const [offset, color] of stops) {
+      const s = el('stop'); s.setAttribute('offset', offset); s.setAttribute('stop-color', color);
+      gr.appendChild(s);
+    }
+    defs.appendChild(gr);
+  }
+  function radGrad(id: string, cx: string, cy: string, r: string, stops: [string, string][]) {
+    const gr = el('radialGradient', { id, cx, cy, r });
+    for (const [offset, color] of stops) {
+      const s = el('stop'); s.setAttribute('offset', offset); s.setAttribute('stop-color', color);
+      gr.appendChild(s);
+    }
+    defs.appendChild(gr);
+  }
+
+  linGrad(`tor-chassis-${uid}`, '0', '1', isLight
+    ? [['0', '#ffffff'], ['0.5', '#f6f7f9'], ['1', '#eceef1']]
+    : [['0', '#2d3339'], ['0.06', '#22272c'], ['0.5', '#1a1f23'], ['0.94', '#15181b'], ['1', '#0f1214']]);
+  linGrad(`tor-blade-${uid}`, '1', '0', isLight
+    ? [['0', '#f2f4f6'], ['0.5', '#e8eaed'], ['1', '#dfe2e6']]
+    : [['0', '#22282d'], ['0.35', '#323a41'], ['0.55', '#3d464e'], ['0.8', '#252c31'], ['1', '#171b1e']]);
+  linGrad(`tor-cage-${uid}`, '0', '1', [['0', '#0a0d0f'], ['0.12', '#22272b'], ['0.5', '#13171a'], ['0.88', '#090b0c'], ['1', '#040506']]);
+  linGrad(`tor-cageLip-${uid}`, '0', '1', [['0', '#525a62'], ['1', '#1e2428']]);
+  linGrad(`tor-gold-${uid}`, '0', '1', [['0', '#f6d98a'], ['0.5', '#c9a24b'], ['1', '#7d6021']]);
+  linGrad(`tor-sfpBody-${uid}`, '0', '1', [['0', '#d1d5db'], ['0.14', '#9ca3af'], ['0.5', '#6b7280'], ['0.86', '#374151'], ['1', '#1f2937']]);
+  linGrad(`tor-sfpBoot-${uid}`, '0', '1', [['0', '#2c333a'], ['0.5', '#171c21'], ['1', '#0c0f12']]);
+  radGrad(`tor-cageInner-${uid}`, '0.5', '0.35', '0.9', [['0', '#0f1316'], ['1', '#000000']]);
+  radGrad(`tor-bore-${uid}`, '0.5', '0.4', '0.75', [['0', '#1a2a3a'], ['0.7', '#060b12'], ['1', '#000']]);
+
+  // Filters
+  const aoF = el('filter', { id: `tor-ao-${uid}`, x: '-20%', y: '-20%', width: '140%', height: '140%' });
+  const aoDS = el('feDropShadow');
+  aoDS.setAttribute('dx', '0'); aoDS.setAttribute('dy', '1.4'); aoDS.setAttribute('stdDeviation', '1.6');
+  aoDS.setAttribute('flood-color', '#000'); aoDS.setAttribute('flood-opacity', '0.55');
+  aoF.appendChild(aoDS); defs.appendChild(aoF);
+
+  const glowF = el('filter', { id: `glow-${uid}`, x: '-120%', y: '-120%', width: '340%', height: '340%' });
+  const glowBlur = el('feGaussianBlur'); glowBlur.setAttribute('stdDeviation', '1.1'); glowBlur.setAttribute('result', 'b'); glowF.appendChild(glowBlur);
+  const glowMrg = el('feMerge');
+  const mn1 = el('feMergeNode'); mn1.setAttribute('in', 'b'); glowMrg.appendChild(mn1);
+  const mn2 = el('feMergeNode'); mn2.setAttribute('in', 'SourceGraphic'); glowMrg.appendChild(mn2);
+  glowF.appendChild(glowMrg); defs.appendChild(glowF);
+
+  // RJ45 symbol for MGMT & Console
+  const rjSym = el('symbol', { id: `tor-rj45-${uid}`, viewBox: `0 0 ${RJ_W} ${RJ_H}` });
+  rjSym.appendChild(el('rect', { x: 0.5, y: 0.5, width: RJ_W - 1, height: RJ_H - 1, rx: 2, fill: `url(#tor-cage-${uid})`, stroke: '#05070a', 'stroke-width': 1 }));
+  rjSym.appendChild(el('rect', { x: 1.5, y: 1.5, width: RJ_W - 3, height: RJ_H - 3, rx: 1.5, fill: 'none', stroke: `url(#tor-cageLip-${uid})`, 'stroke-width': 1, opacity: 0.8 }));
+  const rjMg = g(); rjMg.setAttribute('transform', `translate(${RJ_W / 2} ${RJ_H / 2 - 2})`);
+  rjMg.appendChild(el('path', { d: 'M-9 10 h18 v-13 h-3 v-4 a2 2 0 0 0 -2 -2 h-4 a2 2 0 0 0 -2 2 v4 h-3 z', fill: '#0a0d0f', stroke: '#3a352a', 'stroke-width': 0.8 }));
+  for (let i = 0; i < 8; i++) {
+    rjMg.appendChild(el('rect', { x: -6.8 + i * 1.7, y: 2, width: 1, height: 6, fill: `url(#tor-gold-${uid})`, rx: 0.2 }));
+  }
+  rjSym.appendChild(rjMg);
+  defs.appendChild(rjSym);
+
+  // SFP28 Cage & Transceiver Symbols
+  function addSfpSym(symId: string, isPlugged: boolean) {
+    const sym = el('symbol', { id: symId, viewBox: `0 0 ${TOR_SFP_W} ${TOR_SFP_H}` });
+    sym.appendChild(el('rect', { x: 0.5, y: 0.5, width: TOR_SFP_W - 1, height: TOR_SFP_H - 1, rx: 2, fill: `url(#tor-cage-${uid})`, stroke: '#05070a', 'stroke-width': 1 }));
+    sym.appendChild(el('rect', { x: 1.2, y: 1.2, width: TOR_SFP_W - 2.4, height: TOR_SFP_H - 2.4, rx: 1.5, fill: 'none', stroke: `url(#tor-cageLip-${uid})`, 'stroke-width': 0.8, opacity: 0.8 }));
+
+    if (!isPlugged) {
+      sym.appendChild(el('rect', { x: 3, y: 7, width: TOR_SFP_W - 6, height: TOR_SFP_H - 14, rx: 1, fill: `url(#tor-cageInner-${uid})` }));
+      const cg = g(); cg.setAttribute('opacity', '0.9');
+      for (let i = 0; i < 5; i++) {
+        const gw = (TOR_SFP_W - 8) / 5;
+        cg.appendChild(el('rect', { x: 4 + i * gw, y: 9, width: gw - 1, height: TOR_SFP_H - 18, fill: `url(#tor-gold-${uid})`, rx: 0.3 }));
+      }
+      sym.appendChild(cg);
+      sym.appendChild(el('rect', { x: TOR_SFP_W / 2 - 4.5, y: 3.5, width: 9, height: 1.8, rx: 0.9, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.5 }));
+    } else {
+      sym.appendChild(el('rect', { x: 2.5, y: 3.5, width: TOR_SFP_W - 5, height: TOR_SFP_H - 7, rx: 1.6, fill: `url(#tor-sfpBody-${uid})`, stroke: '#1b2024', 'stroke-width': 0.8 }));
+      sym.appendChild(el('rect', { x: 3.5, y: 4.8, width: TOR_SFP_W - 7, height: 1.4, rx: 0.7, fill: '#e8edf1', opacity: 0.55 }));
+      sym.appendChild(el('rect', { x: 3.5, y: 3.8, width: TOR_SFP_W - 7, height: 2.8, rx: 1.2, fill: '#0284c7', opacity: 0.95 }));
+      sym.appendChild(el('rect', { x: TOR_SFP_W / 2 - 5, y: TOR_SFP_H / 2 - 3.5, width: 10, height: 10, rx: 1.8, fill: `url(#tor-sfpBoot-${uid})`, stroke: '#05070a', 'stroke-width': 0.6 }));
+      for (let i = 0; i < 3; i++) {
+        sym.appendChild(el('rect', { x: TOR_SFP_W / 2 - 4, y: TOR_SFP_H / 2 - 2 + i * 2.5, width: 8, height: 0.8, rx: 0.3, fill: '#000', opacity: 0.35 }));
+      }
+    }
+    defs.appendChild(sym);
+  }
+  addSfpSym(`tor-sfpCage-${uid}`, false);
+  addSfpSym(`tor-sfpPlug-${uid}`, true);
+
+  // QSFP28 Cage & Transceiver Symbols
+  function addQsfpSym(symId: string, isPlugged: boolean) {
+    const sym = el('symbol', { id: symId, viewBox: `0 0 ${TOR_QSFP_W} ${TOR_QSFP_H}` });
+    sym.appendChild(el('rect', { x: 0.5, y: 0.5, width: TOR_QSFP_W - 1, height: TOR_QSFP_H - 1, rx: 2, fill: `url(#tor-cage-${uid})`, stroke: '#05070a', 'stroke-width': 1 }));
+    sym.appendChild(el('rect', { x: 1.5, y: 1.5, width: TOR_QSFP_W - 3, height: TOR_QSFP_H - 3, rx: 1.5, fill: 'none', stroke: `url(#tor-cageLip-${uid})`, 'stroke-width': 0.8, opacity: 0.85 }));
+
+    if (!isPlugged) {
+      sym.appendChild(el('rect', { x: 4, y: 8, width: TOR_QSFP_W - 8, height: TOR_QSFP_H - 14, rx: 1.2, fill: `url(#tor-cageInner-${uid})` }));
+      const cg = g(); cg.setAttribute('opacity', '0.9');
+      for (let i = 0; i < 9; i++) {
+        const gw = (TOR_QSFP_W - 12) / 9;
+        cg.appendChild(el('rect', { x: 6 + i * gw, y: 10, width: gw - 1.2, height: TOR_QSFP_H - 18, fill: `url(#tor-gold-${uid})`, rx: 0.3 }));
+      }
+      sym.appendChild(cg);
+      sym.appendChild(el('rect', { x: TOR_QSFP_W / 2 - 8, y: 3.5, width: 16, height: 2, rx: 1, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.5 }));
+    } else {
+      sym.appendChild(el('rect', { x: 3, y: 3.5, width: TOR_QSFP_W - 6, height: TOR_QSFP_H - 7, rx: 1.8, fill: `url(#tor-sfpBody-${uid})`, stroke: '#1b2024', 'stroke-width': 0.8 }));
+      sym.appendChild(el('rect', { x: 4.5, y: 4.8, width: TOR_QSFP_W - 9, height: 1.5, rx: 0.7, fill: '#e8edf1', opacity: 0.55 }));
+      sym.appendChild(el('rect', { x: 4.5, y: 3.8, width: TOR_QSFP_W - 9, height: 3.2, rx: 1.2, fill: '#8b5cf6', opacity: 0.95 }));
+      sym.appendChild(el('rect', { x: TOR_QSFP_W / 2 - 7, y: TOR_QSFP_H / 2 - 3.5, width: 14, height: 11, rx: 2, fill: `url(#tor-sfpBoot-${uid})`, stroke: '#05070a', 'stroke-width': 0.6 }));
+      for (let i = 0; i < 3; i++) {
+        sym.appendChild(el('rect', { x: TOR_QSFP_W / 2 - 6, y: TOR_QSFP_H / 2 - 2 + i * 2.8, width: 12, height: 1, rx: 0.4, fill: '#000', opacity: 0.4 }));
+      }
+    }
+    defs.appendChild(sym);
+  }
+  addQsfpSym(`tor-qsfpCage-${uid}`, false);
+  addQsfpSym(`tor-qsfpPlug-${uid}`, true);
+
+  ns.appendChild(defs);
+
+  const txt = { label: '#94a3b8', mute: '#64748b' };
+  const chassisStroke = isLight ? '#d4d7dc' : '#0a0d10';
+
+  // 1. Main Chassis Body
+  const chG = g(); chG.setAttribute('filter', `url(#tor-ao-${uid})`);
+  chG.appendChild(el('rect', { x: TOR_CHASSIS_X, y: 1, width: TOR_CHASSIS_W, height: TOR_U1 - 2, rx: 3, fill: `url(#tor-chassis-${uid})`, stroke: chassisStroke, 'stroke-width': 1.2 }));
+  chG.appendChild(el('rect', { x: TOR_CHASSIS_X + 2, y: 2.5, width: TOR_CHASSIS_W - 4, height: 1.8, rx: 0.9, fill: '#454b51', opacity: 0.4 }));
+  ns.appendChild(chG);
+
+  // 2. Mounting Ears / Blades (Left and Right)
+  for (let side = 0; side < 2; side++) {
+    const isLeft = side === 0;
+    const bladeX = isLeft ? 0 : TOR_RW - TOR_BLADE_W;
+    const bg = g(); bg.setAttribute('filter', `url(#tor-ao-${uid})`);
+    bg.appendChild(el('rect', { x: bladeX, y: 0, width: TOR_BLADE_W, height: TOR_U1, rx: 2, fill: `url(#tor-blade-${uid})`, stroke: chassisStroke, 'stroke-width': 1 }));
+    for (const f of [0.22, 0.5, 0.78]) {
+      const cy = TOR_U1 * f;
+      const hg = g();
+      hg.appendChild(el('circle', { cx: bladeX + TOR_BLADE_W / 2, cy, r: 4.5, fill: '#0a0d10', stroke: '#3a4249', 'stroke-width': 0.8 }));
+      hg.appendChild(el('circle', { cx: bladeX + TOR_BLADE_W / 2, cy, r: 2.4, fill: '#040608' }));
+      bg.appendChild(hg);
+    }
+    ns.appendChild(bg);
+  }
+
+  // 3. Status Block & Branding (Left side)
+  const con = g(); con.setAttribute('transform', `translate(${TOR_CONS_X} 0)`);
+  const statusLeds: [string, string][] = [
+    ['PWR', 'green'], ['SYS', 'greenBlink'], ['ALM', 'off'], ['LOC', 'blue'],
+  ];
+  for (let i = 0; i < statusLeds.length; i++) {
+    const [lbl, st] = statusLeds[i];
+    const ly = 24 + i * 22;
+    switchLed(con, uid, 10, ly, st, 1.6);
+    const t = el('text', { x: 22, y: ly + 3.2, 'font-size': 8.5, fill: txt.label, 'letter-spacing': 0.8 });
+    t.textContent = lbl; con.appendChild(t);
+  }
+
+  const cy = TOR_U1 / 2;
+  const brandT = el('text', { x: 62, y: cy - 14, 'font-size': 13, 'font-weight': 800, fill: accent, 'letter-spacing': 1.6 });
+  brandT.textContent = brandLabel;
+  con.appendChild(brandT);
+
+  const modelT = el('text', { x: 62, y: cy + 4, 'font-size': 9, 'font-weight': 600, fill: txt.mute, 'letter-spacing': 1.1 });
+  modelT.textContent = model;
+  con.appendChild(modelT);
+
+  con.appendChild(el('rect', { x: 62, y: cy + 11, width: TOR_CONSOLE_W - 68, height: 1, fill: '#334155' }));
+
+  const lcdLine = connectedCount > 0
+    ? `${connectedCount}/${totalPortCount} PORTS UP`
+    : `48× 25G SFP28 + 6× 100G QSFP28 • 1U`;
+  const statT = el('text', { x: 62, y: cy + 24, 'font-size': 7, fill: '#38bdf8', 'letter-spacing': 0.8 });
+  statT.textContent = lcdLine;
+  con.appendChild(statT);
+
+  ns.appendChild(con);
+
+  // 4. Out-of-band MGMT & Console Ports
+  const mgmtG = g(); mgmtG.setAttribute('transform', `translate(${TOR_MGMT_X} ${(TOR_U1 - RJ_H) / 2})`);
+  mgmtG.setAttribute('role', 'button'); mgmtG.setAttribute('tabindex', '0');
+  mgmtG.setAttribute('aria-label', 'MGMT Port (1GbE RJ45)');
+  mgmtG.setAttribute('style', 'cursor:pointer;outline:none');
+  const mgmtUse = el('use'); mgmtUse.setAttribute('href', `#tor-rj45-${uid}`); mgmtUse.setAttribute('width', String(RJ_W)); mgmtUse.setAttribute('height', String(RJ_H));
+  mgmtG.appendChild(mgmtUse);
+  const mgmtPort = ports.find(p => p.type === 'management');
+  const mgmtConnected = mgmtPort ? connectedPortIndices.has(ports.indexOf(mgmtPort)) : false;
+  switchLed(mgmtG, uid, 6, 6, mgmtConnected ? 'green' : 'off', 1.3);
+  switchLed(mgmtG, uid, RJ_W - 6, 6, mgmtConnected ? 'greenBlink' : 'off', 1.3);
+  const mgmtLbl = el('text', { x: RJ_W / 2, y: RJ_H + 11, 'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 600, fill: txt.label });
+  mgmtLbl.textContent = 'MGMT'; mgmtG.appendChild(mgmtLbl);
+  ns.appendChild(mgmtG);
+
+  const conG = g(); conG.setAttribute('transform', `translate(${TOR_CONSOLE_JACK_X} ${(TOR_U1 - RJ_H) / 2})`);
+  conG.setAttribute('role', 'button'); conG.setAttribute('tabindex', '0');
+  conG.setAttribute('aria-label', 'Console Port (RS-232 / RJ45)');
+  conG.setAttribute('style', 'cursor:pointer;outline:none');
+  const conUse = el('use'); conUse.setAttribute('href', `#tor-rj45-${uid}`); conUse.setAttribute('width', String(RJ_W)); conUse.setAttribute('height', String(RJ_H));
+  conG.appendChild(conUse);
+  const conLbl = el('text', { x: RJ_W / 2, y: RJ_H + 11, 'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 600, fill: txt.label });
+  conLbl.textContent = 'CONSOLE'; conG.appendChild(conLbl);
+  ns.appendChild(conG);
+
+  // USB & RST Pinhole
+  const usbG = g(); usbG.setAttribute('transform', `translate(${TOR_USB_X} ${TOR_U1 / 2 - 4.5})`);
+  usbG.appendChild(el('rect', { x: 0, y: 0, width: USB_W, height: 9, rx: 4.5, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.8 }));
+  usbG.appendChild(el('rect', { x: 3, y: 2.9, width: 18, height: 3.2, rx: 1.6, fill: '#2a3036' }));
+  const usbT = el('text', { x: USB_W / 2, y: 20, 'font-size': 6, 'text-anchor': 'middle', fill: txt.mute, 'letter-spacing': 0.6 });
+  usbT.textContent = 'USB'; usbG.appendChild(usbT);
+  ns.appendChild(usbG);
+
+  const rstG = g(); rstG.setAttribute('transform', `translate(${TOR_RST_X + RST_W / 2} ${TOR_U1 / 2})`);
+  rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 3.4, fill: '#0a0d0f', stroke: '#3a4147', 'stroke-width': 0.8 }));
+  rstG.appendChild(el('circle', { cx: 0, cy: 0, r: 1.1, fill: '#02040a' }));
+  const rstT = el('text', { x: 0, y: 14, 'font-size': 6, 'text-anchor': 'middle', fill: txt.mute, 'letter-spacing': 0.6 });
+  rstT.textContent = 'RST'; rstG.appendChild(rstT);
+  ns.appendChild(rstG);
+
+  // 5. Vertical Separator & Header (SFP28 Section)
+  ns.appendChild(el('line', { x1: TOR_SEP1_X, y1: 16, x2: TOR_SEP1_X, y2: TOR_U1 - 16, stroke: '#334155', 'stroke-width': 1 }));
+  const sfpHeadT = el('text', { x: TOR_SFP_X, y: 16, 'font-size': 8.5, 'font-weight': 700, fill: '#38bdf8', 'letter-spacing': 1.2 });
+  sfpHeadT.textContent = '25G SFP28 PORTS (1–48)';
+  ns.appendChild(sfpHeadT);
+
+  // 6. 48x SFP28 Optical Ports (2 stacked rows of 24)
+  for (let n = 1; n <= sfpCount; n++) {
+    const isOdd = n % 2 === 1;
+    const col = Math.floor((n - 1) / 2);
+    const row = isOdd ? 0 : 1;
+    const b = Math.floor(col / 4);
+    const ci = col % 4;
+    const jx = TOR_SFP_X + b * (4 * TOR_SFP_W + 3 * TOR_SFP_COL_GAP + TOR_SFP_BLK_GAP) + ci * (TOR_SFP_W + TOR_SFP_COL_GAP);
+    const jy = row === 0 ? TOR_SFP_TOP0 : TOR_SFP_TOP1;
+
+    const port = sfp28Ports[n - 1] ?? ports[n - 1];
+    const globalIdx = port ? ports.indexOf(port) : (n - 1);
+    const connected = connectedPortIndices.has(globalIdx);
+    const symId = connected ? `tor-sfpPlug-${uid}` : `tor-sfpCage-${uid}`;
+
+    const pg = g(); pg.setAttribute('transform', `translate(${jx} ${jy})`);
+    pg.setAttribute('role', 'button'); pg.setAttribute('tabindex', '0');
+    pg.setAttribute('aria-label', `25G SFP28 port ${n}${connected ? ' (Connected)' : ''}`);
+    pg.setAttribute('style', 'cursor:pointer;outline:none');
+
+    const u = el('use'); u.setAttribute('href', `#${symId}`);
+    u.setAttribute('width', String(TOR_SFP_W)); u.setAttribute('height', String(TOR_SFP_H));
+    pg.appendChild(u);
+
+    // Link/Activity LED
+    const ledY = row === 0 ? 4.5 : TOR_SFP_H - 4.5;
+    switchLed(pg, uid, TOR_SFP_W / 2, ledY, connected ? linkOn : 'off', 1.2);
+
+    const hov = el('rect', { x: 0, y: 0, width: TOR_SFP_W, height: TOR_SFP_H, rx: 2, fill: accent, opacity: 0 });
+    hov.setAttribute('class', `hov-${uid}`); hov.setAttribute('pointer-events', 'none');
+    pg.appendChild(hov);
+    ns.appendChild(pg);
+
+    // Port Number Label
+    const lblY = row === 0 ? jy - 4 : jy + TOR_SFP_H + 9;
+    const pt = el('text', { x: jx + TOR_SFP_W / 2, y: lblY, 'text-anchor': 'middle', 'font-size': 6.8, 'font-weight': 600, fill: txt.label });
+    pt.textContent = String(n);
+    pt.setAttribute('pointer-events', 'none');
+    ns.appendChild(pt);
+  }
+
+  // 7. Vertical Separator & Header (QSFP28 Section)
+  ns.appendChild(el('line', { x1: TOR_SEP2_X, y1: 16, x2: TOR_SEP2_X, y2: TOR_U1 - 16, stroke: '#334155', 'stroke-width': 1 }));
+  const qsfpHeadT = el('text', { x: TOR_QSFP_X, y: 16, 'font-size': 8.5, 'font-weight': 700, fill: '#a855f7', 'letter-spacing': 1.2 });
+  qsfpHeadT.textContent = '100G QSFP28 (Q1–Q6)';
+  ns.appendChild(qsfpHeadT);
+
+  // 8. 6x QSFP28 100G Fabric Ports (2 stacked rows of 3)
+  for (let n = 1; n <= qsfpCount; n++) {
+    const isOdd = n % 2 === 1;
+    const col = Math.floor((n - 1) / 2);
+    const row = isOdd ? 0 : 1;
+    const jx = TOR_QSFP_X + col * (TOR_QSFP_W + TOR_QSFP_COL_GAP);
+    const jy = row === 0 ? TOR_QSFP_TOP0 : TOR_QSFP_TOP1;
+
+    const port = qsfpPorts[n - 1];
+    const globalIdx = port ? ports.indexOf(port) : (sfpCount + n - 1);
+    const connected = connectedPortIndices.has(globalIdx);
+    const symId = connected ? `tor-qsfpPlug-${uid}` : `tor-qsfpCage-${uid}`;
+
+    const qg = g(); qg.setAttribute('transform', `translate(${jx} ${jy})`);
+    qg.setAttribute('role', 'button'); qg.setAttribute('tabindex', '0');
+    qg.setAttribute('aria-label', `100G QSFP28 port Q${n}${connected ? ' (Connected)' : ''}`);
+    qg.setAttribute('style', 'cursor:pointer;outline:none');
+
+    const u = el('use'); u.setAttribute('href', `#${symId}`);
+    u.setAttribute('width', String(TOR_QSFP_W)); u.setAttribute('height', String(TOR_QSFP_H));
+    qg.appendChild(u);
+
+    // Quad LED indicators
+    const ledY = row === 0 ? 4.5 : TOR_QSFP_H - 4.5;
+    switchLed(qg, uid, TOR_QSFP_W / 2 - 6, ledY, connected ? linkOn : 'off', 1.2);
+    switchLed(qg, uid, TOR_QSFP_W / 2 + 6, ledY, connected ? actOn : 'off', 1.2);
+
+    const hov = el('rect', { x: 0, y: 0, width: TOR_QSFP_W, height: TOR_QSFP_H, rx: 2, fill: accent, opacity: 0 });
+    hov.setAttribute('class', `hov-${uid}`); hov.setAttribute('pointer-events', 'none');
+    qg.appendChild(hov);
+    ns.appendChild(qg);
+
+    // QSFP Label (Q1..Q6)
+    const lblY = row === 0 ? jy - 4 : jy + TOR_QSFP_H + 9;
+    const qt = el('text', { x: jx + TOR_QSFP_W / 2, y: lblY, 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 700, fill: '#c084fc' });
+    qt.textContent = `Q${n}`;
+    qt.setAttribute('pointer-events', 'none');
+    ns.appendChild(qt);
+  }
+
+  // 9. CSS animations
+  const style = el('style');
+  style.textContent = `.hov-${uid}{transition:opacity .12s ease}g[role="button"]:hover .hov-${uid}{opacity:.14}g[role="button"]:focus-visible .hov-${uid}{opacity:.22}@keyframes blink-${uid}{0%,49%{opacity:1}50%,100%{opacity:.12}}@keyframes pulse-${uid}{0%,100%{opacity:1}50%{opacity:.45}}.blink-${uid}{animation:blink-${uid} .9s steps(1) infinite}.pulse-${uid}{animation:pulse-${uid} 1.6s ease-in-out infinite}@media (prefers-reduced-motion:reduce){.blink-${uid},.pulse-${uid}{animation:none}}`;
+  ns.appendChild(style);
+
+  group.appendChild(ns);
+  return group;
+}
+
 export function renderSwitchPanel(
   template: DeviceTemplate | null,
   W: number,
@@ -220,23 +716,25 @@ export function renderSwitchPanel(
   const skin = switchVendorSkin(config?.vendor);
   const isLight = !!config && skin.tone === 'light';
 
-  // Prefer the device's own live ports (kept in sync with SwitchConfig by injectConfigurablePorts
-  // in state.ts) over the catalog template's frozen ports — otherwise, once a device's port
-  // counts diverge from the template's original composition, the panel keeps drawing the stale
-  // template layout while the port-renderer.ts hover/neon overlay (positioned from the live
-  // ports) moves to the new layout, visibly desyncing the two. Ear-hole ports (injectEarPorts in
-  // state.ts, mostly typed 'rj45' too) only exist on live device.ports, never on the template —
-  // exclude them here or they'd inflate rj45Count and the panel would draw extra jacks that
-  // don't correspond to any real network port.
-  const ports = (deviceData?.ports ?? template?.ports ?? []).filter(p => !p.id.includes('-ear-'));
+  // Prefer the device's own live ports over the catalog template's frozen ports.
+  // Fall back to template.ports when deviceData.ports is missing or empty.
+  const rawPorts = (deviceData?.ports && deviceData.ports.length > 0)
+    ? deviceData.ports
+    : (template?.ports ?? []);
+  const ports = rawPorts.filter(p => !p.id.includes('-ear-'));
   const rj45Count = ports.filter(p => p.type === 'rj45' && p.group !== 'STACK').length;
-  // `group` is only set on ports generated after this feature landed — fall back to type-based
-  // matching so devices persisted before this change (no `group` field yet) keep their uplinks.
-  const isTransceiverType = (t: string) => t === 'sfp' || t === 'sfp-plus' || t === 'sfp28' || t === 'qsfp' || t === 'qsfp28';
-  const uplinkPorts = ports.filter(p => p.group === 'UPLINK' || (!p.group && isTransceiverType(p.type)));
+  const isTransceiverType = (t: string) => t === 'sfp' || t === 'sfp-plus' || t === 'sfp28' || t === 'qsfp' || t === 'qsfp28' || t === 'qsfp-dd';
+  const uplinkPorts = ports.filter(p => p.group === 'UPLINK' || (!p.group && isTransceiverType(p.type)) || isTransceiverType(p.type));
   const sfpCount = uplinkPorts.length;
   const stackPorts = ports.filter(p => p.group === 'STACK');
   const stackCount = stackPorts.length;
+
+  // High-density ToR Switch (Cisco Nexus 93180YC, Arista 7050SX3, or pure transceiver ToR):
+  const isTor = template?.id === 'sw-1u-tor-25g-100g' || (rj45Count === 0 && sfpCount > 8);
+  if (isTor) {
+    return renderTorSwitchPanel(template, W, H, connectedPortIndices, deviceData, ports, uplinkPorts, config, skin);
+  }
+
   const model = config?.modelName || template?.model || 'RS-2400M';
   const brandLabel = config?.brandName || skin.brandName;
   const rjRows = rj45Count <= 8 ? 1 : 2;
