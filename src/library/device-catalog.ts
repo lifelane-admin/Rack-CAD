@@ -141,7 +141,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     heightUnits: 2,
     color: '#0f172a',
     icon: '🖥️',
-    powerWatts: 2000,
+    powerWatts: 800,
     ports: [
       { id: 's2ue-nic1', name: '25G SFP28 1', type: 'sfp28', relativeX: 295, relativeY: 15, speed: '25 Gbps' },
       { id: 's2ue-nic2', name: '25G SFP28 2', type: 'sfp28', relativeX: 310, relativeY: 15, speed: '25 Gbps' },
