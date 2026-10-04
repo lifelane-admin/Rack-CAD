@@ -265,9 +265,12 @@ export class StudioRackVisualizer {
         }
       : null;
 
+    const req = orchestrator.getState().requirement;
+    const isDualRack = (req?.rackCount || 1) >= 2;
+
     const rackData: RackData = {
       id: 'ai-studio-rack-01',
-      name: cab.name || 'DC01-CAB-01',
+      name: isDualRack ? 'DC01-CAB-01 (Rack A)' : (cab.name || 'DC01-CAB-01'),
       units: cab.totalU || 42,
       x: 0,
       y: 0,
@@ -282,14 +285,50 @@ export class StudioRackVisualizer {
       showPduRight: true,
     };
 
+    const rackDataB: RackData | null = isDualRack
+      ? {
+          id: 'ai-studio-rack-02',
+          name: 'DC01-CAB-02 (Rack B)',
+          units: cab.totalU || 42,
+          x: 450,
+          y: 0,
+          rackColor: '#16161a',
+          frontDoor: 'perforated',
+          leftCableManagerWidth: cab.leftCableManagerWidth || '4-inch',
+          rightCableManagerWidth: cab.rightCableManagerWidth || '4-inch',
+          vcmType: cab.vcmType || 'single-sided',
+          leftPduId: hasLeftPdu ? 'ai-studio-pdu-left-r2' : undefined,
+          rightPduId: hasRightPdu ? 'ai-studio-pdu-right-r2' : undefined,
+          showPduLeft: true,
+          showPduRight: true,
+        }
+      : null;
+
+    const computePlacements = placements.filter(p => p.category === 'Compute');
+    const halfCompute = Math.ceil(computePlacements.length / 2);
+    let cCount = 0;
+    let sCount = 0;
+
     const devices: DeviceData[] = placements.map((p, idx) => {
       const templateId = this.getTemplateIdForPlacement(p);
       const tmpl = getTemplate(templateId);
       const devId = p.id || `dev-${idx}`;
+
+      let targetRackId = rackData.id;
+      if (isDualRack) {
+        if (p.category === 'Network') {
+          targetRackId = sCount === 0 ? rackData.id : rackDataB!.id;
+          sCount++;
+        } else if (p.category === 'Compute') {
+          targetRackId = cCount >= halfCompute ? rackDataB!.id : rackData.id;
+          cCount++;
+        }
+      }
+
       return {
         id: devId,
-        name: p.name,
-        rackId: rackData.id,
+        name: isDualRack && p.category === 'Compute' ? `${p.name} (${targetRackId === rackData.id ? 'Rack A' : 'Rack B'})` : p.name,
+        rackId: targetRackId,
         templateId,
         startUnit: p.startU,
         color: p.action === 'Reserve' ? '#78350f' : undefined,
@@ -311,9 +350,11 @@ export class StudioRackVisualizer {
     if (leftPduDevice) allDevicesForScene.push(leftPduDevice);
     if (rightPduDevice) allDevicesForScene.push(rightPduDevice);
 
-    // Sync stateManager so SceneManager, rack-builder, and renderRack find all side-mount PDUs
+    const allRacks = isDualRack ? [rackData, rackDataB!] : [rackData];
+
+    // Sync stateManager so SceneManager, rack-builder, and renderRack find all side-mount PDUs and racks
     stateManager.setState({
-      racks: [rackData],
+      racks: allRacks,
       devices: isBlank ? [] : allDevicesForScene,
     });
 

@@ -464,7 +464,9 @@ export class RackSlicerAIStudio {
     const cab = this.orchestrator.getCabinetConfig();
     const placements = this.orchestrator.getRackPlacements();
 
-    const rackId = 'rack-ai-01';
+    const isMultiRack = (req.rackCount || 1) >= 2;
+    const rackId1 = 'rack-ai-01';
+    const rackId2 = 'rack-ai-02';
     const totalU = cab.totalU || 42;
     const leftPduTemplateId = cab.leftPduTemplateId || 'vpdu-apc-ap8858';
     const rightPduTemplateId = cab.rightPduTemplateId || 'vpdu-apc-ap8858';
@@ -472,12 +474,13 @@ export class RackSlicerAIStudio {
     const hasRightPdu = rightPduTemplateId !== 'none';
 
     const currentCanvasState = stateManager.getState();
-    const existingRackDevices = currentCanvasState.devices.filter((d) => d.rackId === rackId);
+    const targetRackIds = isMultiRack ? [rackId1, rackId2] : [rackId1];
+    const existingRackDevices = currentCanvasState.devices.filter((d) => targetRackIds.includes(d.rackId));
     const existingDevIds = new Set(existingRackDevices.map((d) => d.id));
 
     const changes: DesignChangeItem[] = [];
 
-    // Remove any stale cables or devices from previous deployment runs on this rack
+    // Remove any stale cables or devices from previous deployment runs on these racks
     for (const cable of currentCanvasState.cables) {
       if (
         (cable.sourcePortId && Array.from(existingDevIds).some((id) => cable.sourcePortId!.startsWith(id))) ||
@@ -487,24 +490,25 @@ export class RackSlicerAIStudio {
       }
     }
     for (const dev of existingRackDevices) {
-      changes.push({ action: 'remove_equipment', deviceId: dev.id, rackId });
+      changes.push({ action: 'remove_equipment', deviceId: dev.id, rackId: dev.rackId });
     }
 
     const powerCfg = this.orchestrator.getPowerThermalConfig();
 
+    // Create Rack A (Primary Rack)
     changes.push({
       action: 'create_rack',
-      rackId,
-      name: cab.name || 'Enterprise Production Cabinet',
+      rackId: rackId1,
+      name: isMultiRack ? 'DC01-CAB-01 (Rack A)' : (cab.name || 'Enterprise Production Cabinet'),
       units: totalU,
       details: {
-        x: 250,
+        x: 100,
         y: 80,
         leftCableManagerWidth: cab.leftCableManagerWidth || '4-inch',
         rightCableManagerWidth: cab.rightCableManagerWidth || '4-inch',
         vcmType: cab.vcmType || 'single-sided',
-        leftPduId: hasLeftPdu ? 'ai-pdu-left' : undefined,
-        rightPduId: hasRightPdu ? 'ai-pdu-right' : undefined,
+        leftPduId: hasLeftPdu ? 'ai-pdu-left-r1' : undefined,
+        rightPduId: hasRightPdu ? 'ai-pdu-right-r1' : undefined,
         powerConfig: {
           breakerAmps: powerCfg.breakerAmps ?? 32,
           voltage: powerCfg.voltage ?? 230,
@@ -513,75 +517,167 @@ export class RackSlicerAIStudio {
       },
     });
 
-
     if (hasLeftPdu) {
       changes.push({
         action: 'add_equipment',
-        rackId,
-        deviceId: 'ai-pdu-left',
+        rackId: rackId1,
+        deviceId: 'ai-pdu-left-r1',
         libraryItemId: leftPduTemplateId,
-        name: 'Feed A Vertical PDU (A-Side)',
+        name: 'Rack A Feed A Vertical PDU',
         position: 0,
         details: { sideMountPosition: 'left' },
       });
     }
-
     if (hasRightPdu) {
       changes.push({
         action: 'add_equipment',
-        rackId,
-        deviceId: 'ai-pdu-right',
+        rackId: rackId1,
+        deviceId: 'ai-pdu-right-r1',
         libraryItemId: rightPduTemplateId,
-        name: 'Feed B Vertical PDU (B-Side)',
+        name: 'Rack A Feed B Vertical PDU',
         position: 0,
         details: { sideMountPosition: 'right' },
       });
     }
 
+    // If Dual-Rack HA design, create Rack B as well
+    if (isMultiRack) {
+      changes.push({
+        action: 'create_rack',
+        rackId: rackId2,
+        name: 'DC01-CAB-02 (Rack B)',
+        units: totalU,
+        details: {
+          x: 600,
+          y: 80,
+          leftCableManagerWidth: cab.leftCableManagerWidth || '4-inch',
+          rightCableManagerWidth: cab.rightCableManagerWidth || '4-inch',
+          vcmType: cab.vcmType || 'single-sided',
+          leftPduId: hasLeftPdu ? 'ai-pdu-left-r2' : undefined,
+          rightPduId: hasRightPdu ? 'ai-pdu-right-r2' : undefined,
+          powerConfig: {
+            breakerAmps: powerCfg.breakerAmps ?? 32,
+            voltage: powerCfg.voltage ?? 230,
+            continuousLoadPercent: powerCfg.continuousLoadPercent ?? 80,
+          },
+        },
+      });
+
+      if (hasLeftPdu) {
+        changes.push({
+          action: 'add_equipment',
+          rackId: rackId2,
+          deviceId: 'ai-pdu-left-r2',
+          libraryItemId: leftPduTemplateId,
+          name: 'Rack B Feed A Vertical PDU',
+          position: 0,
+          details: { sideMountPosition: 'left' },
+        });
+      }
+      if (hasRightPdu) {
+        changes.push({
+          action: 'add_equipment',
+          rackId: rackId2,
+          deviceId: 'ai-pdu-right-r2',
+          libraryItemId: rightPduTemplateId,
+          name: 'Rack B Feed B Vertical PDU',
+          position: 0,
+          details: { sideMountPosition: 'right' },
+        });
+      }
+    }
+
     const nodeDeviceIds: string[] = [];
+    const rack1NodeIds: string[] = [];
+    const rack2NodeIds: string[] = [];
     let torADeviceId = '';
     let torBDeviceId = '';
     let storageDeviceId = '';
+
+    const computePlacements = placements.filter(p => p.category === 'Compute');
+    const halfCompute = Math.ceil(computePlacements.length / 2);
+
+    let computeIdx = 0;
+    let switchCount = 0;
 
     for (let idx = 0; idx < placements.length; idx++) {
       const p = placements[idx];
       const devId = `ai-dev-${p.id || idx}`;
       let libraryItemId = 'server-2u-enterprise';
+      let targetRack = rackId1;
+      let targetPos = p.startU;
 
       if (p.category === 'Network') {
         libraryItemId = 'sw-1u-tor-25g-100g';
-        if (!torADeviceId) torADeviceId = devId;
-        else if (!torBDeviceId) torBDeviceId = devId;
+        if (switchCount === 0) {
+          torADeviceId = devId;
+          targetRack = rackId1;
+          targetPos = totalU;
+        } else {
+          torBDeviceId = devId;
+          targetRack = isMultiRack ? rackId2 : rackId1;
+          targetPos = isMultiRack ? totalU : totalU - 1;
+        }
+        switchCount++;
       } else if (p.category === 'Compute') {
         libraryItemId = p.heightU === 4 ? 'server-4u-ai-gpu' : 'server-2u-enterprise';
         nodeDeviceIds.push(devId);
+
+        if (isMultiRack && computeIdx >= halfCompute) {
+          targetRack = rackId2;
+          rack2NodeIds.push(devId);
+          targetPos = totalU - 6 - (computeIdx - halfCompute) * p.heightU;
+        } else {
+          targetRack = rackId1;
+          rack1NodeIds.push(devId);
+          targetPos = totalU - 6 - computeIdx * p.heightU;
+        }
+        computeIdx++;
       } else if (p.category === 'Storage') {
         libraryItemId = 'storage-2u-allflash-nvme';
         storageDeviceId = devId;
+        targetRack = rackId1;
+        targetPos = 4;
       } else if (p.category === 'Passive') {
         libraryItemId = 'brush-panel-1u';
+        targetRack = rackId1;
+        targetPos = totalU - 1;
       }
 
       changes.push({
         action: 'add_equipment',
-        rackId,
+        rackId: targetRack,
         deviceId: devId,
         libraryItemId,
-        position: p.startU,
+        position: targetPos,
         units: p.heightU,
-        name: p.name,
+        name: isMultiRack && p.category === 'Compute' ? `${p.name} (${targetRack === rackId1 ? 'Rack A' : 'Rack B'})` : p.name,
       });
+
+      // For multi-rack HA, also place a 1U Brush Panel in Rack B
+      if (isMultiRack && p.category === 'Passive') {
+        changes.push({
+          action: 'add_equipment',
+          rackId: rackId2,
+          deviceId: `${devId}-r2`,
+          libraryItemId,
+          position: totalU - 1,
+          units: p.heightU,
+          name: `${p.name} (Rack B)`,
+        });
+      }
     }
 
-    // ── Smart Automated Cabling: High-Speed Data, MLAG, & Power ──
-    const nodeCount = nodeDeviceIds.length;
+    // ── Smart Automated Cabling: High-Speed Data, Cross-Rack HA MLAG, & Power ──
     const skipCabling = !!options?.skipConflictingCables;
 
     if (!skipCabling) {
-      // 1. Data Fabric (LACP / Redundant 25GbE SFP28 Links to ToR-A and ToR-B)
-      for (let i = 0; i < nodeCount; i++) {
+      // 1. Data Fabric (Cross-Rack Dual-Homed 25GbE SFP28 Links to ToR-A in Rack A and ToR-B in Rack B)
+      for (let i = 0; i < nodeDeviceIds.length; i++) {
         const nId = nodeDeviceIds[i];
         const nodeNum = i + 1;
+        const isRackA = rack1NodeIds.includes(nId);
+
         if (torADeviceId) {
           changes.push({
             action: 'create_cable',
@@ -589,8 +685,8 @@ export class RackSlicerAIStudio {
             target: `${torADeviceId}-port-${i}`,
             cableType: 'dac-twinax',
             color: '#0284c7',
-            name: `Node ${nodeNum} NIC 1 ⟶ ToR-A Port ${nodeNum} (25GbE Data A)`,
-            details: { sidePreference: 'left', notes: 'Production VM & Ceph Traffic LACP' },
+            name: `Node ${nodeNum} (${isRackA ? 'Rack A' : 'Rack B'}) NIC 1 ⟶ ToR-A Port ${nodeNum} (25GbE Data A)`,
+            details: { sidePreference: 'left', notes: isRackA ? 'In-Rack Data Link to ToR-A' : 'Cross-Rack Inter-Rack HA Link to ToR-A' },
           });
         }
         if (torBDeviceId) {
@@ -600,13 +696,13 @@ export class RackSlicerAIStudio {
             target: `${torBDeviceId}-port-${i}`,
             cableType: 'dac-twinax',
             color: '#10b981',
-            name: `Node ${nodeNum} NIC 2 ⟶ ToR-B Port ${nodeNum} (25GbE Data B)`,
-            details: { sidePreference: 'right', notes: 'Production VM & Ceph Traffic LACP Redundant' },
+            name: `Node ${nodeNum} (${isRackA ? 'Rack A' : 'Rack B'}) NIC 2 ⟶ ToR-B Port ${nodeNum} (25GbE Data B)`,
+            details: { sidePreference: 'right', notes: !isRackA ? 'In-Rack Data Link to ToR-B' : 'Cross-Rack Inter-Rack HA Link to ToR-B' },
           });
         }
       }
 
-      // 2. Inter-Switch Link (ISL / MLAG Peer Link between ToR-A and ToR-B: 100G QSFP28)
+      // 2. Inter-Switch Link (ISL / MLAG Cross-Rack Peer Link between ToR-A in Rack A and ToR-B in Rack B: 100G QSFP28)
       if (torADeviceId && torBDeviceId) {
         changes.push({
           action: 'create_cable',
@@ -614,8 +710,8 @@ export class RackSlicerAIStudio {
           target: `${torBDeviceId}-port-52`,
           cableType: 'dac-twinax',
           color: '#8b5cf6',
-          name: 'ToR-A Port 53 ⟷ ToR-B Port 53 (100G MLAG ISL Trunk 1)',
-          details: { sidePreference: 'right', notes: 'Inter-Switch Link Peer Bond 1' },
+          name: 'ToR-A (Rack A) ⟷ ToR-B (Rack B) (100G MLAG Inter-Rack ISL Trunk 1)',
+          details: { sidePreference: 'right', notes: 'Inter-Rack Switch Peer Link 1' },
         });
         changes.push({
           action: 'create_cable',
@@ -623,8 +719,8 @@ export class RackSlicerAIStudio {
           target: `${torBDeviceId}-port-53`,
           cableType: 'dac-twinax',
           color: '#8b5cf6',
-          name: 'ToR-A Port 54 ⟷ ToR-B Port 54 (100G MLAG ISL Trunk 2)',
-          details: { sidePreference: 'right', notes: 'Inter-Switch Link Peer Bond 2' },
+          name: 'ToR-A (Rack A) ⟷ ToR-B (Rack B) (100G MLAG Inter-Rack ISL Trunk 2)',
+          details: { sidePreference: 'right', notes: 'Inter-Rack Switch Peer Link 2' },
         });
       }
 
@@ -656,17 +752,21 @@ export class RackSlicerAIStudio {
     }
 
     // 4. Dual A/B Power Feeds to Vertical Side-Mount PDUs (Feed A = Left, Feed B = Right)
+    const nodeCount = nodeDeviceIds.length;
     for (let i = 0; i < nodeCount; i++) {
       const nId = nodeDeviceIds[i];
       const nodeNum = i + 1;
+      const isRackA = rack1NodeIds.includes(nId);
+      const targetPduLeft = isMultiRack ? (!isRackA ? 'outlet-ai-pdu-left-r2-' : 'outlet-ai-pdu-left-r1-') : 'outlet-ai-pdu-left-';
+      const targetPduRight = isMultiRack ? (!isRackA ? 'outlet-ai-pdu-right-r2-' : 'outlet-ai-pdu-right-r1-') : 'outlet-ai-pdu-right-';
       if (hasLeftPdu) {
         changes.push({
           action: 'create_cable',
           source: `${nId}-port-5`,
-          target: `outlet-ai-pdu-left-${i}`,
+          target: `${targetPduLeft}${i}`,
           cableType: 'power-c13',
           color: '#2563eb',
-          name: `Node ${nodeNum} PSU 1 ⟶ PDU-A Outlet ${nodeNum} (Feed A)`,
+          name: `Node ${nodeNum} (${isRackA ? 'Rack A' : 'Rack B'}) PSU 1 ⟶ PDU-A Outlet ${nodeNum} (Feed A)`,
           details: { sidePreference: 'left', powerCableType: 'power', notes: '230V 32A Feed A Branch' },
         });
       }
@@ -674,10 +774,10 @@ export class RackSlicerAIStudio {
         changes.push({
           action: 'create_cable',
           source: `${nId}-port-6`,
-          target: `outlet-ai-pdu-right-${i}`,
+          target: `${targetPduRight}${i}`,
           cableType: 'power-c13',
           color: '#dc2626',
-          name: `Node ${nodeNum} PSU 2 ⟶ PDU-B Outlet ${nodeNum} (Feed B)`,
+          name: `Node ${nodeNum} (${isRackA ? 'Rack A' : 'Rack B'}) PSU 2 ⟶ PDU-B Outlet ${nodeNum} (Feed B)`,
           details: { sidePreference: 'right', powerCableType: 'power', notes: '230V 32A Feed B Branch' },
         });
       }
@@ -690,7 +790,7 @@ export class RackSlicerAIStudio {
         changes.push({
           action: 'create_cable',
           source: `${torADeviceId}-port-56`,
-          target: `outlet-ai-pdu-left-${pduOffsetSw}`,
+          target: isMultiRack ? `outlet-ai-pdu-left-r1-${pduOffsetSw}` : `outlet-ai-pdu-left-${pduOffsetSw}`,
           cableType: 'power-c13',
           color: '#2563eb',
           name: 'ToR-A PSU 1 ⟶ PDU-A (Feed A)',
@@ -701,7 +801,7 @@ export class RackSlicerAIStudio {
         changes.push({
           action: 'create_cable',
           source: `${torADeviceId}-port-57`,
-          target: `outlet-ai-pdu-right-${pduOffsetSw}`,
+          target: isMultiRack ? `outlet-ai-pdu-right-r1-${pduOffsetSw}` : `outlet-ai-pdu-right-${pduOffsetSw}`,
           cableType: 'power-c13',
           color: '#dc2626',
           name: 'ToR-A PSU 2 ⟶ PDU-B (Feed B)',
@@ -714,7 +814,7 @@ export class RackSlicerAIStudio {
         changes.push({
           action: 'create_cable',
           source: `${torBDeviceId}-port-56`,
-          target: `outlet-ai-pdu-left-${pduOffsetSw + 1}`,
+          target: isMultiRack ? `outlet-ai-pdu-left-r2-${pduOffsetSw + 1}` : `outlet-ai-pdu-left-${pduOffsetSw + 1}`,
           cableType: 'power-c13',
           color: '#2563eb',
           name: 'ToR-B PSU 1 ⟶ PDU-A (Feed A)',
@@ -725,7 +825,7 @@ export class RackSlicerAIStudio {
         changes.push({
           action: 'create_cable',
           source: `${torBDeviceId}-port-57`,
-          target: `outlet-ai-pdu-right-${pduOffsetSw + 1}`,
+          target: isMultiRack ? `outlet-ai-pdu-right-r2-${pduOffsetSw + 1}` : `outlet-ai-pdu-right-${pduOffsetSw + 1}`,
           cableType: 'power-c13',
           color: '#dc2626',
           name: 'ToR-B PSU 2 ⟶ PDU-B (Feed B)',
@@ -781,7 +881,7 @@ export class RackSlicerAIStudio {
 
     if (applyRes.success) {
       this.lastTransactionId = preview.transactionId;
-      (eventBus as any).emit('view:focus-rack', rackId);
+      (eventBus as any).emit('view:focus-rack', rackId1);
       this.showToast('Infrastructure & smart cables committed to canvas!');
       return { success: true, txId: preview.transactionId };
     } else {
