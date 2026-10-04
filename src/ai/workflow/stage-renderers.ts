@@ -14,7 +14,10 @@
 import { WorkflowStageId, RequirementSpec, OptimizationObjective } from './types';
 import { AIWorkflowOrchestrator } from './workflow-orchestrator';
 import { eventBus } from '../../core/event-bus';
+import { stateManager } from '../../core/state';
 import { RackPreviewZoom } from './rack-preview-zoom';
+import { LabelSyncManager } from './label-sync-manager';
+import { CableLayingOrchestrator } from './cable-laying-orchestrator';
 
 export interface DeploymentConflictItem {
   id: string;
@@ -2852,6 +2855,14 @@ export class WorkflowStageRenderers {
 
       if (res.success) {
         orchestrator.markDeploymentComplete(res.txId);
+
+        // Auto-lay labels and cables on canvas after successful deploy
+        const canvasDevices = stateManager.getState().devices;
+        const canvasCables = stateManager.getState().cables;
+        new LabelSyncManager().syncLabels(canvasDevices);
+        new CableLayingOrchestrator().syncCables(canvasDevices, canvasCables, orchestrator.getState().requirement);
+        orchestrator.setCanvasDeployed(true);
+
         WorkflowStageRenderers.renderCompletionStage(container, orchestrator, res.txId);
       } else {
         const rawError = res.error || 'The MCP Control Plane rejected the canvas mutations.';
