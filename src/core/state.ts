@@ -783,6 +783,32 @@ export function injectEarPorts(
     });
   }
 
+  // Add management (iDRAC / iLO / BMC) ear hole on the right side when the
+  // device body has a management port.  Placed at the very bottom of the
+  // device height so it sits visually below the power hole.
+  const mgmtBodyPort = filtered.find(p => p.type === 'management');
+  if (mgmtBodyPort) {
+    const mgmtName = mgmtBodyPort.name.toLowerCase();
+    const mgmtLabel =
+      mgmtName.includes('idrac') || mgmtName.includes('drac') ? 'iDRAC' :
+      mgmtName.includes('ilo')                                  ? 'iLO'   :
+      mgmtName.includes('imm')                                  ? 'IMM'   :
+      mgmtName.includes('xcc')                                  ? 'XCC'   :
+      mgmtName.includes('bmc')                                  ? 'BMC'   : 'BMC';
+
+    const height = heightUnits * RACK_CONSTANTS.RU_HEIGHT;
+    earPorts.push({
+      id: `${deviceId}-ear-right-mgmt`,
+      deviceId,
+      name: `Right Ear ${mgmtLabel}`,
+      type: 'management' as const,
+      relativeX: rightX,
+      relativeY: height - 2,
+      connected: false,
+      cableId: null,
+    });
+  }
+
   // Preserve existing cable connections on ports that still exist
   const mergedEarPorts = earPorts.map(ep => {
     const existing = basePorts.find(p => p.id === ep.id);
