@@ -142,7 +142,7 @@ export class CableLayingOrchestrator {
         if (torAPort) {
           const pair = `${nicPorts[0].id}|${torAPort.id}`;
           if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(nicPorts[0].id, torAPort.id, 'ethernet', '#3b82f6', 'left', 'Data — NIC1 → ToR-A'));
+            newCables.push(makeAiCable(nicPorts[0].id, torAPort.id, 'dac-twinax', '#3b82f6', 'left', 'Data — NIC1 → ToR-A'));
             existingPairs.add(pair);
           }
           switchPortIdx[torA.id]++;
@@ -154,7 +154,7 @@ export class CableLayingOrchestrator {
         if (torBPort) {
           const pair = `${nicPorts[1].id}|${torBPort.id}`;
           if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(nicPorts[1].id, torBPort.id, 'ethernet', '#06b6d4', 'left', 'Data — NIC2 → ToR-B'));
+            newCables.push(makeAiCable(nicPorts[1].id, torBPort.id, 'dac-twinax', '#06b6d4', 'left', 'Data — NIC2 → ToR-B'));
             existingPairs.add(pair);
           }
           switchPortIdx[torB.id]++;
@@ -168,7 +168,7 @@ export class CableLayingOrchestrator {
         if (oobPort) {
           const pair = `${mgmtPorts[0].id}|${oobPort.id}`;
           if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(mgmtPorts[0].id, oobPort.id, 'ethernet', '#64748b', 'left', `MGMT — ${device.name} → OOB`));
+            newCables.push(makeAiCable(mgmtPorts[0].id, oobPort.id, 'cat6', '#64748b', 'left', `MGMT — ${device.name} → OOB`));
             existingPairs.add(pair);
           }
         }
@@ -182,7 +182,7 @@ export class CableLayingOrchestrator {
       if (torAUplink && torBUplink) {
         const pair = `${torAUplink.id}|${torBUplink.id}`;
         if (!existingPairs.has(pair)) {
-          newCables.push(makeAiCable(torAUplink.id, torBUplink.id, 'ethernet', '#8b5cf6', 'left', 'ISL — ToR-A ↔ ToR-B'));
+          newCables.push(makeAiCable(torAUplink.id, torBUplink.id, 'dac-twinax', '#8b5cf6', 'left', 'ISL — ToR-A ↔ ToR-B'));
         }
       }
     }

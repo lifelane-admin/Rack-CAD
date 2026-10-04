@@ -5,11 +5,12 @@ export class RackPreviewZoom {
   private readonly step = 0.1;
   private badge: HTMLElement | null = null;
   private fadeTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly container: HTMLElement;
+  private readonly inner: HTMLElement;
 
-  constructor(
-    private readonly container: HTMLElement,
-    private readonly inner: HTMLElement,
-  ) {
+  constructor(container: HTMLElement, inner: HTMLElement) {
+    this.container = container;
+    this.inner = inner;
     this.badge = this.createBadge();
     container.appendChild(this.badge);
     container.addEventListener('wheel', this.onWheel, { passive: false });
