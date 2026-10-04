@@ -58,6 +58,7 @@ export interface RequirementSpec {
   rawPrompt: string;
   workload: string;
   platform: 'Proxmox' | 'VMware vSphere' | 'Microsoft Hyper-V' | 'Kubernetes' | 'Nutanix AHV' | 'OpenStack' | 'Bare Metal' | 'Other';
+  rackCount?: number;
   nodeCount: number;
   cpuCoresPerNode?: number;
   ramGbPerNode: number;

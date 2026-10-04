@@ -32,6 +32,15 @@ export class RequirementCompletenessEngine {
       platform = 'OpenStack';
     }
 
+    // 1b. Detect rack count
+    let rackCount = 1;
+    if (text.includes('two rack') || text.includes('2 rack') || text.includes('dual rack') || text.includes('dual-rack') || text.includes('two identical rack') || text.includes('2 identical rack')) {
+      rackCount = 2;
+    } else {
+      const rackMatch = text.match(/(\d+)\s*[-]?\s*rack/i);
+      if (rackMatch) rackCount = parseInt(rackMatch[1], 10);
+    }
+
     // 2. Detect node count
     let nodeCount = 2; // sensible base default
     const wordMap: Record<string, number> = {
@@ -48,13 +57,15 @@ export class RequirementCompletenessEngine {
 
     const numMatch = text.match(/(\d+)\s*[-]?\s*(?:node|server|host)/i);
     if (numMatch) {
-      nodeCount = parseInt(numMatch[1], 10);
+      const perRack = parseInt(numMatch[1], 10);
+      nodeCount = (text.includes('each rack') || text.includes('per rack') || rackCount > 1) ? perRack * rackCount : perRack;
     } else {
       const wordMatch = text.match(/\b(one|two|three|four|five|six|eight|dual|single)\s*[-]?\s*(?:node|server|host)/i);
       if (wordMatch) {
-        nodeCount = wordMap[wordMatch[1].toLowerCase()] || 2;
+        const perRack = wordMap[wordMatch[1].toLowerCase()] || 2;
+        nodeCount = (text.includes('each rack') || text.includes('per rack') || rackCount > 1) ? perRack * rackCount : perRack;
       } else if (platform === 'Proxmox' || platform === 'Kubernetes') {
-        nodeCount = 3; // quorum default for ceph/etcd if unspecified
+        nodeCount = 3 * rackCount; // default per rack
       }
     }
 
@@ -110,7 +121,8 @@ export class RequirementCompletenessEngine {
     const known: Record<string, string | number> = {
       Workload: workloadName,
       Platform: platform,
-      Nodes: nodeCount,
+      Racks: rackCount > 1 ? `${rackCount} Identical Racks (HA Topology)` : '1 Rack',
+      Nodes: rackCount > 1 ? `${nodeCount} Total Nodes (${nodeCount / rackCount} per rack)` : nodeCount,
     };
     if (usableStorageTb > 0) known['Storage Capacity'] = `${usableStorageTb} TB Usable`;
     if (ramGbPerNode > 0) known['RAM per Node'] = `${ramGbPerNode} GB`;
@@ -213,6 +225,7 @@ export class RequirementCompletenessEngine {
       rawPrompt: prompt,
       workload: workloadName,
       platform,
+      rackCount,
       nodeCount,
       ramGbPerNode: ramGbPerNode || 256,
       storageType,

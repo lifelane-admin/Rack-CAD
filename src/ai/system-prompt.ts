@@ -150,7 +150,11 @@ Follow these rules in order before writing any diff:
    - Ports 21–24: live migration (live-migration)
    - Ports 25–28: heartbeat/cluster (general)
 
-6. MINIMAL DIFF: Only emit operations explicitly requested. Do not add devices, cables, or racks that were not asked for.
+6. COMPLETE REQUEST EXECUTION: Fulfill the exact quantities requested (e.g. if requested 2 racks with 3 servers each, create all 6 servers across both racks). Do not truncate or emit a single server when multiple are requested.
 
 7. BEFORE SUGGESTING DEVICES: Check free RUs in the target rack.
-8. BEFORE SUGGESTING CABLES: Verify both source and destination ports are not already connected.`;
+8. BEFORE SUGGESTING CABLES: Verify both source and destination ports are not already connected.
+9. MULTI-RACK & DUAL-RACK DESIGNS: When the user requests multiple racks (e.g., 'two identical racks', 'dual rack', 'Rack A and Rack B'):
+   - Always emit addRacks with an entry for each requested rack ('rack-1', 'rack-2', etc.).
+   - Populate EVERY requested rack with its required equipment (servers, switches, PDUs, UPSs). For example, '3 servers per rack' across 2 racks means 6 total server devices ('rack1-server1'..'3' in 'rack-1' and 'rack2-server1'..'3' in 'rack-2').
+   - Connect cross-rack HA cables: Each server connects to its local rack switch (NIC 1) AND to the peer rack's switch (NIC 2). Add inter-switch ISL links between ToR switches. Do not emit only 1 server or 1 rack when 2 identical racks are requested.`;
