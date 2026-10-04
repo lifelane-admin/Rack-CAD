@@ -5,6 +5,7 @@ import { renderRack } from '../renderers/rack-renderer';
 import { renderDevice } from '../renderers/device-renderer';
 import { getTemplate } from '../library/device-catalog';
 import { getRackPduCount, getRackPowerCapacityWatts, getRackPduLoadWatts, getRackRedundantPowerDeviceCount } from '../utils/power';
+import { getCableTypeDisplayName } from '../utils/rack-summary';
 
 export interface ReportMetadata {
   title: string;
@@ -144,20 +145,26 @@ function buildPortMappingTable(
 }
 
 function buildCableLegend(state: AppState): string {
-  const counts: Record<string, number> = {};
+  const cableGroups = new Map<string, { type: string; color: string; count: number; isPower: boolean }>();
+
   state.cables.forEach(c => {
-    counts[c.type] = (counts[c.type] ?? 0) + 1;
+    const isPower = !!(c.powerCableType === 'power' || c.type?.includes('power') || c.sourcePortId?.startsWith('outlet-') || c.destPortId?.startsWith('outlet-'));
+    const color = c.color || (CABLE_COLORS as any)[c.type] || (isPower ? '#212529' : '#78909c');
+    const key = `${c.type} ${color}`;
+    const existing = cableGroups.get(key);
+    if (existing) existing.count++;
+    else cableGroups.set(key, { type: c.type, color, count: 1, isPower });
   });
 
-  if (Object.keys(counts).length === 0) {
+  if (cableGroups.size === 0) {
     return '<p class="rpt-empty">No cables in design.</p>';
   }
 
-  const items = Object.entries(counts).map(([type, count]) => {
-    const color = CABLE_COLORS[type as CableType] ?? '#888888';
+  const items = Array.from(cableGroups.values()).map(({ type, color, count, isPower }) => {
+    const label = getCableTypeDisplayName(type, isPower, color);
     return `<div class="rpt-legend-item">
       <span class="rpt-swatch" style="background:${color}"></span>
-      <span class="rpt-legend-label">${type}</span>
+      <span class="rpt-legend-label">${label}</span>
       <span class="rpt-legend-count">${count} cable${count !== 1 ? 's' : ''}</span>
     </div>`;
   }).join('');

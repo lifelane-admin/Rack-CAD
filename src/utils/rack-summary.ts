@@ -89,7 +89,7 @@ export interface RackSummary {
   powerSeverityColor: string;
 }
 
-export function getCableTypeDisplayName(type: string, isPower: boolean = false): string {
+export function getCableTypeDisplayName(type: string, isPower: boolean = false, color?: string): string {
   const map: Record<string, string> = {
     'cat6': 'Cat6 RJ45',
     'cat6a': 'Cat6A RJ45',
@@ -100,9 +100,11 @@ export function getCableTypeDisplayName(type: string, isPower: boolean = false):
     'qsfp28': 'QSFP28 100G',
     'power': 'Power C13/C14',
     'c13-power': 'Power C13/C14',
+    'power-c13': 'Power C13/C14',
     'c19-power': 'High Power C19/C20',
+    'power-c19': 'High Power C19/C20',
     'power-redundant': 'Redundant Power',
-    'idrac': 'iDRAC / IPMI',
+    'idrac': 'iDRAC / IPMI Mgmt',
     'vm-network': 'VM Network 10G',
     'ceph-primary': 'Storage Prim 25G',
     'ceph-secondary': 'Storage Sec 25G',
@@ -114,7 +116,23 @@ export function getCableTypeDisplayName(type: string, isPower: boolean = false):
     'console': 'Console / Serial',
     'custom': 'Custom Cable',
   };
-  return map[type] || (isPower ? 'Power Cable' : `${type.toUpperCase()}`);
+  const baseName = map[type] || (isPower ? 'Power Cable' : `${type.toUpperCase()}`);
+
+  if (color) {
+    const c = color.toLowerCase();
+    if (isPower || type.includes('power')) {
+      if (c === '#2563eb' || c === '#0284c7' || c === '#1e88e5' || c === '#3b82f6') return `${baseName} (Feed A)`;
+      if (c === '#dc2626' || c === '#e53935' || c === '#ef4444') return `${baseName} (Feed B)`;
+    }
+    if (type === 'dac-twinax' || type === 'qsfp28') {
+      if (c === '#0284c7') return '25G Data Fabric A (LACP)';
+      if (c === '#10b981') return '25G Data Fabric B (LACP)';
+      if (c === '#8b5cf6') return '100G MLAG ISL Trunk';
+      if (c === '#06b6d4' || c === '#00acc1') return '100G NVMe-oF Storage';
+    }
+  }
+
+  return baseName;
 }
 
 export function computeRackSummary(
@@ -140,7 +158,7 @@ export function computeRackSummary(
     ? customLegend!.map(item => ({ label: item.label, color: item.color, count: null, type: null }))
     : Array.from(cableGroups.values())
         .sort((a, b) => b.count - a.count)
-        .map(({ type, color, count, isPower }) => ({ label: getCableTypeDisplayName(type, isPower), color, count, type }));
+        .map(({ type, color, count, isPower }) => ({ label: getCableTypeDisplayName(type, isPower, color), color, count, type }));
 
   const categoryCounts = new Map<DeviceCategory, number>();
   devices.forEach(d => {
