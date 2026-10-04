@@ -30,17 +30,21 @@ export function getPortOrientation(
     }
   }
 
-  // Power ports / PDU outlets: default inserting plug will be as per the pin configuration (i.e. towards down just like PDU)
+  // Ear ports always exit horizontally through the cable manager channel,
+  // even when they carry power — putting them 'down' triggers the down↔down
+  // U-bend shortcut and the cable never reaches the VCM channel.
+  if (isEarPort) {
+    if (!port) return cable.sidePreference === 'right' ? 'right' : 'left';
+    return port.relativeX > 175 ? 'right' : 'left';
+  }
+
+  // Power ports / PDU outlets: vertical plug-in orientation
   if (isPower) {
     return 'down';
   }
 
   if (!port) {
     return cable.sidePreference || 'right';
-  }
-
-  if (isEarPort) {
-    return port.relativeX > 175 ? 'right' : 'left';
   }
 
   const s = stateManager.getState();
