@@ -433,6 +433,17 @@ export class McpToolRegistry {
         if (!res.success) {
           throw new Error(res.error || 'Failed to apply transaction');
         }
+        if (res.knownIssues && res.knownIssues.length > 0) {
+          return {
+            ...res.record,
+            knownIssues: res.knownIssues.map(a => ({
+              type: a.type,
+              category: a.category,
+              message: a.message,
+              targetId: a.targetId,
+            })),
+          };
+        }
         return res.record;
       }
 

@@ -13,7 +13,7 @@ import {
 } from '../types';
 import { stateManager } from '../../core/state';
 import { getTemplate } from '../../library/device-catalog';
-import { DeviceData, CableData, RackData } from '../../core/types';
+import { DeviceData, CableData, RackData, ValidationAlert } from '../../core/types';
 import { runValidationAlerts } from '../../core/validation';
 
 export class McpTransactionManager {
@@ -261,7 +261,7 @@ export class McpTransactionManager {
   static applyTransaction(
     transactionId: string,
     context: McpRequestContext
-  ): { success: boolean; record: DesignTransactionRecord; error?: string } {
+  ): { success: boolean; record: DesignTransactionRecord; error?: string; knownIssues?: ValidationAlert[] } {
     const record = this.transactions.get(transactionId);
     if (!record) {
       return {
@@ -440,15 +440,11 @@ export class McpTransactionManager {
         }
       }
 
-      // 3. Post-execution validation
-      const alerts = runValidationAlerts(currentRacks, currentDevices, currentCables);
-      const criticalErrors = alerts.filter(a => a.type === 'error');
+      // 3. Post-execution validation — alerts are informational; never block deployment.
+      // Issues are returned as knownIssues so the UI can surface them in the Validation Log.
+      const knownIssues = runValidationAlerts(currentRacks, currentDevices, currentCables);
 
-      if (criticalErrors.length > 0) {
-        throw new Error(`Validation failed after applying changes: ${criticalErrors.map(e => e.message).join('; ')}`);
-      }
-
-      // Apply to StateManager
+      // Apply to StateManager (always — validation issues are advisory, not a rollback trigger)
       stateManager.setState({
         racks: currentRacks,
         devices: currentDevices,
@@ -464,7 +460,9 @@ export class McpTransactionManager {
         cables: currentCables,
       });
 
-      return { success: true, record };
+      return knownIssues.length > 0
+        ? { success: true, record, knownIssues }
+        : { success: true, record };
     } catch (err: unknown) {
       // Auto-rollback
       const msg = err instanceof Error ? err.message : 'Unknown execution failure';
