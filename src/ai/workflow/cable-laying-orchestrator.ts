@@ -100,6 +100,11 @@ export class CableLayingOrchestrator {
       return tpl?.category === 'switch' && d.name.toLowerCase().includes('oob');
     });
 
+    // Pre-filter only power-type ports from each PDU so we never accidentally
+    // pick up a management port when walking the outlet index.
+    const pduAOutlets = pduA ? pduA.ports.filter(p => p.type === 'power') : [];
+    const pduBOutlets = pduB ? pduB.ports.filter(p => p.type === 'power') : [];
+
     const outletIdx: Record<string, number> = {};
     if (pduA) outletIdx[pduA.id] = 0;
     if (pduB) outletIdx[pduB.id] = 0;
@@ -117,21 +122,25 @@ export class CableLayingOrchestrator {
 
       // ── Power cables ──────────────────────────────────────────────
       if (pduA && psuPorts[0]) {
-        const outletId = `outlet-${pduA.id}-${outletIdx[pduA.id]}`;
-        const pair = `${psuPorts[0].id}|${outletId}`;
-        if (!existingPairs.has(pair)) {
-          newCables.push(makeAiCable(psuPorts[0].id, outletId, 'power', '#f97316', 'right', 'Power — PSU1 → Feed A'));
-          existingPairs.add(pair);
+        const outlet = pduAOutlets[outletIdx[pduA.id]];
+        if (outlet) {
+          const pair = `${psuPorts[0].id}|${outlet.id}`;
+          if (!existingPairs.has(pair)) {
+            newCables.push(makeAiCable(psuPorts[0].id, outlet.id, 'power', '#f97316', 'right', 'Power — PSU1 → Feed A'));
+            existingPairs.add(pair);
+          }
         }
         outletIdx[pduA.id]++;
       }
 
       if (pduB && psuPorts[1]) {
-        const outletId = `outlet-${pduB.id}-${outletIdx[pduB.id]}`;
-        const pair = `${psuPorts[1].id}|${outletId}`;
-        if (!existingPairs.has(pair)) {
-          newCables.push(makeAiCable(psuPorts[1].id, outletId, 'power', '#f97316', 'right', 'Power — PSU2 → Feed B'));
-          existingPairs.add(pair);
+        const outlet = pduBOutlets[outletIdx[pduB.id]];
+        if (outlet) {
+          const pair = `${psuPorts[1].id}|${outlet.id}`;
+          if (!existingPairs.has(pair)) {
+            newCables.push(makeAiCable(psuPorts[1].id, outlet.id, 'power', '#f97316', 'right', 'Power — PSU2 → Feed B'));
+            existingPairs.add(pair);
+          }
         }
         outletIdx[pduB.id]++;
       }
