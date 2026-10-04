@@ -142,7 +142,7 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   } else if (destOrient === 'right') {
     destExitDir = 'right';
     const L = 11.0 * dstScale;
-    effectiveDestPos.y += L;
+    effectiveDestPos.x += L;
   } else if (destOrient === 'up') {
     destExitDir = 'up';
     const L = 11.0 * dstScale;
