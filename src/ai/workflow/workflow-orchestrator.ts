@@ -132,6 +132,34 @@ export class AIWorkflowOrchestrator {
     this.notify();
   }
 
+  public syncSpareNode(enabled: boolean): void {
+    if (!enabled) {
+      const spare = this.getBomItems().find(
+        b => b.badge === 'Redundancy N+1' || b.name.includes('N+1 Standby Node')
+      );
+      if (spare) this.removeBomItem(spare.id);
+    } else {
+      const already = this.getBomItems().find(
+        b => b.badge === 'Redundancy N+1' || b.name.includes('N+1 Standby Node')
+      );
+      if (!already) {
+        this.addBomItem({
+          name: 'Dell PowerEdge R760 (N+1 Standby Node)',
+          model: 'PowerEdge R760 Hot Spare',
+          category: 'Compute',
+          qty: 1,
+          unitCost: 8900,
+          units: 2,
+          power: 310,
+          specs: '2U | 2x Xeon Silver 4410Y | 128GB DDR5 | Standby Hot-Spare Node',
+          whySuggested: 'N+1 compute tolerance for hypervisor maintenance',
+          badge: 'Redundancy N+1',
+          alternatives: [],
+        });
+      }
+    }
+  }
+
   private notify(): void {
     this.state.lastModifiedTimestamp = Date.now();
     this.persistState();
