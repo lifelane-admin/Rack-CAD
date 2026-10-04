@@ -708,8 +708,10 @@ export function injectEarPorts(
   const maxDataHoles = maxHoles - 1; // 1 hole always reserved for power
 
   // ── Two simple user inputs: Number of Slots (1-4) and Ports per Slot (1-4) ─────────────────
+  // Default: 1 slot, 4 ports/slot (physical max per PCIe slot). Cap guards against
+  // STANDARD_EAR_HOLE_COUNTS returning a value that would exceed 4 ports/slot.
   let numSlots     = 1;
-  let portsPerSlot = Math.min(maxDataHoles, (STANDARD_EAR_HOLE_COUNTS[heightUnits] ?? heightUnits * 2) - 1);
+  let portsPerSlot = Math.min(4, maxDataHoles, (STANDARD_EAR_HOLE_COUNTS[heightUnits] ?? heightUnits * 2) - 1);
 
   if (deviceConfig && typeof deviceConfig === 'object') {
     const cfg = deviceConfig as Record<string, unknown>;
@@ -727,9 +729,9 @@ export function injectEarPorts(
     }
   }
 
-  // Fallback when config is absent
+  // Fallback when config is absent (should rarely trigger since defaults above produce entries)
   if (dataEntries.length === 0) {
-    const numData = Math.min(maxDataHoles * 2, Math.max(0, (STANDARD_EAR_HOLE_COUNTS[heightUnits] ?? heightUnits * 2) - 1));
+    const numData = Math.min(numSlots * 4, maxDataHoles * 2, Math.max(0, (STANDARD_EAR_HOLE_COUNTS[heightUnits] ?? heightUnits * 2) - 1));
     for (let i = 0; i < numData; i++) {
       dataEntries.push({ slotNumber: Math.floor(i / 4) + 1, portInSlot: (i % 4) + 1 });
     }
