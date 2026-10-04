@@ -219,20 +219,28 @@ export class AIWorkflowOrchestrator {
   public submitInitialRequirement(prompt: string): void {
     const spec = RequirementCompletenessEngine.parsePrompt(prompt);
     this.state.requirement = spec;
+    this.state.hasCanvasDeployment = false;
+    this.state.decisionHistory = [];
     this.state.bomItems = this.generateDefaultBom(spec);
-    const cab = this.state.cabinetConfig || { name: 'DC01-CAB-01', totalU: 42, slotNumber: 1 };
-    this.state.cabinetConfig = cab;
+    const cab = { name: 'DC01-CAB-01', totalU: 42, slotNumber: 1, leftCableManagerWidth: '4-inch', rightCableManagerWidth: '4-inch', vcmType: 'single-sided', leftPduTemplateId: 'vpdu-apc-ap8858', rightPduTemplateId: 'vpdu-apc-ap8858' };
+    this.state.cabinetConfig = cab as any;
     this.state.rackPlacements = this.generateDefaultRackPlacements(this.state.bomItems, cab.totalU);
     this.state.cableRoutes = this.generateDefaultCableRoutes(spec, this.state.bomItems);
     this.state.powerThermalConfig = this.generateDefaultPowerThermalConfig(spec);
     this.state.gapItems = this.generateDefaultGaps();
 
-    // Transition to REQUIREMENT_BRIEF
-    this.state.stageStatuses['REQUIREMENT_PROMPT'] = 'COMPLETED';
-    this.state.stageStatuses['REQUIREMENT_BRIEF'] = 'WAITING_FOR_USER';
+    // Reset all stage statuses to locked except initial flow
+    for (const stage of WORKFLOW_STAGES_ORDER) {
+      this.state.stageStatuses[stage] = stage === 'REQUIREMENT_PROMPT' ? 'COMPLETED' : stage === 'REQUIREMENT_BRIEF' ? 'WAITING_FOR_USER' : 'LOCKED';
+      if (this.state.stageContracts[stage]) {
+        this.state.stageContracts[stage].status = this.state.stageStatuses[stage];
+        this.state.stageContracts[stage].userDecision = undefined;
+      }
+    }
+
     this.state.currentStage = 'REQUIREMENT_BRIEF';
 
-    this.recordDecision('REQUIREMENT_PROMPT', 'APPROVED', 'Initial requirement submitted');
+    this.recordDecision('REQUIREMENT_PROMPT', 'APPROVED', `New project requirement initialized: ${prompt.substring(0, 60)}...`);
     this.notify();
   }
 
