@@ -14,6 +14,7 @@
 import { WorkflowStageId, RequirementSpec, OptimizationObjective } from './types';
 import { AIWorkflowOrchestrator } from './workflow-orchestrator';
 import { eventBus } from '../../core/event-bus';
+import { RackPreviewZoom } from './rack-preview-zoom';
 
 export interface DeploymentConflictItem {
   id: string;
@@ -516,6 +517,17 @@ export class WorkflowStageRenderers {
     container.querySelector('#btn-accept-arch')?.addEventListener('click', () => {
       orchestrator.approveCurrentStage('Architecture design accepted.');
     });
+
+    // Attach scroll-to-zoom on the rack preview column
+    const previewCol = container.querySelector('.rack-preview-col') as HTMLElement | null;
+    const previewInner = container.querySelector('.rack-frame-inner') as HTMLElement | null;
+    if (previewCol && previewInner) {
+      new RackPreviewZoom(previewCol, previewInner);
+    }
+
+    // Engineering metrics bar below the stage card
+    const stageCard = container.querySelector('.workflow-stage-card') as HTMLElement | null;
+    if (stageCard) WorkflowStageRenderers.renderEngineeringMetricsBar(stageCard, orchestrator);
   }
 
   /**
@@ -3058,5 +3070,62 @@ export class WorkflowStageRenderers {
     container.querySelector('#btn-new-design')?.addEventListener('click', () => {
       orchestrator.resetToLanding();
     });
+  }
+
+  public static renderEngineeringMetricsBar(container: HTMLElement, orchestrator: AIWorkflowOrchestrator): void {
+    const totals = orchestrator.getBomTotals();
+    const req = orchestrator.getState().requirement;
+    const kw = (totals.totalWatts / 1000).toFixed(2);
+    const btu = Math.round(totals.totalWatts * 3.412142).toLocaleString();
+    const uPercent = Math.round((totals.totalUnits / 42) * 100);
+    const bom = totals.totalCost.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+    const isRedundant = req.powerFeed === 'A/B Redundant' || req.powerFeed === 'A/B/C 3-Phase';
+    const redundancyLabel = isRedundant ? 'Dual Feed Verified' : 'Single Feed';
+    const redundancyClass = isRedundant ? 'status-ok' : 'status-warn';
+
+    const existing = container.querySelector('.eng-metrics-bar-wrapper');
+    if (existing) existing.remove();
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'eng-metrics-bar-wrapper';
+    wrapper.innerHTML = `
+      <div class="eng-metrics-bar">
+        <div class="eng-metric">
+          <span class="eng-metric-label">U Space Used</span>
+          <span class="eng-metric-value">${totals.totalUnits} / 42 U (${uPercent}%)</span>
+        </div>
+        <div class="eng-metric">
+          <span class="eng-metric-label">Rack IT Draw</span>
+          <span class="eng-metric-value">${kw} kW</span>
+        </div>
+        <div class="eng-metric">
+          <span class="eng-metric-label">Heat Load</span>
+          <span class="eng-metric-value">${btu} BTU/hr</span>
+        </div>
+        <div class="eng-metric">
+          <span class="eng-metric-label">Estimated BOM</span>
+          <span class="eng-metric-value">${bom} USD</span>
+        </div>
+        <div class="eng-metric">
+          <span class="eng-metric-label">A/B Redundancy</span>
+          <span class="eng-metric-value ${redundancyClass}">${redundancyLabel}</span>
+        </div>
+      </div>
+      <div class="eng-metrics-actions">
+        <button class="btn-undo-deploy">&#x21A9; Undo AI Deployment</button>
+        <button class="btn-export-bom">&#x1F4CA; Export BOM Report</button>
+      </div>
+    `;
+
+    wrapper.querySelector('.btn-undo-deploy')?.addEventListener('click', () => {
+      orchestrator.setCanvasDeployed(false);
+      (orchestrator as any).undoDeployment?.();
+    });
+
+    wrapper.querySelector('.btn-export-bom')?.addEventListener('click', () => {
+      (orchestrator as any).exportBom?.();
+    });
+
+    container.appendChild(wrapper);
   }
 }
