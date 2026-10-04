@@ -98,6 +98,7 @@ export class AIWorkflowOrchestrator {
       gapItems: this.generateDefaultGaps(),
       decisionHistory: [],
       lastModifiedTimestamp: Date.now(),
+      hasCanvasDeployment: false,
       activeOptimizationObjective: 'cost',
       optimizationState: {
         activeObjective: 'cost',
@@ -124,6 +125,11 @@ export class AIWorkflowOrchestrator {
     return () => {
       this.listeners = this.listeners.filter((l) => l !== listener);
     };
+  }
+
+  public setCanvasDeployed(value: boolean): void {
+    this.state.hasCanvasDeployment = value;
+    this.notify();
   }
 
   private notify(): void {

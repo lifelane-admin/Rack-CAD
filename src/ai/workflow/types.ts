@@ -263,6 +263,7 @@ export interface WorkflowStateData {
   gapItems: GapAnalysisItem[];
   decisionHistory: DecisionLogEntry[];
   lastModifiedTimestamp: number;
+  hasCanvasDeployment: boolean;
   activeOptimizationObjective?: OptimizationObjective;
   appliedOptimizationObjective?: OptimizationObjective;
   optimizationState?: {
