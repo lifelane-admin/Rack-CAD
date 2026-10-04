@@ -66,6 +66,7 @@ function makeAiCable(
     sidePreference,
     anchorPoints: [],
     anchorsLocked: false,
+    powerCableType: type === 'power' ? 'power' : 'data',
   } as unknown as CableData;
 }
 
@@ -100,10 +101,22 @@ export class CableLayingOrchestrator {
       return tpl?.category === 'switch' && d.name.toLowerCase().includes('oob');
     });
 
-    // Pre-filter only power-type ports from each PDU so we never accidentally
-    // pick up a management port when walking the outlet index.
-    const pduAOutlets = pduA ? pduA.ports.filter(p => p.type === 'power') : [];
-    const pduBOutlets = pduB ? pduB.ports.filter(p => p.type === 'power') : [];
+    // Compute max outlets for each PDU (handles vertical side-mount PDUs with outletConfig as well as 1U rackmount PDUs with ports array)
+    const getPduMaxOutlets = (pdu: DeviceData | undefined): number => {
+      if (!pdu) return 0;
+      if (pdu.ports && pdu.ports.length > 0) {
+        const pPorts = pdu.ports.filter(p => p.type === 'power');
+        if (pPorts.length > 0) return pPorts.length;
+      }
+      const tpl = getTemplate(pdu.templateId);
+      if (tpl?.outletConfig && tpl.outletConfig.length > 0) {
+        return tpl.outletConfig.reduce((acc, cfg) => acc + cfg.count, 0);
+      }
+      return 24;
+    };
+
+    const pduAMaxOutlets = getPduMaxOutlets(pduA);
+    const pduBMaxOutlets = getPduMaxOutlets(pduB);
 
     const outletIdx: Record<string, number> = {};
     if (pduA) outletIdx[pduA.id] = 0;
@@ -141,30 +154,24 @@ export class CableLayingOrchestrator {
       // ── Power cables — exit through dedicated ear power holes into cable managers ──
       // Primary PSU → left ear power hole → left cable manager → PDU-A (Feed A)
       const primaryPsuPort = earLeftPower ?? psuPorts[0];
-      if (pduA && primaryPsuPort) {
-        const outlet = pduAOutlets[outletIdx[pduA.id]];
-        if (outlet) {
-          const syntheticOutletA = `outlet-${pduA.id}-${outletIdx[pduA.id]}`;
-          const pair = `${primaryPsuPort.id}|${syntheticOutletA}`;
-          if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(primaryPsuPort.id, syntheticOutletA, 'power', '#f97316', 'left', 'Power — Primary PSU → Feed A'));
-            existingPairs.add(pair);
-          }
+      if (pduA && primaryPsuPort && outletIdx[pduA.id] < pduAMaxOutlets) {
+        const syntheticOutletA = `outlet-${pduA.id}-${outletIdx[pduA.id]}`;
+        const pair = `${primaryPsuPort.id}|${syntheticOutletA}`;
+        if (!existingPairs.has(pair)) {
+          newCables.push(makeAiCable(primaryPsuPort.id, syntheticOutletA, 'power', '#f97316', 'left', 'Power — Primary PSU → Feed A'));
+          existingPairs.add(pair);
         }
         outletIdx[pduA.id]++;
       }
 
       // Secondary PSU → right ear power hole → right cable manager → PDU-B (Feed B)
       const secondaryPsuPort = earRightPower ?? psuPorts[1];
-      if (pduB && secondaryPsuPort) {
-        const outlet = pduBOutlets[outletIdx[pduB.id]];
-        if (outlet) {
-          const syntheticOutletB = `outlet-${pduB.id}-${outletIdx[pduB.id]}`;
-          const pair = `${secondaryPsuPort.id}|${syntheticOutletB}`;
-          if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(secondaryPsuPort.id, syntheticOutletB, 'power', '#f97316', 'right', 'Power — Secondary PSU → Feed B'));
-            existingPairs.add(pair);
-          }
+      if (pduB && secondaryPsuPort && outletIdx[pduB.id] < pduBMaxOutlets) {
+        const syntheticOutletB = `outlet-${pduB.id}-${outletIdx[pduB.id]}`;
+        const pair = `${secondaryPsuPort.id}|${syntheticOutletB}`;
+        if (!existingPairs.has(pair)) {
+          newCables.push(makeAiCable(secondaryPsuPort.id, syntheticOutletB, 'power', '#f97316', 'right', 'Power — Secondary PSU → Feed B'));
+          existingPairs.add(pair);
         }
         outletIdx[pduB.id]++;
       }

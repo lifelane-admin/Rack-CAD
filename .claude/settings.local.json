@@ -189,7 +189,24 @@
       "Bash(mkdir -p /c/Claude/_export_staging)",
       "Bash(rm -rf /c/Claude/_export_staging/Rack_Design)",
       "Bash(powershell -NoProfile -Command \"robocopy 'C:\\\\Claude\\\\Rack_Design' 'C:\\\\Claude\\\\_export_staging\\\\Rack_Design' /E /XD 'C:\\\\Claude\\\\Rack_Design\\\\.claude\\\\worktrees' /NFL /NDL /NJH /NP /R:1 /W:1\")",
-      "Bash(echo \"ROBOCOPY_EXIT:$?\")"
+      "Bash(echo \"ROBOCOPY_EXIT:$?\")",
+      "PowerShell(Get-ChildItem -Path \"G:\\\\Claude\\\\RackSlicer_October\\\\Final_Backup_3rd_Oct\\\\Workspace_Files\" -Depth 2 | Where-Object { $_.Name -notin @\\('node_modules', '.git', 'dist', 'build', '.next', '__pycache__'\\) } | Select-Object FullName, PSIsContainer | Format-Table -AutoSize)",
+      "PowerShell(git *)",
+      "Bash(git push *)",
+      "Bash(grep -E \"\\\\.\\(ts|js|tsx|jsx\\)$\")",
+      "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
+      "Bash(grep -n \"device\\\\\\\\.name\\\\|name\\\\|label\" \"G:/Claude/RackSlicer_October/Final_Backup_3rd_Oct/Workspace_Files/src/renderers/panel-renderer.ts\")",
+      "Bash(grep -n \"device\\\\\\\\.name\\\\|renderDevice\\\\|deviceLabel\" \"G:/Claude/RackSlicer_October/Final_Backup_3rd_Oct/Workspace_Files/src/app.ts\")",
+      "Bash(git commit *)",
+      "Bash(grep *)",
+      "Bash(Get-Content \"C:\\\\Users\\\\srini\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\G--Claude-RackSlicer-October-Final-Backup-3rd-Oct-Workspace-Files\\\\5de5a50e-fd50-42ef-a885-d7fe2358dbad\\\\tasks\\\\b6fe6suuw.output\" -Wait -Tail 20)",
+      "Bash(exit)",
+      "Bash(powershell -Command \"Get-Content 'C:\\\\Users\\\\srini\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\G--Claude-RackSlicer-October-Final-Backup-3rd-Oct-Workspace-Files\\\\5de5a50e-fd50-42ef-a885-d7fe2358dbad\\\\tasks\\\\b6fe6suuw.output' | Select-Object -Last 60\")",
+      "Bash(powershell -Command \"Select-String -Path 'C:\\\\Users\\\\srini\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\G--Claude-RackSlicer-October-Final-Backup-3rd-Oct-Workspace-Files\\\\5de5a50e-fd50-42ef-a885-d7fe2358dbad\\\\tasks\\\\b6fe6suuw.output' -Pattern 'cable-laying|cable_laying' | Select-Object -First 20\")",
+      "Bash(Get-ChildItem -Path \"G:\\\\Claude\\\\RackSlicer_October\\\\Final_Backup_3rd_Oct\\\\Workspace_Files\" -Recurse -Name)",
+      "Bash(Start-Sleep -Seconds 4)",
+      "Bash(Get-Content \"C:\\\\Users\\\\srini\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\G--Claude-RackSlicer-October-Final-Backup-3rd-Oct-Workspace-Files\\\\5de5a50e-fd50-42ef-a885-d7fe2358dbad\\\\tasks\\\\bejvmgrh6.output\")",
+      "Bash(Select-Object -Last 20)"
     ]
   }
 }
