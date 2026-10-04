@@ -113,6 +113,10 @@ export class CableLayingOrchestrator {
     if (torA) switchPortIdx[torA.id] = 0;
     if (torB) switchPortIdx[torB.id] = 0;
 
+    // OOB switch port index — tracked explicitly so each server gets a different port.
+    // We cannot rely on port.connected because the AI cable state doesn't update that field.
+    let oobPortIdx = 0;
+
     for (const device of devices) {
       if (isPduDevice(device) || isSwitchDevice(device)) continue;
 
@@ -140,9 +144,10 @@ export class CableLayingOrchestrator {
       if (pduA && primaryPsuPort) {
         const outlet = pduAOutlets[outletIdx[pduA.id]];
         if (outlet) {
-          const pair = `${primaryPsuPort.id}|${outlet.id}`;
+          const syntheticOutletA = `outlet-${pduA.id}-${outletIdx[pduA.id]}`;
+          const pair = `${primaryPsuPort.id}|${syntheticOutletA}`;
           if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(primaryPsuPort.id, outlet.id, 'power', '#f97316', 'left', 'Power — Primary PSU → Feed A'));
+            newCables.push(makeAiCable(primaryPsuPort.id, syntheticOutletA, 'power', '#f97316', 'left', 'Power — Primary PSU → Feed A'));
             existingPairs.add(pair);
           }
         }
@@ -154,9 +159,10 @@ export class CableLayingOrchestrator {
       if (pduB && secondaryPsuPort) {
         const outlet = pduBOutlets[outletIdx[pduB.id]];
         if (outlet) {
-          const pair = `${secondaryPsuPort.id}|${outlet.id}`;
+          const syntheticOutletB = `outlet-${pduB.id}-${outletIdx[pduB.id]}`;
+          const pair = `${secondaryPsuPort.id}|${syntheticOutletB}`;
           if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(secondaryPsuPort.id, outlet.id, 'power', '#f97316', 'right', 'Power — Secondary PSU → Feed B'));
+            newCables.push(makeAiCable(secondaryPsuPort.id, syntheticOutletB, 'power', '#f97316', 'right', 'Power — Secondary PSU → Feed B'));
             existingPairs.add(pair);
           }
         }
@@ -190,14 +196,15 @@ export class CableLayingOrchestrator {
 
       // ── Management cables (via right ear iDRAC/iLO/BMC hole) ──────
       if (oobSwitch && mgmtSourcePorts.length > 0) {
-        const oobPortIdx = oobSwitch.ports.findIndex(p => !p.connected);
-        const oobPort = oobSwitch.ports[oobPortIdx >= 0 ? oobPortIdx : 0];
+        const oobPort = oobSwitch.ports[oobPortIdx];
         if (oobPort) {
+          const mgmtSide: 'left' | 'right' = earRightMgmt.length > 0 ? 'right' : 'left';
           const pair = `${mgmtSourcePorts[0].id}|${oobPort.id}`;
           if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(mgmtSourcePorts[0].id, oobPort.id, 'cat6', '#64748b', 'left', `MGMT — ${device.name} → OOB`));
+            newCables.push(makeAiCable(mgmtSourcePorts[0].id, oobPort.id, 'cat6', '#64748b', mgmtSide, `MGMT — ${device.name} → OOB`));
             existingPairs.add(pair);
           }
+          oobPortIdx++;
         }
       }
     }
@@ -216,8 +223,11 @@ export class CableLayingOrchestrator {
 
     // Remove managed cables for ports that no longer exist
     const allPortIds = new Set(devices.flatMap(d => d.ports.map(p => p.id)));
+    const syntheticOutletRe = /^outlet-.+-\d+$/;
     const validManaged = managedExisting.filter(
-      c => allPortIds.has(c.sourcePortId ?? '') && allPortIds.has(c.destPortId ?? ''),
+      c =>
+        allPortIds.has(c.sourcePortId ?? '') &&
+        (allPortIds.has(c.destPortId ?? '') || syntheticOutletRe.test(c.destPortId ?? '')),
     );
 
     stateManager.setState({ cables: [...unmanaged, ...validManaged, ...newCables] } as any);
