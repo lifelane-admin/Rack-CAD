@@ -213,25 +213,30 @@ export function cableManagerSpan(width: RackData['leftCableManagerWidth']): numb
 }
 
 /**
- * X-offset (in rack-local coordinates, i.e. relative to the rack's own translate(rack.x, rack.y))
- * of a side-mount PDU's own left edge.
- * Physical Order: Rack Frame -> 0U Side PDU -> Vertical Cable Manager (VCM).
- * PDUs are positioned directly against the rack posts/frame.
+ * X-offset of a vertical cable manager's duct, placed directly adjacent to the rack frame (middle position).
  */
-export function sidePduOffsetX(_rack: RackData, side: 'left' | 'right', pduWidth: number): number {
-  if (side === 'left') return -pduWidth - 2;
-  return RACK_CONSTANTS.RACK_OUTER_WIDTH + 2;
+export function sideVcmOffsetX(_rack: RackData, side: 'left' | 'right', vcmWidth: number): number {
+  if (side === 'left') return -vcmWidth - 4;
+  return RACK_CONSTANTS.RACK_OUTER_WIDTH + 4;
 }
 
 /**
- * X-offset of a vertical cable manager's duct, placed outside any 0U PDU on that side.
+ * X-offset (in rack-local coordinates, i.e. relative to the rack's own translate(rack.x, rack.y))
+ * of a side-mount PDU's own left edge.
+ * Physical Order (innermost to outermost): Rack Frame -> Vertical Cable Manager (VCM in middle) -> 0U Side PDU (outside).
  */
-export function sideVcmOffsetX(_rack: RackData, side: 'left' | 'right', vcmWidth: number, pduWidth: number = 0): number {
+export function sidePduOffsetX(rack: RackData, side: 'left' | 'right', pduWidth: number, vcmWidth: number = 0): number {
+  const showLeft = rack.leftCableManagerWidth !== undefined && rack.leftCableManagerWidth !== 'none';
+  const showRight = rack.rightCableManagerWidth !== undefined && rack.rightCableManagerWidth !== 'none';
+
   if (side === 'left') {
-    const pduSpace = pduWidth > 0 ? (pduWidth + 4) : 0;
-    return -pduSpace - vcmWidth - 4;
+    const leftVcmW = showLeft ? (vcmWidth > 0 ? vcmWidth : cableManagerSpan(rack.leftCableManagerWidth)) : 0;
+    const vcmSpace = leftVcmW > 0 ? (leftVcmW + 4) : 0;
+    return -vcmSpace - pduWidth - 4;
+  } else {
+    const rightVcmW = showRight ? (vcmWidth > 0 ? vcmWidth : cableManagerSpan(rack.rightCableManagerWidth)) : 0;
+    const vcmSpace = rightVcmW > 0 ? (rightVcmW + 4) : 0;
+    return RACK_CONSTANTS.RACK_OUTER_WIDTH + vcmSpace + 4;
   }
-  const pduSpace = pduWidth > 0 ? (pduWidth + 4) : 0;
-  return RACK_CONSTANTS.RACK_OUTER_WIDTH + pduSpace + 4;
 }
 

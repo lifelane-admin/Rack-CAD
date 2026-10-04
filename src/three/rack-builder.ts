@@ -1077,12 +1077,43 @@ export function buildRackGroup(
     }
   };
 
-  // ── 3D 0U Side-Mount PDUs & Vertical Cable Managers ──────────────────────
+  // ── 3D 0U Side-Mount PDUs & Vertical Cable Managers (Layout Order: Rack Frame -> VCM (middle) -> PDU (outside)) ──
   const pduMat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#1a1e26'), roughness: 0.45, metalness: 0.55 });
   const has3DLeftPdu = !!rack.leftPduId;
   const has3DRightPdu = !!rack.rightPduId;
 
+  const leftVcmW = get3DVcmWidth(rack.leftCableManagerWidth);
+  const rightVcmW = get3DVcmWidth(rack.rightCableManagerWidth);
+
   let leftPduW = 0;
+  let rightPduW = 0;
+
+  // 1. Vertical Cable Managers (middle position — directly adjacent to rack frame)
+  if (leftVcmW > 0) {
+    const leftVcmColor = rack.leftCableManagerColor || rack.rackColor || '#11141a';
+    const vcmBodyMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(leftVcmColor), roughness: 0.75, metalness: 0.25 });
+    const vcmFaceMat = getVcm3DMaterial(rack, 'left', leftVcmW, totalH, rack.units);
+    const vcmMats = [vcmBodyMat, vcmBodyMat, vcmBodyMat, vcmBodyMat, vcmFaceMat, vcmBodyMat];
+    const vcmGeo = new THREE.BoxGeometry(leftVcmW, shellH, 120);
+    const leftVcmMesh = new THREE.Mesh(vcmGeo, vcmMats);
+    leftVcmMesh.name = 'rack-vcm-left';
+    leftVcmMesh.position.set(-(RACK_OUTER_WIDTH / 2 + leftVcmW / 2 + 2), shellCenterY, fz - 65);
+    group.add(leftVcmMesh);
+  }
+
+  if (rightVcmW > 0) {
+    const rightVcmColor = rack.rightCableManagerColor || rack.rackColor || '#11141a';
+    const vcmBodyMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(rightVcmColor), roughness: 0.75, metalness: 0.25 });
+    const vcmFaceMat = getVcm3DMaterial(rack, 'right', rightVcmW, totalH, rack.units);
+    const vcmMats = [vcmBodyMat, vcmBodyMat, vcmBodyMat, vcmBodyMat, vcmFaceMat, vcmBodyMat];
+    const vcmGeo = new THREE.BoxGeometry(rightVcmW, shellH, 120);
+    const rightVcmMesh = new THREE.Mesh(vcmGeo, vcmMats);
+    rightVcmMesh.name = 'rack-vcm-right';
+    rightVcmMesh.position.set(RACK_OUTER_WIDTH / 2 + rightVcmW / 2 + 2, shellCenterY, fz - 65);
+    group.add(rightVcmMesh);
+  }
+
+  // 2. 0U Side-Mount PDUs (outside position — beyond the VCM)
   if (has3DLeftPdu) {
     const leftPduDevice = rack.leftPduId ? stateManager.getDevice(rack.leftPduId) : null;
     const leftPduTemplate = leftPduDevice ? getTemplate(leftPduDevice.templateId) : null;
@@ -1095,11 +1126,11 @@ export function buildRackGroup(
     const pduGeo = new THREE.BoxGeometry(leftPduW, bodyH, 50);
     const pduMesh = new THREE.Mesh(pduGeo, pduMats);
     pduMesh.name = 'rack-pdu-left';
-    pduMesh.position.set(-(RACK_OUTER_WIDTH / 2 + leftPduW / 2 + 2), 0, fz - 25);
+    const leftPduOffset = (leftVcmW > 0 ? (leftVcmW + 4) : 0) + leftPduW / 2 + 2;
+    pduMesh.position.set(-(RACK_OUTER_WIDTH / 2 + leftPduOffset), 0, fz - 25);
     group.add(pduMesh);
   }
 
-  let rightPduW = 0;
   if (has3DRightPdu) {
     const rightPduDevice = rack.rightPduId ? stateManager.getDevice(rack.rightPduId) : null;
     const rightPduTemplate = rightPduDevice ? getTemplate(rightPduDevice.templateId) : null;
@@ -1111,36 +1142,9 @@ export function buildRackGroup(
     const pduGeo = new THREE.BoxGeometry(rightPduW, bodyH, 50);
     const pduMesh = new THREE.Mesh(pduGeo, pduMats);
     pduMesh.name = 'rack-pdu-right';
-    pduMesh.position.set(RACK_OUTER_WIDTH / 2 + rightPduW / 2 + 2, 0, fz - 25);
+    const rightPduOffset = (rightVcmW > 0 ? (rightVcmW + 4) : 0) + rightPduW / 2 + 2;
+    pduMesh.position.set(RACK_OUTER_WIDTH / 2 + rightPduOffset, 0, fz - 25);
     group.add(pduMesh);
-  }
-
-  const leftVcmW = get3DVcmWidth(rack.leftCableManagerWidth);
-  if (leftVcmW > 0) {
-    const leftVcmColor = rack.leftCableManagerColor || rack.rackColor || '#11141a';
-    const vcmBodyMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(leftVcmColor), roughness: 0.75, metalness: 0.25 });
-    const vcmFaceMat = getVcm3DMaterial(rack, 'left', leftVcmW, totalH, rack.units);
-    const vcmMats = [vcmBodyMat, vcmBodyMat, vcmBodyMat, vcmBodyMat, vcmFaceMat, vcmBodyMat];
-    const vcmGeo = new THREE.BoxGeometry(leftVcmW, shellH, 120);
-    const leftVcmMesh = new THREE.Mesh(vcmGeo, vcmMats);
-    leftVcmMesh.name = 'rack-vcm-left';
-    const leftOffset = has3DLeftPdu ? (leftPduW + 4 + leftVcmW / 2 + 2) : (leftVcmW / 2 + 2);
-    leftVcmMesh.position.set(-(RACK_OUTER_WIDTH / 2 + leftOffset), shellCenterY, fz - 65);
-    group.add(leftVcmMesh);
-  }
-
-  const rightVcmW = get3DVcmWidth(rack.rightCableManagerWidth);
-  if (rightVcmW > 0) {
-    const rightVcmColor = rack.rightCableManagerColor || rack.rackColor || '#11141a';
-    const vcmBodyMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(rightVcmColor), roughness: 0.75, metalness: 0.25 });
-    const vcmFaceMat = getVcm3DMaterial(rack, 'right', rightVcmW, totalH, rack.units);
-    const vcmMats = [vcmBodyMat, vcmBodyMat, vcmBodyMat, vcmBodyMat, vcmFaceMat, vcmBodyMat];
-    const vcmGeo = new THREE.BoxGeometry(rightVcmW, shellH, 120);
-    const rightVcmMesh = new THREE.Mesh(vcmGeo, vcmMats);
-    rightVcmMesh.name = 'rack-vcm-right';
-    const rightOffset = has3DRightPdu ? (rightPduW + 4 + rightVcmW / 2 + 2) : (rightVcmW / 2 + 2);
-    rightVcmMesh.position.set(RACK_OUTER_WIDTH / 2 + rightOffset, shellCenterY, fz - 65);
-    group.add(rightVcmMesh);
   }
 
   // ── 4-post L-angle rails, EIA-310 holes, depth bars ────────────────────────

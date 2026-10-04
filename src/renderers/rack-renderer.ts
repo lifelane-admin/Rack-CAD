@@ -87,10 +87,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
   const hasLeftPdu = !!(leftPduDevice && leftPduTemplate);
   const hasRightPdu = !!(rightPduDevice && rightPduTemplate);
 
-  // Layout order (innermost to outermost): Rack Frame -> 0U Side PDU -> Vertical Cable Manager (VCM)
-  const leftPduX = sidePduOffsetX(rack, 'left', leftPduW || 20);
-  const rightPduX = sidePduOffsetX(rack, 'right', rightPduW || 20);
-
+  // Layout order (innermost to outermost): Rack Frame -> Vertical Cable Manager (VCM in middle) -> 0U Side PDU (outside)
   const getVcmWidthPx = (w?: string): number => {
     switch (w) {
       case '2-inch': return 16;
@@ -106,11 +103,14 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
   const leftVcmWidth = showLeft ? getVcmWidthPx(rack.leftCableManagerWidth) : 0;
   const rightVcmWidth = showRight ? getVcmWidthPx(rack.rightCableManagerWidth) : 0;
 
-  const leftDuctX = showLeft ? (hasLeftPdu ? (-leftPduW - 4 - leftVcmWidth - 4) : (-leftVcmWidth - 4)) : 0;
-  const rightDuctX = showRight ? (hasRightPdu ? (OUTER_W + rightPduW + 4 + 4) : (OUTER_W + 4)) : OUTER_W;
+  const leftPduX = sidePduOffsetX(rack, 'left', leftPduW || 20, leftVcmWidth);
+  const rightPduX = sidePduOffsetX(rack, 'right', rightPduW || 20, rightVcmWidth);
 
-  const leftHandleX = showLeft ? (leftDuctX - 20 - 4) : sidePduOffsetX(rack, 'left', 20);
-  const rightHandleX = showRight ? (rightDuctX + rightVcmWidth + 4) : sidePduOffsetX(rack, 'right', 20);
+  const leftDuctX = showLeft ? (-leftVcmWidth - 4) : 0;
+  const rightDuctX = showRight ? (OUTER_W + 4) : OUTER_W;
+
+  const leftHandleX = hasLeftPdu ? (leftPduX - 20 - 4) : (showLeft ? (leftDuctX - 20 - 4) : -24);
+  const rightHandleX = hasRightPdu ? (rightPduX + rightPduW + 4) : (showRight ? (rightDuctX + rightVcmWidth + 4) : OUTER_W + 4);
 
   const minLeftX = Math.min(0, hasLeftPdu ? leftPduX : leftHandleX, showLeft ? leftDuctX : 0);
   const maxRightX = Math.max(OUTER_W, hasRightPdu ? (rightPduX + rightPduW) : (rightHandleX + 20), showRight ? (rightDuctX + rightVcmWidth) : OUTER_W);
