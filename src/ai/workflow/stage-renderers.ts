@@ -11,7 +11,7 @@
  * 7. Single Clear Next Action
  */
 
-import { WorkflowStageId, RequirementSpec, OptimizationObjective } from './types';
+import { WorkflowStageId, RequirementSpec, OptimizationObjective, DeploymentConflictItem } from './types';
 import { AIWorkflowOrchestrator } from './workflow-orchestrator';
 import { eventBus } from '../../core/event-bus';
 import { stateManager } from '../../core/state';
@@ -19,33 +19,39 @@ import { CableData } from '../../core/types';
 import { RackPreviewZoom } from './rack-preview-zoom';
 import { LabelSyncManager } from './label-sync-manager';
 import { CableLayingOrchestrator } from './cable-laying-orchestrator';
-
-export interface DeploymentConflictItem {
-  id: string;
-  item: string;
-  source: string;
-  sourceMedia: string;
-  dest: string;
-  destMedia: string;
-  conflictType: string;
-  conflictDescription: string;
-  recommendedAction: string;
-}
+import { ExcelArchitectureIntentEngine } from '../excel/excel-intent-engine';
 
 export class WorkflowStageRenderers {
   /**
-   * Stage 00: REQUIREMENT_PROMPT (Fresh, blank, focused landing page)
+   * Stage 00: REQUIREMENT_PROMPT (Fresh landing page supporting Approach 1: Natural Language and Approach 2: Excel Architecture Intent)
    */
   public static renderLandingPage(container: HTMLElement, orchestrator: AIWorkflowOrchestrator): void {
+    let currentInputMode: 'nl' | 'excel' | 'hybrid' = 'nl';
+    let uploadedExcelContent: string | null = null;
+
     container.innerHTML = `
       <div class="workflow-landing-container">
         <div class="landing-header">
-          <div class="landing-badge">✦ RACKSLICER AI ARCHITECT</div>
-          <h1 class="landing-title">What do you want to build?</h1>
-          <p class="landing-sub">Describe your infrastructure requirement in plain English. I'll analyze it, verify all technical dependencies, and guide you through an engineering workflow.</p>
+          <div class="landing-badge">✦ RACKSLICER AI ARCHITECT ENGINE</div>
+          <h1 class="landing-title">Select Architecture Input Mode</h1>
+          <p class="landing-sub">Choose your input strategy: Interactive natural language prompting or enterprise deterministic Excel intent.</p>
+
+          <!-- Input Mode Switcher -->
+          <div class="input-mode-switcher" style="display:flex; justify-content:center; gap:12px; margin-top:16px;">
+            <button class="btn-mode-tab active" id="tab-mode-nl" style="padding:10px 18px; border-radius:8px; border:1px solid #38bdf8; background:rgba(56,189,248,0.15); color:#f8fafc; font-weight:700; cursor:pointer;">
+              💬 Approach 1: Natural Language
+            </button>
+            <button class="btn-mode-tab" id="tab-mode-excel" style="padding:10px 18px; border-radius:8px; border:1px solid #334155; background:rgba(30,41,59,0.7); color:#94a3b8; font-weight:700; cursor:pointer;">
+              📊 Approach 2: Excel Architecture Input (.xlsx)
+            </button>
+            <button class="btn-mode-tab" id="tab-mode-hybrid" style="padding:10px 18px; border-radius:8px; border:1px solid #334155; background:rgba(30,41,59,0.7); color:#94a3b8; font-weight:700; cursor:pointer;">
+              ⚡ Hybrid Mode (Excel + Overlay)
+            </button>
+          </div>
         </div>
 
-        <div class="landing-prompt-box">
+        <!-- Mode 1: Natural Language Box -->
+        <div class="landing-prompt-box" id="box-mode-nl">
           <textarea
             id="landing-prompt-input"
             class="landing-textarea"
@@ -56,7 +62,46 @@ export class WorkflowStageRenderers {
           <div class="landing-prompt-footer">
             <span class="landing-hint">⚡ Press Shift+Enter or click Start Design</span>
             <button id="btn-landing-start" class="btn-primary-action">
-              <span>🚀 START DESIGN</span>
+              <span>🚀 START DESIGN (APPROACH 1)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Mode 2: Excel Architecture Intent Dropzone -->
+        <div class="landing-prompt-box" id="box-mode-excel" style="display:none; padding:24px; text-align:center;">
+          <div style="font-size:13px; font-weight:700; color:#38bdf8; margin-bottom:8px;">
+            📊 APPROACH 2: DETERMINISTIC EXCEL ARCHITECTURE INTENT ENGINE
+          </div>
+          <p style="font-size:12px; color:#cbd5e1; max-width:620px; margin:0 auto 16px auto; line-height:1.4;">
+            Upload your 12-sheet <strong style="color:#f8fafc;">RackSlicer_AI_Infrastructure_Input_Template.xlsx</strong> workbook. The workbook is the Authoritative Source of Truth — previous conversation cache and stale canvas states are 100% reset on <strong style="color:#38bdf8;">CREATE</strong>.
+          </p>
+
+          <div id="excel-drop-zone" style="border:2px dashed #38bdf866; border-radius:10px; padding:30px; background:rgba(15,23,42,0.8); cursor:pointer; transition:all 0.2s ease;">
+            <div style="font-size:32px; margin-bottom:8px;">📑</div>
+            <div style="font-size:14px; font-weight:700; color:#f8fafc; margin-bottom:4px;">Drag & Drop Excel Workbook Template Here</div>
+            <div style="font-size:11px; color:#64748b; margin-bottom:14px;">Supports .xlsx, .csv, and JSON templates (12 Worksheets)</div>
+            <input type="file" id="excel-file-input" accept=".xlsx,.csv,.json" style="display:none;" />
+            <button id="btn-browse-excel" class="btn-secondary-action" style="pointer-events:none;">📁 Browse File</button>
+          </div>
+
+          <!-- Template Downloader & Status -->
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
+            <button id="btn-download-template" class="btn-secondary-action" style="font-size:11.5px;">
+              📥 Download Template (.xlsx / JSON)
+            </button>
+            <div id="excel-validation-status" style="font-size:11.5px; color:#10b981; font-weight:700; display:none;">
+              ✓ Workbook Parsed • 12 Sheets Validated • Ready
+            </div>
+          </div>
+
+          <div id="excel-preview-box" style="display:none; text-align:left; margin-top:16px; background:rgba(30,41,59,0.7); border:1px solid #334155; border-radius:8px; padding:14px;">
+            <div style="font-size:12px; font-weight:700; color:#cbd5e1; margin-bottom:6px;">📋 EXTRACTED ARCHITECTURE INTENT SUMMARY:</div>
+            <pre id="excel-summary-text" style="font-size:11px; color:#38bdf8; background:#0f172a; padding:10px; border-radius:6px; overflow-x:auto; margin:0;"></pre>
+          </div>
+
+          <div class="landing-prompt-footer" style="margin-top:20px;">
+            <button id="btn-excel-generate" class="btn-primary-action" style="width:100%;">
+              <span>🚀 GENERATE ARCHITECTURE FROM EXCEL (APPROACH 2)</span>
             </button>
           </div>
         </div>
@@ -89,31 +134,143 @@ export class WorkflowStageRenderers {
       </div>
     `;
 
-    const input = container.querySelector('#landing-prompt-input') as HTMLTextAreaElement;
-    const startBtn = container.querySelector('#btn-landing-start') as HTMLButtonElement;
+    const inputNL = container.querySelector('#landing-prompt-input') as HTMLTextAreaElement;
+    const startNLBtn = container.querySelector('#btn-landing-start') as HTMLButtonElement;
+    const boxNL = container.querySelector('#box-mode-nl') as HTMLElement;
+    const boxExcel = container.querySelector('#box-mode-excel') as HTMLElement;
+    const tabNL = container.querySelector('#tab-mode-nl') as HTMLButtonElement;
+    const tabExcel = container.querySelector('#tab-mode-excel') as HTMLButtonElement;
+    const tabHybrid = container.querySelector('#tab-mode-hybrid') as HTMLButtonElement;
 
-    const doStart = () => {
-      const val = input.value.trim();
+    // Tab Mode Switching
+    const setMode = (mode: 'nl' | 'excel' | 'hybrid') => {
+      currentInputMode = mode;
+      [tabNL, tabExcel, tabHybrid].forEach((t) => {
+        if (!t) return;
+        t.style.background = 'rgba(30,41,59,0.7)';
+        t.style.borderColor = '#334155';
+        t.style.color = '#94a3b8';
+      });
+
+      if (mode === 'nl') {
+        tabNL.style.background = 'rgba(56,189,248,0.15)';
+        tabNL.style.borderColor = '#38bdf8';
+        tabNL.style.color = '#f8fafc';
+        boxNL.style.display = 'block';
+        boxExcel.style.display = 'none';
+      } else if (mode === 'excel') {
+        tabExcel.style.background = 'rgba(56,189,248,0.15)';
+        tabExcel.style.borderColor = '#38bdf8';
+        tabExcel.style.color = '#f8fafc';
+        boxNL.style.display = 'none';
+        boxExcel.style.display = 'block';
+      } else {
+        tabHybrid.style.background = 'rgba(56,189,248,0.15)';
+        tabHybrid.style.borderColor = '#38bdf8';
+        tabHybrid.style.color = '#f8fafc';
+        boxNL.style.display = 'block';
+        boxExcel.style.display = 'block';
+      }
+    };
+
+    tabNL?.addEventListener('click', () => setMode('nl'));
+    tabExcel?.addEventListener('click', () => setMode('excel'));
+    tabHybrid?.addEventListener('click', () => setMode('hybrid'));
+
+    // Approach 1 Execution
+    const doStartNL = () => {
+      const val = inputNL.value.trim();
       if (!val) {
-        input.focus();
+        inputNL.focus();
         return;
       }
       orchestrator.submitInitialRequirement(val);
     };
 
-    startBtn?.addEventListener('click', doStart);
-    input?.addEventListener('keydown', (e) => {
+    startNLBtn?.addEventListener('click', doStartNL);
+    inputNL?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        doStart();
+        doStartNL();
       }
+    });
+
+    // Approach 2: Excel Dropzone & Parsing
+    const dropZone = container.querySelector('#excel-drop-zone') as HTMLElement;
+    const fileInput = container.querySelector('#excel-file-input') as HTMLInputElement;
+    const statusText = container.querySelector('#excel-validation-status') as HTMLElement;
+    const previewBox = container.querySelector('#excel-preview-box') as HTMLElement;
+    const summaryText = container.querySelector('#excel-summary-text') as HTMLElement;
+    const generateExcelBtn = container.querySelector('#btn-excel-generate') as HTMLButtonElement;
+    const downloadTemplateBtn = container.querySelector('#btn-download-template') as HTMLButtonElement;
+
+    dropZone?.addEventListener('click', () => fileInput?.click());
+
+    const handleFile = (file: File) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        uploadedExcelContent = e.target?.result as string;
+        try {
+          const processed = ExcelArchitectureIntentEngine.processWorkbook(uploadedExcelContent);
+          if (statusText) {
+            statusText.style.display = 'block';
+            statusText.textContent = `✓ '${file.name}' Parsed • Hash: ${processed.manifest.inputHash.substring(0, 18)} • 12 Sheets Validated`;
+          }
+          if (previewBox && summaryText) {
+            previewBox.style.display = 'block';
+            summaryText.textContent = `[GEN ID]: ${processed.manifest.generationId}\n[ACTION]: ${processed.manifest.action}\n[HYPERVISOR]: ${processed.manifest.virtualization.platform}\n[COMPUTE]: ${processed.manifest.compute.length} Server Types (${processed.manifest.compute.map((c) => `${c.qty}x ${c.brandModel}`).join(', ')})\n[STORAGE]: ${processed.manifest.storage.map((s) => `${s.storageType} ${s.usableCapacityTb}TB`).join(', ')}\n[NETWORKS]: ${processed.manifest.networks.map((n) => `${n.name} (VLAN ${n.vlanId || 'Auto'})`).join(', ')}\n[TRACEABILITY]: ${processed.manifest.traceability.length} Mapped Requirement References`;
+          }
+        } catch (err: any) {
+          alert(`Error parsing Excel workbook: ${err.message}`);
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    fileInput?.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files[0]) {
+        handleFile(fileInput.files[0]);
+      }
+    });
+
+    dropZone?.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = '#38bdf8';
+    });
+
+    dropZone?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = '#38bdf866';
+      if (e.dataTransfer?.files && e.dataTransfer.files[0]) {
+        handleFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    // Approach 2 Execution
+    generateExcelBtn?.addEventListener('click', () => {
+      const content = uploadedExcelContent || ExcelArchitectureIntentEngine.exportTemplateJson();
+      const processed = ExcelArchitectureIntentEngine.processWorkbook(content);
+      orchestrator.submitInitialRequirement(processed.requirementSpec.rawPrompt);
+      orchestrator.getState().requirement = processed.requirementSpec;
+    });
+
+    // Download Template
+    downloadTemplateBtn?.addEventListener('click', () => {
+      const jsonStr = ExcelArchitectureIntentEngine.exportTemplateJson();
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'RackSlicer_AI_Infrastructure_Input_Template.json';
+      a.click();
+      URL.revokeObjectURL(url);
     });
 
     container.querySelectorAll('.landing-chip').forEach((chip) => {
       chip.addEventListener('click', () => {
         const text = chip.getAttribute('data-prompt') || '';
-        input.value = text;
-        doStart();
+        inputNL.value = text;
+        doStartNL();
       });
     });
   }

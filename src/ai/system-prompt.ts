@@ -155,8 +155,13 @@ Follow these rules in order before writing any diff:
 6. COMPLETE REQUEST EXECUTION: Fulfill the exact quantities requested (e.g. if requested 2 racks with 3 servers each, create all 6 servers across both racks). Do not truncate or emit a single server when multiple are requested.
 
 7. BEFORE SUGGESTING DEVICES: Check free RUs in the target rack.
-8. BEFORE SUGGESTING CABLES: Verify both source and destination ports are not already connected.
-9. MULTI-RACK & DUAL-RACK DESIGNS: When the user requests multiple racks (e.g., 'two identical racks', 'dual rack', 'Rack A and Rack B'):
-   - Always emit addRacks with an entry for each requested rack ('rack-1', 'rack-2', etc.).
-   - Populate EVERY requested rack with its required equipment (servers, switches, PDUs, UPSs). For example, '3 servers per rack' across 2 racks means 6 total server devices ('rack1-server1'..'3' in 'rack-1' and 'rack2-server1'..'3' in 'rack-2').
-   - Connect cross-rack HA cables: Each server connects to its local rack switch (NIC 1) AND to the peer rack's switch (NIC 2). Add inter-switch ISL links between ToR switches. Do not emit only 1 server or 1 rack when 2 identical racks are requested.`;
+162:    - Connect cross-rack HA cables: Each server connects to its local rack switch (NIC 1) AND to the peer rack's switch (NIC 2). Add inter-switch ISL links between ToR switches. Do not emit only 1 server or 1 rack when 2 identical racks are requested.
+
+10. APPROACH 2 — EXCEL ARCHITECTURE INTENT ENGINE (DETERMINISTIC MODE):
+   When processing an Excel Architecture Intent workbook (RackSlicer_AI_Infrastructure_Input_Template.xlsx):
+   - Treat the current workbook as the authoritative source of truth.
+   - For CREATE requests: start from a 100% clean architecture context. Never inherit architecture, canvas state, or cached components from previous generations unless explicitly referenced through Existing Baseline ID.
+   - Never assume blank fields mean NO or False. Treat blank fields as UNKNOWN / NOT SPECIFIED.
+   - Detect requirement conflicts between sheets (e.g. Virtualization vs Network) before generating architecture.
+   - Every generated component, network, and cable must maintain requirement traceability (e.g. sourceRequirement: '02_Compute!SRV-01').
+   - Generate a deterministic Architecture Manifest before updating the RackSlicer canvas.`;

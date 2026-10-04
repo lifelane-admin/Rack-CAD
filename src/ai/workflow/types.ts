@@ -84,7 +84,7 @@ export interface RequirementSpec {
   limitationReport?: LimitationReportItem[];
   cpuCoresPerNode?: number;
   ramGbPerNode: number;
-  storageType: 'Ceph All-NVMe' | 'Ceph Hybrid' | 'SAN iSCSI' | 'SAN FC' | 'NVMe-oF' | 'Local ZFS' | 'Local Storage';
+  storageType: 'Ceph All-NVMe' | 'Ceph Hybrid' | 'SAN iSCSI' | 'SAN FC' | 'NVMe-oF' | 'Local ZFS' | 'Local Storage' | 'NAS Backup Target';
   usableStorageTb: number;
   networkFabric: '25GbE Redundant' | '100GbE Spine-Leaf' | '10GbE Standard' | 'InfiniBand' | 'Custom';
   availability: 'Standard' | 'High Availability (N+1)' | 'Fault Tolerant (2N)' | 'Disaster Recovery Ready';
@@ -115,6 +115,18 @@ export interface ValidationCheckItem {
   threshold: string;
   details: string;
   correctionProposal?: string;
+}
+
+export interface DeploymentConflictItem {
+  id: string;
+  item: string;
+  source: string;
+  sourceMedia: string;
+  dest: string;
+  destMedia: string;
+  conflictType: string;
+  conflictDescription: string;
+  recommendedAction: string;
 }
 
 export interface GapAnalysisItem {
