@@ -7,13 +7,14 @@
 
 ## Overview
 
-Five coordinated improvements to the RackSlicer AI Workflow (Stages 1–10):
+Six coordinated improvements to the RackSlicer AI Workflow (Stages 1–10):
 
 1. N+1 spare node toggle actually updates the BOM
 2. Stage 2 rack preview is taller with scroll-to-zoom
 3. Auto-labels with elbow connectors in preview and on canvas deploy
 4. Active Engineering Metrics bar replaces the static Design Summary
 5. Full cable laying (power + data + management) on canvas deployment
+6. New Stage 2b — Front Panel Port/Slot Inventory with isometric illustration and confirmation gate
 
 All changes use Approach 1 (incremental, isolated) — each feature is independently testable and can be reverted without affecting the others.
 
@@ -214,6 +215,90 @@ class CableLayingOrchestrator {
 
 ---
 
+## Feature 6 — Front Panel Port/Slot Assessment (Stage 2b)
+
+### Problem
+Port and slot assignments are assumed silently during architecture. Users have no visibility into what physical ports exist on each device, how they are mapped to cables, or the opportunity to remap before deployment. This makes port conflicts and cabling errors invisible until deployment fails.
+
+### New Stage: `PORT_SLOT_INVENTORY`
+Inserted between `ARCHITECTURE_DESIGN` (Stage 2) and `RESOURCE_BOM` (Stage 3). All existing stages re-number to Stage 3–11. Stage label constants updated in `stage-renderers.ts` and `workflow-orchestrator.ts`.
+
+### Notation System
+| Prefix | Meaning | Examples |
+|--------|---------|---------|
+| `S1, S2…` | PCIe / expansion slot bays | S1: PCIe x16 [NIC card] |
+| `P1, P2…` | Network data ports (SFP28, QSFP28, RJ45) | P1: SFP28 → ToR-A P3 |
+| `PWR1, PWR2` | PSU bays (C13/C14 power inlets) | PWR1 → PDU-A Outlet 4 |
+| `MGMT` | BMC / iDRAC / iLO management port | MGMT → OOB-SW P12 |
+
+### Stage Card Layout
+One panel card per device type in the BOM (compute server, ToR switch, PDU, storage array). Each card:
+1. Device name + specs header
+2. Isometric SVG front panel illustration (see below)
+3. Port inventory table beneath the graphic (all ports listed with S/P notation, type, assignment, status)
+4. `"Confirm Port Map ✓"` button — enabled only after user has reviewed/interacted with the card
+5. `✓ Port Map Locked` green badge shown after confirmation
+
+Stage "Accept & Continue" button disabled until all device cards are `confirmed: true`.
+
+### Isometric SVG Front Panel (`port-slot-renderer.ts`)
+Generated programmatically from `device-catalog.ts` port definitions. Each device's ports are already typed (`sfp28`, `qsfp28`, `power`, `management`, `rj45`).
+
+**Visual style:** 12° isometric tilt, subtle drop shadow, brushed-metal faceplate via SVG gradient. Connector silhouettes:
+- SFP28 / SFP+ → small square cage outline
+- QSFP28 / QSFP → larger square cage outline
+- C13 / C14 power → trapezoid inlet
+- RJ45 → rectangular port with 8-pin suggestion lines
+- PCIe slot → horizontal slot outline with bay number
+
+**Per-port label (traffic-light status):**
+- `P1: SFP28 → ToR-A P3` with colour-coded dot:
+  - 🟢 Green — confirmed + cable assignment locked
+  - 🟡 Amber — auto-assigned, awaiting confirmation
+  - 🔴 Red — conflict (duplicate assignment or speed mismatch)
+  - ⚫ Grey — unassigned / reserved for future use
+- Hover tooltip: full detail (speed, VLAN, cable colour, cable manager side)
+
+### Port Remapping Interaction
+Click any port → inline popover with:
+- Current assignment (pre-filled from architecture decisions in Stage 2)
+- Dropdown to reassign to a different device/port
+- "Mark as Reserved" option
+- "Clear" (set to unassigned)
+
+Changes written to `orchestrator.portAssignmentMap: Record<deviceId, Record<portId, PortAssignment>>` where:
+```typescript
+interface PortAssignment {
+  targetDeviceId: string;
+  targetPortId: string;
+  cableType: 'data' | 'power' | 'management';
+  confirmed: boolean;
+}
+```
+
+### Integration with Cable Laying (Feature 5)
+`CableLayingOrchestrator.syncCables()` reads `orchestrator.portAssignmentMap` as the authoritative source for all cable connections. If a port assignment exists in the map, that exact pairing is used. If no map entry exists for a port (device added after Stage 2b), auto-assignment logic applies as fallback.
+
+### New Type in `workflow/types.ts`
+```typescript
+interface PortAssignment {
+  targetDeviceId: string;
+  targetPortId: string;
+  cableType: 'data' | 'power' | 'management';
+  confirmed: boolean;
+}
+```
+`portAssignmentMap` added to `WorkflowState`.
+
+### Files Changed
+- `src/ai/workflow/port-slot-renderer.ts` — new file; isometric SVG generator + port interaction events
+- `src/ai/workflow/stage-renderers.ts` — `renderPortSlotInventoryStage()`; stage number constants updated
+- `src/ai/workflow/workflow-orchestrator.ts` — `portAssignmentMap` state; `confirmDevicePortMap(deviceId)`; stage transition guard
+- `src/ai/workflow/types.ts` — `PortAssignment` interface; `portAssignmentMap` on `WorkflowState`
+- `src/ai/workflow/cable-laying-orchestrator.ts` — read `portAssignmentMap` as primary cable source
+
+---
+
 ## New Files Summary
 
 | File | Purpose |
@@ -221,30 +306,55 @@ class CableLayingOrchestrator {
 | `src/ai/workflow/rack-preview-zoom.ts` | Scroll-to-zoom handler for rack preview panels |
 | `src/ai/workflow/label-sync-manager.ts` | Creates/updates/removes TextLabel objects in sync with orchestrator |
 | `src/ai/workflow/cable-laying-orchestrator.ts` | Auto-wires power, data, management cables on deployment |
+| `src/ai/workflow/port-slot-renderer.ts` | Isometric SVG front panel generator + port interaction events |
 
 ## Modified Files Summary
 
 | File | Changes |
 |------|---------|
-| `src/ai/workflow/workflow-orchestrator.ts` | `syncSpareNode()`, call `syncLabels()` + `syncCables()` in `notify()` |
-| `src/ai/workflow/stage-renderers.ts` | All 5 features touch this file — checkbox handler, preview labels, metrics bar, zoom attachment, post-deploy hooks |
-| `src/styles/workflow.css` | Preview height, metrics bar styles |
+| `src/ai/workflow/workflow-orchestrator.ts` | `syncSpareNode()`, `portAssignmentMap`, `confirmDevicePortMap()`, call `syncLabels()` + `syncCables()` in `notify()` |
+| `src/ai/workflow/stage-renderers.ts` | All 6 features — checkbox handler, preview labels, metrics bar, zoom, post-deploy hooks, Stage 2b renderer, stage number re-labelling |
+| `src/ai/workflow/types.ts` | `PortAssignment` interface, `portAssignmentMap` on `WorkflowState` |
+| `src/styles/workflow.css` | Preview height, metrics bar styles, port card styles, isometric panel styles |
 
 ---
 
 ## Testing Checklist
 
-- [ ] Uncheck N+1 in Stage 1 → Stage 2 shows base node count, BOM totals drop by 1 node
+**Feature 1 — N+1 Toggle**
+- [ ] Uncheck N+1 in Stage 1 → Stage 2 Cluster Size drops spare, BOM totals decrease by 1 node cost/power/U
 - [ ] Re-check N+1 → spare node returns to BOM, Stage 2 shows "+1 N+1 Spare"
+
+**Feature 2 — Rack Preview**
 - [ ] Stage 2 rack preview renders at ≥450px height
-- [ ] Scroll wheel over preview zooms in/out; zoom badge appears then fades
+- [ ] Scroll wheel over preview zooms in/out (0.4×–3.0×); zoom badge appears then fades after 1.5s
+- [ ] Zoom resets to 1.0× on stage re-render
+
+**Feature 3 — Auto-Labels**
 - [ ] Stage 2 device rows show short label pills with CSS elbow leaders
 - [ ] Deploy to canvas → devices appear with TextLabel elbow connectors on main canvas
-- [ ] Back from Stage 7, change node count → canvas labels update (rename/add/remove)
+- [ ] Back from Stage 7, change node count → canvas labels update (rename/add/remove), no duplicates
+
+**Feature 4 — Engineering Metrics Bar**
 - [ ] Metrics bar visible from Stage 2 onward with correct U%, kW, BTU/hr, BOM $, redundancy status
+- [ ] Metrics update reactively when N+1 toggled or BOM changes
 - [ ] Undo AI Deployment button triggers rollback
 - [ ] Export BOM Report button triggers existing export
-- [ ] Deploy → power cables (red) connect PSUs to PDUs
-- [ ] Deploy → data cables (blue) connect server NICs to ToR-A/B
-- [ ] Deploy → management cables (grey) connect BMC ports to OOB switch or log known issue
+
+**Feature 5 — Cable Laying**
+- [ ] Deploy → power cables (red) connect PSU ports to PDU outlets via Right Cable Manager
+- [ ] Deploy → data cables (blue/teal) connect server NICs to ToR-A/B via Left Cable Manager
+- [ ] Deploy → management cables (grey, dashed) connect BMC ports to OOB switch or log known issue
 - [ ] Re-deploy after config change → cables are idempotent (no duplicates)
+- [ ] Congestion alert fires in Validation Log if either cable manager exceeds 12 cables
+
+**Feature 6 — Port/Slot Assessment (Stage 2b)**
+- [ ] Stage 2b appears between Stage 2 and Stage 3 (now Stage 3)
+- [ ] Every BOM device type has a panel card with isometric SVG front panel
+- [ ] All ports show S/P notation with type, assignment, and traffic-light status dot
+- [ ] Hover on port shows full tooltip (speed, VLAN, cable manager side)
+- [ ] Clicking a port opens remap popover; reassignment updates portAssignmentMap
+- [ ] "Confirm Port Map ✓" button locks device card with green badge
+- [ ] "Accept & Continue" is disabled until all device cards confirmed
+- [ ] CableLayingOrchestrator uses confirmed portAssignmentMap as primary cable source
+- [ ] Port added after Stage 2b (config change) falls back to auto-assignment
