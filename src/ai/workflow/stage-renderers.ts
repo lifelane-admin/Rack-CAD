@@ -350,6 +350,9 @@ export class WorkflowStageRenderers {
       row.querySelector('.asm-checkbox')?.addEventListener('change', (e) => {
         const checked = (e.target as HTMLInputElement).checked;
         orchestrator.updateAssumption(asmId, { enabled: checked });
+        if (asmId === 'asm_spare') {
+          orchestrator.syncSpareNode(checked);
+        }
         this.renderRequirementBrief(container, orchestrator);
       });
 
@@ -436,7 +439,12 @@ export class WorkflowStageRenderers {
             </div>
             <div class="pillar-content">
               <div class="metric-row"><span>Hypervisor:</span> <strong>${req.platform}</strong></div>
-              <div class="metric-row"><span>Cluster Size:</span> <strong>${req.nodeCount} Host Nodes</strong></div>
+              <div class="metric-row"><span>Cluster Size:</span> <strong>${(() => {
+                const spareAsm = req.assumptions.find(a => a.id === 'asm_spare');
+                return spareAsm?.enabled
+                  ? `${req.nodeCount} Host Nodes + 1 N+1 Spare`
+                  : `${req.nodeCount} Host Nodes`;
+              })()}</strong></div>
               <div class="metric-row"><span>RAM per Node:</span> <strong>${req.ramGbPerNode} GB DDR5</strong></div>
               <div class="metric-row"><span>Total Cluster RAM:</span> <strong>${req.nodeCount * req.ramGbPerNode} GB</strong></div>
             </div>
