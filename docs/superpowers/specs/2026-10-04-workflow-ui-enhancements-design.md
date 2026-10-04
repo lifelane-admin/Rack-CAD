@@ -184,19 +184,24 @@ class CableLayingOrchestrator {
 - Each device with PSU ports: PSU 1 → Feed A PDU first available outlet, PSU 2 → Feed B PDU first available outlet
 - Dual-corded where device has 2 PSU ports; single-corded otherwise
 - Reuses port-finding logic from `canvas-deploy-smart-cabling.ts`
-- Visual: red/orange colour, routed right gutter (`sidePreference: 'right'`)
+- Visual: red/orange colour
+- Routing: `sidePreference: 'right'` → **Right Vertical Cable Manager** (keeps AC power separated from data to prevent EMI — enforced by existing validation rule in `validation.ts`)
 
 **Data cables:**
 - Each server NIC uplink 1 → ToR-A first available port; uplink 2 → ToR-B first available port
 - Storage nodes: dedicated storage NICs → ToR-A/B storage VLAN ports
 - Speed/type derived from `req.networkFabric` (25GbE → SFP28, 100GbE → QSFP28)
 - Inter-switch uplink: ToR-A ↔ ToR-B peer link on highest-index ports of each switch
-- Visual: blue (25G) / teal (100G), routed left gutter (`sidePreference: 'left'`)
+- Visual: blue (25G) / teal (100G)
+- Routing: `sidePreference: 'left'` → **Left Vertical Cable Manager**
 
 **Management cables:**
 - Each device MGMT/BMC port → OOB management switch sequential port assignment
 - If no OOB switch in BOM: MGMT ports left unconnected; logged as known issue in Validation Log
-- Visual: grey, dashed style, routed left gutter
+- Visual: grey, dashed style
+- Routing: `sidePreference: 'left'` → **Left Vertical Cable Manager** (bundled with data cables)
+
+**Cable manager congestion:** The existing `runValidationAlerts()` congestion check (threshold: 12 cables per manager) will automatically flag over-populated managers in the Validation Log after deployment. No special handling needed — it runs on every `stateManager.setState()` call.
 
 **Idempotency:** `syncCables()` checks existing cable `sourcePortId`/`destPortId` pairs before creating — skips any cable that already exists. On config change (device removed): removes orphaned cables whose source or dest device no longer exists.
 
