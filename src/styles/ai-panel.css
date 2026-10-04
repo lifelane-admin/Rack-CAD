@@ -611,3 +611,116 @@
   word-break: break-all;
 }
 
+/* ── Rack Preview Panel ─────────────────────────── */
+.rack-preview-container {
+  position: relative;
+  min-height: 450px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #0d1117;
+  border-radius: 8px;
+}
+
+.rack-frame-inner {
+  transform-origin: top center;
+  transition: transform 0.05s linear;
+  width: 100%;
+}
+
+/* ── Engineering Metrics Bar ────────────────────── */
+.eng-metrics-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  padding: 12px 16px;
+  background: #0f172a;
+  border-radius: 8px;
+  margin-top: 12px;
+  border: 1px solid #1e293b;
+}
+
+.eng-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.eng-metric-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.eng-metric-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.eng-metric-value.status-ok   { color: #22c55e; }
+.eng-metric-value.status-warn { color: #f59e0b; }
+.eng-metric-value.status-err  { color: #ef4444; }
+
+.eng-metrics-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 8px 16px;
+  border-top: 1px solid #1e293b;
+  margin-top: 4px;
+}
+
+.btn-undo-deploy {
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-export-bom {
+  background: #1d4ed8;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ── Device Label Pills in Stage 2 preview ──────── */
+.device-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.device-label-leader {
+  width: 24px;
+  height: 1px;
+  background: #3b82f6;
+  flex-shrink: 0;
+}
+
+.device-label-pill {
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(59,130,246,0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59,130,246,0.3);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
