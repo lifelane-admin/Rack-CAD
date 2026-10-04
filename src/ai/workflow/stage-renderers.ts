@@ -412,6 +412,27 @@ export class WorkflowStageRenderers {
   public static renderArchitectureStage(container: HTMLElement, orchestrator: AIWorkflowOrchestrator): void {
     const req = orchestrator.getState().requirement;
 
+    const shortLabel = (name: string, idx: number): string => {
+      const lower = name.toLowerCase();
+      if (lower.includes('pdu')) return `PDU-${idx === 0 ? 'A' : 'B'}`;
+      if (lower.includes('switch') || lower.includes('tor')) return `ToR-${idx === 0 ? 'A' : 'B'}`;
+      if (lower.includes('san') || lower.includes('nvme')) return 'NVMe SAN';
+      if (lower.includes('server') || lower.includes('poweredge') || lower.includes('host')) return `Host ${idx + 1}`;
+      return name.split(' ').slice(0, 3).join(' ');
+    };
+
+    const bomItems = orchestrator.getBomItems();
+    const deviceRowsHtml = bomItems.map((item, idx) => `
+      <div class="device-slot" style="background:rgba(30,41,59,0.7);border:1px solid #334155;border-radius:3px;padding:4px 8px;margin-bottom:2px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:10px;color:#64748b;min-width:28px;">${String(idx + 1).padStart(2, '0')}U</span>
+        <span style="flex:1;font-size:10px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.name}</span>
+        <div class="device-label-row" style="margin:0;">
+          <div class="device-label-leader"></div>
+          <div class="device-label-pill">${shortLabel(item.name, idx)}</div>
+        </div>
+      </div>
+    `).join('');
+
     container.innerHTML = `
       <div class="workflow-stage-card">
         <div class="stage-banner">
@@ -501,6 +522,15 @@ export class WorkflowStageRenderers {
           <div class="section-title">💡 ARCHITECTURAL RATIONALE</div>
           <div class="rationale-box">
             A <strong>${req.nodeCount}-node ${req.platform}</strong> cluster with <strong>${req.storageType}</strong> provides an optimal balance of compute density and quorum stability. By provisioning dual 25GbE interconnects, Ceph east-west sync operations run on an isolated fabric, guaranteeing zero latency impact on tenant VM workloads.
+          </div>
+        </div>
+
+        <div class="stage-section" style="margin-top:16px;">
+          <div class="section-title">🗄️ RACK LAYOUT PREVIEW</div>
+          <div class="rack-preview-col" style="overflow:auto;">
+            <div class="rack-frame-inner" style="padding:8px;">
+              ${deviceRowsHtml}
+            </div>
           </div>
         </div>
 
