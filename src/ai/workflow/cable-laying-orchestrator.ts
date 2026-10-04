@@ -120,13 +120,25 @@ export class CableLayingOrchestrator {
       const nicPorts = device.ports.filter(isNicPort);
       const mgmtPorts = device.ports.filter(isMgmtPort);
 
-      // ── Power cables ──────────────────────────────────────────────
+      // Prefer ear-hole ports for cleaner cable-manager routing.
+      // Left ear data ports exit toward the left cable manager (used for data cables).
+      // Right ear management port exits toward the right side (used for iDRAC/iLO).
+      // Falls back to body ports when ear holes are not present (non-server devices).
+      const earLeftData = device.ports
+        .filter(p => p.id.includes('-ear-left-') && p.type !== 'power')
+        .sort((a, b) => a.relativeY - b.relativeY);
+      const earRightMgmt = device.ports.filter(p => p.id === `${device.id}-ear-right-mgmt`);
+
+      const dataSourcePorts = earLeftData.length > 0 ? earLeftData : nicPorts;
+      const mgmtSourcePorts = earRightMgmt.length > 0 ? earRightMgmt : mgmtPorts;
+
+      // ── Power cables (Primary PSU1 → PDU Feed-A, Secondary PSU2 → PDU Feed-B) ──
       if (pduA && psuPorts[0]) {
         const outlet = pduAOutlets[outletIdx[pduA.id]];
         if (outlet) {
           const pair = `${psuPorts[0].id}|${outlet.id}`;
           if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(psuPorts[0].id, outlet.id, 'power', '#f97316', 'right', 'Power — PSU1 → Feed A'));
+            newCables.push(makeAiCable(psuPorts[0].id, outlet.id, 'power', '#f97316', 'right', 'Power — Primary PSU → Feed A'));
             existingPairs.add(pair);
           }
         }
@@ -138,46 +150,46 @@ export class CableLayingOrchestrator {
         if (outlet) {
           const pair = `${psuPorts[1].id}|${outlet.id}`;
           if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(psuPorts[1].id, outlet.id, 'power', '#f97316', 'right', 'Power — PSU2 → Feed B'));
+            newCables.push(makeAiCable(psuPorts[1].id, outlet.id, 'power', '#f97316', 'right', 'Power — Secondary PSU → Feed B'));
             existingPairs.add(pair);
           }
         }
         outletIdx[pduB.id]++;
       }
 
-      // ── Data cables ───────────────────────────────────────────────
-      if (torA && nicPorts[0]) {
+      // ── Data cables (via left ear holes → left cable manager) ─────
+      if (torA && dataSourcePorts[0]) {
         const torAPort = torA.ports[switchPortIdx[torA.id]];
         if (torAPort) {
-          const pair = `${nicPorts[0].id}|${torAPort.id}`;
+          const pair = `${dataSourcePorts[0].id}|${torAPort.id}`;
           if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(nicPorts[0].id, torAPort.id, 'dac-twinax', '#3b82f6', 'left', 'Data — NIC1 → ToR-A'));
+            newCables.push(makeAiCable(dataSourcePorts[0].id, torAPort.id, 'dac-twinax', '#3b82f6', 'left', 'Data — NIC1 → ToR-A'));
             existingPairs.add(pair);
           }
           switchPortIdx[torA.id]++;
         }
       }
 
-      if (torB && nicPorts[1]) {
+      if (torB && dataSourcePorts[1]) {
         const torBPort = torB.ports[switchPortIdx[torB.id]];
         if (torBPort) {
-          const pair = `${nicPorts[1].id}|${torBPort.id}`;
+          const pair = `${dataSourcePorts[1].id}|${torBPort.id}`;
           if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(nicPorts[1].id, torBPort.id, 'dac-twinax', '#06b6d4', 'left', 'Data — NIC2 → ToR-B'));
+            newCables.push(makeAiCable(dataSourcePorts[1].id, torBPort.id, 'dac-twinax', '#06b6d4', 'left', 'Data — NIC2 → ToR-B'));
             existingPairs.add(pair);
           }
           switchPortIdx[torB.id]++;
         }
       }
 
-      // ── Management cables ─────────────────────────────────────────
-      if (oobSwitch && mgmtPorts.length > 0) {
+      // ── Management cables (via right ear iDRAC/iLO/BMC hole) ──────
+      if (oobSwitch && mgmtSourcePorts.length > 0) {
         const oobPortIdx = oobSwitch.ports.findIndex(p => !p.connected);
         const oobPort = oobSwitch.ports[oobPortIdx >= 0 ? oobPortIdx : 0];
         if (oobPort) {
-          const pair = `${mgmtPorts[0].id}|${oobPort.id}`;
+          const pair = `${mgmtSourcePorts[0].id}|${oobPort.id}`;
           if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(mgmtPorts[0].id, oobPort.id, 'cat6', '#64748b', 'left', `MGMT — ${device.name} → OOB`));
+            newCables.push(makeAiCable(mgmtSourcePorts[0].id, oobPort.id, 'cat6', '#64748b', 'left', `MGMT — ${device.name} → OOB`));
             existingPairs.add(pair);
           }
         }

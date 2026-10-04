@@ -724,3 +724,116 @@
   text-overflow: ellipsis;
 }
 
+/* ── Cable Wiring Summary Panel (Completion Stage) ──────────────── */
+.cable-deploy-summary {
+  background: #0d1322;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+
+.cable-deploy-summary-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.cable-group-section {
+  margin-bottom: 10px;
+}
+
+.cable-group-section:last-child {
+  margin-bottom: 0;
+}
+
+.cable-group-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+}
+
+.cable-group-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cable-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #cbd5e1;
+  flex: 1;
+}
+
+.cable-group-count {
+  font-size: 10px;
+  font-weight: 600;
+  background: #1e293b;
+  color: #64748b;
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+
+.cable-row-summary {
+  display: grid;
+  grid-template-columns: 10px 1fr 1fr 14px 1fr;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0 3px 15px;
+  font-size: 10px;
+  color: #64748b;
+  border-left: 1px solid #1e293b;
+  margin-left: 4px;
+}
+
+.cable-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.cable-row-name {
+  color: #94a3b8;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cable-row-src {
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cable-row-arrow {
+  color: #334155;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.cable-row-dst {
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cable-deploy-empty {
+  font-size: 11px;
+  color: #475569;
+  text-align: center;
+  padding: 12px 0;
+  font-style: italic;
+}
+

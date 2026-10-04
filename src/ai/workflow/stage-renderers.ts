@@ -15,6 +15,7 @@ import { WorkflowStageId, RequirementSpec, OptimizationObjective } from './types
 import { AIWorkflowOrchestrator } from './workflow-orchestrator';
 import { eventBus } from '../../core/event-bus';
 import { stateManager } from '../../core/state';
+import { CableData } from '../../core/types';
 import { RackPreviewZoom } from './rack-preview-zoom';
 import { LabelSyncManager } from './label-sync-manager';
 import { CableLayingOrchestrator } from './cable-laying-orchestrator';
@@ -3071,6 +3072,54 @@ export class WorkflowStageRenderers {
     orchestrator: AIWorkflowOrchestrator,
     txId?: string
   ): void {
+    // ── Build cable wiring summary ────────────────────────────────────
+    const s = stateManager.getState();
+    const aiCables = (s.cables ?? []).filter((c: CableData) => c.id.startsWith('ai-cable-'));
+
+    const portDeviceName = (portId: string | null | undefined): string => {
+      if (!portId) return '—';
+      const port = stateManager.getPort(portId);
+      if (!port) return portId;
+      const dev = stateManager.getDevice(port.deviceId);
+      return dev?.name ?? port.deviceId;
+    };
+
+    type CableGroup = { label: string; color: string; dot: string; cables: CableData[] };
+    const groups: CableGroup[] = [
+      { label: 'Power', color: '#f97316', dot: '#f97316', cables: [] },
+      { label: 'Data', color: '#3b82f6', dot: '#3b82f6', cables: [] },
+      { label: 'Management', color: '#64748b', dot: '#64748b', cables: [] },
+      { label: 'ISL / Uplink', color: '#8b5cf6', dot: '#8b5cf6', cables: [] },
+    ];
+    for (const c of aiCables) {
+      const n = (c.name ?? '').toLowerCase();
+      if (n.startsWith('power') || c.type === 'power') groups[0].cables.push(c);
+      else if (n.startsWith('isl') || n.startsWith('uplink')) groups[3].cables.push(c);
+      else if (n.startsWith('mgmt') || c.type === 'cat6') groups[2].cables.push(c);
+      else groups[1].cables.push(c);
+    }
+
+    const groupHtml = groups
+      .filter(g => g.cables.length > 0)
+      .map(g => `
+        <div class="cable-group-section">
+          <div class="cable-group-header">
+            <span class="cable-group-dot" style="background:${g.dot};"></span>
+            <span class="cable-group-label">${g.label}</span>
+            <span class="cable-group-count">${g.cables.length} cable${g.cables.length !== 1 ? 's' : ''}</span>
+          </div>
+          ${g.cables.map(c => `
+            <div class="cable-row-summary">
+              <span class="cable-swatch" style="background:${c.color};"></span>
+              <span class="cable-row-name">${c.name ?? c.type}</span>
+              <span class="cable-row-src">${portDeviceName(c.sourcePortId)}</span>
+              <span class="cable-row-arrow">→</span>
+              <span class="cable-row-dst">${portDeviceName(c.destPortId)}</span>
+            </div>
+          `).join('')}
+        </div>
+      `).join('');
+
     container.innerHTML = `
       <div class="workflow-stage-card success">
         <div class="stage-banner">
@@ -3080,11 +3129,16 @@ export class WorkflowStageRenderers {
         </div>
 
         <div class="completed-summary-box">
-          <div style="font-size:42px; margin-bottom:10px;">🎉</div>
-          <div style="font-weight:800; font-size:18px; color:#065f46;">TRANSACTION COMMITTED: ${txId || 'TXN-9842-PROD'}</div>
-          <p style="font-size:12px; color:#475569; max-width:540px; margin:8px auto;">
-            All rack units, servers, switches, side-mounted PDUs, vertical cable ducts, and smart data/power cables are now live on your canvas.
+          <div style="font-size:32px; margin-bottom:6px;">🎉</div>
+          <div style="font-weight:800; font-size:16px; color:#065f46;">TRANSACTION COMMITTED: ${txId || 'TXN-9842-PROD'}</div>
+          <p style="font-size:11px; color:#475569; max-width:540px; margin:6px auto 0;">
+            All rack units, servers, switches, PDUs, and cables are live on your canvas.
           </p>
+        </div>
+
+        <div class="cable-deploy-summary">
+          <div class="cable-deploy-summary-title">🔌 Cable Wiring Summary — ${aiCables.length} cable${aiCables.length !== 1 ? 's' : ''} deployed</div>
+          ${groupHtml || '<div class="cable-deploy-empty">No AI cables deployed yet.</div>'}
         </div>
 
         <div class="stage-footer center">
