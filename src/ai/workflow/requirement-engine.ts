@@ -41,8 +41,7 @@ export class RequirementCompletenessEngine {
       if (rackMatch) rackCount = parseInt(rackMatch[1], 10);
     }
 
-    // 2. Detect node count
-    let nodeCount = 2; // sensible base default
+    // 2. Detect explicit inventory & hardware counts
     const wordMap: Record<string, number> = {
       one: 1,
       single: 1,
@@ -55,18 +54,63 @@ export class RequirementCompletenessEngine {
       eight: 8,
     };
 
-    const numMatch = text.match(/(\d+)\s*[-]?\s*(?:node|server|host)/i);
-    if (numMatch) {
-      const perRack = parseInt(numMatch[1], 10);
-      nodeCount = (text.includes('each rack') || text.includes('per rack') || rackCount > 1) ? perRack * rackCount : perRack;
-    } else {
-      const wordMatch = text.match(/\b(one|two|three|four|five|six|eight|dual|single)\s*[-]?\s*(?:node|server|host)/i);
-      if (wordMatch) {
-        const perRack = wordMap[wordMatch[1].toLowerCase()] || 2;
-        nodeCount = (text.includes('each rack') || text.includes('per rack') || rackCount > 1) ? perRack * rackCount : perRack;
-      } else if (platform === 'Proxmox' || platform === 'Kubernetes') {
-        nodeCount = 3 * rackCount; // default per rack
-      }
+    const parseWordOrDigit = (matchStr: string | undefined): number => {
+      if (!matchStr) return 0;
+      const parsed = parseInt(matchStr, 10);
+      if (!isNaN(parsed)) return parsed;
+      return wordMap[matchStr.toLowerCase()] || 1;
+    };
+
+    const inventory: NonNullable<RequirementSpec['inventory']> = {};
+
+    // Servers
+    const serverMatch = text.match(/\b(\d+|one|two|three|four|five|six|eight|dual|single)\s*(?:dell|hp|lenovo|supermicro)?\s*(?:node|server|host)s?/i);
+    let nodeCount = 2;
+    if (serverMatch) {
+      const cnt = parseWordOrDigit(serverMatch[1]);
+      nodeCount = (text.includes('each rack') || text.includes('per rack') || rackCount > 1) ? cnt * rackCount : cnt;
+      inventory.servers = { count: cnt, brand: text.includes('dell') ? 'Dell PowerEdge' : text.includes('hp') ? 'HPE ProLiant' : undefined };
+    } else if (platform === 'Proxmox' || platform === 'Kubernetes') {
+      nodeCount = 3 * rackCount;
+    }
+
+    // SAN
+    const sanMatch = text.match(/\b(\d+|one|single|two|dual)\s*san\b/i);
+    if (sanMatch) {
+      inventory.san = { count: parseWordOrDigit(sanMatch[1]) };
+    }
+
+    // Switches
+    const switchMatch = text.match(/\b(\d+|one|single|two|dual)\s*switches?\b/i);
+    if (switchMatch) {
+      inventory.switches = { count: parseWordOrDigit(switchMatch[1]) };
+    }
+
+    // Firewalls
+    const fwMatch = text.match(/\b(\d+|one|single|two|dual)\s*firewalls?\b/i);
+    if (fwMatch) {
+      inventory.firewalls = { count: parseWordOrDigit(fwMatch[1]) };
+    }
+
+    // UPS
+    const upsMatch = text.match(/\b(\d+|one|single|two|dual)\s*ups\b/i);
+    if (upsMatch) {
+      inventory.ups = { count: parseWordOrDigit(upsMatch[1]) };
+    }
+
+    // 2b. Parse requested networks
+    const requestedNetworks: string[] = [];
+    if (text.includes('management') || text.includes('mgmt')) requestedNetworks.push('Management (Out-of-Band / iDRAC)');
+    if (text.includes('vm') || text.includes('guest')) requestedNetworks.push('VM Traffic Network');
+    if (text.includes('migration') || text.includes('vmotion')) requestedNetworks.push('Live Migration');
+    if (text.includes('heartbeat') || text.includes('quorum')) requestedNetworks.push('Cluster Heartbeat / Quorum');
+    if (text.includes('backup') || text.includes('dr')) requestedNetworks.push('Backup & Replication');
+    if (text.includes('storage') || text.includes('iscsi') || text.includes('san')) requestedNetworks.push('Storage Network (iSCSI / MPIO)');
+
+    // 2c. Parse user non-purchase constraint
+    const userConstraints: string[] = [];
+    if (text.includes("don't want to buy") || text.includes("dont want to buy") || text.includes("use what i already have") || text.includes("already have")) {
+      userConstraints.push('Strict Inventory Constraint: Reuse existing hardware only. Do not add mandatory purchased equipment unless explicitly approved.');
     }
 
     // 3. Detect storage
@@ -114,7 +158,58 @@ export class RequirementCompletenessEngine {
     // 7. Detect availability & power
     const isHA = text.includes('ha') || text.includes('redundant') || text.includes('high availability') || nodeCount >= 2;
     const availability: RequirementSpec['availability'] = isHA ? 'High Availability (N+1)' : 'Standard';
-    const powerFeed: RequirementSpec['powerFeed'] = text.includes('3-phase') ? 'A/B/C 3-Phase' : 'A/B Redundant';
+    const powerFeed: RequirementSpec['powerFeed'] = inventory.ups?.count === 1 ? 'Single Feed' : text.includes('3-phase') ? 'A/B/C 3-Phase' : 'A/B Redundant';
+
+    // 8. Build Limitation Report (SPOF & Redundancy Analysis)
+    const limitationReport: NonNullable<RequirementSpec['limitationReport']> = [];
+
+    if (inventory.ups?.count === 1) {
+      limitationReport.push({
+        id: 'lim_spof_power',
+        category: 'Power',
+        title: 'Single UPS Unit — Critical Power Single Point of Failure (SPOF)',
+        hardwareGiven: '1x UPS Battery Backup Unit',
+        status: 'FAIL_SPOF',
+        limitationText: 'Only 1 UPS is provided. Utility AC loss or UPS battery/inverter fault will shut down all 3 servers, SAN, switches, and firewalls concurrently. Dual Feed A/B power fault-tolerance is IMPOSSIBLE with 1 UPS.',
+        recommendationToFix: 'Add 1x Secondary UPS (UPS-02) to establish independent A/B power feeds.',
+      });
+    }
+
+    if (inventory.san?.count === 1) {
+      limitationReport.push({
+        id: 'lim_spof_san',
+        category: 'Storage',
+        title: 'Single SAN Array — Enclosure & Midplane Single Point of Failure',
+        hardwareGiven: '1x Shared SAN Storage Array',
+        status: 'WARN_CHASSIS',
+        limitationText: '1 SAN array provides shared block storage. While dual internal controllers prevent controller-level downtime, a physical SAN enclosure failure or midplane short will halt all cluster storage access.',
+        recommendationToFix: 'Add a 2nd SAN array with synchronous block replication or deploy host-based SDS (Ceph / vSAN / ZFS).',
+      });
+    }
+
+    if (inventory.switches?.count === 2) {
+      limitationReport.push({
+        id: 'lim_ha_network',
+        category: 'Network',
+        title: 'Dual Switch Fabric — 802.1Q Network Partitioning',
+        hardwareGiven: '2x Managed ToR Switches',
+        status: 'PASS_HA',
+        limitationText: `2 switches operate in MLAG / LACP active-active pair. The ${requestedNetworks.length > 0 ? requestedNetworks.length : 6} requested networks will be partitioned using IEEE 802.1Q VLANs (10-60) across dual 10G/25G host bonds.`,
+        recommendationToFix: 'Configure 802.1Q VLAN trunking and enable LACP bonding on host NIC ports.',
+      });
+    }
+
+    if (inventory.firewalls?.count === 2) {
+      limitationReport.push({
+        id: 'lim_ha_firewall',
+        category: 'Security',
+        title: 'Dual Firewall Active/Passive HA Pair',
+        hardwareGiven: '2x Next-Gen Firewalls',
+        status: 'PASS_HA',
+        limitationText: '2 firewalls operate in Active/Passive High Availability mode with stateful session synchronization over dedicated sync links.',
+        recommendationToFix: 'Connect dedicated HA sync cable between Firewalls and trunk LAN/WAN interfaces to Switch 1 & Switch 2.',
+      });
+    }
 
     // Build known map
     const workloadName = platform !== 'Bare Metal' ? `${platform} Virtualization Cluster` : 'Compute Cluster';
@@ -122,8 +217,27 @@ export class RequirementCompletenessEngine {
       Workload: workloadName,
       Platform: platform,
       Racks: rackCount > 1 ? `${rackCount} Identical Racks (HA Topology)` : '1 Rack',
-      Nodes: rackCount > 1 ? `${nodeCount} Total Nodes (${nodeCount / rackCount} per rack)` : nodeCount,
+      Nodes: rackCount > 1 ? `${nodeCount} Total Nodes (${nodeCount / rackCount} per rack)` : `${nodeCount} Server Nodes`,
     };
+
+    if (inventory.servers || inventory.san || inventory.switches || inventory.firewalls || inventory.ups) {
+      const parts: string[] = [];
+      if (inventory.servers) parts.push(`${inventory.servers.count}x ${inventory.servers.brand || 'Server'}`);
+      if (inventory.san) parts.push(`${inventory.san.count}x SAN Storage`);
+      if (inventory.switches) parts.push(`${inventory.switches.count}x Switches`);
+      if (inventory.firewalls) parts.push(`${inventory.firewalls.count}x Firewalls`);
+      if (inventory.ups) parts.push(`${inventory.ups.count}x UPS`);
+      known['Existing Inventory'] = parts.join(', ');
+    }
+
+    if (requestedNetworks.length > 0) {
+      known['Logical Networks'] = `${requestedNetworks.length} Networks (${requestedNetworks.join(', ')})`;
+    }
+
+    if (userConstraints.length > 0) {
+      known['Design Constraint'] = 'Reuse Existing Inventory Only (Zero Extra Purchases)';
+    }
+
     if (usableStorageTb > 0) known['Storage Capacity'] = `${usableStorageTb} TB Usable`;
     if (ramGbPerNode > 0) known['RAM per Node'] = `${ramGbPerNode} GB`;
     if (text.includes('25gbe') || text.includes('100gbe') || text.includes('10gbe')) {
@@ -196,13 +310,24 @@ export class RequirementCompletenessEngine {
         enabled: true,
         category: 'facility',
       },
-      {
+    ];
+
+    if (inventory.ups?.count === 1) {
+      assumptions.push({
+        id: 'asm_single_ups',
+        text: 'Single UPS power distribution (Note: Power Feed B redundancy limited by 1x UPS hardware)',
+        enabled: true,
+        category: 'power',
+        userComment: 'Single UPS specified by user constraint. Identified as SPOF in Limitation Report.',
+      });
+    } else {
+      assumptions.push({
         id: 'asm_power',
         text: 'Dual redundant A/B power feeds with 16A/32A metered PDUs',
         enabled: true,
         category: 'power',
-      },
-    ];
+      });
+    }
 
     if (nodeCount === 2) {
       assumptions.push({
@@ -227,6 +352,10 @@ export class RequirementCompletenessEngine {
       platform,
       rackCount,
       nodeCount,
+      inventory,
+      requestedNetworks,
+      userConstraints,
+      limitationReport,
       ramGbPerNode: ramGbPerNode || 256,
       storageType,
       usableStorageTb: usableStorageTb || 50,

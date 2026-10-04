@@ -253,6 +253,46 @@ export class WorkflowStageRenderers {
             : ''
         }
 
+        ${
+          req.limitationReport && req.limitationReport.length > 0
+            ? `
+          <div class="stage-section limitation-report-section" style="background:rgba(15,23,42,0.85); border:1px solid rgba(239,68,68,0.4); border-radius:8px; padding:16px; margin-top:16px;">
+            <div class="section-title" style="color:#f87171; display:flex; align-items:center; gap:8px; font-weight:700; font-size:13px;">
+              <span>⚠️ SINGLE POINT OF FAILURE (SPOF) & REDUNDANCY LIMITATIONS REPORT</span>
+            </div>
+            <p style="font-size:12px; color:#cbd5e1; margin:6px 0 14px 0; line-height:1.4;">
+              The AI analyzed your prompt and inventory constraints. Here is the exact audit of redundancy capabilities and hardware limitations:
+            </p>
+            <div class="limitation-items-list" style="display:flex; flex-direction:column; gap:12px;">
+              ${req.limitationReport
+                .map(
+                  (item) => `
+                <div class="limitation-card ${item.status}" style="background:rgba(30,41,59,0.7); border-left:4px solid ${item.status === 'FAIL_SPOF' ? '#ef4444' : item.status === 'WARN_CHASSIS' ? '#f59e0b' : '#10b981'}; border-radius:6px; padding:12px 14px;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                    <strong style="font-size:13px; color:#f8fafc;">${item.title}</strong>
+                    <span class="lim-badge" style="font-size:10px; font-weight:700; padding:3px 9px; border-radius:12px; background:${item.status === 'FAIL_SPOF' ? 'rgba(239,68,68,0.2)' : item.status === 'WARN_CHASSIS' ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'}; color:${item.status === 'FAIL_SPOF' ? '#f87171' : item.status === 'WARN_CHASSIS' ? '#fbbf24' : '#34d399'}; border:1px solid ${item.status === 'FAIL_SPOF' ? 'rgba(239,68,68,0.4)' : item.status === 'WARN_CHASSIS' ? 'rgba(245,158,11,0.4)' : 'rgba(16,185,129,0.4)'};">
+                      ${item.status === 'FAIL_SPOF' ? '🔴 SPOF LIMITATION' : item.status === 'WARN_CHASSIS' ? '🟡 CHASSIS WARNING' : '🟢 PASS HA'}
+                    </span>
+                  </div>
+                  <div style="font-size:11.5px; color:#94a3b8; margin-bottom:6px;">
+                    <strong>Hardware Specified:</strong> <span style="color:#e2e8f0; font-weight:600;">${item.hardwareGiven}</span>
+                  </div>
+                  <div style="font-size:12px; color:#cbd5e1; line-height:1.45; margin-bottom:8px;">
+                    ${item.limitationText}
+                  </div>
+                  <div style="font-size:11.5px; color:#38bdf8; background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.2); padding:8px 10px; border-radius:4px; line-height:1.4;">
+                    <strong>💡 Action to Add Full Redundancy:</strong> ${item.recommendationToFix}
+                  </div>
+                </div>
+              `
+                )
+                .join('')}
+            </div>
+          </div>
+        `
+            : ''
+        }
+
         <div class="stage-section">
           <div class="section-title">📋 DECLARED ASSUMPTIONS (EDITABLE & COMMENTABLE)</div>
           <p style="font-size:11.5px; color:#64748b; margin-top:-4px; margin-bottom:10px;">

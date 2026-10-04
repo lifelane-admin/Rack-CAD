@@ -54,12 +54,34 @@ export interface AssumptionItem {
   userComment?: string;
 }
 
+export interface EquipmentInventory {
+  servers?: { count: number; brand?: string };
+  san?: { count: number };
+  switches?: { count: number };
+  firewalls?: { count: number };
+  ups?: { count: number };
+}
+
+export interface LimitationReportItem {
+  id: string;
+  category: 'Power' | 'Storage' | 'Network' | 'Security' | 'Compute';
+  title: string;
+  hardwareGiven: string;
+  status: 'FAIL_SPOF' | 'WARN_CHASSIS' | 'PASS_HA';
+  limitationText: string;
+  recommendationToFix: string;
+}
+
 export interface RequirementSpec {
   rawPrompt: string;
   workload: string;
   platform: 'Proxmox' | 'VMware vSphere' | 'Microsoft Hyper-V' | 'Kubernetes' | 'Nutanix AHV' | 'OpenStack' | 'Bare Metal' | 'Other';
   rackCount?: number;
   nodeCount: number;
+  inventory?: EquipmentInventory;
+  requestedNetworks?: string[];
+  userConstraints?: string[];
+  limitationReport?: LimitationReportItem[];
   cpuCoresPerNode?: number;
   ramGbPerNode: number;
   storageType: 'Ceph All-NVMe' | 'Ceph Hybrid' | 'SAN iSCSI' | 'SAN FC' | 'NVMe-oF' | 'Local ZFS' | 'Local Storage';

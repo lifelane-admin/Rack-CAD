@@ -556,222 +556,145 @@ export class AIWorkflowOrchestrator {
    * Generates default suggested BOM items derived from requirement specification.
    */
   public generateDefaultBom(req: RequirementSpec): HardwareBomItem[] {
-    const nodeCount = req.nodeCount || 2;
+    const inv = req.inventory || {};
+    const nodeCount = inv.servers?.count || req.nodeCount || 2;
     const ram = req.ramGbPerNode || 128;
-    const isHyperV = req.platform === 'Microsoft Hyper-V';
-    const isProxmox = req.platform === 'Proxmox';
-    const isVmware = req.platform === 'VMware vSphere';
     const platformLabel = req.platform || 'Enterprise Cluster';
+    const serverBrand = inv.servers?.brand || 'Dell PowerEdge';
 
-    return [
+    const items: HardwareBomItem[] = [
       {
         id: 'bom-compute-primary',
         category: 'Compute',
-        name: 'Dell PowerEdge R760',
-        model: 'PowerEdge R760 2U Rack Server',
+        name: `${serverBrand} R760`,
+        model: `${serverBrand} R760 2U Rack Server`,
         qty: nodeCount,
         specs: `2U | 2x Intel Xeon Silver 4410Y (24C/48T) | ${ram}GB DDR5-4800 | 4x 25GbE SFP28 | Dual 1100W Titanium PSU`,
-        whySuggested: `Certified for ${platformLabel}. Native iDRAC9 telemetry, dual redundant PSUs, optimized CPU cores per host.`,
+        whySuggested: `Specified in user inventory. Native iDRAC9 telemetry, dual redundant PSUs, certified for ${platformLabel}.`,
         unitCost: 6450,
         units: 2,
         power: 450,
-        badge: 'AI Recommended',
-        alternatives: [
-          {
-            name: 'HPE ProLiant DL380 Gen11',
-            specs: `2U | 2x Intel Xeon Silver 4410Y | ${ram}GB DDR5 | 4x 25GbE | Dual 1000W PSU (iLO 6 Advanced)`,
-            unitCost: 6870,
-            units: 2,
-            power: 460,
-            reason: 'HPE enterprise platform with Silicon Root of Trust and iLO 6 management.',
-          },
-          {
-            name: 'Supermicro SuperServer 2024US-TRT',
-            specs: `2U | Dual AMD EPYC 9124 16-Core | ${ram}GB DDR5 | 2x 25GbE + 2x 10GbE | Dual 1200W PSU`,
-            unitCost: 5920,
-            units: 2,
-            power: 430,
-            reason: 'High density compute value with lower initial hardware acquisition cost.',
-          },
-          {
-            name: 'Lenovo ThinkSystem SR650 V3',
-            specs: `2U | 2x Intel Xeon Silver 4410Y | ${ram}GB DDR5 | 4x 25GbE | Dual 1100W PSU (XClarity)`,
-            unitCost: 6600,
-            units: 2,
-            power: 450,
-            reason: 'Lenovo enterprise reliability with XClarity deployment automation.',
-          },
-        ],
+        badge: 'User Inventory',
+        alternatives: [],
       },
       {
         id: 'bom-network-primary',
         category: 'Network',
         name: 'Cisco Nexus 93180YC-FX3',
         model: 'Nexus 93180YC-FX3',
-        qty: 2,
+        qty: inv.switches?.count || 2,
         specs: '1U | 48x 10/25GbE SFP28 + 6x 40/100GbE QSFP28 Uplinks | Dual AC PSU | Cloud Scale ASIC',
         whySuggested: 'Ultra-low latency cut-through fabric switch. Provides non-blocking 25GbE interconnects for cluster & VM traffic.',
         unitCost: 8900,
         units: 1,
         power: 310,
-        badge: 'Enterprise Standard',
-        alternatives: [
-          {
-            name: 'Arista 7050SX3-48YC8',
-            specs: '1U | 48x 25GbE SFP28 + 8x 100GbE QSFP28 | EOS Operating System | Dual AC PSU',
-            unitCost: 8450,
-            units: 1,
-            power: 290,
-            reason: 'Arista EOS programmable automation and robust EVPN-VXLAN telemetry.',
-          },
-          {
-            name: 'Dell PowerSwitch S5248F-ON',
-            specs: '1U | 48x 25GbE SFP28 + 4x 100GbE + 2x 28GbE | OS10 Open Networking | Dual PSU',
-            unitCost: 7800,
-            units: 1,
-            power: 320,
-            reason: 'Lower cost open-networking switch, native SmartFabric integration with Dell compute.',
-          },
-          {
-            name: 'Juniper QFX5120-48Y',
-            specs: '1U | 48x 25GbE SFP28 + 8x 100GbE QSFP28 | Junos OS | Dual AC PSU',
-            unitCost: 8700,
-            units: 1,
-            power: 310,
-            reason: 'Carrier-grade Junos stability with rich EVPN/MPLS feature set.',
-          },
-        ],
-      },
-      {
-        id: 'bom-storage-primary',
-        category: 'Storage',
-        name: req.storageType?.includes('SAN') ? 'Pure Storage FlashArray //X10 R3' : 'Enterprise NVMe U.2 SSD Tier (7.68TB)',
-        model: req.storageType?.includes('SAN') ? 'FlashArray //X10' : 'U.2 PCIe 4.0 NVMe 7.68TB',
-        qty: req.storageType?.includes('SAN') ? 1 : Math.max(4, nodeCount * 4),
-        specs: req.storageType?.includes('SAN')
-          ? '3U Active-Active SAN Controller | 33TB Raw NVMe | 16/32G FC + 25GbE iSCSI | 99.9999% Availability'
-          : 'U.2 PCIe 4.0 NVMe | 7.68TB per drive | 3 DWPD Endurance | Power Loss Protection',
-        whySuggested: req.storageType?.includes('SAN')
-          ? 'Ultra-reliable dedicated shared SAN array, ideal for enterprise clustering with sub-millisecond latencies.'
-          : 'High write endurance for distributed storage WAL/DB and OSD pools. Guaranteed zero IOPS bottleneck.',
-        unitCost: req.storageType?.includes('SAN') ? 24500 : 820,
-        units: req.storageType?.includes('SAN') ? 3 : 0,
-        power: req.storageType?.includes('SAN') ? 600 : 14,
-        badge: req.storageType?.includes('SAN') ? 'HA SAN Tier' : 'High Endurance NVMe',
-        alternatives: [
-          {
-            name: 'Micron 9400 PRO U.3 NVMe SSD (7.68TB)',
-            specs: 'U.3 PCIe 4.0 NVMe | 7.68TB | 1 DWPD Read-Intensive | PLP',
-            unitCost: 790,
-            units: 0,
-            power: 15,
-            reason: 'High density NVMe tier with lower cost per terabyte for read-heavy workloads.',
-          },
-          {
-            name: 'Solidigm D5-P5336 QLC NVMe (15.36TB)',
-            specs: 'U.2 PCIe 4.0 QLC NVMe | 15.36TB | Massive Capacity | PLP',
-            unitCost: 1290,
-            units: 0,
-            power: 16,
-            reason: 'Double capacity per drive bay, cutting total physical drives required.',
-          },
-          {
-            name: 'Dell PowerStore 500T Shared SAN/NAS',
-            specs: '2U Dual Controller | 25-96TB NVMe All-Flash | Unified SAN/NAS block storage',
-            unitCost: 22800,
-            units: 2,
-            power: 550,
-            reason: 'Cost-effective entry enterprise SAN for Hyper-V or VMware clusters.',
-          },
-        ],
-      },
-      {
-        id: 'bom-power-primary',
-        category: 'Power Distribution',
-        name: 'APC AP8858 Vertical PDU',
-        model: 'AP8858',
-        qty: req.powerFeed === 'Single Feed' ? 1 : 2,
-        specs: '0U Vertical Side-Mount | 230V 32A | 20x IEC C13 Outlets | True Scale 42U Span',
-        whySuggested: 'Side-mount vertical 0U chassis provides branch circuit metering without consuming rack units.',
-        unitCost: 890,
-        units: 0,
-        power: 10,
-        badge: req.powerFeed === 'Single Feed' ? 'Single Feed PDU' : 'A/B Redundant Feed',
-        alternatives: [
-          {
-            name: 'APC AP8868 Vertical PDU',
-            specs: '0U Vertical Side-Mount | 208V 30A | 24x C19 Outlets | High-Current Compute',
-            unitCost: 1150,
-            units: 0,
-            power: 15,
-            reason: 'High-density C19 receptacles support high-draw AI accelerators and GPU server blades.',
-          },
-          {
-            name: 'APC AP8853 Vertical PDU',
-            specs: '0U Vertical Side-Mount | 230V 32A | 16x C13 + 2x C19 Outlets | Mixed Load',
-            unitCost: 980,
-            units: 0,
-            power: 10,
-            reason: 'Combination C13/C19 outlets accommodate both standard servers and heavy SAN storage.',
-          },
-          {
-            name: 'Vertiv MPH2-IS Vertical PDU (India)',
-            specs: '0U Vertical Side-Mount | 230V 32A | 16x IS6538 15A Sockets | BIS Compliant',
-            unitCost: 920,
-            units: 0,
-            power: 10,
-            reason: 'Complies with Indian Bureau of Indian Standards (BIS) IS6538 data center requirements.',
-          },
-          {
-            name: 'Legrand LCS3 Vertical PDU (India)',
-            specs: '0U Vertical Side-Mount | 230V 32A | 24x IS6538 5A Outlets | BIS Certified',
-            unitCost: 860,
-            units: 0,
-            power: 10,
-            reason: 'High-count Indian 5A sockets for standard compute density and network appliances.',
-          },
-          {
-            name: 'Generic NEMA Vertical PDU',
-            specs: '0U Vertical Side-Mount | 120V 20A | 24x NEMA 5-15 Receptacles',
-            unitCost: 650,
-            units: 0,
-            power: 10,
-            reason: 'Standard North American 120V NEMA 5-15 wall plug compatibility.',
-          },
-        ],
-      },
-      {
-        id: 'bom-cabling-primary',
-        category: 'Cabling & Optics',
-        name: 'Amphenol 25GbE SFP28 Direct Attach Copper (2m)',
-        model: 'SFP28 Passive DAC Cable (2m)',
-        qty: nodeCount * 4 + 4,
-        specs: 'Passive Twinax DAC | 25Gbps Line Rate | 30AWG | EEPROM Auto-Negotiation',
-        whySuggested: 'Zero optical conversion latency, <0.1W power per link, highly durable for in-rack top-of-rack connections.',
-        unitCost: 55,
-        units: 0,
-        power: 2,
-        badge: 'Low Latency DAC',
-        alternatives: [
-          {
-            name: 'Cisco Active Optical Cable (AOC) SFP28 (5m)',
-            specs: 'Active Optical Cable | 25Gbps | Lightweight Flexible Fiber | 5 Meter Reach',
-            unitCost: 120,
-            units: 0,
-            power: 4,
-            reason: 'Flexible lightweight routing for inter-rack cabling or distances beyond 3 meters.',
-          },
-          {
-            name: 'FS.com 25GBASE-SR SFP28 Transceiver + OM4 LC Patch',
-            specs: '850nm MMF Transceiver (up to 100m) + 2m Aqua OM4 LC Duplex Fiber Patch Cable',
-            unitCost: 75,
-            units: 0,
-            power: 3,
-            reason: 'Modular transceiver configuration allowing custom cable lengths or patch panels.',
-          },
-        ],
+        badge: inv.switches ? 'User Inventory' : 'Enterprise Standard',
+        alternatives: [],
       },
     ];
+
+    // Firewalls
+    if (inv.firewalls?.count) {
+      items.push({
+        id: 'bom-security-primary',
+        category: 'Security & Management',
+        name: 'Fortinet FortiGate 100F',
+        model: 'FortiGate 100F Next-Gen Firewall',
+        qty: inv.firewalls.count,
+        specs: '1U | 22x GE RJ45 + 4x 10GE SFP+ | Dual Redundant Power | Active/Passive HA Pair',
+        whySuggested: 'Specified in user inventory. Enterprise next-generation firewall pair with stateful HA session sync.',
+        unitCost: 3200,
+        units: 1,
+        power: 85,
+        badge: 'User Inventory',
+        alternatives: [],
+      });
+    }
+
+    // SAN Array
+    if (inv.san?.count || req.storageType?.includes('SAN')) {
+      items.push({
+        id: 'bom-storage-primary',
+        category: 'Storage',
+        name: 'Dell PowerStore 500T SAN Array',
+        model: 'PowerStore 500T All-Flash SAN',
+        qty: inv.san?.count || 1,
+        specs: '3U Dual Active-Active Controller | 33TB Raw NVMe | 4x 25GbE iSCSI / FC MPIO | 99.9999% Availability',
+        whySuggested: 'Specified in user inventory. High-performance dual-controller shared SAN storage array.',
+        unitCost: 18500,
+        units: 3,
+        power: 550,
+        badge: 'User Inventory',
+        alternatives: [],
+      });
+    } else {
+      items.push({
+        id: 'bom-storage-primary',
+        category: 'Storage',
+        name: 'Enterprise NVMe U.2 SSD Tier (7.68TB)',
+        model: 'U.2 PCIe 4.0 NVMe 7.68TB',
+        qty: Math.max(4, nodeCount * 4),
+        specs: 'U.2 PCIe 4.0 NVMe | 7.68TB per drive | 3 DWPD Endurance | Power Loss Protection',
+        whySuggested: 'High write endurance for distributed storage OSD pools.',
+        unitCost: 820,
+        units: 0,
+        power: 14,
+        badge: 'High Endurance NVMe',
+        alternatives: [],
+      });
+    }
+
+    // UPS Battery Backup
+    if (inv.ups?.count) {
+      items.push({
+        id: 'bom-power-ups',
+        category: 'Power Distribution',
+        name: 'APC Smart-UPS RT 3000VA',
+        model: 'SURTD3000XLT 3U On-Line UPS',
+        qty: inv.ups.count,
+        specs: '3U Rackmount | 3000VA / 2700W | Double Conversion On-Line | Network Management Card',
+        whySuggested: 'Specified in user inventory. Provides battery backup and power conditioning for rack load.',
+        unitCost: 2400,
+        units: 3,
+        power: 120,
+        badge: 'User Inventory',
+        alternatives: [],
+      });
+    }
+
+    // Default Vertical PDU
+    items.push({
+      id: 'bom-power-primary',
+      category: 'Power Distribution',
+      name: 'APC AP8858 Vertical PDU',
+      model: 'AP8858',
+      qty: req.powerFeed === 'Single Feed' ? 1 : 2,
+      specs: '0U Vertical Side-Mount | 230V 32A | 20x IEC C13 Outlets | True Scale 42U Span',
+      whySuggested: 'Side-mount vertical 0U chassis provides branch circuit metering without consuming rack units.',
+      unitCost: 890,
+      units: 0,
+      power: 10,
+      badge: req.powerFeed === 'Single Feed' ? 'Single Feed PDU' : 'A/B Redundant Feed',
+      alternatives: [],
+    });
+
+    // Cabling & Optics
+    items.push({
+      id: 'bom-cabling-primary',
+      category: 'Cabling & Optics',
+      name: 'Amphenol 25GbE SFP28 Direct Attach Copper (2m)',
+      model: 'SFP28 Passive DAC Cable (2m)',
+      qty: nodeCount * 4 + 4,
+      specs: 'Passive Twinax DAC | 25Gbps Line Rate | 30AWG | EEPROM Auto-Negotiation',
+      whySuggested: 'Zero optical conversion latency, <0.1W power per link, highly durable for in-rack top-of-rack connections.',
+      unitCost: 55,
+      units: 0,
+      power: 2,
+      badge: 'Low Latency DAC',
+      alternatives: [],
+    });
+
+    return items;
   }
 
   /**
