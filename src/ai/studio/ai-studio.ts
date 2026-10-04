@@ -668,15 +668,17 @@ export class RackSlicerAIStudio {
       }
     }
 
-    // ── Smart Automated Cabling: High-Speed Data, Cross-Rack HA MLAG, & Power ──
+    // ── Smart Automated Cabling: High-Speed Data, iDRAC, iSCSI, NAS Backup, & Power ──
     const skipCabling = !!options?.skipConflictingCables;
+    const nodeCount = nodeDeviceIds.length;
 
     if (!skipCabling) {
-      // 1. Data Fabric (Cross-Rack Dual-Homed 25GbE SFP28 Links to ToR-A in Rack A and ToR-B in Rack B)
-      for (let i = 0; i < nodeDeviceIds.length; i++) {
+      // 1. iSCSI Storage & Data Fabric Links (Green #10b981 for iSCSI, Blue #2563eb for Server Mgmt/VM)
+      for (let i = 0; i < nodeCount; i++) {
         const nId = nodeDeviceIds[i];
         const nodeNum = i + 1;
-        const isRackA = rack1NodeIds.includes(nId);
+        const isRackA = isMultiRack ? rack1NodeIds.includes(nId) : true;
+        const rackLabel = isMultiRack ? (isRackA ? ' (Rack A)' : ' (Rack B)') : '';
 
         if (torADeviceId) {
           changes.push({
@@ -684,9 +686,9 @@ export class RackSlicerAIStudio {
             source: `${nId}-port-0`,
             target: `${torADeviceId}-port-${i}`,
             cableType: 'dac-twinax',
-            color: '#0284c7',
-            name: `Node ${nodeNum} (${isRackA ? 'Rack A' : 'Rack B'}) NIC 1 ⟶ ToR-A Port ${nodeNum} (25GbE Data A)`,
-            details: { sidePreference: 'left', notes: isRackA ? 'In-Rack Data Link to ToR-A' : 'Cross-Rack Inter-Rack HA Link to ToR-A' },
+            color: '#10b981',
+            name: `Node ${nodeNum}${rackLabel} NIC 1 ⟶ ToR-A Port ${nodeNum} (iSCSI Storage Fabric A)`,
+            details: { sidePreference: 'left', notes: 'iSCSI Primary Storage Link' },
           });
         }
         if (torBDeviceId) {
@@ -696,13 +698,39 @@ export class RackSlicerAIStudio {
             target: `${torBDeviceId}-port-${i}`,
             cableType: 'dac-twinax',
             color: '#10b981',
-            name: `Node ${nodeNum} (${isRackA ? 'Rack A' : 'Rack B'}) NIC 2 ⟶ ToR-B Port ${nodeNum} (25GbE Data B)`,
-            details: { sidePreference: 'right', notes: !isRackA ? 'In-Rack Data Link to ToR-B' : 'Cross-Rack Inter-Rack HA Link to ToR-B' },
+            name: `Node ${nodeNum}${rackLabel} NIC 2 ⟶ ToR-B Port ${nodeNum} (iSCSI Storage Fabric B)`,
+            details: { sidePreference: 'right', notes: 'iSCSI Redundant Storage Link' },
+          });
+        }
+
+        // Server Mgmt / VM Traffic (Blue)
+        if (torADeviceId) {
+          changes.push({
+            action: 'create_cable',
+            source: `${nId}-port-3`,
+            target: `${torADeviceId}-port-${12 + i}`,
+            cableType: 'cat6a',
+            color: '#2563eb',
+            name: `Node ${nodeNum}${rackLabel} NIC 3 ⟶ ToR-A Port ${13 + i} (Server Mgmt & VM Traffic)`,
+            details: { sidePreference: 'left', notes: 'VM Network & Mgmt Link A' },
+          });
+        }
+
+        // iDRAC / IPMI Management Link (Red #ef4444)
+        if (torADeviceId) {
+          changes.push({
+            action: 'create_cable',
+            source: `${nId}-port-2`,
+            target: `${torADeviceId}-port-${24 + i}`,
+            cableType: 'cat6',
+            color: '#ef4444',
+            name: `Node ${nodeNum}${rackLabel} iDRAC ⟶ ToR-A Port ${25 + i} (iDRAC / Out-of-Band Mgmt)`,
+            details: { sidePreference: 'left', notes: 'Dedicated Out-of-Band iDRAC' },
           });
         }
       }
 
-      // 2. Inter-Switch Link (ISL / MLAG Cross-Rack Peer Link between ToR-A in Rack A and ToR-B in Rack B: 100G QSFP28)
+      // 2. Inter-Switch Link (ISL / MLAG Trunk: 100G QSFP28)
       if (torADeviceId && torBDeviceId) {
         changes.push({
           action: 'create_cable',
@@ -710,21 +738,12 @@ export class RackSlicerAIStudio {
           target: `${torBDeviceId}-port-52`,
           cableType: 'dac-twinax',
           color: '#8b5cf6',
-          name: 'ToR-A (Rack A) ⟷ ToR-B (Rack B) (100G MLAG Inter-Rack ISL Trunk 1)',
-          details: { sidePreference: 'right', notes: 'Inter-Rack Switch Peer Link 1' },
-        });
-        changes.push({
-          action: 'create_cable',
-          source: `${torADeviceId}-port-53`,
-          target: `${torBDeviceId}-port-53`,
-          cableType: 'dac-twinax',
-          color: '#8b5cf6',
-          name: 'ToR-A (Rack A) ⟷ ToR-B (Rack B) (100G MLAG Inter-Rack ISL Trunk 2)',
-          details: { sidePreference: 'right', notes: 'Inter-Rack Switch Peer Link 2' },
+          name: isMultiRack ? 'ToR-A (Rack A) ⟷ ToR-B (Rack B) (100G MLAG Inter-Rack ISL)' : 'ToR-A ⟷ ToR-B (100G MLAG Switch Trunk)',
+          details: { sidePreference: 'right', notes: isMultiRack ? 'Inter-Rack Switch Link' : 'In-Rack MLAG Switch Peer Link' },
         });
       }
 
-      // 3. Storage Fabric (100G NVMe-oF / iSCSI to Switch 100G QSFP28 Ports 48/49)
+      // 3. Storage Array iSCSI & iDRAC Links
       if (storageDeviceId) {
         if (torADeviceId) {
           changes.push({
@@ -732,9 +751,19 @@ export class RackSlicerAIStudio {
             source: `${storageDeviceId}-port-4`,
             target: `${torADeviceId}-port-48`,
             cableType: 'dac-twinax',
-            color: '#06b6d4',
-            name: 'Storage Array Ctrl 1 ⟶ ToR-A (100G NVMe-oF Fabric A)',
-            details: { sidePreference: 'left', notes: 'Primary Storage Fabric Link' },
+            color: '#10b981',
+            name: 'SAN Storage Ctrl 1 ⟶ ToR-A (iSCSI Storage Fabric A)',
+            details: { sidePreference: 'left', notes: 'Primary SAN iSCSI Controller Link' },
+          });
+          // SAN iDRAC / Mgmt
+          changes.push({
+            action: 'create_cable',
+            source: `${storageDeviceId}-port-2`,
+            target: `${torADeviceId}-port-28`,
+            cableType: 'cat6',
+            color: '#ef4444',
+            name: 'SAN Storage Mgmt ⟶ ToR-A Port 29 (SAN iDRAC / Out-of-Band)',
+            details: { sidePreference: 'left', notes: 'SAN Out-of-Band Management' },
           });
         }
         if (torBDeviceId) {
@@ -743,50 +772,47 @@ export class RackSlicerAIStudio {
             source: `${storageDeviceId}-port-5`,
             target: `${torBDeviceId}-port-48`,
             cableType: 'dac-twinax',
-            color: '#06b6d4',
-            name: 'Storage Array Ctrl 2 ⟶ ToR-B (100G NVMe-oF Fabric B)',
-            details: { sidePreference: 'right', notes: 'Secondary Storage Fabric Link' },
+            color: '#10b981',
+            name: 'SAN Storage Ctrl 2 ⟶ ToR-B (iSCSI Storage Fabric B)',
+            details: { sidePreference: 'right', notes: 'Secondary SAN iSCSI Controller Link' },
           });
         }
       }
-    }
 
-    // 4. Dual A/B Power Feeds to Vertical Side-Mount PDUs (Feed A = Left, Feed B = Right)
-    const nodeCount = nodeDeviceIds.length;
-    for (let i = 0; i < nodeCount; i++) {
-      const nId = nodeDeviceIds[i];
-      const nodeNum = i + 1;
-      const isRackA = rack1NodeIds.includes(nId);
-      const targetPduLeft = isMultiRack ? (!isRackA ? 'outlet-ai-pdu-left-r2-' : 'outlet-ai-pdu-left-r1-') : 'outlet-ai-pdu-left-';
-      const targetPduRight = isMultiRack ? (!isRackA ? 'outlet-ai-pdu-right-r2-' : 'outlet-ai-pdu-right-r1-') : 'outlet-ai-pdu-right-';
-      if (hasLeftPdu) {
-        changes.push({
-          action: 'create_cable',
-          source: `${nId}-port-5`,
-          target: `${targetPduLeft}${i}`,
-          cableType: 'power-c13',
-          color: '#2563eb',
-          name: `Node ${nodeNum} (${isRackA ? 'Rack A' : 'Rack B'}) PSU 1 ⟶ PDU-A Outlet ${nodeNum} (Feed A)`,
-          details: { sidePreference: 'left', powerCableType: 'power', notes: '230V 32A Feed A Branch' },
-        });
+      // 4. Dual A/B Power Feeds to Vertical Side-Mount PDUs (Feed A = Left PDU, Feed B = Right PDU)
+      for (let i = 0; i < nodeCount; i++) {
+        const nId = nodeDeviceIds[i];
+        const nodeNum = i + 1;
+        const isRackA = isMultiRack ? rack1NodeIds.includes(nId) : true;
+        const targetPduLeft = isMultiRack ? (!isRackA ? 'outlet-ai-pdu-left-r2-' : 'outlet-ai-pdu-left-r1-') : 'outlet-ai-pdu-left-';
+        const targetPduRight = isMultiRack ? (!isRackA ? 'outlet-ai-pdu-right-r2-' : 'outlet-ai-pdu-right-r1-') : 'outlet-ai-pdu-right-';
+        if (hasLeftPdu) {
+          changes.push({
+            action: 'create_cable',
+            source: `${nId}-port-5`,
+            target: `${targetPduLeft}${i}`,
+            cableType: 'power-c13',
+            color: '#2563eb',
+            name: `Node ${nodeNum} PSU 1 ⟶ PDU-A Outlet ${nodeNum} (Feed A)`,
+            details: { sidePreference: 'left', powerCableType: 'power', notes: '230V 32A Feed A Branch' },
+          });
+        }
+        if (hasRightPdu) {
+          changes.push({
+            action: 'create_cable',
+            source: `${nId}-port-6`,
+            target: `${targetPduRight}${i}`,
+            cableType: 'power-c13',
+            color: '#dc2626',
+            name: `Node ${nodeNum} PSU 2 ⟶ PDU-B Outlet ${nodeNum} (Feed B)`,
+            details: { sidePreference: 'right', powerCableType: 'power', notes: '230V 32A Feed B Branch' },
+          });
+        }
       }
-      if (hasRightPdu) {
-        changes.push({
-          action: 'create_cable',
-          source: `${nId}-port-6`,
-          target: `${targetPduRight}${i}`,
-          cableType: 'power-c13',
-          color: '#dc2626',
-          name: `Node ${nodeNum} (${isRackA ? 'Rack A' : 'Rack B'}) PSU 2 ⟶ PDU-B Outlet ${nodeNum} (Feed B)`,
-          details: { sidePreference: 'right', powerCableType: 'power', notes: '230V 32A Feed B Branch' },
-        });
-      }
-    }
 
-    // ToR Switch Power Feeds
-    const pduOffsetSw = nodeCount;
-    if (torADeviceId) {
-      if (hasLeftPdu) {
+      // ToR Switch Power Feeds
+      const pduOffsetSw = nodeCount;
+      if (torADeviceId && hasLeftPdu) {
         changes.push({
           action: 'create_cable',
           source: `${torADeviceId}-port-56`,
@@ -797,67 +823,43 @@ export class RackSlicerAIStudio {
           details: { sidePreference: 'left', powerCableType: 'power' },
         });
       }
-      if (hasRightPdu) {
-        changes.push({
-          action: 'create_cable',
-          source: `${torADeviceId}-port-57`,
-          target: isMultiRack ? `outlet-ai-pdu-right-r1-${pduOffsetSw}` : `outlet-ai-pdu-right-${pduOffsetSw}`,
-          cableType: 'power-c13',
-          color: '#dc2626',
-          name: 'ToR-A PSU 2 ⟶ PDU-B (Feed B)',
-          details: { sidePreference: 'right', powerCableType: 'power' },
-        });
-      }
-    }
-    if (torBDeviceId) {
-      if (hasLeftPdu) {
+      if (torBDeviceId && hasRightPdu) {
         changes.push({
           action: 'create_cable',
           source: `${torBDeviceId}-port-56`,
-          target: isMultiRack ? `outlet-ai-pdu-left-r2-${pduOffsetSw + 1}` : `outlet-ai-pdu-left-${pduOffsetSw + 1}`,
-          cableType: 'power-c13',
-          color: '#2563eb',
-          name: 'ToR-B PSU 1 ⟶ PDU-A (Feed A)',
-          details: { sidePreference: 'left', powerCableType: 'power' },
-        });
-      }
-      if (hasRightPdu) {
-        changes.push({
-          action: 'create_cable',
-          source: `${torBDeviceId}-port-57`,
-          target: isMultiRack ? `outlet-ai-pdu-right-r2-${pduOffsetSw + 1}` : `outlet-ai-pdu-right-${pduOffsetSw + 1}`,
+          target: isMultiRack ? `outlet-ai-pdu-right-r2-${pduOffsetSw}` : `outlet-ai-pdu-right-${pduOffsetSw}`,
           cableType: 'power-c13',
           color: '#dc2626',
           name: 'ToR-B PSU 2 ⟶ PDU-B (Feed B)',
           details: { sidePreference: 'right', powerCableType: 'power' },
         });
       }
-    }
 
-    // Storage Power Feeds
-    if (storageDeviceId) {
-      const pduOffsetStorage = nodeCount + 2;
-      if (hasLeftPdu) {
-        changes.push({
-          action: 'create_cable',
-          source: `${storageDeviceId}-port-7`,
-          target: `outlet-ai-pdu-left-${pduOffsetStorage}`,
-          cableType: 'power-c13',
-          color: '#2563eb',
-          name: 'Storage Array PSU 1 ⟶ PDU-A (Feed A)',
-          details: { sidePreference: 'left', powerCableType: 'power' },
-        });
-      }
-      if (hasRightPdu) {
-        changes.push({
-          action: 'create_cable',
-          source: `${storageDeviceId}-port-8`,
-          target: `outlet-ai-pdu-right-${pduOffsetStorage}`,
-          cableType: 'power-c13',
-          color: '#dc2626',
-          name: 'Storage Array PSU 2 ⟶ PDU-B (Feed B)',
-          details: { sidePreference: 'right', powerCableType: 'power' },
-        });
+      // Storage Power Feeds
+      if (storageDeviceId) {
+        const pduOffsetStorage = nodeCount + 2;
+        if (hasLeftPdu) {
+          changes.push({
+            action: 'create_cable',
+            source: `${storageDeviceId}-port-7`,
+            target: `outlet-ai-pdu-left-${pduOffsetStorage}`,
+            cableType: 'power-c13',
+            color: '#2563eb',
+            name: 'Storage Array PSU 1 ⟶ PDU-A (Feed A)',
+            details: { sidePreference: 'left', powerCableType: 'power' },
+          });
+        }
+        if (hasRightPdu) {
+          changes.push({
+            action: 'create_cable',
+            source: `${storageDeviceId}-port-8`,
+            target: `outlet-ai-pdu-right-${pduOffsetStorage}`,
+            cableType: 'power-c13',
+            color: '#dc2626',
+            name: 'Storage Array PSU 2 ⟶ PDU-B (Feed B)',
+            details: { sidePreference: 'right', powerCableType: 'power' },
+          });
+        }
       }
     }
 

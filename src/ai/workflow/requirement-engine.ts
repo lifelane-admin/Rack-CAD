@@ -32,13 +32,18 @@ export class RequirementCompletenessEngine {
       platform = 'OpenStack';
     }
 
-    // 1b. Detect rack count
+    // 1b. Detect rack count (STRICT DEFAULT = 1 Single Rack)
     let rackCount = 1;
-    if (text.includes('two rack') || text.includes('2 rack') || text.includes('dual rack') || text.includes('dual-rack') || text.includes('two identical rack') || text.includes('2 identical rack')) {
+    if (/\b(?:two|2|dual)\s*[-]?\s*(?:identical\s*)?(?:racks?|cabinets?)\b/i.test(text) || text.includes('rack a and rack b')) {
       rackCount = 2;
     } else {
-      const rackMatch = text.match(/(\d+)\s*[-]?\s*rack/i);
-      if (rackMatch) rackCount = parseInt(rackMatch[1], 10);
+      const rackMatch = text.match(/\b(\d+)\s*[-]?\s*(?:racks?|cabinets?)\b/i);
+      if (rackMatch) {
+        const parsedRacks = parseInt(rackMatch[1], 10);
+        if (!isNaN(parsedRacks) && parsedRacks >= 1) {
+          rackCount = parsedRacks;
+        }
+      }
     }
 
     // 2. Detect explicit inventory & hardware counts
