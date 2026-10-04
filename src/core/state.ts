@@ -736,78 +736,99 @@ export function injectEarPorts(
   }
 
   const totalDataPorts = dataEntries.length;
-  const leftCount = Math.ceil(totalDataPorts / 2);
-  const rightCount = totalDataPorts - leftCount;
-  const maxDataCount = Math.max(leftCount, rightCount);
+  const leftCount  = Math.ceil(totalDataPorts / 2);
+  const leftDataEntries  = dataEntries.slice(0, leftCount);
+  const rightDataEntries = dataEntries.slice(leftCount);
 
-  const numHoles = maxDataCount + 1; // +1 for the power hole
-  const earPorts: PortData[] = [];
-  const height = heightUnits * RACK_CONSTANTS.RU_HEIGHT;
-  const pitch  = height / numHoles;
-
-  for (let i = 1; i <= numHoles; i++) {
-    const yVal = (i - 0.5) * pitch;
-
-    // Left side port
-    const leftIsLast = i === numHoles;
-    const leftEntry  = leftIsLast ? null : (i <= leftCount ? dataEntries[i - 1] : null);
-    const leftLabel  = leftIsLast ? 'Power' : (leftEntry ? `S${leftEntry.slotNumber}-P${leftEntry.portInSlot}` : 'Res');
-    const leftType   = leftIsLast ? 'power' : 'rj45';
-
-    earPorts.push({
-      id: `${deviceId}-ear-left-nic${i}`,
-      deviceId,
-      name: `Left Ear ${leftLabel}`,
-      type: leftType,
-      relativeX: leftX,
-      relativeY: yVal,
-      connected: false,
-      cableId: null
-    });
-
-    // Right side port
-    const rightIsLast = i === numHoles;
-    const rightEntry  = rightIsLast ? null : (i <= rightCount ? dataEntries[leftCount + i - 1] : null);
-    const rightLabel  = rightIsLast ? 'Power' : (rightEntry ? `S${rightEntry.slotNumber}-P${rightEntry.portInSlot}` : 'Res');
-    const rightType   = rightIsLast ? 'power' : 'rj45';
-
-    earPorts.push({
-      id: `${deviceId}-ear-right-nic${i}`,
-      deviceId,
-      name: `Right Ear ${rightLabel}`,
-      type: rightType,
-      relativeX: rightX,
-      relativeY: yVal,
-      connected: false,
-      cableId: null
-    });
-  }
-
-  // Add management (iDRAC / iLO / BMC) ear hole on the right side when the
-  // device body has a management port.  Placed at the very bottom of the
-  // device height so it sits visually below the power hole.
+  // Resolve management port label from body port name
   const mgmtBodyPort = filtered.find(p => p.type === 'management');
-  if (mgmtBodyPort) {
-    const mgmtName = mgmtBodyPort.name.toLowerCase();
-    const mgmtLabel =
-      mgmtName.includes('idrac') || mgmtName.includes('drac') ? 'iDRAC' :
-      mgmtName.includes('ilo')                                  ? 'iLO'   :
-      mgmtName.includes('imm')                                  ? 'IMM'   :
-      mgmtName.includes('xcc')                                  ? 'XCC'   :
-      mgmtName.includes('bmc')                                  ? 'BMC'   : 'BMC';
+  const hasMgmt = !!mgmtBodyPort;
+  const mgmtLabel = (() => {
+    if (!mgmtBodyPort) return 'BMC';
+    const n = mgmtBodyPort.name.toLowerCase();
+    return n.includes('idrac') || n.includes('drac') ? 'iDRAC'
+         : n.includes('ilo')                          ? 'iLO'
+         : n.includes('imm')                          ? 'IMM'
+         : n.includes('xcc')                          ? 'XCC'
+         : 'BMC';
+  })();
 
-    const height = heightUnits * RACK_CONSTANTS.RU_HEIGHT;
+  const height   = heightUnits * RACK_CONSTANTS.RU_HEIGHT;
+  const earPorts: PortData[] = [];
+
+  // ── Left side: 1 hole per data port + 1 power hole (no "Res" gaps) ──
+  const totalLeftHoles = leftDataEntries.length + 1;
+  const leftPitch = height / totalLeftHoles;
+
+  leftDataEntries.forEach((entry, idx) => {
+    earPorts.push({
+      id: `${deviceId}-ear-left-nic${idx + 1}`,
+      deviceId,
+      name: `Left Ear S${entry.slotNumber}-P${entry.portInSlot}`,
+      type: 'rj45' as const,
+      relativeX: leftX,
+      relativeY: (idx + 0.5) * leftPitch,
+      connected: false,
+      cableId: null,
+    });
+  });
+  // Left power hole — Primary PSU exits through left cable manager
+  earPorts.push({
+    id: `${deviceId}-ear-left-nic${leftDataEntries.length + 1}`,
+    deviceId,
+    name: 'Left Ear Power',
+    type: 'power' as const,
+    relativeX: leftX,
+    relativeY: (leftDataEntries.length + 0.5) * leftPitch,
+    connected: false,
+    cableId: null,
+  });
+
+  // ── Right side: 1 hole per data port + management (if any) + 1 power hole ──
+  const totalRightHoles = rightDataEntries.length + (hasMgmt ? 1 : 0) + 1;
+  const rightPitch = height / totalRightHoles;
+  let rightIdx = 0;
+
+  rightDataEntries.forEach((entry, idx) => {
+    earPorts.push({
+      id: `${deviceId}-ear-right-nic${idx + 1}`,
+      deviceId,
+      name: `Right Ear S${entry.slotNumber}-P${entry.portInSlot}`,
+      type: 'rj45' as const,
+      relativeX: rightX,
+      relativeY: (idx + 0.5) * rightPitch,
+      connected: false,
+      cableId: null,
+    });
+    rightIdx = idx + 1;
+  });
+
+  // Management hole (iDRAC/iLO/BMC) — before power on right side
+  if (hasMgmt) {
     earPorts.push({
       id: `${deviceId}-ear-right-mgmt`,
       deviceId,
       name: `Right Ear ${mgmtLabel}`,
       type: 'management' as const,
       relativeX: rightX,
-      relativeY: height - 2,
+      relativeY: (rightIdx + 0.5) * rightPitch,
       connected: false,
       cableId: null,
     });
+    rightIdx++;
   }
+
+  // Right power hole — Secondary PSU exits through right cable manager
+  earPorts.push({
+    id: `${deviceId}-ear-right-nic${rightIdx + 1}`,
+    deviceId,
+    name: 'Right Ear Power',
+    type: 'power' as const,
+    relativeX: rightX,
+    relativeY: (rightIdx + 0.5) * rightPitch,
+    connected: false,
+    cableId: null,
+  });
 
   // Preserve existing cable connections on ports that still exist
   const mergedEarPorts = earPorts.map(ep => {
