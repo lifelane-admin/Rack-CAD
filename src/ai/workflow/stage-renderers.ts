@@ -2890,7 +2890,7 @@ export class WorkflowStageRenderers {
         // Auto-lay labels and cables on canvas after successful deploy
         const canvasDevices = stateManager.getState().devices;
         const canvasCables = stateManager.getState().cables;
-        new LabelSyncManager().syncLabels(canvasDevices);
+        new LabelSyncManager().clearAll();
         new CableLayingOrchestrator().syncCables(canvasDevices, canvasCables, orchestrator.getState().requirement);
         orchestrator.setCanvasDeployed(true);
 

@@ -69,7 +69,7 @@ describe('CableLayingOrchestrator — power cables', () => {
     const psu1Cable = powerCables.find((c: any) => c.sourcePortId === 'srv1-psu1');
     expect(psu1Cable).toBeDefined();
     expect(psu1Cable.destPortId).toBe('outlet-pdu-a-0');
-    expect(psu1Cable.sidePreference).toBe('right');
+    expect(psu1Cable.sidePreference).toBe('left'); // primary PSU exits through left cable manager
   });
 
   it('creates a power cable from PSU2 to Feed-B PDU outlet', () => {

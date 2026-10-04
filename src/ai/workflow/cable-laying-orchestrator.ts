@@ -60,7 +60,7 @@ function makeAiCable(
     destPortId,
     bendPoints: [],
     thickness: 2,
-    bendRadius: 4,
+    bendRadius: 10,
     bundleId: null,
     notes: 'Auto-laid by AI workflow',
     sidePreference,
@@ -121,36 +121,42 @@ export class CableLayingOrchestrator {
       const mgmtPorts = device.ports.filter(isMgmtPort);
 
       // Prefer ear-hole ports for cleaner cable-manager routing.
-      // Left ear data ports exit toward the left cable manager (used for data cables).
-      // Right ear management port exits toward the right side (used for iDRAC/iLO).
+      // Left ear: data ports exit through left cable manager; left power hole → PDU-A.
+      // Right ear: data ports + management (iDRAC/iLO) exit through right side; right power → PDU-B.
       // Falls back to body ports when ear holes are not present (non-server devices).
       const earLeftData = device.ports
         .filter(p => p.id.includes('-ear-left-') && p.type !== 'power')
         .sort((a, b) => a.relativeY - b.relativeY);
-      const earRightMgmt = device.ports.filter(p => p.id === `${device.id}-ear-right-mgmt`);
+      const earLeftPower  = device.ports.find(p => p.id.includes('-ear-left-')  && p.type === 'power');
+      const earRightPower = device.ports.find(p => p.id.includes('-ear-right-') && p.type === 'power');
+      const earRightMgmt  = device.ports.filter(p => p.id === `${device.id}-ear-right-mgmt`);
 
       const dataSourcePorts = earLeftData.length > 0 ? earLeftData : nicPorts;
       const mgmtSourcePorts = earRightMgmt.length > 0 ? earRightMgmt : mgmtPorts;
 
-      // ── Power cables (Primary PSU1 → PDU Feed-A, Secondary PSU2 → PDU Feed-B) ──
-      if (pduA && psuPorts[0]) {
+      // ── Power cables — exit through dedicated ear power holes into cable managers ──
+      // Primary PSU → left ear power hole → left cable manager → PDU-A (Feed A)
+      const primaryPsuPort = earLeftPower ?? psuPorts[0];
+      if (pduA && primaryPsuPort) {
         const outlet = pduAOutlets[outletIdx[pduA.id]];
         if (outlet) {
-          const pair = `${psuPorts[0].id}|${outlet.id}`;
+          const pair = `${primaryPsuPort.id}|${outlet.id}`;
           if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(psuPorts[0].id, outlet.id, 'power', '#f97316', 'right', 'Power — Primary PSU → Feed A'));
+            newCables.push(makeAiCable(primaryPsuPort.id, outlet.id, 'power', '#f97316', 'left', 'Power — Primary PSU → Feed A'));
             existingPairs.add(pair);
           }
         }
         outletIdx[pduA.id]++;
       }
 
-      if (pduB && psuPorts[1]) {
+      // Secondary PSU → right ear power hole → right cable manager → PDU-B (Feed B)
+      const secondaryPsuPort = earRightPower ?? psuPorts[1];
+      if (pduB && secondaryPsuPort) {
         const outlet = pduBOutlets[outletIdx[pduB.id]];
         if (outlet) {
-          const pair = `${psuPorts[1].id}|${outlet.id}`;
+          const pair = `${secondaryPsuPort.id}|${outlet.id}`;
           if (!existingPairs.has(pair)) {
-            newCables.push(makeAiCable(psuPorts[1].id, outlet.id, 'power', '#f97316', 'right', 'Power — Secondary PSU → Feed B'));
+            newCables.push(makeAiCable(secondaryPsuPort.id, outlet.id, 'power', '#f97316', 'right', 'Power — Secondary PSU → Feed B'));
             existingPairs.add(pair);
           }
         }
@@ -203,7 +209,7 @@ export class CableLayingOrchestrator {
       if (torAUplink && torBUplink) {
         const pair = `${torAUplink.id}|${torBUplink.id}`;
         if (!existingPairs.has(pair)) {
-          newCables.push(makeAiCable(torAUplink.id, torBUplink.id, 'dac-twinax', '#8b5cf6', 'left', 'ISL — ToR-A ↔ ToR-B'));
+          newCables.push(makeAiCable(torAUplink.id, torBUplink.id, 'dac-twinax', '#8b5cf6', 'right', 'ISL — ToR-A ↔ ToR-B'));
         }
       }
     }
