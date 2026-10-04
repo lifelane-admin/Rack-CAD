@@ -131,7 +131,7 @@ export class CableLayingOrchestrator {
     let oobPortIdx = 0;
 
     for (const device of devices) {
-      if (isPduDevice(device) || isSwitchDevice(device)) continue;
+      if (isPduDevice(device)) continue; // PDUs don't draw power from other PDUs
 
       const psuPorts = device.ports.filter(isPsuPort);
       const nicPorts = device.ports.filter(isNicPort);
@@ -148,17 +148,14 @@ export class CableLayingOrchestrator {
       const earRightPower = device.ports.find(p => p.id.includes('-ear-right-') && p.type === 'power');
       const earRightMgmt  = device.ports.filter(p => p.id === `${device.id}-ear-right-mgmt`);
 
-      const dataSourcePorts = earLeftData.length > 0 ? earLeftData : nicPorts;
-      const mgmtSourcePorts = earRightMgmt.length > 0 ? earRightMgmt : mgmtPorts;
-
-      // ── Power cables — exit through dedicated ear power holes into cable managers ──
+      // ── Power cables — exit through dedicated ear power holes into cable managers for ALL active devices ──
       // Primary PSU → left ear power hole → left cable manager → PDU-A (Feed A)
       const primaryPsuPort = earLeftPower ?? psuPorts[0];
       if (pduA && primaryPsuPort && outletIdx[pduA.id] < pduAMaxOutlets) {
         const syntheticOutletA = `outlet-${pduA.id}-${outletIdx[pduA.id]}`;
         const pair = `${primaryPsuPort.id}|${syntheticOutletA}`;
         if (!existingPairs.has(pair)) {
-          newCables.push(makeAiCable(primaryPsuPort.id, syntheticOutletA, 'power', '#f97316', 'left', 'Power — Primary PSU → Feed A'));
+          newCables.push(makeAiCable(primaryPsuPort.id, syntheticOutletA, 'power', '#f97316', 'left', `Power — ${device.name} Primary PSU → Feed A`));
           existingPairs.add(pair);
         }
         outletIdx[pduA.id]++;
@@ -170,11 +167,17 @@ export class CableLayingOrchestrator {
         const syntheticOutletB = `outlet-${pduB.id}-${outletIdx[pduB.id]}`;
         const pair = `${secondaryPsuPort.id}|${syntheticOutletB}`;
         if (!existingPairs.has(pair)) {
-          newCables.push(makeAiCable(secondaryPsuPort.id, syntheticOutletB, 'power', '#f97316', 'right', 'Power — Secondary PSU → Feed B'));
+          newCables.push(makeAiCable(secondaryPsuPort.id, syntheticOutletB, 'power', '#dc2626', 'right', `Power — ${device.name} Secondary PSU → Feed B`));
           existingPairs.add(pair);
         }
         outletIdx[pduB.id]++;
       }
+
+      // Skip switches for host data and management port connections to ToR/OOB
+      if (isSwitchDevice(device)) continue;
+
+      const dataSourcePorts = earLeftData.length > 0 ? earLeftData : nicPorts;
+      const mgmtSourcePorts = earRightMgmt.length > 0 ? earRightMgmt : mgmtPorts;
 
       // ── Data cables (via left ear holes → left cable manager) ─────
       if (torA && dataSourcePorts[0]) {
@@ -216,14 +219,17 @@ export class CableLayingOrchestrator {
       }
     }
 
-    // ToR-A ↔ ToR-B peer link (highest-index ports of each switch)
-    if (torA && torB && torA.ports.length > 0 && torB.ports.length > 0) {
-      const torAUplink = torA.ports[torA.ports.length - 1];
-      const torBUplink = torB.ports[torB.ports.length - 1];
+    // ToR-A ↔ ToR-B peer link (highest-index DATA/UPLINK ports of each switch, NEVER power ports)
+    if (torA && torB) {
+      const dataPortsA = torA.ports.filter(p => p.type === 'qsfp28' || p.type === 'sfp28' || (p.type !== 'power' && p.type !== 'management' && p.type !== 'console'));
+      const dataPortsB = torB.ports.filter(p => p.type === 'qsfp28' || p.type === 'sfp28' || (p.type !== 'power' && p.type !== 'management' && p.type !== 'console'));
+      const torAUplink = dataPortsA[dataPortsA.length - 1];
+      const torBUplink = dataPortsB[dataPortsB.length - 1];
       if (torAUplink && torBUplink) {
         const pair = `${torAUplink.id}|${torBUplink.id}`;
         if (!existingPairs.has(pair)) {
           newCables.push(makeAiCable(torAUplink.id, torBUplink.id, 'dac-twinax', '#8b5cf6', 'right', 'ISL — ToR-A ↔ ToR-B'));
+          existingPairs.add(pair);
         }
       }
     }

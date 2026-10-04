@@ -13,7 +13,7 @@ vi.mock('../../core/state', () => ({
 // Mock getTemplate so PDU and switch categories are recognized
 vi.mock('../../library/device-catalog', () => ({
   getTemplate: vi.fn((id: string) => {
-    if (id === 'pdu-basic-8c13') return { category: 'pdu' };
+    if (id.includes('pdu')) return { category: 'pdu', outletConfig: [{ count: 24, socketType: 'C13' }] };
     if (id.includes('switch')) return { category: 'switch' };
     return { category: 'server' };
   }),
@@ -103,6 +103,34 @@ describe('CableLayingOrchestrator — power cables', () => {
     const call = (stateManager.setState as any).mock.calls[0][0];
     const psu1Cables = call.cables.filter((c: any) => c.sourcePortId === 'srv1-psu1');
     expect(psu1Cables).toHaveLength(1);
+  });
+
+  it('creates power cables for side-mounted vertical PDUs whose ports array is empty', () => {
+    const server = makeServer('srv1');
+    const sidePduA: DeviceData = {
+      id: 'vpdu-a', templateId: 'vpdu-apc-ap8858', rackId: 'r1', startUnit: 0,
+      name: 'Feed A Vertical PDU', hostname: '', managementIp: '', serialNumber: '', description: '',
+      ports: [], sideMountPosition: 'left',
+    } as unknown as DeviceData;
+    const sidePduB: DeviceData = {
+      id: 'vpdu-b', templateId: 'vpdu-apc-ap8858', rackId: 'r1', startUnit: 0,
+      name: 'Feed B Vertical PDU', hostname: '', managementIp: '', serialNumber: '', description: '',
+      ports: [], sideMountPosition: 'right',
+    } as unknown as DeviceData;
+
+    orch.syncCables([server, sidePduA, sidePduB], [], {} as any);
+
+    const call = (stateManager.setState as any).mock.calls[0][0];
+    const powerCables = call.cables.filter((c: any) => c.type === 'power');
+    expect(powerCables.length).toBe(2);
+
+    const psu1Cable = powerCables.find((c: any) => c.sourcePortId === 'srv1-psu1');
+    expect(psu1Cable).toBeDefined();
+    expect(psu1Cable.destPortId).toBe('outlet-vpdu-a-0');
+
+    const psu2Cable = powerCables.find((c: any) => c.sourcePortId === 'srv1-psu2');
+    expect(psu2Cable).toBeDefined();
+    expect(psu2Cable.destPortId).toBe('outlet-vpdu-b-0');
   });
 });
 
