@@ -81,25 +81,22 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
 
   const isEarPort = port.id.includes('-ear-');
   if (isEarPort) {
-    const isPower = port.type === 'power';
+    const isPower  = port.type === 'power';
+    const isMgmt   = port.type === 'management';
     const isHybrid = port.type === 'hybrid';
-    // ── Ear ports use a smaller radius to match network-switch port scale ──
-    // Previous: radius = 2.5 (too large). Now: 1.8 for network/hybrid, 2.2 for power.
-    // Hybrid keeps the exact same footprint as a regular network hole — only its shape
-    // (rounded square instead of circle) and color (purple) differ, so it reads as a
-    // distinct port type without disrupting the row's spacing or size.
-    const radius = isPower ? 2.2 : 1.8;
+
+    // Power/mgmt holes are slightly larger so their distinct shapes read clearly at small scale
+    const radius      = (isPower || isMgmt) ? 2.2 : 1.8;
     const bezelRadius = radius + 1.0;
 
-    let fill        = isConnected ? (isPower ? '#e53935' : isHybrid ? '#c837ff' : '#00e676') : '#0d0d10';
-    let strokeColor = isConnected ? (isPower ? '#ff5252' : isHybrid ? '#e0a3ff' : '#00e676') : (isHybrid ? '#7b4a94' : '#3a3a42');
+    const fill = isConnected
+      ? (isPower ? '#e53935' : isMgmt ? '#f59e0b' : isHybrid ? '#c837ff' : '#00e676')
+      : '#0d0d10';
+    const strokeColor = isConnected
+      ? (isPower ? '#ff5252' : isMgmt ? '#fbbf24' : isHybrid ? '#e0a3ff' : '#00e676')
+      : (isMgmt ? '#6b4c00' : isHybrid ? '#7b4a94' : '#3a3a42');
 
-    // Neon glow hit target (invisible — the ONLY element in this port that should receive
-    // hover/click events). This is a DIRECT SVG hit-test, checked before any of the distance-based
-    // proximity-snap fallbacks in app.ts, so its own size is what actually governs "how close is
-    // close enough" for a raw click. At r=6 (original) it was nearly as wide as the 7.5px hole
-    // pitch, so almost any click near a hole landed inside SOME hole's hit target directly. r=1.5
-    // stays well under the 3.75px half-pitch at the tightest (1U, 4-hole) spacing.
+    // Invisible hit target — the only interactive element; others are pointer-events:none
     const hitTarget = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     hitTarget.setAttribute('cx', '0');
     hitTarget.setAttribute('cy', '0');
@@ -108,12 +105,29 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
     hitTarget.setAttribute('class', 'port-hover-target');
     portGroup.appendChild(hitTarget);
 
-    // Outer metallic bezel — rounded square for hybrid, circular ring for everything else.
-    // pointer-events: none — these are real painted (filled) shapes, so without this they're each
-    // independently hit-testable at their own ~2.8-3.2px radius regardless of how small the
-    // hitTarget above is shrunk, which is exactly what made an earlier hitTarget-only shrink
-    // (r=6 -> r=3) barely change the actual clickable area: the bezel was already almost that big.
-    if (isHybrid) {
+    // Points string for an equilateral triangle (▲) centered at origin, tip up
+    const triPts = (r: number): string => {
+      const h = r * 0.866; // sin(60°)
+      return `0,${-r} ${-h},${r * 0.5} ${h},${r * 0.5}`;
+    };
+
+    // ── Outer metallic bezel ──────────────────────────────────────────────
+    // Power → sharp square | Management → triangle | Hybrid → rounded square | Data → circle
+    if (isPower) {
+      const bezel = createRect(-bezelRadius, -bezelRadius, bezelRadius * 2, bezelRadius * 2, {
+        fill: '#1a1a1e', stroke: '#555560', 'stroke-width': 0.5,
+      });
+      bezel.setAttribute('pointer-events', 'none');
+      portGroup.appendChild(bezel);
+    } else if (isMgmt) {
+      const bezel = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      bezel.setAttribute('points', triPts(bezelRadius));
+      bezel.setAttribute('fill', '#1a1a1e');
+      bezel.setAttribute('stroke', '#555560');
+      bezel.setAttribute('stroke-width', '0.5');
+      bezel.setAttribute('pointer-events', 'none');
+      portGroup.appendChild(bezel);
+    } else if (isHybrid) {
       const bezel = createRect(-bezelRadius, -bezelRadius, bezelRadius * 2, bezelRadius * 2, {
         fill: '#1a1a1e', stroke: '#555560', 'stroke-width': 0.5, rx: bezelRadius * 0.4,
       });
@@ -131,8 +145,24 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
       portGroup.appendChild(bezel);
     }
 
-    // Inner compact socket hole — same rounded-square-vs-circle split; also non-interactive.
-    if (isHybrid) {
+    // ── Inner socket hole ─────────────────────────────────────────────────
+    if (isPower) {
+      const hole = createRect(-radius, -radius, radius * 2, radius * 2, {
+        fill, stroke: strokeColor, 'stroke-width': 0.6,
+      });
+      hole.setAttribute('class', 'ear-port-hole power-port');
+      hole.setAttribute('pointer-events', 'none');
+      portGroup.appendChild(hole);
+    } else if (isMgmt) {
+      const hole = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      hole.setAttribute('points', triPts(radius));
+      hole.setAttribute('fill', fill);
+      hole.setAttribute('stroke', strokeColor);
+      hole.setAttribute('stroke-width', '0.6');
+      hole.setAttribute('class', 'ear-port-hole mgmt-port');
+      hole.setAttribute('pointer-events', 'none');
+      portGroup.appendChild(hole);
+    } else if (isHybrid) {
       const hole = createRect(-radius, -radius, radius * 2, radius * 2, {
         fill, stroke: strokeColor, 'stroke-width': 0.6, rx: radius * 0.4,
       });
@@ -147,45 +177,61 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
       hole.setAttribute('fill', fill);
       hole.setAttribute('stroke', strokeColor);
       hole.setAttribute('stroke-width', '0.6');
-      hole.setAttribute('class', isPower ? 'ear-port-hole power-port' : 'ear-port-hole network-port');
+      hole.setAttribute('class', 'ear-port-hole network-port');
       hole.setAttribute('pointer-events', 'none');
       portGroup.appendChild(hole);
     }
 
-    // Center socket pin dot — also non-interactive.
+    // Center pin dot
     const pin = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     pin.setAttribute('cx', '0');
     pin.setAttribute('cy', '0');
     pin.setAttribute('r', '0.6');
-    pin.setAttribute('fill', isConnected ? '#ffffff' : isHybrid ? '#d8a3ff' : '#ffb74d');
+    pin.setAttribute('fill', isConnected ? '#ffffff' : isMgmt ? '#fbbf24' : isHybrid ? '#d8a3ff' : '#ffb74d');
     pin.setAttribute('pointer-events', 'none');
     portGroup.appendChild(pin);
 
-    // Neon glow overlay ring (shown via CSS when port is hovered during cable drag). Hugs the
-    // bezel closely (radius == bezelRadius, thin stroke) rather than extending well past it —
-    // ear holes can sit as little as ~7.5px apart (e.g. a PSU port between two NIC holes), and
-    // a wider halo would visually bleed into the neighboring hole when highlighted.
-    const glowRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    glowRing.setAttribute('cx', '0');
-    glowRing.setAttribute('cy', '0');
-    glowRing.setAttribute('r', bezelRadius.toString());
-    glowRing.setAttribute('fill', 'none');
-    glowRing.setAttribute('stroke', isPower ? '#ff1744' : isHybrid ? '#c837ff' : '#00e5ff');
-    glowRing.setAttribute('stroke-width', '1');
-    glowRing.setAttribute('opacity', '0');
-    glowRing.setAttribute('class', 'port-neon-ring');
-    glowRing.setAttribute('pointer-events', 'none'); // opacity:0 alone doesn't disable hit-testing
-    portGroup.appendChild(glowRing);
+    // ── Neon glow overlay (shown when port is hovered during cable drag) ─
+    // Shape matches the hole: rect for power, polygon for mgmt, circle for others
+    if (isPower) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      g.setAttribute('x', String(-bezelRadius)); g.setAttribute('y', String(-bezelRadius));
+      g.setAttribute('width', String(bezelRadius * 2)); g.setAttribute('height', String(bezelRadius * 2));
+      g.setAttribute('fill', 'none'); g.setAttribute('stroke', '#ff1744');
+      g.setAttribute('stroke-width', '1'); g.setAttribute('opacity', '0');
+      g.setAttribute('class', 'port-neon-ring'); g.setAttribute('pointer-events', 'none');
+      portGroup.appendChild(g);
+    } else if (isMgmt) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      g.setAttribute('points', triPts(bezelRadius));
+      g.setAttribute('fill', 'none'); g.setAttribute('stroke', '#f59e0b');
+      g.setAttribute('stroke-width', '1'); g.setAttribute('opacity', '0');
+      g.setAttribute('class', 'port-neon-ring'); g.setAttribute('pointer-events', 'none');
+      portGroup.appendChild(g);
+    } else {
+      const glowRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      glowRing.setAttribute('cx', '0'); glowRing.setAttribute('cy', '0');
+      glowRing.setAttribute('r', bezelRadius.toString());
+      glowRing.setAttribute('fill', 'none');
+      glowRing.setAttribute('stroke', isHybrid ? '#c837ff' : '#00e5ff');
+      glowRing.setAttribute('stroke-width', '1'); glowRing.setAttribute('opacity', '0');
+      glowRing.setAttribute('class', 'port-neon-ring'); glowRing.setAttribute('pointer-events', 'none');
+      portGroup.appendChild(glowRing);
+    }
 
-    // Extract the slot/port label directly from the port name set by injectEarPorts
-    // e.g. "Left Ear S2-P3" → leftVal='S2', rightVal='P3'
-    //      "Left Ear Power"  → leftVal='PW', rightVal='Res'
+    // ── Labels (slot/port or type abbreviation) ───────────────────────────
+    // e.g. "Left Ear S2-P3" → 'S2' / 'P3'  |  "Right Ear Power" → 'PW' / ''
+    //      "Right Ear iDRAC" → 'MG' / 'iDR'  |  "Right Ear iLO" → 'MG' / 'iLO'
     let leftVal = 'PW';
-    let rightVal = 'Res';
-    if (!isPower) {
+    let rightVal = '';
+    if (isMgmt) {
+      const typeName = port.name.replace(/^(Left|Right)\s+Ear\s+/i, ''); // 'iDRAC', 'iLO', 'BMC'…
+      leftVal  = 'MG';
+      rightVal = typeName.slice(0, 3); // 'iDR', 'iLO', 'BMC', 'IMM', 'XCC'
+    } else if (!isPower) {
       const nameMatch = port.name.match(/S(\d+)-P(\d+)/);
       if (nameMatch) {
-        leftVal = `S${nameMatch[1]}`;
+        leftVal  = `S${nameMatch[1]}`;
         rightVal = `P${nameMatch[2]}`;
       }
     }
