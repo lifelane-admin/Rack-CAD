@@ -5,8 +5,8 @@ const rack: RackData = {
   id: 'r1', name: 'Rack 1', units: 42, x: 0, y: 0,
 };
 
-// Two PDU devices placed in the rack → capacity: 2 x 7200 = 14400W (matches getRackPduCount,
-// which counts actual devices with category 'pdu', not the legacy showPduLeft/showPduRight flags).
+// Two PDU devices placed in the rack → per-PDU capacity: 7200W each (PDU_WATTS_PER_UNIT fallback,
+// no powerConfig on the test rack). Validation checks each PDU's own live meter independently.
 const pduDevices = [
   {
     id: 'pdu1', templateId: 'pdu-basic-8c13', rackId: 'r1', startUnit: 40,
@@ -41,33 +41,33 @@ describe('runValidationAlerts - power', () => {
   });
 
   it('emits no power alert when draw is below 80%', () => {
-    // PDU capacity: 2 x 7200 = 14400W. 80% threshold = 11520W.
-    // Device with 9000W description → 62.5%, no alert expected.
-    const devices = [...pduDevices, serverWithPower(9000)];
+    // Per-PDU capacity: 7200W. 80% threshold = 5760W.
+    // 4500W → 62.5% of pdu1 capacity — no alert expected.
+    const devices = [...pduDevices, serverWithPower(4500)];
     const alerts = runValidationAlerts([rack], devices, powerCable);
     const powerAlerts = alerts.filter(a => a.category === 'power');
     expect(powerAlerts).toHaveLength(0);
   });
 
   it('emits a warning when draw is >= 80% and < 95%', () => {
-    // PDU capacity: 2 x 7200 = 14400W. 85% = 12240W.
-    const devices = [...pduDevices, serverWithPower(12240)];
+    // Per-PDU capacity: 7200W. 85% = 6120W → warning on pdu1.
+    const devices = [...pduDevices, serverWithPower(6120)];
     const alerts = runValidationAlerts([rack], devices, powerCable);
     const powerAlerts = alerts.filter(a => a.category === 'power');
     expect(powerAlerts).toHaveLength(1);
     expect(powerAlerts[0].type).toBe('warning');
-    expect(powerAlerts[0].targetId).toBe('r1');
+    expect(powerAlerts[0].targetId).toBe('pdu1');
     expect(powerAlerts[0].targetType).toBe('rack');
   });
 
   it('emits an error when draw is >= 95%', () => {
-    // PDU capacity: 2 x 7200 = 14400W. 96% = 13824W.
-    const devices = [...pduDevices, serverWithPower(13824)];
+    // Per-PDU capacity: 7200W. 96% = 6912W → error on pdu1.
+    const devices = [...pduDevices, serverWithPower(6912)];
     const alerts = runValidationAlerts([rack], devices, powerCable);
     const powerAlerts = alerts.filter(a => a.category === 'power');
     expect(powerAlerts).toHaveLength(1);
     expect(powerAlerts[0].type).toBe('error');
-    expect(powerAlerts[0].targetId).toBe('r1');
+    expect(powerAlerts[0].targetId).toBe('pdu1');
   });
 
   it('emits no power alert when rack has no PDUs', () => {
@@ -89,8 +89,8 @@ describe('runValidationAlerts - power', () => {
   });
 
   it('message includes percentage of capacity', () => {
-    // 85% of 14400W = 12240W → warning
-    const devices = [...pduDevices, serverWithPower(12240)];
+    // 85% of 7200W = 6120W → warning on pdu1
+    const devices = [...pduDevices, serverWithPower(6120)];
     const alerts = runValidationAlerts([rack], devices, powerCable);
     const powerAlerts = alerts.filter(a => a.category === 'power');
     expect(powerAlerts[0].message).toContain('85%');
