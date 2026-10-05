@@ -134,8 +134,11 @@ export class Sidebar {
     // Search
     const searchContainer = document.createElement('div');
     searchContainer.className = 'sidebar-search';
+    searchContainer.style.cssText = 'position:relative;display:flex;align-items:center;';
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
+    searchInput.value = this.searchTerm;
+    searchInput.style.paddingRight = '28px';
     const providerLabels: Record<CloudProvider, string> = { aws: 'AWS', azure: 'Azure', gcp: 'GCP', onprem: 'Local Resources' };
     const categoryScope = this.focusedCloudCategory ? `Search ${this.focusedCloudCategory} components...` : null;
     searchInput.placeholder = isHybrid
@@ -144,6 +147,26 @@ export class Sidebar {
         ? (categoryScope || (this.focusedCloudProvider ? `Search ${providerLabels[this.focusedCloudProvider]} services...` : 'Search AWS/Azure/GCP/Local services...'))
         : 'Search components...';
     searchContainer.appendChild(searchInput);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'sidebar-search-clear';
+    clearBtn.style.cssText = `position:absolute;right:22px;background:none;border:none;color:#8b949e;cursor:pointer;font-size:13px;padding:2px 4px;display:${this.searchTerm ? 'block' : 'none'};line-height:1;`;
+    clearBtn.innerHTML = '✕';
+    clearBtn.title = 'Clear search';
+    clearBtn.onclick = () => {
+      this.searchTerm = '';
+      searchInput.value = '';
+      clearBtn.style.display = 'none';
+      if (isHybrid) {
+        this.renderCatalog();
+        this.renderCloudPalette(cloudCatalogContainer);
+      } else if (isCloud) {
+        this.renderCloudPalette();
+      } else {
+        this.renderCatalog();
+      }
+    };
+    searchContainer.appendChild(clearBtn);
 
     const catalogContainer = document.createElement('div');
     catalogContainer.className = 'sidebar-catalog';
@@ -154,7 +177,8 @@ export class Sidebar {
     cloudCatalogContainer.id = 'cloud-catalog-container';
 
     searchInput.oninput = (e: any) => {
-      this.searchTerm = e.target.value.toLowerCase();
+      this.searchTerm = e.target.value.toLowerCase().trim();
+      clearBtn.style.display = this.searchTerm ? 'block' : 'none';
       if (isHybrid) {
         this.renderCatalog();
         if (cloudSearchDebounceTimer) clearTimeout(cloudSearchDebounceTimer);
@@ -453,19 +477,24 @@ export class Sidebar {
     const customTemplates = state.customTemplates ?? [];
 
     const strip = document.createElement('div');
-    strip.className = 'sb-library-strip';
+    strip.className = 'sb-library-strip open';
+    strip.style.cssText = 'display:flex;align-items:center;padding:0 10px 0 12px;height:36px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.08);background:rgba(251,191,36,0.06);user-select:none;';
     strip.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 24 24" fill="#fbbf24" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;flex-shrink:0;margin-right:8px;">
         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
       </svg>
-      <span class="sb-library-label">My Library</span>
-      <span class="sb-library-count">${customTemplates.length} item${customTemplates.length !== 1 ? 's' : ''}</span>
+      <span class="sb-library-label" style="font-weight:700;font-size:12px;color:#fbbf24;letter-spacing:0.4px;">My Library</span>
+      <span class="sb-library-count" style="margin-left:8px;font-size:11px;color:#8b949e;font-weight:500;">${customTemplates.length} item${customTemplates.length !== 1 ? 's' : ''}</span>
+      <div class="cat-chevron" style="margin-left:auto;margin-right:6px;transform:rotate(90deg);transition:transform 0.18s ease;display:flex;align-items:center;color:#8b949e;">${icon('<path d="M9 18l6-6-6-6"/>')}</div>
     `;
+
+    const chevronEl = strip.querySelector('.cat-chevron') as HTMLElement | null;
 
     const importBtn = document.createElement('button');
     importBtn.className = 'sb-library-add';
     importBtn.textContent = '+';
     importBtn.title = 'Import custom library from JSON file';
+    importBtn.style.cssText = 'margin-left:2px;font-size:16px;line-height:1;background:none;border:none;color:#fbbf24;cursor:pointer;padding:2px 6px;border-radius:3px;font-weight:700;';
     importBtn.onclick = (e) => {
       e.stopPropagation();
       const input = document.createElement('input');
@@ -495,11 +524,15 @@ export class Sidebar {
     strip.appendChild(importBtn);
 
     const panel = document.createElement('div');
-    panel.className = 'sb-library-panel';
+    panel.className = 'sb-library-panel open';
 
     strip.addEventListener('click', (e) => {
       if ((e.target as HTMLElement) === importBtn || importBtn.contains(e.target as HTMLElement)) return;
-      panel.classList.toggle('open');
+      const isOpen = panel.classList.toggle('open');
+      strip.classList.toggle('open', isOpen);
+      if (chevronEl) {
+        chevronEl.style.transform = isOpen ? 'rotate(90deg)' : 'none';
+      }
     });
 
     if (customTemplates.length === 0) {
@@ -851,6 +884,21 @@ export class Sidebar {
     const container = containerEl ?? this.container.querySelector('#catalog-container') as HTMLElement;
     if (!container) return;
     container.innerHTML = '';
+
+    if (this.searchTerm) {
+      const banner = document.createElement('div');
+      banner.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:rgba(56,189,248,0.12);border-bottom:1px solid rgba(56,189,248,0.25);font-size:11px;color:#38bdf8;';
+      banner.innerHTML = `<span>Filtered by <b>"${this.searchTerm}"</b></span><button style="background:none;border:none;color:#38bdf8;cursor:pointer;font-weight:700;text-decoration:underline;font-size:11px;padding:2px 4px;">✕ Clear</button>`;
+      banner.querySelector('button')?.addEventListener('click', () => {
+        this.searchTerm = '';
+        const searchInput = this.container.querySelector('.sidebar-search input') as HTMLInputElement | null;
+        if (searchInput) searchInput.value = '';
+        const clearBtn = this.container.querySelector('.sidebar-search-clear') as HTMLElement | null;
+        if (clearBtn) clearBtn.style.display = 'none';
+        this.renderCatalog();
+      });
+      container.appendChild(banner);
+    }
 
     this.renderMyLibraryStrip(container);
 

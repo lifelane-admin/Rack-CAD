@@ -5,6 +5,8 @@ import { DeviceTemplate, RACK_CONSTANTS, RackData, DeviceData, CableData, PortDa
 import canvasCss from '../styles/canvas.css?raw';
 import reportsCss from '../styles/reports.css?raw';
 import { appendExportSummaryOverlay, Rect } from '../renderers/export-summary-overlay';
+import { ExcelExportEngine } from '../model/excel-export-engine';
+import { physicalInfrastructureModel } from '../model/physical-model';
 
 function unionRect(a: Rect, b: Rect): Rect {
   const x0 = Math.min(a.x, b.x);
@@ -1224,6 +1226,15 @@ export function initExportHandlers(): void {
 
   eventBus.on('project:load', (jsonString: string) => {
     importJSON(jsonString);
+  });
+
+  eventBus.on('export:excel' as any, () => {
+    try {
+      ExcelExportEngine.downloadEngineeringExcel(physicalInfrastructureModel);
+      eventBus.emit('notification', { message: 'Engineering Excel Workbook exported successfully!', type: 'success' });
+    } catch (err: any) {
+      eventBus.emit('notification', { message: `Excel export failed: ${err.message}`, type: 'error' });
+    }
   });
 
   eventBus.on('export:report' as any, () => {

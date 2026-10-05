@@ -9,6 +9,8 @@ import { switchPorts } from '../renderers/switch-renderer';
 import { firewallPorts } from '../renderers/firewall-renderer';
 import { nacPorts } from '../renderers/nac-renderer';
 import { atsPorts } from '../renderers/ats-renderer';
+import { physicalInfrastructureModel } from '../model/physical-model';
+import { ModelMigrationAdapter } from '../model/adapter';
 
 function asPduConfig(config: unknown): PduConfig {
   return (config && typeof config === 'object') ? (config as PduConfig) : {};
@@ -195,6 +197,11 @@ class StateManager {
       this.state.validationAlerts = runValidationAlerts(this.state.racks, this.state.devices, this.state.cables);
       // Emit validation event
       eventBus.emit('validation:updated', this.state.validationAlerts);
+      try {
+        physicalInfrastructureModel.loadSnapshot(ModelMigrationAdapter.fromAppState(this.state));
+      } catch (err) {
+        console.warn('Physical model sync failed:', err);
+      }
     }
 
     eventBus.emit('state:changed', partial);
@@ -202,6 +209,14 @@ class StateManager {
     if (isStructuralChange) {
       this._hasUnsavedChanges = true;
     }
+  }
+
+  /**
+   * Synchronizes state from the authoritative Physical Infrastructure Model.
+   */
+  syncFromPhysicalModel(): void {
+    const partial = ModelMigrationAdapter.toAppState(physicalInfrastructureModel, this.state);
+    this.setState(partial);
   }
 
   /** Whether structural state has changed since the last explicit Save/Open/New — drives the

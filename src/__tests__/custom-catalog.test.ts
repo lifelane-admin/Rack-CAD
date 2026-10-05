@@ -30,17 +30,18 @@ describe('custom-catalog localStorage CRUD', () => {
     vi.resetModules();
   });
 
-  it('loadCustomTemplates returns [] when localStorage is empty', async () => {
-    const { loadCustomTemplates } = await import('../library/custom-catalog');
-    expect(loadCustomTemplates()).toEqual([]);
+  it('loadCustomTemplates returns default templates when localStorage is empty', async () => {
+    const { loadCustomTemplates, DEFAULT_CUSTOM_TEMPLATES } = await import('../library/custom-catalog');
+    expect(loadCustomTemplates()).toEqual(DEFAULT_CUSTOM_TEMPLATES);
   });
 
   it('saveCustomTemplate adds a new template', async () => {
-    const { saveCustomTemplate, loadCustomTemplates } = await import('../library/custom-catalog');
+    const { saveCustomTemplate, loadCustomTemplates, DEFAULT_CUSTOM_TEMPLATES } = await import('../library/custom-catalog');
     const tpl: any = { id: 'custom-1', name: 'My Server', isCustom: true };
     saveCustomTemplate(tpl);
-    expect(loadCustomTemplates()).toHaveLength(1);
-    expect(loadCustomTemplates()[0].id).toBe('custom-1');
+    const all = loadCustomTemplates();
+    expect(all).toHaveLength(DEFAULT_CUSTOM_TEMPLATES.length + 1);
+    expect(all.some(t => t.id === 'custom-1')).toBe(true);
   });
 
   it('saveCustomTemplate updates an existing template by id', async () => {
@@ -49,8 +50,7 @@ describe('custom-catalog localStorage CRUD', () => {
     saveCustomTemplate(tpl);
     saveCustomTemplate({ ...tpl, name: 'New Name' });
     const all = loadCustomTemplates();
-    expect(all).toHaveLength(1);
-    expect(all[0].name).toBe('New Name');
+    expect(all.find(t => t.id === 'custom-1')?.name).toBe('New Name');
   });
 
   it('deleteCustomTemplate removes the entry', async () => {
@@ -59,14 +59,14 @@ describe('custom-catalog localStorage CRUD', () => {
     saveCustomTemplate({ id: 'custom-2', name: 'B', isCustom: true } as any);
     deleteCustomTemplate('custom-1');
     const all = loadCustomTemplates();
-    expect(all).toHaveLength(1);
-    expect(all[0].id).toBe('custom-2');
+    expect(all.some(t => t.id === 'custom-1')).toBe(false);
+    expect(all.some(t => t.id === 'custom-2')).toBe(true);
   });
 
-  it('loadCustomTemplates returns [] when localStorage has malformed JSON', async () => {
+  it('loadCustomTemplates returns default templates when localStorage has malformed JSON', async () => {
     localStorage.setItem('rackcad_custom_library', '{{{broken');
-    const { loadCustomTemplates } = await import('../library/custom-catalog');
-    expect(loadCustomTemplates()).toEqual([]);
+    const { loadCustomTemplates, DEFAULT_CUSTOM_TEMPLATES } = await import('../library/custom-catalog');
+    expect(loadCustomTemplates()).toEqual(DEFAULT_CUSTOM_TEMPLATES);
   });
 
   it('parseCustomLibraryJSON returns templates array from valid export format', async () => {

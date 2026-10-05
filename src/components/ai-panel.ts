@@ -3,6 +3,11 @@ import { aiService } from '../ai/ai-service';
 import { AIMessage, RackDiff } from '../ai/types';
 import { modelRegistry } from '../ai/registry/model-registry';
 import { DesignChangePreview, McpAuditLogEntry, McpExecutionMode } from '../mcp';
+import { physicalInfrastructureModel } from '../model/physical-model';
+import { InfrastructureCopilotEngine, CopilotResponse } from '../ai/copilot/copilot-engine';
+import { ExcelExportEngine } from '../model/excel-export-engine';
+import { stateManager } from '../core/state';
+import { ChangeProposal } from '../model/types';
 
 export class AIPanel {
   private el: HTMLElement;
@@ -404,13 +409,77 @@ export class AIPanel {
       statusText = 'API Key Saved';
     }
 
+    // Physical Infrastructure Model Metrics
+    const racks = physicalInfrastructureModel.getRacks();
+    const objects = physicalInfrastructureModel.getObjects();
+    const ports = physicalInfrastructureModel.getPorts();
+    const cables = physicalInfrastructureModel.getCables();
+    const findings = physicalInfrastructureModel.validate();
+    const totalWatts = objects.reduce((a, b) => a + (b.powerWatts || 0), 0);
+    const totalU = racks.reduce((a, b) => a + b.rackSizeU, 0);
+    const usedU = objects.reduce((a, b) => a + b.heightU, 0);
+    const uPercent = totalU > 0 ? Math.round((usedU / totalU) * 100) : 0;
+
+    const criticalCount = findings.filter(f => f.severity === 'CRITICAL').length;
+    const highCount = findings.filter(f => f.severity === 'HIGH').length;
+    const mediumCount = findings.filter(f => f.severity === 'MEDIUM').length;
+
+    let riskBadgeClass = 'healthy';
+    let riskText = 'HEALTHY';
+    if (criticalCount > 0) {
+      riskBadgeClass = 'critical';
+      riskText = 'CRITICAL RISK';
+    } else if (highCount > 0) {
+      riskBadgeClass = 'high';
+      riskText = 'HIGH RISK';
+    }
+
     this.messagesEl.innerHTML = `
       <div class="ai-landing-view">
         <div class="ai-landing-hero">
-          <div class="ai-hero-icon">🤖</div>
-          <div class="ai-hero-title">RackSlicer AI Architect</div>
+          <div class="ai-hero-icon">🏛️</div>
+          <div class="ai-hero-title">RackSlicer AI Copilot</div>
           <div class="ai-hero-subtitle">
-            Secure MCP Control Plane for autonomous datacenter infrastructure design.
+            Infrastructure Engineering Copilot grounded in the Physical Model.
+          </div>
+        </div>
+
+        <!-- Section 41 Architecture Status Card -->
+        <div class="ai-architecture-status-card">
+          <div class="ai-arch-header-row">
+            <span class="ai-arch-title">🏛️ CURRENT PHYSICAL INFRASTRUCTURE</span>
+            <span class="ai-arch-risk-badge ${riskBadgeClass}">${riskText}</span>
+          </div>
+          <div class="ai-arch-metrics-grid">
+            <div class="ai-arch-metric-box">
+              <span class="label">RACKS</span>
+              <span class="value">${racks.length}</span>
+            </div>
+            <div class="ai-arch-metric-box">
+              <span class="label">CHASSIS</span>
+              <span class="value">${objects.length}</span>
+            </div>
+            <div class="ai-arch-metric-box">
+              <span class="label">PORTS</span>
+              <span class="value">${ports.length}</span>
+            </div>
+            <div class="ai-arch-metric-box">
+              <span class="label">POWER</span>
+              <span class="value">${(totalWatts / 1000).toFixed(1)} kW</span>
+            </div>
+            <div class="ai-arch-metric-box">
+              <span class="label">U OCCUPANCY</span>
+              <span class="value">${uPercent}%</span>
+            </div>
+            <div class="ai-arch-metric-box">
+              <span class="label">CABLES</span>
+              <span class="value">${cables.length}</span>
+            </div>
+          </div>
+          <div class="ai-arch-audit-summary">
+            <span style="color:#f87171">🔴 ${criticalCount} Critical</span>
+            <span style="color:#fb923c">🟠 ${highCount} High</span>
+            <span style="color:#facc15">🟡 ${mediumCount} Medium</span>
           </div>
         </div>
 
@@ -437,44 +506,34 @@ export class AIPanel {
             <span>Price: <strong>${activeModel?.pricing.inputPer1M ? '$' + activeModel.pricing.inputPer1M + '/1M' : (activeModel?.category === 'open_source' ? 'Free' : '$0.00')}</strong></span>
           </div>
 
-          <div style="font-size:10px; color:#64748b; line-height:1.35; border-top:1px solid #141c2b; padding-top:6px; margin-top:2px;">
-            ℹ️ Direct Provider Cost: Token charges bill directly to your ${activeModel?.providerDisplayName || 'AI'} account, completely separate from your CAD subscription.
-          </div>
-
           <div class="ai-model-actions-row">
             <button class="btn-ai-registry" id="landing-btn-registry" title="Explore and select models from the registry">
-              🚀 Dynamic Registry (N → N-8) ↗
+              🚀 Dynamic Registry ↗
             </button>
             <button class="btn-ai-key" id="landing-btn-keys" title="Configure API Keys and test connection">
-              🔑 Providers & Keys
+              🔑 Keys & Providers
             </button>
           </div>
         </div>
 
-        <!-- Quick Infrastructure Prompt Starters matching specifications -->
+        <!-- Section 37 Quick Engineering Copilot Actions -->
         <div class="ai-quick-prompts-section">
-          <div class="ai-quick-header">⚡ MCP INFRASTRUCTURE COMMANDS</div>
+          <div class="ai-quick-header">⚡ ENGINEERING COPILOT ACTIONS</div>
           <div class="ai-quick-prompts-list">
-            <button class="ai-prompt-chip" data-prompt="Build me a 3-node Proxmox cluster with Ceph">
-              <strong>🖥️ Proxmox Ceph Cluster:</strong> 3 compute nodes, Ceph storage & redundant 25GbE
+            <button class="ai-prompt-chip" data-prompt="Analyze this infrastructure for physical single points of failure">
+              <strong>🔍 Find SPOFs:</strong> Audit cabinet, power feeds & ToR network diversity
             </button>
-            <button class="ai-prompt-chip" data-prompt="Add three Dell PowerEdge R770 servers">
-              <strong>⚡ Dell PowerEdge R770:</strong> Install 3 enterprise 2U servers with A/B power
+            <button class="ai-prompt-chip" data-prompt="Optimize infrastructure to balance power and separate failure domains">
+              <strong>⚖️ Optimize Infrastructure:</strong> Rebalance high-density servers and improve HA
             </button>
-            <button class="ai-prompt-chip" data-prompt="Create a 42U rack">
-              <strong>🏢 42U Enterprise Cabinet:</strong> Standard EIA-310-D server rack with cable managers
+            <button class="ai-prompt-chip" data-prompt="Generate HLD for this infrastructure">
+              <strong>📄 Generate HLD:</strong> High Level Architecture Design document
             </button>
-            <button class="ai-prompt-chip" data-prompt="Connect the servers using redundant 25GbE networking">
-              <strong>🔗 Redundant 25GbE:</strong> Dual-ToR switching paths with low-latency DAC cabling
+            <button class="ai-prompt-chip" data-prompt="Generate BOM for this infrastructure">
+              <strong>📋 Generate BOM:</strong> Bill of Materials with power and specs
             </button>
-            <button class="ai-prompt-chip" data-prompt="Add A/B power">
-              <strong>⚡ A/B Redundant Power:</strong> Dual 30A zero-U vertical PDUs with circuit balancing
-            </button>
-            <button class="ai-prompt-chip" data-prompt="Validate the entire design">
-              <strong>🔍 Validate Design:</strong> Run full engineering check on capacity, power & thermal
-            </button>
-            <button class="ai-prompt-chip" data-prompt="Optimize the rack for power">
-              <strong>⚖️ Power Optimization:</strong> Balance circuit loads across Feed A and Feed B
+            <button class="ai-prompt-chip" id="chip-export-excel" data-prompt="Export engineering Excel schedule">
+              <strong>📊 Export Engineering Excel:</strong> Full 20-sheet workbook (.xml)
             </button>
           </div>
         </div>
@@ -572,6 +631,58 @@ export class AIPanel {
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
   }
 
+  private renderProposalCard(proposal: ChangeProposal): void {
+    const card = document.createElement('div');
+    card.className = 'ai-proposal-card';
+    const fromStr = proposal.from ? `${proposal.from.rackId || ''} U${proposal.from.uStart || ''}` : 'Unassigned';
+    const toStr = proposal.to ? `${proposal.to.rackId || ''} U${proposal.to.uStart || ''}` : 'Unassigned';
+
+    card.innerHTML = `
+      <div class="ai-proposal-header">
+        <span>💡 AI RECOMMENDATION (${proposal.proposalId})</span>
+        <span style="font-size:10px; background:#0284c7; color:#fff; padding:1px 6px; border-radius:10px;">${proposal.type}</span>
+      </div>
+      <div style="font-size:11px; color:#f1f5f9; font-weight:600; margin-bottom:6px;">
+        ${proposal.reason}
+      </div>
+      <div class="ai-proposal-diff-box">
+        <div class="ai-proposal-diff-row before">
+          <strong>BEFORE:</strong> ${fromStr}
+        </div>
+        <div class="ai-proposal-diff-row proposed">
+          <strong>PROPOSED:</strong> ${toStr}
+        </div>
+      </div>
+      <div class="ai-proposal-impact">
+        <strong>Impact:</strong> ${proposal.impact.summary}
+      </div>
+      <div class="ai-proposal-actions">
+        <button class="btn-prop-apply" id="btn-prop-apply-${proposal.proposalId}">✓ APPLY CHANGE</button>
+        <button class="btn-prop-reject" id="btn-prop-reject-${proposal.proposalId}">✕ REJECT</button>
+      </div>
+    `;
+
+    card.querySelector(`#btn-prop-apply-${proposal.proposalId}`)?.addEventListener('click', () => {
+      const res = physicalInfrastructureModel.applyProposal(proposal.proposalId);
+      if (res.success) {
+        stateManager.syncFromPhysicalModel();
+        card.innerHTML = `<div style="color:#4ade80; font-size:11px; font-weight:700;">✓ Proposal ${proposal.proposalId} Applied to Physical Model & Re-rendered!</div>`;
+        eventBus.emit('notification', { message: `Proposal ${proposal.proposalId} applied!`, type: 'success' });
+      } else {
+        eventBus.emit('notification', { message: `Failed to apply: ${res.errors.join(', ')}`, type: 'error' });
+      }
+    });
+
+    card.querySelector(`#btn-prop-reject-${proposal.proposalId}`)?.addEventListener('click', () => {
+      physicalInfrastructureModel.rejectProposal(proposal.proposalId);
+      card.remove();
+      eventBus.emit('notification', { message: `Proposal ${proposal.proposalId} rejected.`, type: 'info' });
+    });
+
+    this.messagesEl.appendChild(card);
+    this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+  }
+
   private async sendMessage(): Promise<void> {
     const text = this.inputEl.value.trim();
     if (!text || this.streaming) return;
@@ -581,6 +692,60 @@ export class AIPanel {
     this.messages.push({ role: 'user', content: text });
     if (this.messages.length > 20) {
       this.messages = this.messages.slice(-20);
+    }
+
+    const tLower = text.toLowerCase();
+    const isCopilotCommand =
+      tLower.includes('spof') ||
+      tLower.includes('ha') ||
+      tLower.includes('single point') ||
+      tLower.includes('optimiz') ||
+      tLower.includes('balance') ||
+      tLower.includes('hld') ||
+      tLower.includes('lld') ||
+      tLower.includes('bom') ||
+      tLower.includes('implementation plan') ||
+      tLower.includes('risk') ||
+      tLower.includes('excel');
+
+    if (tLower.includes('excel') || tLower.includes('spreadsheet')) {
+      try {
+        ExcelExportEngine.downloadEngineeringExcel(physicalInfrastructureModel);
+        this.appendMessage('assistant', '📊 Generated and downloaded comprehensive 20-sheet Engineering Excel Workbook (.xml) from the canonical Physical Infrastructure Model.');
+        eventBus.emit('notification', { message: 'Engineering Excel downloaded successfully!', type: 'success' });
+        return;
+      } catch (err: any) {
+        this.appendMessage('assistant', `⚠️ Excel export failed: ${err.message}`);
+        return;
+      }
+    }
+
+    if (isCopilotCommand) {
+      this.streaming = true;
+      this.sendBtn.disabled = true;
+      this.thinkingEl.style.display = 'flex';
+
+      try {
+        const res = await InfrastructureCopilotEngine.query(text);
+        this.thinkingEl.style.display = 'none';
+        this.sendBtn.disabled = false;
+        this.streaming = false;
+
+        const explanationEl = this.formatExplanation(res.markdown);
+        this.messagesEl.appendChild(explanationEl);
+        this.messages.push({ role: 'assistant', content: res.markdown });
+
+        if (res.proposals && res.proposals.length > 0) {
+          for (const prop of res.proposals) {
+            physicalInfrastructureModel.registerProposal(prop);
+            this.renderProposalCard(prop);
+          }
+        }
+        this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+        return;
+      } catch (err: any) {
+        console.warn('Copilot query error, falling back to AI chat:', err);
+      }
     }
 
     this.streaming = true;

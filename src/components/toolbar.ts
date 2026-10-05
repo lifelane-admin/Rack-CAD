@@ -193,6 +193,7 @@ export class Toolbar {
       { label: 'Export PDF…', icon: ICONS.exportPdf, action: () => EventBus.emit('export:pdf', undefined) },
       { label: 'Export HTML…', icon: ICONS.exportHtml, action: () => EventBus.emit('export:html', undefined) },
       'sep',
+      { label: 'Engineering Excel (.xml)…', icon: ICONS.exportReport, action: () => EventBus.emit('export:excel' as any, undefined) },
       { label: 'Design Report…', icon: ICONS.exportReport, action: () => EventBus.emit('export:report' as any, undefined) },
     ]);
     menuBar.appendChild(exportMenu);
