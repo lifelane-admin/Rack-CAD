@@ -69,6 +69,27 @@
   stroke-width: 2;
 }
 
+.toolbar-btn-pill {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.toolbar-btn-pill:hover {
+  filter: brightness(1.2);
+  transform: translateY(-1px);
+}
+.toolbar-btn-pill:active {
+  transform: translateY(0);
+}
+
 /* ── Separator ───────────────────────────────────────────────────────────── */
 .tb-sep {
   width: 1px;

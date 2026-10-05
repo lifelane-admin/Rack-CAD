@@ -1231,7 +1231,7 @@ export function initExportHandlers(): void {
   eventBus.on('export:excel' as any, () => {
     try {
       ExcelExportEngine.downloadEngineeringExcel(physicalInfrastructureModel);
-      eventBus.emit('notification', { message: 'Engineering Excel Workbook exported successfully!', type: 'success' });
+      eventBus.emit('notification', { message: 'Engineering Excel Workbook (.xlsx) exported successfully!', type: 'success' });
     } catch (err: any) {
       eventBus.emit('notification', { message: `Excel export failed: ${err.message}`, type: 'error' });
     }

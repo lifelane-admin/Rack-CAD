@@ -1,17 +1,12 @@
-/**
- * Engineering Excel Export Engine
- * Generates an exhaustive multi-sheet engineering workbook directly from the Physical Infrastructure Model.
- * Produces SpreadsheetML XML (native Excel workbook format) with all 20+ required engineering sheets.
- */
-
+import * as XLSX from 'xlsx';
 import { PhysicalInfrastructureModel } from './physical-model';
 import { USpaceEngine } from './u-space-engine';
 
 export class ExcelExportEngine {
   /**
-   * Generates the complete multi-sheet XML workbook content.
+   * Builds the structured data for all 20+ engineering sheets from the Physical Infrastructure Model.
    */
-  static generateWorkbook(model: PhysicalInfrastructureModel): string {
+  static generateSheets(model: PhysicalInfrastructureModel): Array<{ name: string; rows: any[][] }> {
     const project = model.getProject();
     const racks = model.getRacks();
     const objects = model.getObjects();
@@ -23,7 +18,7 @@ export class ExcelExportEngine {
     const proposals = model.getProposals();
     const history = model.getVersionManager().getHistory();
 
-    const sheets: { name: string; rows: string[][] }[] = [];
+    const sheets: { name: string; rows: any[][] }[] = [];
 
     // 1. 01_Project_Summary
     sheets.push({
@@ -329,7 +324,7 @@ export class ExcelExportEngine {
       ],
     });
 
-    return this.buildSpreadsheetXml(sheets);
+    return sheets;
   }
 
   /**
@@ -391,18 +386,39 @@ export class ExcelExportEngine {
   }
 
   /**
-   * Helper to trigger download in browser.
+   * Generates the complete multi-sheet XML workbook content (legacy format fallback).
    */
-  static downloadEngineeringExcel(model: PhysicalInfrastructureModel, filename = 'RackSlicer_Engineering_Infrastructure.xml'): void {
-    const xml = this.generateWorkbook(model);
-    const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  static generateWorkbook(model: PhysicalInfrastructureModel): string {
+    const sheets = this.generateSheets(model);
+    return this.buildSpreadsheetXml(sheets);
+  }
+
+  /**
+   * Triggers download of a genuine, native binary .xlsx Excel workbook in the browser.
+   */
+  static downloadEngineeringExcel(model: PhysicalInfrastructureModel, filename = 'RackSlicer_Physical_Infrastructure.xlsx'): void {
+    const sheets = this.generateSheets(model);
+    const wb = XLSX.utils.book_new();
+
+    for (const sheet of sheets) {
+      // Sheet names in Excel must be <= 31 chars and cannot contain: \ / ? * [ ]
+      const cleanName = sheet.name.replace(/[\\/?*[\]]/g, '_').substring(0, 31);
+      const ws = XLSX.utils.aoa_to_sheet(sheet.rows);
+
+      // Auto-fit column widths
+      const colWidths = sheet.rows.reduce((acc: number[], row: any[]) => {
+        row.forEach((cell, colIdx) => {
+          const len = cell ? String(cell).length : 5;
+          acc[colIdx] = Math.max(acc[colIdx] || 10, Math.min(len + 3, 50));
+        });
+        return acc;
+      }, []);
+      ws['!cols'] = colWidths.map(w => ({ wch: w }));
+
+      XLSX.utils.book_append_sheet(wb, ws, cleanName);
+    }
+
+    const safeName = filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`;
+    XLSX.writeFile(wb, safeName);
   }
 }

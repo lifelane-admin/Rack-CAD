@@ -96,33 +96,18 @@ export class Toolbar {
 
     const inner = document.createElement('div');
     inner.className = 'toolbar-inner';
+    inner.style.cssText = 'display:flex;align-items:center;justify-content:space-between;width:100%;height:100%;padding:0 8px;gap:12px;';
 
-    // SaaS Dashboard launcher button
-    const dashBtn = document.createElement('button');
-    dashBtn.className = 'toolbar-btn';
-    dashBtn.style.cssText = 'background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; font-weight: 700; font-size: 12px; border-radius: 6px; padding: 4px 10px; margin-right: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px;';
-    dashBtn.innerHTML = '<span style="font-size:14px;">🏢</span> <span>Dashboard</span>';
-    dashBtn.title = 'Open SaaS Workspace & Projects Dashboard';
-    dashBtn.addEventListener('click', () => EventBus.emit('saas:open-dashboard', undefined));
-    inner.appendChild(dashBtn);
+    // ── Zone 1 (Left): Brand + Menus ──────────────────────────────────────────
+    const left = document.createElement('div');
+    left.className = 'tb-left';
+    left.style.cssText = 'display:flex;align-items:center;gap:8px;flex-shrink:0;';
 
-    // ── Tool strip (segmented capsule group) ───────────────────────────────
-    const strip = document.createElement('div');
-    strip.className = 'tb-strip';
-    const currentTool = State.getState().tool;
-    TOOLS.forEach(({ id, tool, title, svg }) => {
-      const btn = document.createElement('button');
-      btn.id = id;
-      btn.className = 'toolbar-btn tb-tool' + (currentTool === tool ? ' active' : '');
-      btn.title = title;
-      btn.innerHTML = svg;
-      btn.addEventListener('click', () => EventBus.emit('tool:changed', tool));
-      strip.appendChild(btn);
-    });
-    inner.appendChild(strip);
-
-    // ── Separator ───────────────────────────────────────────────────────────
-    inner.appendChild(this.sep());
+    const brand = document.createElement('div');
+    brand.className = 'tb-brand';
+    brand.style.cssText = 'display:flex;align-items:center;gap:6px;font-weight:800;font-size:13px;color:#f0f6fc;margin-right:4px;letter-spacing:0.3px;';
+    brand.innerHTML = '<span style="font-size:16px;">📦</span> <span>RACKSLICER</span>';
+    left.appendChild(brand);
 
     // ── Menu bar with modern grouped icons ───────────────────────────────────
     const menuBar = document.createElement('div');
@@ -187,13 +172,14 @@ export class Toolbar {
     menuBar.appendChild(viewMenu);
 
     const exportMenu = this.menu('Export', MENU_ICONS.export, [
+      { label: 'Engineering Excel (.xlsx)…', icon: ICONS.exportReport, action: () => EventBus.emit('export:excel' as any, undefined) },
+      'sep',
       { label: 'Export SVG…', icon: ICONS.exportSvg, action: () => EventBus.emit('export:svg', undefined) },
       { label: 'Export PNG…', icon: ICONS.exportPng, action: () => EventBus.emit('export:png', undefined) },
       { label: 'Export JPEG…', icon: ICONS.exportJpeg, action: () => EventBus.emit('export:jpeg', undefined) },
       { label: 'Export PDF…', icon: ICONS.exportPdf, action: () => EventBus.emit('export:pdf', undefined) },
       { label: 'Export HTML…', icon: ICONS.exportHtml, action: () => EventBus.emit('export:html', undefined) },
       'sep',
-      { label: 'Engineering Excel (.xml)…', icon: ICONS.exportReport, action: () => EventBus.emit('export:excel' as any, undefined) },
       { label: 'Design Report…', icon: ICONS.exportReport, action: () => EventBus.emit('export:report' as any, undefined) },
     ]);
     menuBar.appendChild(exportMenu);
@@ -210,11 +196,51 @@ export class Toolbar {
       menuBar.appendChild(cloudMenu);
     }
 
-    inner.appendChild(menuBar);
+    left.appendChild(menuBar);
+    inner.appendChild(left);
 
-    // ── Right zone ──────────────────────────────────────────────────────────
+    // ── Zone 2 (Center): Segmented Interactive Tools Capsule ─────────────────
+    const center = document.createElement('div');
+    center.className = 'tb-center';
+    center.style.cssText = 'display:flex;align-items:center;justify-content:center;flex:1;min-width:0;';
+
+    const strip = document.createElement('div');
+    strip.className = 'tb-strip';
+    const currentTool = State.getState().tool;
+    TOOLS.forEach(({ id, tool, title, svg }) => {
+      const btn = document.createElement('button');
+      btn.id = id;
+      btn.className = 'toolbar-btn tb-tool' + (currentTool === tool ? ' active' : '');
+      btn.title = title;
+      btn.innerHTML = svg;
+      btn.addEventListener('click', () => EventBus.emit('tool:changed', tool));
+      strip.appendChild(btn);
+    });
+    center.appendChild(strip);
+    inner.appendChild(center);
+
+    // ── Zone 3 (Right): Direct Actions + Dashboard + AI + User ───────────────
     const right = document.createElement('div');
     right.className = 'tb-right';
+    right.style.cssText = 'display:flex;align-items:center;gap:8px;flex-shrink:0;';
+
+    // DIRECT 1-CLICK EXCEL (.XLSX) BUTTON
+    const excelBtn = document.createElement('button');
+    excelBtn.className = 'toolbar-btn-pill tb-excel-direct-btn';
+    excelBtn.style.cssText = 'display:flex;align-items:center;gap:6px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.45);color:#10b981;font-weight:700;font-size:12px;padding:4px 12px;border-radius:6px;cursor:pointer;transition:all 0.15s ease;white-space:nowrap;';
+    excelBtn.innerHTML = '<span style="font-size:14px;">📊</span> <span>Export .XLSX</span>';
+    excelBtn.title = 'Export complete Physical Model workbook (25+ sheets in true Microsoft Excel .xlsx format)';
+    excelBtn.onclick = () => EventBus.emit('export:excel' as any, undefined);
+    right.appendChild(excelBtn);
+
+    // SaaS Dashboard launcher button (Clean pill, no overlap)
+    const dashBtn = document.createElement('button');
+    dashBtn.className = 'toolbar-btn-pill';
+    dashBtn.style.cssText = 'background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.35);color:#38bdf8;font-weight:700;font-size:12px;border-radius:6px;padding:4px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;';
+    dashBtn.innerHTML = '<span style="font-size:14px;">🏢</span> <span>Dashboard</span>';
+    dashBtn.title = 'Open SaaS Workspace & Projects Dashboard';
+    dashBtn.addEventListener('click', () => EventBus.emit('saas:open-dashboard', undefined));
+    right.appendChild(dashBtn);
 
     // Float toggle
     const floatToggle = document.createElement('button');
