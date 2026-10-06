@@ -8,6 +8,8 @@ import { ExcelExportEngine } from '../model/excel-export-engine';
 import { EngineeringDocGenerator } from '../model/doc-generator';
 import { InfrastructureCopilotEngine } from '../ai/copilot/copilot-engine';
 import { PhysicalRack, PhysicalObject, PhysicalCable, PhysicalPower } from '../model/types';
+import { ModelMigrationAdapter } from '../model/adapter';
+import { AppState } from '../core/types';
 
 describe('Physical Infrastructure Model & AI Copilot Suite', () => {
   let model: PhysicalInfrastructureModel;
@@ -853,6 +855,317 @@ describe('Physical Infrastructure Model & AI Copilot Suite', () => {
       expect(res.proposals).toBeDefined();
       expect(res.proposals!.length).toBeGreaterThan(0);
       expect(res.proposals![0].type).toBe('MOVE_OBJECT');
+    });
+  });
+
+  describe('9. False Positive Prevention & DCIM Real-World Validation', () => {
+    it('validates 0U vertical PDU without uStart or bounds errors', () => {
+      const testRack: PhysicalRack = {
+        rackId: 'RACK-01',
+        rackName: 'Rack 01',
+        rackSizeU: 42,
+        rackWidth: 600,
+        rackDepth: 1070,
+        rackHeight: 2000,
+        rackPositionX: 0,
+        rackPositionY: 0,
+        rackPositionZ: 0,
+        weightCapacity: 1200,
+        powerCapacity: 7400,
+        coolingCapacity: 25000,
+        usedU: 0,
+        freeU: 42,
+        reservedU: 0,
+        blockedU: 0,
+        powerConsumed: 0,
+        weightConsumed: 0,
+      };
+
+      const res = USpaceEngine.validatePlacement(testRack, [], {
+        objectId: 'vpdu-legrand-01',
+        uStart: 0,
+        heightU: 0,
+        category: 'power',
+        subCategory: 'Legrand LCS3 Vertical PDU (India)',
+      });
+
+      expect(res.valid).toBe(true);
+      expect(res.errors).toHaveLength(0);
+    });
+
+    it('passes server dual PSU power redundancy validation with dual PDUs', () => {
+      const rack: PhysicalRack = {
+        rackId: 'RACK-01',
+        rackName: 'Server Rack',
+        rackSizeU: 42,
+        rackWidth: 600,
+        rackDepth: 1070,
+        rackHeight: 2000,
+        rackPositionX: 0,
+        rackPositionY: 0,
+        rackPositionZ: 0,
+        weightCapacity: 1200,
+        powerCapacity: 7400,
+        coolingCapacity: 25000,
+        usedU: 2,
+        freeU: 40,
+        reservedU: 0,
+        blockedU: 0,
+        powerConsumed: 500,
+        weightConsumed: 30,
+      };
+
+      const server: PhysicalObject = {
+        objectId: 'proxmox-h1',
+        objectName: 'Proxmox-H1-BLR',
+        category: 'compute',
+        subCategory: '2U Server',
+        manufacturer: 'Supermicro',
+        model: 'SYS-2029U',
+        rackId: 'RACK-01',
+        uStart: 10,
+        uEnd: 11,
+        heightU: 2,
+        width: 482.6,
+        depth: 750,
+        height: 88.9,
+        weight: 25,
+        positionX: 0,
+        positionY: 0,
+        positionZ: 0,
+        rotation: 0,
+        powerWatts: 500,
+        powerVA: 550,
+        psuCount: 2,
+        psuRedundancy: '1+1',
+        airflowDirection: 'Front-to-Back',
+        frontRearOrientation: 'Front',
+        status: 'Active',
+      };
+
+      const pduA: PhysicalObject = {
+        objectId: 'pdu-left',
+        objectName: 'Legrand LCS3 Vertical PDU (Feed A)',
+        category: 'power',
+        subCategory: 'Vertical PDU',
+        manufacturer: 'Legrand',
+        model: 'LCS3-IS',
+        rackId: 'RACK-01',
+        uStart: 0,
+        uEnd: 0,
+        heightU: 0,
+        width: 46,
+        depth: 50,
+        height: 1800,
+        weight: 5.5,
+        positionX: 0,
+        positionY: 0,
+        positionZ: 0,
+        rotation: 0,
+        powerWatts: 0,
+        powerVA: 0,
+        psuCount: 0,
+        psuRedundancy: 'None',
+        airflowDirection: 'Passive',
+        frontRearOrientation: 'Front',
+        status: 'Active',
+      };
+
+      const pduB: PhysicalObject = {
+        objectId: 'pdu-right',
+        objectName: 'Legrand LCS3 Vertical PDU (Feed B)',
+        category: 'power',
+        subCategory: 'Vertical PDU',
+        manufacturer: 'Legrand',
+        model: 'LCS3-IS',
+        rackId: 'RACK-01',
+        uStart: 0,
+        uEnd: 0,
+        heightU: 0,
+        width: 46,
+        depth: 50,
+        height: 1800,
+        weight: 5.5,
+        positionX: 0,
+        positionY: 0,
+        positionZ: 0,
+        rotation: 0,
+        powerWatts: 0,
+        powerVA: 0,
+        psuCount: 0,
+        psuRedundancy: 'None',
+        airflowDirection: 'Passive',
+        frontRearOrientation: 'Front',
+        status: 'Active',
+      };
+
+      const powerEntries: PhysicalPower[] = [
+        {
+          powerId: 'pwr-1',
+          objectId: 'proxmox-h1',
+          psuId: '1',
+          psuLabel: 'PSU 1',
+          cableId: 'c-pwr-1',
+          pduId: 'pdu-left',
+          pduSocketId: 'outlet-left-0',
+          socketType: 'C13',
+          powerFeed: 'A',
+          powerWatts: 250,
+          redundancyStatus: 'redundant',
+        },
+        {
+          powerId: 'pwr-2',
+          objectId: 'proxmox-h1',
+          psuId: '2',
+          psuLabel: 'PSU 2',
+          cableId: 'c-pwr-2',
+          pduId: 'pdu-right',
+          pduSocketId: 'outlet-right-0',
+          socketType: 'C13',
+          powerFeed: 'B',
+          powerWatts: 250,
+          redundancyStatus: 'redundant',
+        },
+      ];
+
+      const findings = DeterministicValidator.validate(
+        [rack],
+        [server, pduA, pduB],
+        [],
+        [],
+        powerEntries
+      );
+
+      // Verify no power errors exist for the server
+      const powerFindings = findings.filter(f => f.category === 'power');
+      expect(powerFindings).toHaveLength(0);
+      const criticalFindings = findings.filter(f => f.severity === 'CRITICAL');
+      expect(criticalFindings).toHaveLength(0);
+    });
+
+    it('end-to-end converts AppState with dual PDU, dual PSU server, and ear data ports without false positives', () => {
+      const mockAppState = {
+        racks: [
+          { id: 'rack-blr', name: 'Production Rack BLR', units: 42, x: 0, y: 0, leftCableManagerWidth: '4-inch', rightCableManagerWidth: '4-inch' }
+        ],
+        devices: [
+          {
+            id: 'pdu-left',
+            templateId: 'vpdu-legrand-is',
+            rackId: 'rack-blr',
+            startUnit: 0,
+            name: 'Legrand LCS3 Vertical PDU (Feed A)',
+            ports: [],
+          },
+          {
+            id: 'pdu-right',
+            templateId: 'vpdu-legrand-is',
+            rackId: 'rack-blr',
+            startUnit: 0,
+            name: 'Legrand LCS3 Vertical PDU (Feed B)',
+            ports: [],
+          },
+          {
+            id: 'server-proxmox',
+            templateId: 'server-2u',
+            rackId: 'rack-blr',
+            startUnit: 10,
+            name: 'Proxmox-H1-BLR',
+            powerWatts: 450,
+            ports: [
+              { id: 'server-proxmox-nic1', name: 'NIC 1', type: 'rj45', relativeX: 320, relativeY: 15, speed: '1 Gbps', connected: false, cableId: null },
+              { id: 'server-proxmox-nic2', name: 'NIC 2', type: 'sfp-plus', relativeX: 332, relativeY: 15, speed: '10 Gbps', connected: false, cableId: null },
+              { id: 'server-proxmox-nic3', name: 'NIC 3', type: 'sfp-plus', relativeX: 332, relativeY: 27, speed: '10 Gbps', connected: true, cableId: 'cable-data-1' },
+              { id: 'server-proxmox-nic4', name: 'NIC 4', type: 'sfp-plus', relativeX: 320, relativeY: 27, speed: '10 Gbps', connected: false, cableId: null },
+              { id: 'server-proxmox-ear-left-power', name: 'Left Ear Power', type: 'power', relativeX: -12.5, relativeY: 40, connected: true, cableId: 'c-pwr-a' },
+              { id: 'server-proxmox-ear-right-power', name: 'Right Ear Power', type: 'power', relativeX: 362.5, relativeY: 40, connected: true, cableId: 'c-pwr-b' },
+              { id: 'server-proxmox-ear-right-nic1', name: 'Right Ear S2-P1', type: 'sfp-plus', relativeX: 362.5, relativeY: 15, speed: '10 Gbps', connected: true, cableId: 'cable-data-1' },
+            ],
+          },
+          {
+            id: 'switch-leaf',
+            templateId: 'rs-sw-32p',
+            rackId: 'rack-blr',
+            startUnit: 40,
+            name: 'Arista 7050SX3 Leaf Switch',
+            ports: [
+              { id: 'switch-leaf-sfp-4', name: 'SFP+ 4', type: 'sfp-plus', relativeX: 50, relativeY: 10, speed: '10 Gbps', connected: true, cableId: 'cable-data-1' },
+            ],
+          },
+        ],
+        cables: [
+          // Power cable A: Left Ear Power -> PDU Left Outlet 1
+          {
+            id: 'c-pwr-a',
+            name: 'PSU 1 Feed A',
+            type: 'power',
+            color: '#3b82f6',
+            sourcePortId: 'server-proxmox-ear-left-power',
+            destPortId: 'outlet-pdu-left-0',
+            bendPoints: [],
+            powerCableType: 'power',
+          },
+          // Power cable B: Right Ear Power -> PDU Right Outlet 1
+          {
+            id: 'c-pwr-b',
+            name: 'PSU 2 Feed B',
+            type: 'power',
+            color: '#ef4444',
+            sourcePortId: 'server-proxmox-ear-right-power',
+            destPortId: 'outlet-pdu-right-0',
+            bendPoints: [],
+            powerCableType: 'power',
+          },
+          // 10GbE DAC data cable: Right Ear S2-P1 -> Switch SFP+ 4
+          {
+            id: 'cable-data-1',
+            name: 'Server Uplink 10G',
+            type: 'dac-twinax',
+            color: '#10b981',
+            sourcePortId: 'server-proxmox-ear-right-nic1',
+            destPortId: 'switch-leaf-sfp-4',
+            bendPoints: [],
+          },
+        ],
+      } as unknown as AppState;
+
+      const convertedModel = ModelMigrationAdapter.fromAppState(mockAppState);
+
+      // Verify physical objects
+      const pduObj = convertedModel.objects.find(o => o.objectId === 'pdu-left');
+      expect(pduObj).toBeDefined();
+      expect(pduObj?.uStart).toBe(0);
+      expect(pduObj?.heightU).toBe(0);
+
+      // Verify power mapping has 2 PSUs for Proxmox server on Feed A and Feed B
+      const serverPower = convertedModel.power.filter(p => p.objectId === 'server-proxmox');
+      expect(serverPower).toHaveLength(2);
+      expect(new Set(serverPower.map(p => p.psuId)).size).toBe(2);
+      expect(new Set(serverPower.map(p => p.powerFeed)).size).toBe(2);
+
+      // Verify data cable is 10GbE / DAC
+      const dataCable = convertedModel.cables.find(c => c.cableId === 'cable-data-1');
+      expect(dataCable).toBeDefined();
+      expect(dataCable?.media).toBe('DAC');
+      expect(dataCable?.speed).toBe('10GbE');
+
+      // Run deterministic validation on the converted model
+      const findings = DeterministicValidator.validate(
+        convertedModel.racks,
+        convertedModel.objects,
+        convertedModel.ports,
+        convertedModel.cables,
+        convertedModel.power
+      );
+
+      // Check: zero critical physical, zero power errors, zero speed/media mismatch errors
+      const critical = findings.filter(f => f.severity === 'CRITICAL');
+      const powerErrors = findings.filter(f => f.category === 'power');
+      const networkMismatches = findings.filter(f => f.description.includes('Speed mismatch') || f.description.includes('Media mismatch'));
+
+      expect(critical).toHaveLength(0);
+      expect(powerErrors).toHaveLength(0);
+      expect(networkMismatches).toHaveLength(0);
     });
   });
 });

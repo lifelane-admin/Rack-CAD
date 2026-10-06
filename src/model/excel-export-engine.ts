@@ -130,6 +130,27 @@ export class ExcelExportEngine {
         }
       }
 
+      // Append 0U side-mounted vertical infrastructure (e.g. vertical PDUs)
+      const sideMounted = objectsInRack.filter(
+        o => o.heightU === 0 || o.uStart === 0 || o.subCategory?.toLowerCase().includes('vertical')
+      );
+      if (sideMounted.length > 0) {
+        rackRows.push(['—', '—', '── SIDE-MOUNTED 0U INFRASTRUCTURE ──', '—', '—', '—', '—', '—', '—']);
+        for (const item of sideMounted) {
+          rackRows.push([
+            '0U (Side)',
+            objIdMap.get(item.objectId) || item.objectId,
+            item.objectName,
+            item.manufacturer,
+            item.model,
+            '0U (Vertical)',
+            String(item.powerWatts),
+            item.psuRedundancy || 'N/A',
+            item.status,
+          ]);
+        }
+      }
+
       sheets.push({ name: sheetName, rows: rackRows });
     }
 
@@ -147,9 +168,9 @@ export class ExcelExportEngine {
           o.model,
           o.serialNumber || 'N/A',
           this.resolveRackName(o.rackId, model),
-          `U${o.uStart}`,
-          `U${o.uEnd}`,
-          `${o.heightU}U`,
+          o.heightU === 0 || o.uStart === 0 ? '0U (Side)' : `U${o.uStart}`,
+          o.heightU === 0 || o.uStart === 0 ? '0U (Side)' : `U${o.uEnd}`,
+          o.heightU === 0 || o.uStart === 0 ? '0U (Side-Mount)' : `${o.heightU}U`,
           String(o.powerWatts),
           String(o.weight),
           o.haPairId ? (this.resolveObjectName(o.haPairId, model) || 'Configured') : 'None',
@@ -363,9 +384,9 @@ export class ExcelExportEngine {
     if (!objectId) return '—';
     const obj = model.getObject(objectId);
     if (obj) {
-      const uStr = obj.uStart ? ` [U${obj.uStart}]` : '';
+      const uStr = obj.uStart ? ` [U${obj.uStart}]` : (obj.heightU === 0 || obj.subCategory?.toLowerCase().includes('vertical') ? ' [0U Side]' : '');
       const baseName = obj.objectName || obj.model || obj.category;
-      return baseName.includes(`[U${obj.uStart}]`) || baseName.includes(`U${obj.uStart}`)
+      return baseName.includes(`[U${obj.uStart}]`) || baseName.includes(`U${obj.uStart}`) || (baseName.includes('[0U Side]') && !obj.uStart)
         ? baseName
         : `${baseName}${uStr}`;
     }

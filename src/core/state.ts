@@ -772,17 +772,20 @@ export function injectEarPorts(
 
   const height   = heightUnits * RACK_CONSTANTS.RU_HEIGHT;
   const earPorts: PortData[] = [];
+  const bodyDataPorts = filtered.filter(p => p.type !== 'management' && p.type !== 'power' && p.type !== 'console');
 
   // ── Left side: 1 hole per data port + 1 power hole (no "Res" gaps) ──
   const totalLeftHoles = leftDataEntries.length + 1;
   const leftPitch = height / totalLeftHoles;
 
   leftDataEntries.forEach((entry, idx) => {
+    const refPort = bodyDataPorts[idx] || (bodyDataPorts.length > 0 ? bodyDataPorts[idx % bodyDataPorts.length] : null);
     earPorts.push({
       id: `${deviceId}-ear-left-nic${idx + 1}`,
       deviceId,
       name: `Left Ear S${entry.slotNumber}-P${entry.portInSlot}`,
-      type: 'rj45' as const,
+      type: (refPort?.type as any) || 'rj45',
+      speed: refPort?.speed,
       relativeX: leftX,
       relativeY: (idx + 0.5) * leftPitch,
       connected: false,
@@ -795,6 +798,7 @@ export function injectEarPorts(
     deviceId,
     name: 'Left Ear Power',
     type: 'power' as const,
+    speed: 'Power',
     relativeX: leftX,
     relativeY: (leftDataEntries.length + 0.5) * leftPitch,
     connected: false,
@@ -807,11 +811,14 @@ export function injectEarPorts(
   let rightIdx = 0;
 
   rightDataEntries.forEach((entry, idx) => {
+    const globalIdx = leftCount + idx;
+    const refPort = bodyDataPorts[globalIdx] || (bodyDataPorts.length > 0 ? bodyDataPorts[globalIdx % bodyDataPorts.length] : null);
     earPorts.push({
       id: `${deviceId}-ear-right-nic${idx + 1}`,
       deviceId,
       name: `Right Ear S${entry.slotNumber}-P${entry.portInSlot}`,
-      type: 'rj45' as const,
+      type: (refPort?.type as any) || 'rj45',
+      speed: refPort?.speed,
       relativeX: rightX,
       relativeY: (idx + 0.5) * rightPitch,
       connected: false,
@@ -827,6 +834,7 @@ export function injectEarPorts(
       deviceId,
       name: `Right Ear ${mgmtLabel}`,
       type: 'management' as const,
+      speed: mgmtBodyPort?.speed || '1 Gbps',
       relativeX: rightX,
       relativeY: (rightIdx + 0.5) * rightPitch,
       connected: false,
@@ -841,6 +849,7 @@ export function injectEarPorts(
     deviceId,
     name: 'Right Ear Power',
     type: 'power' as const,
+    speed: 'Power',
     relativeX: rightX,
     relativeY: (rightIdx + 0.5) * rightPitch,
     connected: false,

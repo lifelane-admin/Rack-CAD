@@ -57,37 +57,50 @@ export class ModelMigrationAdapter {
     // Map devices to PhysicalObjects
     for (const d of appState.devices || []) {
       const tmpl = getTemplate(d.templateId);
-      const heightU = tmpl ? tmpl.heightUnits : 1;
-      const category: ObjectCategory = this.mapCategory(tmpl?.category || 'compute');
+      const isZeroU =
+        tmpl?.heightUnits === 0 ||
+        tmpl?.mountType === 'side' ||
+        d.startUnit === 0 ||
+        tmpl?.name?.toLowerCase().includes('vertical') ||
+        d.name?.toLowerCase().includes('vertical pdu');
+      const heightU = isZeroU ? 0 : (tmpl ? tmpl.heightUnits : 1);
+      const inferredCategory = tmpl?.category ||
+        (d.name?.toLowerCase().includes('switch') ? 'switch' :
+         d.name?.toLowerCase().includes('router') ? 'router' :
+         d.name?.toLowerCase().includes('firewall') ? 'firewall' :
+         d.name?.toLowerCase().includes('pdu') ? 'pdu' :
+         d.name?.toLowerCase().includes('storage') || d.name?.toLowerCase().includes('san') || d.name?.toLowerCase().includes('nas') ? 'storage' :
+         'compute');
+      const category: ObjectCategory = this.mapCategory(inferredCategory);
 
       const obj: PhysicalObject = {
         objectId: d.id,
         objectName: d.name || tmpl?.name || d.id,
         category,
-        subCategory: tmpl?.name || 'Standard Equipment',
-        manufacturer: tmpl?.manufacturer || 'Standard OEM',
+        subCategory: tmpl?.name || (isZeroU ? 'Vertical PDU' : 'Standard Equipment'),
+        manufacturer: tmpl?.manufacturer || (isZeroU ? 'Legrand' : 'Standard OEM'),
         model: tmpl?.model || tmpl?.name || 'Enterprise Chassis',
         serialNumber: d.serialNumber || `SN-${d.id.toUpperCase()}`,
         rackId: d.rackId,
-        uStart: d.startUnit,
-        uEnd: d.startUnit + heightU - 1,
+        uStart: isZeroU ? 0 : d.startUnit,
+        uEnd: isZeroU ? 0 : d.startUnit + heightU - 1,
         heightU,
-        width: 482.6,
-        depth: d.device3D?.depth ?? tmpl?.default3D?.depth ?? 750,
-        height: heightU * 44.45,
-        weight: heightU * 12.5, // approx kg
+        width: isZeroU ? (tmpl?.pduWidth || 46) : 482.6,
+        depth: d.device3D?.depth ?? tmpl?.default3D?.depth ?? (isZeroU ? 50 : 750),
+        height: isZeroU ? 1800 : heightU * 44.45,
+        weight: isZeroU ? 5.5 : heightU * 12.5, // approx kg
         positionX: 0,
         positionY: 0,
         positionZ: 0,
         rotation: 0,
-        powerWatts: d.powerWatts ?? tmpl?.powerWatts ?? 450,
-        powerVA: Math.round((d.powerWatts ?? tmpl?.powerWatts ?? 450) * 1.08),
-        psuCount: category === 'compute' ? 2 : 1,
+        powerWatts: d.powerWatts ?? tmpl?.powerWatts ?? (isZeroU ? 0 : 450),
+        powerVA: Math.round((d.powerWatts ?? tmpl?.powerWatts ?? (isZeroU ? 0 : 450)) * 1.08),
+        psuCount: category === 'compute' ? 2 : (category === 'power' ? 0 : 1),
         psuRedundancy: category === 'compute' ? '1+1' : 'None',
-        airflowDirection: 'Front-to-Back',
+        airflowDirection: isZeroU ? 'Passive' : 'Front-to-Back',
         frontRearOrientation: 'Front',
         status: 'Active',
-        notes: d.description,
+        notes: isZeroU ? '0U Side-Mount Equipment' : d.description,
       };
 
       // Check HA Pair heuristic
@@ -120,16 +133,22 @@ export class ModelMigrationAdapter {
           }
         }
 
+        const isEarPower =
+          p.id.includes('-ear-') &&
+          (p.type === 'power' ||
+            label.toLowerCase().includes('power') ||
+            p.id.toLowerCase().includes('power'));
+
         const portObj: PhysicalPort = {
           portId: p.id,
           objectId: d.id,
-          portGroup: p.group || (p.type === 'management' ? 'Management' : p.type === 'power' ? 'Power' : 'Data'),
-          portType: p.type,
-          speed: this.mapSpeed(p.speed, p.type),
-          connector: this.mapConnector(p.type),
+          portGroup: isEarPower ? 'Power' : (p.group || (p.type === 'management' ? 'Management' : p.type === 'power' ? 'Power' : 'Data')),
+          portType: isEarPower ? 'power' : p.type,
+          speed: isEarPower ? 'Power' : this.mapSpeed(p.speed, p.type),
+          connector: isEarPower ? 'C13' : this.mapConnector(p.type),
           physicalPosition: { x: p.relativeX, y: p.relativeY, side: 'front' },
           label,
-          purpose: p.description || label,
+          purpose: isEarPower ? 'PSU Power Connection' : (p.description || label),
           status: p.connected ? 'Connected' : 'Available',
         };
         ports.push(portObj);
@@ -190,22 +209,75 @@ export class ModelMigrationAdapter {
       const srcObj = srcPort ? objects.find(o => o.objectId === srcPort.objectId) : null;
       const destObj = destPort ? objects.find(o => o.objectId === destPort.objectId) : null;
 
+      // Detect if this cable is a power connection
+      const isPowerCable =
+        c.type === 'power' ||
+        c.type === 'power-redundant' ||
+        c.type === 'c13-power' ||
+        c.type === 'c19-power' ||
+        c.powerCableType === 'power' ||
+        c.sourcePortId?.startsWith('outlet-') ||
+        c.destPortId?.startsWith('outlet-') ||
+        srcPort?.portType === 'power' ||
+        destPort?.portType === 'power' ||
+        srcPort?.portGroup === 'Power' ||
+        destPort?.portGroup === 'Power' ||
+        srcPort?.label?.toLowerCase().includes('power') ||
+        destPort?.label?.toLowerCase().includes('power') ||
+        srcPort?.portId?.toLowerCase().includes('power') ||
+        destPort?.portId?.toLowerCase().includes('power') ||
+        (srcObj?.category === 'power' && destObj?.category !== 'power') ||
+        (destObj?.category === 'power' && srcObj?.category !== 'power');
+
+      // For data ear ports: inherit speed and connector from connected switch/partner port if available
+      if (!isPowerCable) {
+        if (srcPort?.portId.includes('-ear-') && !srcPort.portId.includes('mgmt') && destPort && destPort.speed !== '1GbE' && destPort.speed !== 'Management') {
+          srcPort.speed = destPort.speed;
+          srcPort.connector = destPort.connector;
+        } else if (destPort?.portId.includes('-ear-') && !destPort.portId.includes('mgmt') && srcPort && srcPort.speed !== '1GbE' && srcPort.speed !== 'Management') {
+          destPort.speed = srcPort.speed;
+          destPort.connector = srcPort.connector;
+        }
+      }
+
       const cable: PhysicalCable = {
         cableId: c.id,
         sourceObject: srcObj?.objectId || (srcPort ? srcPort.objectId : ''),
         sourcePort: c.sourcePortId || '',
         destinationObject: destObj?.objectId || (destPort ? destPort.objectId : ''),
         destinationPort: c.destPortId || '',
-        media: c.type === 'power' ? 'Power' : c.type.includes('om') || c.type.includes('fiber') ? 'Fiber' : c.type.includes('dac') ? 'DAC' : 'Copper',
-        speed: c.type.includes('qsfp') ? '100GbE' : c.type.includes('sfp28') ? '25GbE' : '10GbE',
-        connectorA: srcPort?.connector || 'RJ45',
-        connectorB: destPort?.connector || (c.type === 'power' ? 'C13' : 'RJ45'),
+        media: isPowerCable
+          ? 'Power'
+          : c.type.includes('om') || c.type.includes('fiber')
+          ? 'Fiber'
+          : c.type.includes('dac')
+          ? 'DAC'
+          : (srcPort?.connector === 'SFP+' || destPort?.connector === 'SFP+' ? 'DAC' : 'Copper'),
+        speed: isPowerCable
+          ? 'Power'
+          : c.type.includes('qsfp') || c.type.includes('100')
+          ? '100GbE'
+          : c.type.includes('sfp28') || c.type.includes('25')
+          ? '25GbE'
+          : srcPort?.speed && srcPort.speed !== '1GbE' && srcPort.speed !== 'Management'
+          ? srcPort.speed
+          : destPort?.speed && destPort.speed !== '1GbE' && destPort.speed !== 'Management'
+          ? destPort.speed
+          : c.type.includes('sfp') || c.type.includes('10')
+          ? '10GbE'
+          : '1GbE',
+        connectorA: isPowerCable ? 'C13' : (srcPort?.connector || 'RJ45'),
+        connectorB: isPowerCable ? 'C13' : (destPort?.connector || (isPowerCable ? 'C13' : 'RJ45')),
         length: c.length ?? 2.5,
         color: c.color || '#3b82f6',
         primaryRoute: c.sidePreference === 'right' ? 'Right VCM' : 'Left VCM',
         rackA: srcObj?.rackId || '',
         rackB: destObj?.rackId || srcObj?.rackId || '',
-        purpose: c.type === 'idrac' ? 'Management' : c.type === 'vm-network' ? 'Production' : c.type === 'power' ? 'Power' : 'Production',
+        purpose: isPowerCable
+          ? 'Power'
+          : c.type === 'idrac' || c.type === 'console'
+          ? 'Management'
+          : 'Production',
         vlan: c.vlan,
         vlanMode: c.vlanMode,
         portGroup: c.portGroup,
@@ -215,20 +287,102 @@ export class ModelMigrationAdapter {
       cables.push(cable);
 
       // Power Mappings
-      if (c.type === 'power' && srcObj) {
-        power.push({
-          powerId: `pwr-${c.id}`,
-          objectId: srcObj.objectId,
-          psuId: '1',
-          psuLabel: 'PSU 1',
-          cableId: c.id,
-          pduId: destObj?.objectId || (destPort ? destPort.objectId : 'PDU-A'),
-          pduSocketId: destPort?.portId || c.destPortId || 'C13-1',
-          socketType: 'C13',
-          powerFeed: (destObj?.objectName || destObj?.objectId || '').toLowerCase().includes('b') || (destPort?.portId || '').includes('right') ? 'B' : 'A',
-          powerWatts: srcObj.powerWatts,
-          redundancyStatus: 'redundant',
-        });
+      if (isPowerCable) {
+        // Determine consumer (e.g., server) and supplier (PDU)
+        let consumerObj = srcObj;
+        let consumerPort = srcPort;
+        let supplierObj = destObj;
+        let supplierPort = destPort;
+
+        if (
+          srcObj?.category === 'power' ||
+          srcPort?.portId?.startsWith('outlet-') ||
+          (destPort?.portId.includes('-ear-') && (destPort.portId.includes('power') || destPort.label.toLowerCase().includes('power')))
+        ) {
+          consumerObj = destObj;
+          consumerPort = destPort;
+          supplierObj = srcObj;
+          supplierPort = srcPort;
+        }
+
+        if (consumerObj) {
+          const existingConsumerPower = power.filter(p => p.objectId === consumerObj!.objectId);
+
+          // Determine PSU ID (PSU 1 vs PSU 2)
+          let psuId = '1';
+          let psuLabel = 'PSU 1';
+
+          const portHint = (consumerPort?.portId || '') + ' ' + (consumerPort?.label || '');
+          const cableHint = c.name + ' ' + (c.notes || '');
+
+          if (
+            portHint.toLowerCase().includes('right') ||
+            portHint.toLowerCase().includes('psu2') ||
+            portHint.toLowerCase().includes('psu 2') ||
+            cableHint.toLowerCase().includes('psu2') ||
+            cableHint.toLowerCase().includes('psu 2') ||
+            cableHint.toLowerCase().includes('feed b') ||
+            cableHint.toLowerCase().includes('feed-b') ||
+            c.type === 'power-redundant' ||
+            c.sidePreference === 'right' ||
+            existingConsumerPower.length === 1
+          ) {
+            psuId = '2';
+            psuLabel = 'PSU 2';
+          } else if (
+            portHint.toLowerCase().includes('left') ||
+            portHint.toLowerCase().includes('psu1') ||
+            portHint.toLowerCase().includes('psu 1') ||
+            cableHint.toLowerCase().includes('psu1') ||
+            cableHint.toLowerCase().includes('psu 1') ||
+            existingConsumerPower.length === 0
+          ) {
+            psuId = '1';
+            psuLabel = 'PSU 1';
+          } else {
+            psuId = String(existingConsumerPower.length + 1);
+            psuLabel = `PSU ${psuId}`;
+          }
+
+          // Determine Power Feed (A vs B)
+          let powerFeed: 'A' | 'B' = 'A';
+          const pduNameHint = (supplierObj?.objectName || supplierObj?.objectId || '').toLowerCase();
+          const pduPortHint = (supplierPort?.portId || '').toLowerCase();
+
+          if (
+            pduNameHint.includes('feed b') ||
+            pduNameHint.includes('feed-b') ||
+            pduNameHint.includes('-b') ||
+            pduNameHint.includes(' b') ||
+            pduNameHint.includes('pdu-b') ||
+            pduNameHint.includes('right') ||
+            pduPortHint.includes('right') ||
+            psuId === '2'
+          ) {
+            powerFeed = 'B';
+          } else {
+            powerFeed = 'A';
+          }
+
+          // If this host already has a PSU on feed A and connects to this PDU, ensure feed B
+          if (existingConsumerPower.length === 1 && existingConsumerPower[0].powerFeed === 'A' && powerFeed === 'A') {
+            powerFeed = 'B';
+          }
+
+          power.push({
+            powerId: `pwr-${c.id}`,
+            objectId: consumerObj.objectId,
+            psuId,
+            psuLabel,
+            cableId: c.id,
+            pduId: supplierObj?.objectId || (supplierPort ? supplierPort.objectId : (powerFeed === 'B' ? 'PDU-B' : 'PDU-A')),
+            pduSocketId: supplierPort?.portId || c.destPortId || (powerFeed === 'B' ? 'C13-B1' : 'C13-A1'),
+            socketType: 'C13',
+            powerFeed,
+            powerWatts: Math.round(consumerObj.powerWatts / Math.max(1, consumerObj.psuCount || 2)),
+            redundancyStatus: 'redundant',
+          });
+        }
       }
     }
 
@@ -364,32 +518,37 @@ export class ModelMigrationAdapter {
 
   private static mapSpeed(speed?: string, type?: string): PortSpeed {
     if (speed) {
-      if (speed.includes('400')) return '400GbE';
-      if (speed.includes('100')) return '100GbE';
-      if (speed.includes('40')) return '40GbE';
-      if (speed.includes('25')) return '25GbE';
-      if (speed.includes('10')) return '10GbE';
-      if (speed.includes('1')) return '1GbE';
+      const s = speed.toLowerCase();
+      if (s.includes('400')) return '400GbE';
+      if (s.includes('100')) return '100GbE';
+      if (s.includes('40')) return '40GbE';
+      if (s.includes('25')) return '25GbE';
+      if (s.includes('10')) return '10GbE';
+      if (s.includes('1')) return '1GbE';
     }
-    if (type === 'qsfp28') return '100GbE';
-    if (type === 'sfp28') return '25GbE';
-    if (type === 'sfp-plus') return '10GbE';
-    if (type === 'management') return 'Management';
-    if (type === 'console') return 'Console';
-    if (type === 'power') return 'Power';
+    const t = (type || '').toLowerCase();
+    if (t.includes('qsfp28') || t.includes('100g')) return '100GbE';
+    if (t.includes('qsfp') || t.includes('40g')) return '40GbE';
+    if (t.includes('sfp28') || t.includes('25g')) return '25GbE';
+    if (t.includes('sfp+') || t.includes('sfp-plus') || t.includes('10g')) return '10GbE';
+    if (t.includes('sfp')) return '1GbE';
+    if (t.includes('management') || t.includes('idrac') || t.includes('ilo') || t.includes('bmc')) return 'Management';
+    if (t.includes('console')) return 'Console';
+    if (t.includes('power')) return 'Power';
     return '1GbE';
   }
 
   private static mapConnector(type: string): ConnectorType {
-    switch (type.toLowerCase()) {
-      case 'sfp': return 'SFP';
-      case 'sfp-plus': return 'SFP+';
-      case 'sfp28': return 'SFP28';
-      case 'qsfp': return 'QSFP+';
-      case 'qsfp28': return 'QSFP28';
-      case 'power': return 'C13';
-      case 'rj45':
-      default: return 'RJ45';
-    }
+    const t = (type || '').toLowerCase();
+    if (t.includes('qsfp28')) return 'QSFP28';
+    if (t.includes('qsfp')) return 'QSFP+';
+    if (t.includes('sfp28')) return 'SFP28';
+    if (t.includes('sfp+') || t.includes('sfp-plus')) return 'SFP+';
+    if (t.includes('sfp')) return 'SFP';
+    if (t.includes('power') || t.includes('c13') || t.includes('c14')) return 'C13';
+    if (t.includes('c19') || t.includes('c20')) return 'C19';
+    if (t.includes('lc')) return 'LC';
+    if (t.includes('mpo')) return 'MPO';
+    return 'RJ45';
   }
 }

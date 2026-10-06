@@ -42,10 +42,24 @@ export class DeterministicValidator {
 
       // Check rack overflow & collisions
       for (const obj of objectsInRack) {
+        // Skip 0U vertical equipment (e.g., vertical side-mount PDUs, 0U cable managers)
+        if (
+          obj.heightU === 0 ||
+          obj.uStart === 0 ||
+          obj.subCategory?.toLowerCase().includes('vertical') ||
+          (obj.category === 'power' && obj.uStart === 0) ||
+          obj.notes?.toLowerCase().includes('0u') ||
+          obj.notes?.toLowerCase().includes('side-mount')
+        ) {
+          continue;
+        }
+
         const uRes = USpaceEngine.validatePlacement(rack, objects, {
           objectId: obj.objectId,
           uStart: obj.uStart,
           heightU: obj.heightU,
+          category: obj.category,
+          subCategory: obj.subCategory,
         });
 
         for (const err of uRes.errors) {
@@ -202,6 +216,18 @@ export class DeterministicValidator {
         continue;
       }
 
+      // Skip power connections from network media and speed mismatch validation
+      if (
+        cable.media === 'Power' ||
+        cable.purpose === 'Power' ||
+        srcPort.portType === 'power' ||
+        destPort.portType === 'power' ||
+        srcPort.portGroup === 'Power' ||
+        destPort.portGroup === 'Power'
+      ) {
+        continue;
+      }
+
       // Connector compatibility
       if (cable.media === 'Fiber' && (srcPort.connector === 'RJ45' || destPort.connector === 'RJ45')) {
         findings.push({
@@ -216,8 +242,16 @@ export class DeterministicValidator {
         });
       }
 
-      // Speed mismatch warning
-      if (srcPort.speed && destPort.speed && srcPort.speed !== destPort.speed && srcPort.speed !== 'Management' && destPort.speed !== 'Management') {
+      // Speed mismatch warning (exclude management and auto-negotiation compatibility)
+      if (
+        srcPort.speed &&
+        destPort.speed &&
+        srcPort.speed !== destPort.speed &&
+        srcPort.speed !== 'Management' &&
+        destPort.speed !== 'Management' &&
+        srcPort.speed !== 'Power' &&
+        destPort.speed !== 'Power'
+      ) {
         findings.push({
           findingId: nextId(),
           severity: 'MEDIUM',

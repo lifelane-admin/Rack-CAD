@@ -33,10 +33,22 @@ export class USpaceEngine {
   static validatePlacement(
     rack: PhysicalRack,
     existingObjects: PhysicalObject[],
-    candidate: { objectId?: string; uStart: number; heightU: number }
+    candidate: { objectId?: string; uStart: number; heightU: number; category?: string; subCategory?: string }
   ): UValidationResult {
     const errors: string[] = [];
     const { objectId, uStart, heightU } = candidate;
+
+    // 0U side-mount vertical equipment (Vertical PDUs, 0U managers) does not occupy horizontal RU slots
+    const isZeroU =
+      heightU === 0 ||
+      uStart === 0 ||
+      (candidate as any).isZeroU ||
+      candidate.category === 'power' && uStart === 0 ||
+      candidate.subCategory?.toLowerCase().includes('vertical');
+
+    if (isZeroU) {
+      return { valid: true, errors: [] };
+    }
 
     if (!Number.isInteger(uStart) || uStart < 1) {
       errors.push(`Invalid U position: uStart must be an integer >= 1 (got ${uStart}).`);
@@ -56,7 +68,7 @@ export class USpaceEngine {
 
     // Check collisions with other objects in this rack
     const objectsInRack = existingObjects.filter(
-      obj => obj.rackId === rack.rackId && obj.objectId !== objectId
+      obj => obj.rackId === rack.rackId && obj.objectId !== objectId && obj.heightU > 0 && obj.uStart > 0 && !obj.subCategory?.toLowerCase().includes('vertical')
     );
 
     for (const obj of objectsInRack) {
