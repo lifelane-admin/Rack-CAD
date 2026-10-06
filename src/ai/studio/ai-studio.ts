@@ -15,6 +15,8 @@ import { AIWorkflowOrchestrator, WORKFLOW_RAIL_STEPS } from '../workflow/workflo
 import { WorkflowStageRenderers } from '../workflow/stage-renderers';
 import { WorkflowStageId } from '../workflow/types';
 import { StudioRackVisualizer, StudioViewMode } from './studio-rack-visualizer';
+import { authStore } from '../../auth/auth-store';
+import { showUserProfileModal } from '../../components/user-profile-modal';
 import './ai-studio.css';
 
 export class RackSlicerAIStudio {
@@ -57,10 +59,13 @@ export class RackSlicerAIStudio {
     div.className = 'rackslicer-ai-studio hidden';
     div.id = 'rackslicer-ai-studio';
 
+    const currentUser = authStore.getCurrentUser();
+    const userInitials = (currentUser?.name ? currentUser.name.split(' ').map(n => n.charAt(0)).join('').slice(0, 2) : 'RS').toUpperCase();
+
     div.innerHTML = `
       <!-- Top Navigation Header (54px) -->
       <header class="ai-studio-top">
-        <div class="ai-studio-logo">
+        <div class="ai-studio-logo" style="cursor:pointer;" title="Return to Launchpad & Home">
           <span class="ai-studio-mark"></span>
           <span>RackSlicer</span>
         </div>
@@ -78,8 +83,8 @@ export class RackSlicerAIStudio {
           <button class="ai-studio-header-btn" id="top-btn-settings" title="Configure AI Models, API Keys & Latency LEDs">
             ⚙️ API Settings & Keys
           </button>
-          <span style="font-size:12px; color:#64748b;">Project: <strong style="color:#0f172a;" id="top-project-name">DC01-Production</strong> ⌄</span>
-          <span class="ai-studio-user" title="Enterprise Architect Profile">JD</span>
+          <span style="font-size:12px; color:#64748b; cursor:pointer;" id="top-project-pill" title="View all designs in Workspace Dashboard">Project: <strong style="color:#0f172a;" id="top-project-name">DC01-Production</strong> ⌄</span>
+          <span class="ai-studio-user" id="top-user-avatar" title="${currentUser.name} (${currentUser.plan.toUpperCase()} Plan)" style="cursor:pointer;">${userInitials}</span>
         </div>
       </header>
 
@@ -140,10 +145,45 @@ export class RackSlicerAIStudio {
   }
 
   private bindEvents(): void {
-    // Navigation
+    // Navigation & Header Links
+    this.el.querySelector('.ai-studio-logo')?.addEventListener('click', () => {
+      this.close();
+      eventBus.emit('app:show-landing' as any, undefined);
+    });
+
+    this.el.querySelector('#nav-btn-ai')?.addEventListener('click', () => {
+      this.showToast('✦ AI Studio is currently active');
+    });
+
     this.el.querySelector('#nav-btn-canvas')?.addEventListener('click', () => {
       this.close();
       eventBus.emit('view:switch', 'rack');
+    });
+
+    this.el.querySelector('#nav-btn-library')?.addEventListener('click', () => {
+      this.close();
+      eventBus.emit('view:switch', 'rack');
+      eventBus.emit('sidebar:open' as any, undefined);
+      eventBus.emit('notification', { message: '📦 Equipment & Component Library opened in sidebar', type: 'info' });
+    });
+
+    this.el.querySelector('#nav-btn-designs')?.addEventListener('click', () => {
+      this.close();
+      eventBus.emit('saas:open-dashboard' as any, undefined);
+    });
+
+    this.el.querySelector('#nav-btn-reports')?.addEventListener('click', () => {
+      this.close();
+      eventBus.emit('export:report' as any, undefined);
+    });
+
+    this.el.querySelector('#top-project-pill')?.addEventListener('click', () => {
+      this.close();
+      eventBus.emit('saas:open-dashboard' as any, undefined);
+    });
+
+    this.el.querySelector('#top-user-avatar')?.addEventListener('click', () => {
+      showUserProfileModal(() => {});
     });
 
     this.el.querySelector('#btn-restart-workflow')?.addEventListener('click', () => {
