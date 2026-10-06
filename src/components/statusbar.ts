@@ -30,7 +30,14 @@ export class StatusBar {
     EventBus.on('state:changed', () => {
       this.updateStats();
     });
+
+    EventBus.on('autosave:status-changed' as any, (data: any) => {
+      this.updateAutosaveStatus(data);
+    });
   }
+
+  private autosaveText: string = '☁ Auto-Recovery Active';
+  private autosaveColor: string = '#34d399';
 
   render() {
     this.container.innerHTML = '';
@@ -54,13 +61,43 @@ export class StatusBar {
     statsSection.className = 'status-section';
     statsSection.id = 'status-stats';
 
+    const divider3 = document.createElement('div');
+    divider3.className = 'status-divider';
+
+    const autosaveSection = document.createElement('div');
+    autosaveSection.className = 'status-section';
+    autosaveSection.id = 'status-autosave';
+    autosaveSection.style.cssText = 'cursor: pointer; display: flex; align-items: center; gap: 4px;';
+    autosaveSection.title = 'Click to open Auto-Recovery Vault';
+    autosaveSection.addEventListener('click', () => {
+      EventBus.emit('autosave:open-vault' as any, undefined);
+    });
+
     this.container.appendChild(toolSection);
     this.container.appendChild(divider1);
     this.container.appendChild(mouseSection);
     this.container.appendChild(divider2);
     this.container.appendChild(statsSection);
+    this.container.appendChild(divider3);
+    this.container.appendChild(autosaveSection);
 
     this.updateStats();
+    this.updateDisplay();
+  }
+
+  private updateAutosaveStatus(data: any) {
+    if (!data) return;
+    if (data.status === 'unsaved') {
+      this.autosaveText = '● Unsaved Draft (Autosaving...)';
+      this.autosaveColor = '#fbbf24';
+    } else if (data.status === 'autosaved') {
+      const time = data.timestamp ? new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      this.autosaveText = `☁ Autosaved (${time})`;
+      this.autosaveColor = '#38bdf8';
+    } else {
+      this.autosaveText = '✓ Saved to File';
+      this.autosaveColor = '#34d399';
+    }
     this.updateDisplay();
   }
 
@@ -104,6 +141,11 @@ export class StatusBar {
 
     if (statsEl) {
       statsEl.innerHTML = `Zoom: ${this.zoomLevel}% | Racks: ${this.stats.racks} | Devices: ${this.stats.devices} | Cables: ${this.stats.cables}`;
+    }
+
+    const autosaveEl = this.container.querySelector('#status-autosave') as HTMLElement;
+    if (autosaveEl) {
+      autosaveEl.innerHTML = `<span style="color:${this.autosaveColor};font-weight:600;">${this.autosaveText}</span>`;
     }
   }
 }

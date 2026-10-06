@@ -47,7 +47,7 @@ import { deviceCatalog, getTemplate } from './library/device-catalog';
 import { RACK_TEMPLATES, VCM_TEMPLATES, createRackFromTemplate } from './library/rack-catalog';
 import { customRackModal } from './components/custom-rack-modal';
 import { generateId, distToSegment } from './utils/geometry';
-import { initExportHandlers, downloadFile, exportJSON } from './utils/export';
+import { initExportHandlers, downloadFile, exportJSON, importJSON } from './utils/export';
 import { computeSmartRouting, get3DefaultAnchors } from './utils/routing';
 import { reorderById, ZOrderDirection } from './utils/z-order';
 import { cloneDevice, cloneRack, cloneTextLabel, cloneImageAsset, cloneCloudNode, cloneCloudContainer, cloneCloudHierarchy, cloneCloudConnector } from './utils/clone';
@@ -71,6 +71,8 @@ import { hierarchyLevelsToLine, hierarchyLevelIcon } from './library/hierarchy-p
 import { showHierarchyInputModal } from './components/hierarchy-input-modal';
 import { showStartupModal, StartupChoice } from './components/startup-modal';
 import { SaaSWorkspaceDashboard } from './components/saas-dashboard';
+import { autoSaveManager } from './storage/autosave-manager';
+import { recoveryBanner } from './components/recovery-banner';
 
 type CloudConnectorSegmentKind = 'entryStub' | 'entry' | 'crossbar' | 'exit' | 'exitStub';
 /** Maps a dragged segment's `kind` (see routeHandlesFor() in cloud-connector-renderer.ts) to the
@@ -442,7 +444,15 @@ export class App {
     this.presenterDashboard = new PresenterDashboard();
 
     // Initialize SaaS Workspace Dashboard
-    this.saasDashboard = new SaaSWorkspaceDashboard((_project, category) => {
+    this.saasDashboard = new SaaSWorkspaceDashboard((project, category) => {
+      if (project && project.dataJson && project.dataJson !== '{}') {
+        try {
+          importJSON(project.dataJson);
+          autoSaveManager.markExplicitlySaved(project.name);
+        } catch (e) {
+          console.warn('Failed to load SaaS project state:', e);
+        }
+      }
       if (category) {
         if (category === 'rack') {
           stateManager.setState({ workflowMode: 'rack', activeElevationRackId: null });
@@ -745,6 +755,10 @@ export class App {
 
     // Set dark theme on body
     document.body.setAttribute('data-theme', stateManager.getState().theme);
+
+    // Initialize AutoSave & Crash Recovery Protection
+    autoSaveManager.init();
+    void recoveryBanner; // ensure initialized
 
     this.showStartupModal();
 
@@ -3814,6 +3828,12 @@ export class App {
       // L = Add Label (device-pointing) tool
       if (e.key === 'l' && !e.ctrlKey) eventBus.emit('tool:changed', 'label');
 
+      // Ctrl+H / Cmd+H = Home / Landing Page Launchpad
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'h' || e.key === 'H')) {
+        e.preventDefault();
+        (eventBus as any).emit('app:show-landing', undefined);
+      }
+
       // Ctrl+S = Save
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
@@ -5291,16 +5311,21 @@ export class App {
   private async saveProject(forcePicker: boolean): Promise<void> {
     const json = exportJSON();
     const hasPicker = typeof (window as any).showSaveFilePicker === 'function';
+    const draftMeta = autoSaveManager.getActiveMetadata();
+    const fallbackSuggested = draftMeta?.projectName
+      ? `${draftMeta.projectName.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().replace(/\s+/g, '-')}.json`
+      : `rack-slicer-${new Date().toISOString().slice(0, 10)}.json`;
 
     if (hasPicker && (forcePicker || !this.fileHandle)) {
       try {
         const handle = await (window as any).showSaveFilePicker({
-          suggestedName: this.fileHandle?.name ?? `rack-slicer-${new Date().toISOString().slice(0, 10)}.json`,
+          suggestedName: this.fileHandle?.name ?? fallbackSuggested,
           types: [{ description: 'Rack Slicer Project', accept: { 'application/json': ['.json'] } }],
         });
         this.fileHandle = handle;
         await this.writeToFileHandle(handle, json);
         stateManager.markSaved();
+        autoSaveManager.markExplicitlySaved(handle.name);
         eventBus.emit('notification', { message: `Project saved as ${handle.name}`, type: 'success' });
       } catch (err: any) {
         if (err?.name === 'AbortError') return; // user cancelled the picker
@@ -5313,6 +5338,7 @@ export class App {
       try {
         await this.writeToFileHandle(this.fileHandle, json);
         stateManager.markSaved();
+        autoSaveManager.markExplicitlySaved(this.fileHandle.name);
         eventBus.emit('notification', { message: `Project saved — ${this.fileHandle.name}`, type: 'success' });
       } catch (err) {
         eventBus.emit('notification', { message: `Save failed: ${err}`, type: 'error' });
@@ -5321,10 +5347,11 @@ export class App {
     }
 
     // Fallback: no File System Access API — same download-link behavior as before.
-    const filename = `rack-slicer-${new Date().toISOString().slice(0, 10)}.json`;
+    const filename = fallbackSuggested;
     try {
       downloadFile(json, filename, 'application/json');
       stateManager.markSaved();
+      autoSaveManager.markExplicitlySaved(filename);
       eventBus.emit('notification', { message: `Project saved — ${filename} downloaded`, type: 'success' });
     } catch (err) {
       eventBus.emit('notification', { message: `Save failed: ${err}`, type: 'error' });

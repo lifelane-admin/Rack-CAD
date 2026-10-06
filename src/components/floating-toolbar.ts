@@ -301,11 +301,19 @@ export class FloatingToolbar {
     ];
 
     this.element.innerHTML = `
-      <!-- Row 1: Drag handle, Select, Rotate, Move, Undo, Redo, Delete, Anchors, Inserts, 2D/3D, AI Mode -->
+      <!-- Row 1: Drag handle, Home, Select, Rotate, Move, Undo, Redo, Delete, Anchors, Inserts, 2D/3D, AI Mode -->
       <div class="ft-row" id="ft-row-1">
         <div class="ft-drag-handle" title="Drag to reposition toolbar">
           <span class="ft-drag-dots">⋮⋮</span>
         </div>
+
+        <!-- Home / Landing Page Button -->
+        <button class="ft-btn ft-btn-home" id="ft-home-landing" title="Return to Landing Page & Launchpad (Home)" style="color:#38bdf8;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+        </button>
 
         ${isDcWorkflow ? `
         <div class="ft-separator"></div>
@@ -520,6 +528,10 @@ export class FloatingToolbar {
 
   private bindEvents() {
     if (!this.element) return;
+
+    this.element.querySelector('#ft-home-landing')?.addEventListener('click', () => {
+      EventBus.emit('app:show-landing' as any, undefined);
+    });
 
     this.element.querySelector('#ft-swap-datacenter')?.addEventListener('click', () => {
       EventBus.emit('view:switch', 'datacenter');

@@ -42,11 +42,13 @@ const MENU_ICONS = {
 
 // ── Dropdown Item Icons ──────────────────────────────────────────────────────
 const ICONS = {
+  home: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#38bdf8" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
   new: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#38bdf8" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>',
   open: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>',
   save: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#34d399" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>',
   saveAs: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2"><path d="M17 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v5"/><path d="M19 19v-6m-3 3h6"/></svg>',
   demo: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fbbf24" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+  vault: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#eab308" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>',
   image: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#a78bfa" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
   undo: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#cbd5e1" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg>',
   redo: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#cbd5e1" stroke-width="2"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/></svg>',
@@ -101,13 +103,36 @@ export class Toolbar {
     // ── Zone 1 (Left): Brand + Menus ──────────────────────────────────────────
     const left = document.createElement('div');
     left.className = 'tb-left';
-    left.style.cssText = 'display:flex;align-items:center;gap:8px;flex-shrink:0;';
+    left.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
 
-    const brand = document.createElement('div');
-    brand.className = 'tb-brand';
-    brand.style.cssText = 'display:flex;align-items:center;gap:6px;font-weight:800;font-size:13px;color:#f0f6fc;margin-right:4px;letter-spacing:0.3px;';
+    // Clickable Brand Logo (navigates to Landing Page / Launchpad)
+    const brand = document.createElement('button');
+    brand.className = 'tb-brand tb-brand-btn';
+    brand.style.cssText = 'display:flex;align-items:center;gap:6px;font-weight:800;font-size:13px;color:#f0f6fc;margin-right:2px;letter-spacing:0.3px;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;transition:all 0.15s ease;';
     brand.innerHTML = '<span style="font-size:16px;">📦</span> <span>RACKSLICER</span>';
+    brand.title = 'Return to Landing Page & Launchpad (Home)';
+    brand.addEventListener('mouseenter', () => brand.style.background = 'rgba(255,255,255,0.08)');
+    brand.addEventListener('mouseleave', () => brand.style.background = 'none');
+    brand.addEventListener('click', () => EventBus.emit('app:show-landing' as any, undefined));
     left.appendChild(brand);
+
+    // Dedicated Home / Landing Page Button in Header
+    const homeBtn = document.createElement('button');
+    homeBtn.id = 'tb-home-btn';
+    homeBtn.className = 'toolbar-btn-pill tb-home-btn';
+    homeBtn.style.cssText = 'display:flex;align-items:center;gap:5px;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.35);color:#38bdf8;font-weight:700;font-size:12px;padding:3px 10px;border-radius:6px;cursor:pointer;transition:all 0.15s ease;white-space:nowrap;margin-right:4px;';
+    homeBtn.innerHTML = '<span style="font-size:13px;">🏠</span> <span>Home</span>';
+    homeBtn.title = 'Return to Landing Page & Design Launchpad (Ctrl+H)';
+    homeBtn.addEventListener('mouseenter', () => {
+      homeBtn.style.background = 'rgba(56,189,248,0.22)';
+      homeBtn.style.borderColor = 'rgba(56,189,248,0.6)';
+    });
+    homeBtn.addEventListener('mouseleave', () => {
+      homeBtn.style.background = 'rgba(56,189,248,0.12)';
+      homeBtn.style.borderColor = 'rgba(56,189,248,0.35)';
+    });
+    homeBtn.addEventListener('click', () => EventBus.emit('app:show-landing' as any, undefined));
+    left.appendChild(homeBtn);
 
     // ── Menu bar with modern grouped icons ───────────────────────────────────
     const menuBar = document.createElement('div');
@@ -115,10 +140,14 @@ export class Toolbar {
     menuBar.id = 'tb-menu-bar';
 
     const fileMenu = this.menu('File', MENU_ICONS.file, [
+      { label: 'Home / Launchpad', kbd: '⌘H', icon: ICONS.home, action: () => EventBus.emit('app:show-landing' as any, undefined) },
+      'sep',
       { label: 'New Project', kbd: '⌘N', icon: ICONS.new, action: () => EventBus.emit('file:new', undefined) },
       { label: 'Open…', kbd: '⌘O', icon: ICONS.open, action: () => EventBus.emit('file:open', undefined) },
       { label: 'Save', kbd: '⌘S', icon: ICONS.save, action: () => EventBus.emit('file:save', undefined) },
       { label: 'Save As…', kbd: '⌘⇧S', icon: ICONS.saveAs, action: () => EventBus.emit('file:save-as', undefined) },
+      'sep',
+      { label: 'Recover Previous Session…', icon: ICONS.vault, action: () => EventBus.emit('autosave:open-vault' as any, undefined) },
       'sep',
       { label: 'Load Demo…', icon: ICONS.demo, action: () => EventBus.emit('file:demo', undefined) },
       { label: 'Insert Image…', icon: ICONS.image, action: () => EventBus.emit('image:insert' as any, undefined) },
@@ -154,6 +183,8 @@ export class Toolbar {
     menuBar.appendChild(editMenu);
 
     const viewMenu = this.menu('View', MENU_ICONS.view, [
+      { label: 'Home / Launchpad', kbd: '⌘H', icon: ICONS.home, action: () => EventBus.emit('app:show-landing' as any, undefined) },
+      'sep',
       { label: 'Zoom In', kbd: '+', icon: ICONS.zoomIn, action: () => EventBus.emit('view:zoom-in', undefined) },
       { label: 'Zoom Out', kbd: '−', icon: ICONS.zoomOut, action: () => EventBus.emit('view:zoom-out', undefined) },
       'sep',
@@ -281,11 +312,43 @@ export class Toolbar {
     });
     right.appendChild(aiSettingsBtn);
 
-    // Cloud sync status indicator
-    const syncBadge = document.createElement('div');
-    syncBadge.style.cssText = 'font-size: 11px; color: #34d399; display: flex; align-items: center; gap: 4px; padding: 2px 8px; background: rgba(52, 211, 153, 0.1); border-radius: 12px; border: 1px solid rgba(52, 211, 153, 0.2); margin-left: 4px;';
-    syncBadge.innerHTML = '<span>☁</span> <span>Saved</span>';
+    // Interactive Autosave / Working Draft status indicator pill
+    const syncBadge = document.createElement('button');
+    syncBadge.id = 'tb-save-status-btn';
+    syncBadge.className = 'toolbar-btn tb-save-status-btn';
+    syncBadge.style.cssText = 'font-size: 11px; font-weight: 600; color: #34d399; display: flex; align-items: center; gap: 5px; padding: 3px 10px; background: rgba(52, 211, 153, 0.1); border-radius: 12px; border: 1px solid rgba(52, 211, 153, 0.25); margin-left: 4px; cursor: pointer; transition: all 0.2s ease; white-space: nowrap;';
+    syncBadge.innerHTML = '<span>✓</span> <span>Saved</span>';
+    syncBadge.title = 'All changes saved. Click to save project (Ctrl+S)';
+    syncBadge.addEventListener('click', () => {
+      EventBus.emit('file:save', undefined);
+    });
     right.appendChild(syncBadge);
+
+    // Listen to autosave status changes to update the indicator badge live
+    EventBus.on('autosave:status-changed' as any, (data: any) => {
+      const el = this.container.querySelector('#tb-save-status-btn') as HTMLElement;
+      if (!el || !data) return;
+      if (data.status === 'unsaved') {
+        el.style.color = '#fbbf24';
+        el.style.background = 'rgba(251, 191, 36, 0.14)';
+        el.style.borderColor = 'rgba(251, 191, 36, 0.45)';
+        el.innerHTML = '<span style="color:#fbbf24;font-size:9px;">●</span> <span>Unsaved Draft</span>';
+        el.title = 'You have unsaved changes! Auto-saving to recovery cache. Click to Save file (Ctrl+S).';
+      } else if (data.status === 'autosaved') {
+        const time = data.timestamp ? new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+        el.style.color = '#38bdf8';
+        el.style.background = 'rgba(56, 189, 248, 0.12)';
+        el.style.borderColor = 'rgba(56, 189, 248, 0.35)';
+        el.innerHTML = `<span>☁</span> <span>Autosaved ${time}</span>`;
+        el.title = `Autosaved to recovery cache at ${time}. Click to save to permanent file (Ctrl+S).`;
+      } else {
+        el.style.color = '#34d399';
+        el.style.background = 'rgba(52, 211, 153, 0.1)';
+        el.style.borderColor = 'rgba(52, 211, 153, 0.25)';
+        el.innerHTML = '<span>✓</span> <span>Saved</span>';
+        el.title = 'All changes saved to file. Click to save again (Ctrl+S).';
+      }
+    });
 
     // User Profile & Avatar Menu
     const user = authStore.getCurrentUser();

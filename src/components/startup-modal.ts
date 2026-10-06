@@ -3,6 +3,8 @@
 // each choice does exactly what its equivalent sidebar nav-tree entry does (see sidebar.ts's
 // NAV_TREE + focusCloudProvider()), it doesn't touch or reset any existing project data.
 
+import EventBus from '../core/event-bus';
+
 export type StartupChoice = 'ai' | 'rack' | 'datacenter' | 'flowchart' | 'aws' | 'azure' | 'gcp' | 'hybrid';
 
 interface StartupOption {
@@ -114,14 +116,34 @@ export function showStartupModal(onChoose: (choice: StartupChoice | null) => voi
   `).join('');
 
   modal.innerHTML = `
-    <div style="max-width: 960px; width: 92vw; text-align: center;">
-      <div style="display: flex; justify-content: flex-end;">
-        <button id="startup-modal-close" title="Skip" style="background: none; border: none; color: #8b949e; font-size: 20px; cursor: pointer; padding: 4px 8px;">✕</button>
+    <div style="max-width: 980px; width: 92vw; text-align: center; background: #0d1117; border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 28px 24px 24px; box-shadow: 0 25px 60px rgba(0,0,0,0.6); position: relative;">
+      <div style="position: absolute; top: 16px; right: 16px;">
+        <button id="startup-modal-close" title="Close / Return to active canvas (Esc)" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #8b949e; font-size: 14px; cursor: pointer; padding: 4px 10px; border-radius: 6px; transition: all 0.15s ease;">✕</button>
       </div>
-      <h1 style="margin: 0 0 6px; font-size: 24px; font-weight: 800;">What are you designing today?</h1>
-      <p style="margin: 0 0 28px; font-size: 13px; color: #8b949e;">Pick a starting point — you can switch views anytime from the sidebar.</p>
-      <div style="display: flex; flex-wrap: wrap; gap: 14px; justify-content: center;">
+
+      <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.25); color: #38bdf8; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;">
+        <span>📦</span> <span>RACK SLICER INFRASTRUCTURE SUITE • CLOUD EDITION</span>
+      </div>
+
+      <h1 style="margin: 0 0 6px; font-size: 24px; font-weight: 800; color: #f0f6fc;">Design Launchpad &amp; Mode Switcher</h1>
+      <p style="margin: 0 0 24px; font-size: 13px; color: #8b949e;">Select a workspace module below, or manage saved projects in the Projects Hub. Your active canvas state is preserved.</p>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 24px;">
         ${cardsHtml}
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.08);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button id="startup-open-dashboard" style="display: flex; align-items: center; gap: 6px; background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: all 0.15s ease;">
+            <span>📁</span> <span>Open Projects Hub &amp; SaaS Workspace</span>
+          </button>
+          <button id="startup-load-demo" style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: #c9d1d9; font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: all 0.15s ease;">
+            <span>⚡</span> <span>Load Demo Project</span>
+          </button>
+        </div>
+        <button id="startup-return-canvas" style="display: flex; align-items: center; gap: 6px; background: none; border: 1px solid rgba(255,255,255,0.15); color: #8b949e; font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: all 0.15s ease;">
+          <span>✕</span> <span>Return to Active Canvas</span>
+        </button>
       </div>
     </div>
   `;
@@ -133,6 +155,17 @@ export function showStartupModal(onChoose: (choice: StartupChoice | null) => voi
   });
 
   modal.querySelector('#startup-modal-close')?.addEventListener('click', () => closeModal(null));
+  modal.querySelector('#startup-return-canvas')?.addEventListener('click', () => closeModal(null));
+
+  modal.querySelector('#startup-open-dashboard')?.addEventListener('click', () => {
+    closeModal(null);
+    EventBus.emit('saas:open-dashboard' as any, undefined);
+  });
+
+  modal.querySelector('#startup-load-demo')?.addEventListener('click', () => {
+    closeModal(null);
+    EventBus.emit('file:demo', undefined);
+  });
 
   modal.querySelectorAll<HTMLButtonElement>('.startup-card').forEach(card => {
     card.addEventListener('mouseenter', () => {

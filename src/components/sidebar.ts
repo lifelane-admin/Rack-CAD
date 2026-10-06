@@ -92,7 +92,7 @@ export class Sidebar {
       moduleIcon = '🌐';
     }
 
-    // Header with Module Title & Switch Button
+    // Header with Module Title & Home Navigation Button
     const header = document.createElement('div');
     header.className = 'sidebar-header';
     header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.08);background:#0d1117;';
@@ -102,7 +102,9 @@ export class Sidebar {
         <span style="font-size:13px;font-weight:800;color:#f0f6fc;letter-spacing:0.3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${moduleTitle.toUpperCase()}</span>
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
-        <button id="sb-switch-module" class="dc-btn dc-btn-sm" style="padding:2px 8px;font-size:10px;font-weight:700;background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.35);border-radius:4px;cursor:pointer;" title="Switch to a different module or landing page">⇄ Switch</button>
+        <button id="sb-switch-module" class="dc-btn dc-btn-sm" style="display:flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;font-weight:700;background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);border-radius:5px;cursor:pointer;transition:all 0.15s ease;" title="Return to Landing Page & Design Launchpad (Home)">
+          <span>🏠</span> <span>Home</span>
+        </button>
         <button class="collapse-btn" title="Collapse Left Sidebar" style="background:none;border:none;color:#8b949e;cursor:pointer;font-size:14px;padding:2px 4px;">«</button>
       </div>
     `;
@@ -113,12 +115,32 @@ export class Sidebar {
       this.toggleCollapse();
     });
 
+    // Quick Navigation Bar: 1-click switch between Landing Page & SaaS Projects Hub
+    const quickBar = document.createElement('div');
+    quickBar.className = 'sb-quickbar';
+    quickBar.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 10px;background:#161b22;border-bottom:1px solid rgba(255,255,255,0.06);font-size:11px;';
+    quickBar.innerHTML = `
+      <button id="sb-quick-landing" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.22);color:#38bdf8;padding:4px 6px;border-radius:4px;font-weight:600;font-size:11px;cursor:pointer;transition:all 0.15s ease;" title="Open Design Launchpad & Landing Page">
+        <span style="font-size:12px;">🏠</span> <span>Landing Page</span>
+      </button>
+      <button id="sb-quick-projects" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#c9d1d9;padding:4px 6px;border-radius:4px;font-weight:600;font-size:11px;cursor:pointer;transition:all 0.15s ease;" title="Open SaaS Projects Hub & Dashboard">
+        <span style="font-size:12px;">📁</span> <span>Projects Hub</span>
+      </button>
+    `;
+    quickBar.querySelector('#sb-quick-landing')?.addEventListener('click', () => {
+      EventBus.emit('app:show-landing' as any, undefined);
+    });
+    quickBar.querySelector('#sb-quick-projects')?.addEventListener('click', () => {
+      EventBus.emit('saas:open-dashboard' as any, undefined);
+    });
+
     // Workspace tab bar (replaces nav tree)
     const tabBar = document.createElement('div');
     tabBar.className = 'sb-tabs';
     this.renderTabBar(tabBar, activeView);
 
     this.container.appendChild(header);
+    this.container.appendChild(quickBar);
     this.container.appendChild(tabBar);
 
     if (isDc) {

@@ -908,6 +908,22 @@ export interface AppEvents {
   'file:save-as': void;
   'file:open': void;
   'file:demo': void;
+  'autosave:status-changed': {
+    status: 'unsaved' | 'autosaved' | 'saved';
+    timestamp: number;
+    projectName: string;
+    isExplicitlySaved: boolean;
+  };
+  'autosave:recovery-available': {
+    draftId: string;
+    projectName: string;
+    timestamp: number;
+    deviceCount: number;
+    rackCount: number;
+    cableCount: number;
+  };
+  'autosave:open-vault': void;
+  'autosave:trigger-now': void;
   'view:zoom-in': void;
   'view:zoom-out': void;
   'view:zoom-fit': void;
