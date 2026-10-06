@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/IPsec VPN Tunnel</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <rect stroke="#FFFFFF" stroke-width="3" x="10" y="32" width="60" height="20" rx="10" fill="none"></rect>
+        <line x1="16" y1="42" x2="64" y2="42" stroke="#FFFFFF" stroke-width="3" stroke-dasharray="6,5" stroke-linecap="round"></line>
+        <circle fill="#FFFFFF" cx="40" cy="22" r="9"></circle>
+        <circle fill="#586069" cx="40" cy="20" r="3"></circle>
+        <rect fill="#586069" x="38" y="20" width="4" height="6"></rect>
+    </g>
+</svg>

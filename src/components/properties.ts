@@ -2498,6 +2498,36 @@ export class PropertiesPanel {
           ${cableTypes.map(t => `<option value="${t}" ${cable.type === t ? 'selected' : ''}>${t}</option>`).join('')}
         </select>
       </div>
+
+      <div style="margin: 12px 0 8px 0; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+        <label style="font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--accent-primary); display: flex; align-items: center; gap: 5px;">
+          🌐 Logical Network &amp; VLAN Configuration
+        </label>
+        
+        <div class="form-group" style="margin-top: 8px;">
+          <label style="font-size: 11px;">VLAN / Subnet Segment</label>
+          <input type="text" id="prop-cab-vlan" value="${cable.vlan || ''}" placeholder="e.g. 10, VLAN 20 (VM Traffic), or 10-40" />
+        </div>
+
+        <div class="form-group" style="margin-top: 6px;">
+          <label style="font-size: 11px;">VLAN Mode</label>
+          <select id="prop-cab-vlan-mode" style="font-size: 12px;">
+            <option value="access" ${cable.vlanMode === 'access' || !cable.vlanMode ? 'selected' : ''}>Access (Untagged Native)</option>
+            <option value="trunk" ${cable.vlanMode === 'trunk' ? 'selected' : ''}>Trunk (802.1Q Tagged Multi-VLAN)</option>
+            <option value="routed" ${cable.vlanMode === 'routed' ? 'selected' : ''}>Routed (Layer 3 Interface)</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-top: 6px;">
+          <label style="font-size: 11px;">Port Group / Virtual Switch</label>
+          <input type="text" id="prop-cab-portgroup" value="${cable.portGroup || ''}" placeholder="e.g. dpg-management, vSwitch0-Uplink" />
+        </div>
+
+        <div class="form-group" style="margin-top: 6px;">
+          <label style="font-size: 11px;">Network Traffic Role</label>
+          <input type="text" id="prop-cab-network-role" value="${cable.networkRole || ''}" placeholder="e.g. Production Data, iSCSI Storage, OOB" />
+        </div>
+      </div>
       <div class="form-group">
         <label>Lifecycle Status</label>
         <select id="prop-cab-status">
@@ -2704,6 +2734,18 @@ export class PropertiesPanel {
       EventBus.emit('cable:update', { id, data: { type, color } });
       const colorInput = container.querySelector('#prop-cab-color') as HTMLInputElement;
       if (colorInput) colorInput.value = color;
+    });
+    container.querySelector('#prop-cab-vlan')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cable:update', { id, data: { vlan: e.target.value.trim() } });
+    });
+    container.querySelector('#prop-cab-vlan-mode')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cable:update', { id, data: { vlanMode: e.target.value } });
+    });
+    container.querySelector('#prop-cab-portgroup')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cable:update', { id, data: { portGroup: e.target.value.trim() } });
+    });
+    container.querySelector('#prop-cab-network-role')?.addEventListener('change', (e: any) => {
+      EventBus.emit('cable:update', { id, data: { networkRole: e.target.value.trim() } });
     });
     container.querySelector('#prop-cab-color')?.addEventListener('change', (e: any) => {
       EventBus.emit('cable:update', { id, data: { color: e.target.value } });

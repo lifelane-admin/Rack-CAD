@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Active Directory / Domain Controller</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <rect fill="#FFFFFF" x="16" y="44" width="48" height="22" rx="3"></rect>
+        <circle fill="#586069" cx="24" cy="55" r="2.5"></circle>
+        <g stroke="#FFFFFF" stroke-width="2.5" fill="none" stroke-linecap="round">
+            <line x1="40" y1="34" x2="40" y2="24"></line>
+            <line x1="40" y1="24" x2="24" y2="16"></line>
+            <line x1="40" y1="24" x2="56" y2="16"></line>
+        </g>
+        <g fill="#FFFFFF">
+            <circle cx="40" cy="34" r="6"></circle>
+            <circle cx="24" cy="14" r="5"></circle>
+            <circle cx="56" cy="14" r="5"></circle>
+        </g>
+    </g>
+</svg>

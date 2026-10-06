@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400px" height="60px" viewBox="0 0 400 60" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>True-Scale/2U Storage Array (True Scale)</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+
+      <rect x="0" y="0" width="400" height="60" fill="#eef1f5"></rect>
+      <rect x="0" y="0" width="25" height="60" fill="#c4cad2" stroke="#24292f" stroke-width="0.5"></rect>
+      <rect x="375" y="0" width="25" height="60" fill="#c4cad2" stroke="#24292f" stroke-width="0.5"></rect>
+      <circle cx="12.5" cy="12.0" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="24.0" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="36.0" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="48.0" r="1.6" fill="#8b949e"></circle>
+      <circle cx="387.5" cy="12.0" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="24.0" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="36.0" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="48.0" r="1.6" fill="#8b949e"></circle>
+      <rect x="25" y="0" width="350" height="60" fill="none" stroke="#24292f" stroke-width="1"></rect>
+      <rect x="32.0" y="8.0" width="31.8" height="21.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="65.8" y="8.0" width="31.8" height="21.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="99.6" y="8.0" width="31.8" height="21.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="133.4" y="8.0" width="31.8" height="21.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="167.2" y="8.0" width="31.8" height="21.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="201.0" y="8.0" width="31.8" height="21.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="234.8" y="8.0" width="31.8" height="21.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="268.6" y="8.0" width="31.8" height="21.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="302.4" y="8.0" width="31.8" height="21.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="336.2" y="8.0" width="31.8" height="21.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="32.0" y="31.0" width="31.8" height="21.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect><rect x="65.8" y="31.0" width="31.8" height="21.0" fill="none" stroke="#24292f" stroke-width="0.5"></rect>
+    
+    </g>
+</svg>

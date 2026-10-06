@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Data Center</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <rect fill="#FFFFFF" x="12" y="26" width="56" height="40"></rect>
+        <g fill="#586069">
+            <rect x="18" y="32" width="44" height="4"></rect>
+            <rect x="18" y="40" width="44" height="4"></rect>
+            <rect x="18" y="48" width="44" height="4"></rect>
+            <rect x="18" y="56" width="44" height="4"></rect>
+        </g>
+        <line x1="40" y1="26" x2="40" y2="16" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></line>
+        <circle fill="#FFFFFF" cx="40" cy="13" r="3.5"></circle>
+    </g>
+</svg>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400px" height="30px" viewBox="0 0 400 30" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>True-Scale/1U Firewall (True Scale)</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+
+      <rect x="0" y="0" width="400" height="30" fill="#eef1f5"></rect>
+      <rect x="0" y="0" width="25" height="30" fill="#c4cad2" stroke="#24292f" stroke-width="0.5"></rect>
+      <rect x="375" y="0" width="25" height="30" fill="#c4cad2" stroke="#24292f" stroke-width="0.5"></rect>
+      <circle cx="12.5" cy="10.0" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="20.0" r="1.6" fill="#8b949e"></circle>
+      <circle cx="387.5" cy="10.0" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="20.0" r="1.6" fill="#8b949e"></circle>
+      <rect x="25" y="0" width="350" height="30" fill="none" stroke="#24292f" stroke-width="1"></rect>
+      
+  <rect x="32.0" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="43.8" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="55.6" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="67.5" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="79.3" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="91.1" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="102.9" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="114.8" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="126.6" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="138.4" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="150.3" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="162.1" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="173.9" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="185.7" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="197.5" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="209.4" y="10" width="10.6" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect>
+  <rect x="240.0" y="8" width="11.0" height="14" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="253.0" y="8" width="11.0" height="14" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="266.0" y="8" width="11.0" height="14" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="279.0" y="8" width="11.0" height="14" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="292.0" y="8" width="11.0" height="14" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="305.0" y="8" width="11.0" height="14" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="318.0" y="8" width="11.0" height="14" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="331.0" y="8" width="11.0" height="14" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="344.0" y="8" width="11.0" height="14" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect><rect x="357.0" y="8" width="11.0" height="14" fill="#c4cad2" stroke="#24292f" stroke-width="0.3"></rect>
+
+    
+    </g>
+</svg>

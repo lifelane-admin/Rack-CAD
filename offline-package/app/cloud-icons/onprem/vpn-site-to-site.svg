@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Site-to-Site VPN</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <rect fill="#FFFFFF" x="8" y="30" width="16" height="16" rx="2"></rect>
+        <rect fill="#FFFFFF" x="56" y="30" width="16" height="16" rx="2"></rect>
+        <line x1="27" y1="38" x2="53" y2="38" stroke="#FFFFFF" stroke-width="3" stroke-dasharray="6,5" stroke-linecap="round"></line>
+        <path d="M27,38 L21,33 M27,38 L21,43" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" fill="none"></path>
+        <path d="M53,38 L59,33 M53,38 L59,43" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" fill="none"></path>
+        <circle fill="#FFFFFF" cx="40" cy="55" r="9"></circle>
+        <circle fill="#586069" cx="40" cy="53" r="3"></circle>
+        <rect fill="#586069" x="38" y="53" width="4" height="7"></rect>
+    </g>
+</svg>

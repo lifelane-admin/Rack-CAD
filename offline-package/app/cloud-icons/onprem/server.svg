@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Server</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <g transform="translate(18, 16)" fill="#FFFFFF">
+            <rect x="0" y="0" width="44" height="14" rx="2"></rect>
+            <rect x="0" y="17" width="44" height="14" rx="2"></rect>
+            <rect x="0" y="34" width="44" height="14" rx="2"></rect>
+            <circle fill="#586069" cx="6" cy="7" r="2"></circle>
+            <circle fill="#586069" cx="6" cy="24" r="2"></circle>
+            <circle fill="#586069" cx="6" cy="41" r="2"></circle>
+        </g>
+    </g>
+</svg>

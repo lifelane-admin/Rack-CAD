@@ -456,6 +456,13 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     });
   }
 
+  // Add native SVG hover tooltip with physical & logical properties
+  const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+  const vlanPart = cable.vlan ? ` | VLAN: ${cable.vlan}` : '';
+  const portGroupPart = cable.portGroup ? ` | Port Group: ${cable.portGroup}` : '';
+  titleEl.textContent = `${cable.name || 'Cable ' + cable.id} [${cable.type}]${vlanPart}${portGroupPart}`;
+  group.appendChild(titleEl);
+
   cableLayer.appendChild(group);
   return group;
 }

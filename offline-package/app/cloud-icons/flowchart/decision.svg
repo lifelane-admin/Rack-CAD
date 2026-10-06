@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Flowchart/Decision</title>
+    <g fill="#8b949e" stroke="#484f58" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+        <polygon points="40,8 74,40 40,72 6,40"/>
+    </g>
+</svg>

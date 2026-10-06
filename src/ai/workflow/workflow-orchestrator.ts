@@ -56,12 +56,19 @@ export const WORKFLOW_RAIL_STEPS: { stageId: WorkflowStageId; num: number; label
   { stageId: 'FINAL_DESIGN', num: 10, label: 'Final Package & Deploy', short: 'Deploy' },
 ];
 
+let activeWorkflowOrchestrator: AIWorkflowOrchestrator | null = null;
+
+export function getActiveWorkflowOrchestrator(): AIWorkflowOrchestrator | null {
+  return activeWorkflowOrchestrator;
+}
+
 export class AIWorkflowOrchestrator {
   private state: WorkflowStateData;
   private listeners: ((state: WorkflowStateData) => void)[] = [];
 
   constructor() {
     this.state = this.loadPersistedState() || this.createInitialState();
+    activeWorkflowOrchestrator = this;
   }
 
   private createInitialState(): WorkflowStateData {

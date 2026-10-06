@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Load-Balancer</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <circle fill="#FFFFFF" cx="24" cy="40" r="7"></circle>
+        <g stroke="#FFFFFF" stroke-width="3" stroke-linecap="round">
+            <path d="M31,40 L48,20"></path>
+            <path d="M31,40 L48,40"></path>
+            <path d="M31,40 L48,60"></path>
+        </g>
+        <g fill="#FFFFFF">
+            <circle cx="52" cy="20" r="5"></circle>
+            <circle cx="52" cy="40" r="5"></circle>
+            <circle cx="52" cy="60" r="5"></circle>
+        </g>
+    </g>
+</svg>

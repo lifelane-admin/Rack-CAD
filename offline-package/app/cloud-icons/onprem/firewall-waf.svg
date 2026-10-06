@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Web Application Firewall (WAF)</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <path fill="#FFFFFF" d="M40,10 L60,18 L60,34 C60,46 51,55 40,60 C29,55 20,46 20,34 L20,18 Z"></path><g fill="#586069"><rect x="26" y="23" width="10" height="6"></rect><rect x="38" y="23" width="10" height="6"></rect><rect x="32" y="31" width="10" height="6"></rect></g><g><rect fill="#FFFFFF" x="25" y="63" width="30" height="14" rx="4"></rect><text x="40" y="74" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#586069" text-anchor="middle">WAF</text></g>
+    </g>
+</svg>

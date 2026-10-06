@@ -17,7 +17,7 @@ import {
   PortSpeed,
   ConnectorType,
 } from './types';
-import { PhysicalInfrastructureModel } from './physical-model';
+import { PhysicalInfrastructureModel, physicalInfrastructureModel } from './physical-model';
 
 export class ModelMigrationAdapter {
   /**
@@ -102,6 +102,24 @@ export class ModelMigrationAdapter {
 
       // Map Ports
       for (const p of d.ports || []) {
+        let label = p.name;
+        if (!label || label.trim() === '' || label === p.id) {
+          if (p.id.includes('-ear-left-nic')) {
+            const m = /-ear-left-nic(\d+)$/.exec(p.id);
+            label = m ? `Left Ear NIC ${m[1]}` : 'Left Ear NIC';
+          } else if (p.id.includes('-ear-right-nic')) {
+            const m = /-ear-right-nic(\d+)$/.exec(p.id);
+            label = m ? `Right Ear NIC ${m[1]}` : 'Right Ear NIC';
+          } else if (p.id.includes('-ear-right-mgmt') || p.id.includes('-mgmt')) {
+            label = 'Right Ear Mgmt (iDRAC)';
+          } else if (p.id.includes('-port-')) {
+            const m = /-port-(\d+)$/.exec(p.id);
+            label = m ? `Port ${parseInt(m[1], 10) + 1}` : 'Port';
+          } else {
+            label = p.type ? `${p.type.toUpperCase()} Port` : 'Port';
+          }
+        }
+
         const portObj: PhysicalPort = {
           portId: p.id,
           objectId: d.id,
@@ -110,8 +128,8 @@ export class ModelMigrationAdapter {
           speed: this.mapSpeed(p.speed, p.type),
           connector: this.mapConnector(p.type),
           physicalPosition: { x: p.relativeX, y: p.relativeY, side: 'front' },
-          label: p.name,
-          purpose: p.description || p.name,
+          label,
+          purpose: p.description || label,
           status: p.connected ? 'Connected' : 'Available',
         };
         ports.push(portObj);
@@ -120,28 +138,78 @@ export class ModelMigrationAdapter {
 
     // Map Cables
     for (const c of appState.cables || []) {
-      const srcPort = ports.find(p => p.portId === c.sourcePortId);
-      const destPort = ports.find(p => p.portId === c.destPortId);
+      let srcPort = ports.find(p => p.portId === c.sourcePortId);
+      let destPort = ports.find(p => p.portId === c.destPortId);
+
+      // Resolve synthetic PDU outlet for sourcePortId if not registered
+      if (!srcPort && c.sourcePortId?.startsWith('outlet-')) {
+        const match = /^outlet-(.+)-(\d+)$/.exec(c.sourcePortId);
+        if (match) {
+          const pduId = match[1];
+          const outletNum = parseInt(match[2], 10) + 1;
+          const pduObj = objects.find(o => o.objectId === pduId || o.objectId.includes(pduId) || (pduId.includes('left') && o.objectName.toLowerCase().includes('left')) || (pduId.includes('right') && o.objectName.toLowerCase().includes('right')));
+          srcPort = {
+            portId: c.sourcePortId,
+            objectId: pduObj ? pduObj.objectId : pduId,
+            portGroup: 'Power',
+            portType: 'power',
+            speed: 'Power',
+            connector: 'C13',
+            physicalPosition: { x: 0, y: 0, side: 'front' },
+            label: `Outlet ${outletNum} (C13)`,
+            purpose: 'Power Outlet',
+            status: 'Connected',
+          };
+          ports.push(srcPort);
+        }
+      }
+
+      // Resolve synthetic PDU outlet for destPortId if not registered
+      if (!destPort && c.destPortId?.startsWith('outlet-')) {
+        const match = /^outlet-(.+)-(\d+)$/.exec(c.destPortId);
+        if (match) {
+          const pduId = match[1];
+          const outletNum = parseInt(match[2], 10) + 1;
+          const pduObj = objects.find(o => o.objectId === pduId || o.objectId.includes(pduId) || (pduId.includes('left') && o.objectName.toLowerCase().includes('left')) || (pduId.includes('right') && o.objectName.toLowerCase().includes('right')));
+          destPort = {
+            portId: c.destPortId,
+            objectId: pduObj ? pduObj.objectId : pduId,
+            portGroup: 'Power',
+            portType: 'power',
+            speed: 'Power',
+            connector: 'C13',
+            physicalPosition: { x: 0, y: 0, side: 'front' },
+            label: `Outlet ${outletNum} (C13)`,
+            purpose: 'Power Outlet',
+            status: 'Connected',
+          };
+          ports.push(destPort);
+        }
+      }
 
       const srcObj = srcPort ? objects.find(o => o.objectId === srcPort.objectId) : null;
       const destObj = destPort ? objects.find(o => o.objectId === destPort.objectId) : null;
 
       const cable: PhysicalCable = {
         cableId: c.id,
-        sourceObject: srcObj?.objectId || '',
+        sourceObject: srcObj?.objectId || (srcPort ? srcPort.objectId : ''),
         sourcePort: c.sourcePortId || '',
-        destinationObject: destObj?.objectId || '',
+        destinationObject: destObj?.objectId || (destPort ? destPort.objectId : ''),
         destinationPort: c.destPortId || '',
         media: c.type === 'power' ? 'Power' : c.type.includes('om') || c.type.includes('fiber') ? 'Fiber' : c.type.includes('dac') ? 'DAC' : 'Copper',
         speed: c.type.includes('qsfp') ? '100GbE' : c.type.includes('sfp28') ? '25GbE' : '10GbE',
         connectorA: srcPort?.connector || 'RJ45',
-        connectorB: destPort?.connector || 'RJ45',
+        connectorB: destPort?.connector || (c.type === 'power' ? 'C13' : 'RJ45'),
         length: c.length ?? 2.5,
         color: c.color || '#3b82f6',
         primaryRoute: c.sidePreference === 'right' ? 'Right VCM' : 'Left VCM',
         rackA: srcObj?.rackId || '',
-        rackB: destObj?.rackId || '',
+        rackB: destObj?.rackId || srcObj?.rackId || '',
         purpose: c.type === 'idrac' ? 'Management' : c.type === 'vm-network' ? 'Production' : c.type === 'power' ? 'Power' : 'Production',
+        vlan: c.vlan,
+        vlanMode: c.vlanMode,
+        portGroup: c.portGroup,
+        networkRole: c.networkRole,
         status: 'connected',
       };
       cables.push(cable);
@@ -154,10 +222,10 @@ export class ModelMigrationAdapter {
           psuId: '1',
           psuLabel: 'PSU 1',
           cableId: c.id,
-          pduId: destObj?.objectId || 'PDU-A',
-          pduSocketId: destPort?.portId || 'C13-1',
+          pduId: destObj?.objectId || (destPort ? destPort.objectId : 'PDU-A'),
+          pduSocketId: destPort?.portId || c.destPortId || 'C13-1',
           socketType: 'C13',
-          powerFeed: destObj?.objectId?.includes('b') ? 'B' : 'A',
+          powerFeed: (destObj?.objectName || destObj?.objectId || '').toLowerCase().includes('b') || (destPort?.portId || '').includes('right') ? 'B' : 'A',
           powerWatts: srcObj.powerWatts,
           redundancyStatus: 'redundant',
         });
@@ -183,7 +251,7 @@ export class ModelMigrationAdapter {
         { domainId: 'FD-A', domainName: 'Power & Cabinet Zone A', type: 'rack', memberObjectIds: [] },
         { domainId: 'FD-B', domainName: 'Power & Cabinet Zone B', type: 'rack', memberObjectIds: [] },
       ],
-      proposals: [],
+      proposals: typeof physicalInfrastructureModel !== 'undefined' && physicalInfrastructureModel ? physicalInfrastructureModel.getProposals() : [],
     };
   }
 
@@ -256,6 +324,10 @@ export class ModelMigrationAdapter {
         bendRadius: existing?.bendRadius || 22,
         bundleId: existing?.bundleId || null,
         notes: c.purpose,
+        vlan: c.vlan || existing?.vlan,
+        vlanMode: c.vlanMode || existing?.vlanMode,
+        portGroup: c.portGroup || existing?.portGroup,
+        networkRole: c.networkRole || existing?.networkRole,
         anchorPoints: existing?.anchorPoints || [],
         anchorsLocked: existing?.anchorsLocked || false,
       };

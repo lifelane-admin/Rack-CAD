@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400px" height="30px" viewBox="0 0 400 30" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>True-Scale/16-Port Switch (True Scale)</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+
+      <rect x="0" y="0" width="400" height="30" fill="#eef1f5"></rect>
+      <rect x="0" y="0" width="25" height="30" fill="#c4cad2" stroke="#24292f" stroke-width="0.5"></rect>
+      <rect x="375" y="0" width="25" height="30" fill="#c4cad2" stroke="#24292f" stroke-width="0.5"></rect>
+      <circle cx="12.5" cy="10.0" r="1.6" fill="#8b949e"></circle><circle cx="12.5" cy="20.0" r="1.6" fill="#8b949e"></circle>
+      <circle cx="387.5" cy="10.0" r="1.6" fill="#8b949e"></circle><circle cx="387.5" cy="20.0" r="1.6" fill="#8b949e"></circle>
+      <rect x="25" y="0" width="350" height="30" fill="none" stroke="#24292f" stroke-width="1"></rect>
+      <rect x="32.0" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="53.1" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="74.2" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="95.2" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="116.3" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="137.4" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="158.4" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="179.5" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="200.6" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="221.7" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="242.8" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="263.8" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="284.9" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="306.0" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="327.1" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect><rect x="348.1" y="10" width="19.9" height="10" fill="none" stroke="#24292f" stroke-width="0.6"></rect>
+    
+    </g>
+</svg>

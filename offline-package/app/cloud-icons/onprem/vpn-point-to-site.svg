@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Point-to-Site VPN</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <circle fill="#FFFFFF" cx="16" cy="38" r="9"></circle>
+        <rect fill="#FFFFFF" x="56" y="29" width="17" height="17" rx="2"></rect>
+        <line x1="27" y1="38" x2="54" y2="38" stroke="#FFFFFF" stroke-width="3" stroke-dasharray="6,5" stroke-linecap="round"></line>
+        <path d="M54,38 L48,33 M54,38 L48,43" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" fill="none"></path>
+        <circle fill="#586069" cx="64.5" cy="35.5" r="2.5"></circle>
+        <rect fill="#586069" x="63" y="35.5" width="3" height="6"></rect>
+    </g>
+</svg>

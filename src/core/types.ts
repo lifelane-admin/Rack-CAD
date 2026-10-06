@@ -737,6 +737,12 @@ export interface CableData {
   plugType?: SocketType;               // set when powerCableType === 'power'
   flowSpeed?: number;      // Animation speed factor
   exitStraightOffset?: number; // Straight exit distance before first bend (default 18px)
+
+  // Network Logical / DCIM Properties
+  vlan?: string;            // e.g. "10", "VLAN 20 (VM Traffic)", "Trunk: 10, 20, 30"
+  vlanMode?: 'access' | 'trunk' | 'routed'; // Port/cable VLAN mode
+  portGroup?: string;       // e.g. "dpg-management", "iSCSI-Fabric-A", "vSwitch0-Uplink"
+  networkRole?: string;     // e.g. "Production Data", "Storage Fabric", "Management", "Live Migration", "Heartbeat"
 }
 
 // === Application State ===

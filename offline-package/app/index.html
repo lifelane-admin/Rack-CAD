@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rack Slicer</title>
+  
+  <!-- SEO & Meta -->
+  <meta name="description" content="Professional CAD application for enterprise server rack design and cable management.">
+  
+  <!-- Stylesheets -->
+  <script type="module" crossorigin src="./assets/index-CTCNAWN3.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DapqpQTF.css">
+</head>
+<body>
+  <!-- Global Shared SVG Definitions for Cable Graphics, Gradients & Shading -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none;" aria-hidden="true">
+    <defs>
+      <linearGradient id="metal-finish" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#FFFFFF" />
+        <stop offset="25%" stop-color="#E2E8F0" />
+        <stop offset="60%" stop-color="#94A3B8" />
+        <stop offset="100%" stop-color="#475569" />
+      </linearGradient>
+      <linearGradient id="silver-prong" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#CBD5E1" />
+        <stop offset="40%" stop-color="#FFFFFF" />
+        <stop offset="80%" stop-color="#94A3B8" />
+        <stop offset="100%" stop-color="#64748B" />
+      </linearGradient>
+      <linearGradient id="gold-contact" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#FEF08A" />
+        <stop offset="40%" stop-color="#F59E0B" />
+        <stop offset="100%" stop-color="#B45309" />
+      </linearGradient>
+      <linearGradient id="polycarb" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95" />
+        <stop offset="40%" stop-color="#94A3B8" stop-opacity="0.8" />
+        <stop offset="100%" stop-color="#334155" stop-opacity="0.95" />
+      </linearGradient>
+      <linearGradient id="pvc-blue" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#60A5FA" />
+        <stop offset="40%" stop-color="#2563EB" />
+        <stop offset="100%" stop-color="#1D4ED8" />
+      </linearGradient>
+      <linearGradient id="pvc-red" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#F87171" />
+        <stop offset="40%" stop-color="#EF4444" />
+        <stop offset="100%" stop-color="#B91C1C" />
+      </linearGradient>
+      <linearGradient id="pvc-black" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#4B5563" />
+        <stop offset="40%" stop-color="#1F2937" />
+        <stop offset="100%" stop-color="#111827" />
+      </linearGradient>
+      <linearGradient id="pvc-aqua" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#67E8F9" />
+        <stop offset="40%" stop-color="#06B6D4" />
+        <stop offset="100%" stop-color="#0891B2" />
+      </linearGradient>
+      <linearGradient id="pvc-orange" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#FDBA74" />
+        <stop offset="40%" stop-color="#F97316" />
+        <stop offset="100%" stop-color="#C2410C" />
+      </linearGradient>
+      <linearGradient id="pvc-magenta" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#F472B6" />
+        <stop offset="40%" stop-color="#EC4899" />
+        <stop offset="100%" stop-color="#BE185D" />
+      </linearGradient>
+      <linearGradient id="pvc-green-earth" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#4ADE80" />
+        <stop offset="40%" stop-color="#16A34A" />
+        <stop offset="100%" stop-color="#15803D" />
+      </linearGradient>
+      <linearGradient id="vga-blue" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#38BDF8" />
+        <stop offset="40%" stop-color="#0284C7" />
+        <stop offset="100%" stop-color="#0369A1" />
+      </linearGradient>
+      <linearGradient id="ceramic-ferrule" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#FFFFFF" />
+        <stop offset="50%" stop-color="#F1F5F9" />
+        <stop offset="100%" stop-color="#CBD5E1" />
+      </linearGradient>
+      <linearGradient id="lc-body-grey" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#F8FAFC" />
+        <stop offset="40%" stop-color="#E2E8F0" />
+        <stop offset="100%" stop-color="#94A3B8" />
+      </linearGradient>
+    </defs>
+  </svg>
+  <div id="app">
+    <header id="toolbar"></header>
+    <div id="workspace">
+      <aside id="sidebar"></aside>
+      <main id="canvas-container">
+        <div id="ruler-corner"></div>
+        <div id="ruler-horizontal"></div>
+        <div id="ruler-vertical"></div>
+        <div id="canvas-split">
+          <div id="canvas-viewport">
+            <svg id="canvas"></svg>
+            <div class="splitter-3d hidden" id="splitter-3d"></div>
+            <div id="canvas-3d" class="hidden"></div>
+          </div>
+          <div class="splitter-hybrid hidden" id="splitter-hybrid"></div>
+          <div id="cloud-viewport" class="hidden">
+            <svg id="cloud-canvas"></svg>
+          </div>
+        </div>
+        <div id="minimap"></div>
+      </main>
+      <!-- dc-viewport is a sibling of sidebar/properties-panel inside #workspace.
+           position:absolute;inset:0 on #workspace covers the full content area,
+           making it immune to sidebar and properties-panel CSS width transitions. -->
+      <div id="dc-viewport" class="hidden"></div>
+      <aside id="properties-panel"></aside>
+    </div>
+    <footer id="statusbar"></footer>
+    <div id="context-menu" class="hidden"></div>
+  </div>
+
+  <!-- AI Key Modal -->
+  <div id="ai-key-modal" class="hidden">
+    <div class="modal-box" style="max-width: 480px; width: 92%;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <h3 style="margin:0; font-size:16px; font-weight:700; color:#f8fafc; display:flex; align-items:center; gap:8px;">
+          <span>⚡ AI Architect Settings</span>
+        </h3>
+        <button id="ai-modal-close" style="background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px;" title="Close">✕</button>
+      </div>
+      
+      <!-- Provider Selector Tabs -->
+      <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:14px; background:#0b0f19; padding:4px; border-radius:6px; border:1px solid #1e293b;">
+        <button type="button" id="ai-provider-tab-gemini" style="flex:1 1 30%; padding:6px 6px; font-size:11px; font-weight:600; border-radius:4px; border:none; cursor:pointer; background:#38bdf8; color:#0b0f19; transition:all 0.15s ease;">
+          ✨ Gemini (Free)
+        </button>
+        <button type="button" id="ai-provider-tab-deepseek" style="flex:1 1 30%; padding:6px 6px; font-size:11px; font-weight:600; border-radius:4px; border:none; cursor:pointer; background:transparent; color:#94a3b8; transition:all 0.15s ease;">
+          🐋 DeepSeek
+        </button>
+        <button type="button" id="ai-provider-tab-openrouter" style="flex:1 1 30%; padding:6px 6px; font-size:11px; font-weight:600; border-radius:4px; border:none; cursor:pointer; background:transparent; color:#94a3b8; transition:all 0.15s ease;">
+          🌐 OpenRouter (Qwen)
+        </button>
+        <button type="button" id="ai-provider-tab-openai" style="flex:1 1 45%; padding:6px 6px; font-size:11px; font-weight:600; border-radius:4px; border:none; cursor:pointer; background:transparent; color:#94a3b8; transition:all 0.15s ease;">
+          🟢 OpenAI
+        </button>
+        <button type="button" id="ai-provider-tab-claude" style="flex:1 1 45%; padding:6px 6px; font-size:11px; font-weight:600; border-radius:4px; border:none; cursor:pointer; background:transparent; color:#94a3b8; transition:all 0.15s ease;">
+          ☁ Claude
+        </button>
+      </div>
+
+      <!-- Description / Help -->
+      <p id="ai-provider-desc" style="font-size:12px; color:#94a3b8; line-height:1.5; margin-bottom:14px;">
+        Use <strong>Google Gemini API</strong> with instant high-speed responses and a generous <strong>Free Tier</strong>.
+      </p>
+
+      <!-- Model Selection -->
+      <div style="margin-bottom: 12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <label for="ai-model-select" style="font-size:11px; font-weight:600; text-transform:uppercase; color:#38bdf8;">Model</label>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button type="button" id="ai-open-registry-btn" style="background:rgba(56,189,248,0.15); border:1px solid #38bdf8; color:#38bdf8; font-size:10px; font-weight:700; border-radius:3px; padding:2px 6px; cursor:pointer;">Browse Registry (N → N-8) ↗</button>
+            <button type="button" id="ai-model-fetch-btn" style="background:none; border:none; color:#38bdf8; font-size:11px; cursor:pointer; padding:0; text-decoration:underline;">Auto-Detect ↻</button>
+          </div>
+        </div>
+        <select id="ai-model-select" style="width:100%; background:#111; border:1px solid #444; border-radius:4px; padding:8px 10px; color:#fff; font-size:12px; margin-bottom:6px;">
+          <!-- Populated dynamically based on provider -->
+        </select>
+        <input id="ai-model-custom-input" type="text" placeholder="Type custom model ID (e.g. gemini-2.0-flash, qwen-3, etc.)..." style="display:none; width:100%; background:#0d1117; border:1px dashed #38bdf8; border-radius:4px; padding:6px 10px; color:#38bdf8; font-size:12px; box-sizing:border-box;" />
+      </div>
+
+      <!-- API Key Field -->
+      <div style="margin-bottom: 8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <label id="ai-key-label" for="ai-key-input" style="font-size:11px; font-weight:600; text-transform:uppercase; color:#38bdf8;">Gemini API Key</label>
+          <a id="ai-get-key-link" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="font-size:11px; color:#38bdf8; text-decoration:none; display:flex; align-items:center; gap:2px;">
+            Get Free Key ↗
+          </a>
+        </div>
+        <div class="modal-input-row" style="margin-bottom:0;">
+          <input id="ai-key-input" type="password" placeholder="AIzaSy..."/>
+          <button id="ai-key-toggle" title="Show/Hide Key">👁</button>
+        </div>
+      </div>
+      
+      <p class="modal-hint" style="margin-top:6px; font-size:11px; color:#64748b;">🔒 Keys are stored strictly on your local device (browser localStorage) and sent directly to the AI provider endpoint.</p>
+      
+      <div class="modal-actions" style="margin-top:16px; display:flex; gap:8px; align-items:center;">
+        <button id="ai-key-clear" style="display:none; color:#ef4444; background:rgba(239,68,68,0.1); border:1px solid #ef4444; border-radius:4px; padding:8px 12px; margin-right:auto; font-size:12px; cursor:pointer;">Clear Key</button>
+        <button id="ai-key-skip" style="font-size:12px; padding:8px 12px; cursor:pointer;">Use Free Rules</button>
+        <button id="ai-key-connect" style="background:#38bdf8; color:#0d1117; font-weight:700; font-size:12px; padding:8px 16px; border-radius:4px; border:none; cursor:pointer;">Save & Enable AI</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Export Report Modal -->
+  <div id="export-report-modal" class="hidden">
+    <div class="modal-box">
+      <h3>Export Design Report</h3>
+      <div class="report-field">
+        <label for="rpt-title">Project Name</label>
+        <input id="rpt-title" type="text" placeholder="Data Centre Rack Design"/>
+      </div>
+      <div class="report-field">
+        <label for="rpt-author">Author</label>
+        <input id="rpt-author" type="text" placeholder="Your name"/>
+      </div>
+      <div class="report-field">
+        <label for="rpt-rev">Revision</label>
+        <input id="rpt-rev" type="text" placeholder="Rev 1.0"/>
+      </div>
+      <div class="report-field">
+        <label for="rpt-notes">Design Notes</label>
+        <textarea id="rpt-notes" rows="4" placeholder="Deployment notes, change log..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button id="rpt-cancel">Cancel</button>
+        <button id="rpt-generate">Generate Report</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Asset Modal -->
+  <div id="custom-asset-modal" class="hidden">
+    <div class="modal-box">
+      <h3>Save as Custom Asset</h3>
+      <div class="cam-field">
+        <label for="cam-name">Name</label>
+        <input id="cam-name" type="text" placeholder="DELL PowerEdge R770 2U"/>
+      </div>
+      <div class="cam-field">
+        <label for="cam-cat">Category</label>
+        <select id="cam-cat">
+          <option value="server">Server</option>
+          <option value="switch">Switch</option>
+          <option value="router">Router</option>
+          <option value="firewall">Firewall</option>
+          <option value="nac">NAC Appliance</option>
+          <option value="storage">Storage</option>
+          <option value="patch-panel">Patch Panel</option>
+          <option value="pdu">PDU</option>
+          <option value="ats">ATS Switch</option>
+          <option value="ups">UPS</option>
+          <option value="blank-panel">Blank Panel</option>
+          <option value="cable-manager">Cable Manager</option>
+          <option value="cooling">Cooling</option>
+          <option value="console">Console</option>
+        </select>
+      </div>
+      <div class="cam-field">
+        <label for="cam-based-on">Based On</label>
+        <input id="cam-based-on" type="text" readonly/>
+      </div>
+      <div class="cam-field">
+        <label>Front Panel Image</label>
+        <div class="cam-image-row">
+          <img id="cam-image-thumb" class="cam-image-thumb hidden" src="" alt="Front panel"/>
+          <div id="cam-no-image" class="cam-no-image">No image</div>
+          <div class="cam-image-actions">
+            <button id="cam-upload-btn" class="cam-btn-sm">Upload</button>
+            <button id="cam-remove-btn" class="cam-btn-sm">Remove</button>
+          </div>
+        </div>
+      </div>
+      <div class="cam-field">
+        <label for="cam-desc">Description</label>
+        <textarea id="cam-desc" rows="2" placeholder="Optional notes..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button id="cam-cancel">Cancel</button>
+        <button id="cam-save">Save to My Library</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

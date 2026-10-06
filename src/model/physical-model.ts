@@ -471,8 +471,10 @@ export class PhysicalInfrastructureModel {
     this.failureDomains.clear();
     for (const fd of snapshot.failureDomains) this.failureDomains.set(fd.domainId, fd);
 
-    this.proposals.clear();
-    for (const prop of snapshot.proposals) this.proposals.set(prop.proposalId, prop);
+    if (snapshot.proposals && snapshot.proposals.length > 0) {
+      this.proposals.clear();
+      for (const prop of snapshot.proposals) this.proposals.set(prop.proposalId, prop);
+    }
 
     architectureEvents.emit('ARCHITECTURE_UPDATED', { timestamp: new Date().toISOString() });
     this.validate();

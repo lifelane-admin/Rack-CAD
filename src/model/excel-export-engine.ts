@@ -1,6 +1,8 @@
 import * as XLSX from 'xlsx';
 import { PhysicalInfrastructureModel } from './physical-model';
 import { USpaceEngine } from './u-space-engine';
+import { ValidationFinding, ChangeProposal } from './types';
+import { getActiveWorkflowOrchestrator } from '../ai/workflow/workflow-orchestrator';
 
 export class ExcelExportEngine {
   /**
@@ -61,13 +63,29 @@ export class ExcelExportEngine {
       ],
     });
 
+    // Build human-friendly identifier maps so names remain deterministic and consistent across all sheets
+    const rackIdMap = new Map<string, string>();
+    racks.forEach((r, i) => {
+      rackIdMap.set(r.rackId, this.isUuid(r.rackId) ? `RK-${String(i + 1).padStart(2, '0')}` : r.rackId);
+    });
+
+    const objIdMap = new Map<string, string>();
+    objects.forEach((o, i) => {
+      objIdMap.set(o.objectId, this.isUuid(o.objectId) ? `OBJ-${String(i + 1).padStart(3, '0')}` : o.objectId);
+    });
+
+    const cableIdMap = new Map<string, string>();
+    cables.forEach((c, i) => {
+      cableIdMap.set(c.cableId, this.isUuid(c.cableId) ? `CBL-${String(i + 1).padStart(3, '0')}` : c.cableId);
+    });
+
     // 3. 03_Rack_Inventory
     sheets.push({
       name: '03_Rack_Inventory',
       rows: [
         ['RACK ID', 'NAME', 'TOTAL U', 'USED U', 'FREE U', 'UTIL %', 'POWER (W)', 'WEIGHT (KG)', 'FAILURE DOMAIN', 'ORIENTATION'],
         ...racks.map(r => [
-          r.rackId,
+          rackIdMap.get(r.rackId) || r.rackId,
           r.rackName,
           String(r.rackSizeU),
           String(r.usedU),
@@ -98,7 +116,7 @@ export class ExcelExportEngine {
         if (item) {
           rackRows.push([
             `U${u}`,
-            item.objectId,
+            objIdMap.get(item.objectId) || item.objectId,
             item.objectName,
             item.manufacturer,
             item.model,
@@ -121,20 +139,20 @@ export class ExcelExportEngine {
       rows: [
         ['OBJECT ID', 'CATEGORY', 'SUBCATEGORY', 'NAME', 'MANUFACTURER', 'MODEL', 'SERIAL NUMBER', 'RACK', 'U START', 'U END', 'HEIGHT', 'POWER (W)', 'WEIGHT (KG)', 'HA PAIR', 'STATUS'],
         ...objects.map(o => [
-          o.objectId,
+          objIdMap.get(o.objectId) || o.objectId,
           o.category.toUpperCase(),
           o.subCategory,
           o.objectName,
           o.manufacturer,
           o.model,
           o.serialNumber || 'N/A',
-          o.rackId,
+          this.resolveRackName(o.rackId, model),
           `U${o.uStart}`,
           `U${o.uEnd}`,
           `${o.heightU}U`,
           String(o.powerWatts),
           String(o.weight),
-          o.haPairId || 'None',
+          o.haPairId ? (this.resolveObjectName(o.haPairId, model) || 'Configured') : 'None',
           o.status,
         ]),
       ],
@@ -144,15 +162,17 @@ export class ExcelExportEngine {
     sheets.push({
       name: 'Port_Inventory',
       rows: [
-        ['PORT ID', 'OBJECT ID', 'PORT GROUP', 'LABEL', 'CONNECTOR', 'SPEED', 'PURPOSE', 'STATUS'],
-        ...ports.map(p => [
-          p.portId,
-          p.objectId,
+        ['PORT ID', 'DEVICE / CHASSIS', 'PORT GROUP', 'PORT LABEL', 'CONNECTOR', 'SPEED', 'PURPOSE', 'STATUS'],
+        ...ports.map((p, i) => [
+          this.isUuid(p.portId) || p.portId.includes('-ear-') || p.portId.includes('-port-')
+            ? `PRT-${String(i + 1).padStart(4, '0')}`
+            : p.portId,
+          this.resolveObjectName(p.objectId, model),
           p.portGroup,
-          p.label,
+          this.resolvePortLabel(p.portId, p.objectId, model),
           p.connector,
           p.speed,
-          p.purpose,
+          p.purpose && !this.isUuid(p.purpose) && !p.purpose.includes('-') ? p.purpose : this.resolvePortLabel(p.portId, p.objectId, model),
           p.status,
         ]),
       ],
@@ -162,16 +182,18 @@ export class ExcelExportEngine {
     sheets.push({
       name: 'Connectivity',
       rows: [
-        ['CABLE ID', 'SOURCE OBJECT', 'SOURCE PORT', 'DEST OBJECT', 'DEST PORT', 'MEDIA', 'SPEED', 'COLOR', 'PRIMARY ROUTE', 'STATUS'],
+        ['CABLE ID', 'SOURCE OBJECT', 'SOURCE PORT', 'DEST OBJECT', 'DEST PORT', 'MEDIA', 'SPEED', 'COLOR', 'VLAN / SUBNET', 'PORT GROUP', 'PRIMARY ROUTE', 'STATUS'],
         ...cables.map(c => [
-          c.cableId,
-          c.sourceObject,
-          c.sourcePort,
-          c.destinationObject,
-          c.destinationPort,
+          cableIdMap.get(c.cableId) || c.cableId,
+          this.resolveObjectName(c.sourceObject, model),
+          this.resolvePortLabel(c.sourcePort, c.sourceObject, model),
+          this.resolveObjectName(c.destinationObject, model),
+          this.resolvePortLabel(c.destinationPort, c.destinationObject, model),
           c.media,
           c.speed,
           c.color,
+          c.vlan || 'Untagged / Default',
+          c.portGroup || c.networkRole || 'Standard',
           c.primaryRoute,
           c.status.toUpperCase(),
         ]),
@@ -182,19 +204,21 @@ export class ExcelExportEngine {
     sheets.push({
       name: 'Cable_Schedule',
       rows: [
-        ['CABLE ID', 'SOURCE RACK', 'SOURCE OBJECT', 'SOURCE PORT', 'DEST RACK', 'DEST OBJECT', 'DEST PORT', 'MEDIA', 'LENGTH (M)', 'COLOR', 'PURPOSE', 'STATUS'],
+        ['CABLE ID', 'SOURCE RACK', 'SOURCE OBJECT', 'SOURCE PORT', 'DEST RACK', 'DEST OBJECT', 'DEST PORT', 'MEDIA', 'LENGTH (M)', 'COLOR', 'PURPOSE', 'VLAN / SUBNET', 'PORT GROUP / ROLE', 'STATUS'],
         ...cables.map(c => [
-          c.cableId,
-          c.rackA,
-          c.sourceObject,
-          c.sourcePort,
-          c.rackB,
-          c.destinationObject,
-          c.destinationPort,
+          cableIdMap.get(c.cableId) || c.cableId,
+          this.resolveRackName(c.rackA, model),
+          this.resolveObjectName(c.sourceObject, model),
+          this.resolvePortLabel(c.sourcePort, c.sourceObject, model),
+          this.resolveRackName(c.rackB, model),
+          this.resolveObjectName(c.destinationObject, model),
+          this.resolvePortLabel(c.destinationPort, c.destinationObject, model),
           c.media,
           String(c.length),
           c.color,
           c.purpose,
+          c.vlan || 'Auto / Default',
+          c.portGroup || c.networkRole || 'Standard Uplink',
           c.status,
         ]),
       ],
@@ -204,13 +228,15 @@ export class ExcelExportEngine {
     sheets.push({
       name: 'Power_Schedule',
       rows: [
-        ['POWER ID', 'OBJECT ID', 'PSU LABEL', 'PDU ID', 'PDU OUTLET', 'FEED', 'POWER (W)', 'REDUNDANCY STATUS'],
-        ...power.map(p => [
-          p.powerId,
-          p.objectId,
+        ['POWER ID', 'DEVICE / CHASSIS', 'PSU LABEL', 'PDU NAME', 'PDU OUTLET', 'FEED', 'POWER (W)', 'REDUNDANCY STATUS'],
+        ...power.map((p, i) => [
+          this.isUuid(p.powerId) || p.powerId.startsWith('pwr-')
+            ? `PWR-${String(i + 1).padStart(3, '0')}`
+            : p.powerId,
+          this.resolveObjectName(p.objectId, model),
           p.psuLabel,
-          p.pduId,
-          p.pduSocketId,
+          this.resolveObjectName(p.pduId, model),
+          this.resolvePortLabel(p.pduSocketId, p.pduId, model),
           p.powerFeed,
           String(p.powerWatts),
           p.redundancyStatus.toUpperCase(),
@@ -228,7 +254,9 @@ export class ExcelExportEngine {
           fd.domainName,
           fd.type,
           fd.description || '',
-          fd.memberObjectIds.join(', ') || 'Auto-allocated',
+          fd.memberObjectIds.length > 0
+            ? fd.memberObjectIds.map(id => this.resolveObjectName(id, model)).join(', ')
+            : 'All Cabinets',
         ]),
       ],
     });
@@ -242,7 +270,9 @@ export class ExcelExportEngine {
           f.findingId,
           f.severity,
           f.category.toUpperCase(),
-          f.affectedObjectIds.join(', '),
+          f.affectedObjectIds.length > 0
+            ? f.affectedObjectIds.map(id => this.resolveEntityName(id, model, cableIdMap)).join(', ')
+            : (this.resolveEntityName(f.objectId || f.rackId || '', model, cableIdMap) || 'Cabinet Topology'),
           f.description,
           f.impact,
           f.recommendation,
@@ -254,17 +284,7 @@ export class ExcelExportEngine {
     // 12. AI_Recommendations
     sheets.push({
       name: 'AI_Recommendations',
-      rows: [
-        ['PROPOSAL ID', 'TYPE', 'OBJECT ID', 'REASON', 'IMPACT SUMMARY', 'STATUS'],
-        ...proposals.map(pr => [
-          pr.proposalId,
-          pr.type,
-          pr.objectId,
-          pr.reason,
-          pr.impact.summary,
-          pr.status.toUpperCase(),
-        ]),
-      ],
+      rows: this.generateAiRecommendations(model, findings, proposals, cableIdMap),
     });
 
     // 13. Change_History
@@ -328,16 +348,182 @@ export class ExcelExportEngine {
   }
 
   /**
+   * Helper to check if a string is a raw UUID.
+   */
+  public static isUuid(val: string): boolean {
+    if (!val || typeof val !== 'string') return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim());
+  }
+
+  /**
+   * Resolves human-readable object/device name with rack unit context.
+   * e.g. "Primary Node 1 [U14]" or "ToR Switch 1 [U40]" or "PDU-A (Left Vertical)"
+   */
+  public static resolveObjectName(objectId: string, model: PhysicalInfrastructureModel): string {
+    if (!objectId) return '—';
+    const obj = model.getObject(objectId);
+    if (obj) {
+      const uStr = obj.uStart ? ` [U${obj.uStart}]` : '';
+      const baseName = obj.objectName || obj.model || obj.category;
+      return baseName.includes(`[U${obj.uStart}]`) || baseName.includes(`U${obj.uStart}`)
+        ? baseName
+        : `${baseName}${uStr}`;
+    }
+
+    // Check PDU synthetic outlet IDs: outlet-<pduId>-<idx>
+    if (objectId.startsWith('outlet-')) {
+      const match = /^outlet-(.+)-(\d+)$/.exec(objectId);
+      if (match) {
+        const pduId = match[1];
+        const pduObj = model.getObject(pduId);
+        if (pduObj) return pduObj.objectName;
+        if (pduId.includes('left') || pduId.includes('pdu-a') || pduId.includes('feed-a')) return 'PDU-A (Left Vertical)';
+        if (pduId.includes('right') || pduId.includes('pdu-b') || pduId.includes('feed-b')) return 'PDU-B (Right Vertical)';
+        return `PDU (${pduId})`;
+      }
+    }
+
+    // Check known PDU IDs
+    if (objectId.includes('ai-pdu-left') || objectId.includes('vpdu-a')) return 'PDU-A (Left Vertical)';
+    if (objectId.includes('ai-pdu-right') || objectId.includes('vpdu-b')) return 'PDU-B (Right Vertical)';
+    if (objectId.toLowerCase().includes('pdu')) return objectId;
+
+    // Check Rack ID
+    const rack = model.getRack(objectId);
+    if (rack) return rack.rackName;
+
+    return objectId;
+  }
+
+  /**
+   * Resolves human-readable rack name.
+   */
+  public static resolveRackName(rackId: string, model: PhysicalInfrastructureModel): string {
+    if (!rackId) return '—';
+    const rack = model.getRack(rackId);
+    if (rack) return rack.rackName;
+    return rackId;
+  }
+
+  /**
+   * Resolves human-readable port label/identifier.
+   */
+  public static resolvePortLabel(portId: string, objectId: string, model: PhysicalInfrastructureModel): string {
+    if (!portId) return '—';
+
+    // 1. Check if model has registered port with clean label
+    const port = model.getPort(portId);
+    const label = port?.label?.trim();
+    const isRaw = label ? this.isUuid(label) || label === portId || /^[0-9a-f]{8}-/i.test(label) : true;
+
+    if (!isRaw && label) {
+      return label;
+    }
+
+    // 2. Check PDU outlet format: outlet-<pduId>-<idx>
+    if (portId.startsWith('outlet-')) {
+      const match = /^outlet-(.+)-(\d+)$/.exec(portId);
+      if (match) {
+        const outletNum = parseInt(match[2], 10) + 1;
+        return `Outlet ${outletNum} (C13)`;
+      }
+    }
+
+    // 3. Ear ports
+    if (portId.includes('-ear-left-nic')) {
+      const m = /-ear-left-nic(\d+)$/.exec(portId);
+      return m ? `Left Ear NIC ${m[1]}` : 'Left Ear NIC';
+    }
+    if (portId.includes('-ear-right-nic')) {
+      const m = /-ear-right-nic(\d+)$/.exec(portId);
+      return m ? `Right Ear NIC ${m[1]}` : 'Right Ear NIC';
+    }
+    if (portId.includes('-ear-right-mgmt') || portId.includes('-mgmt')) {
+      return 'Right Ear Mgmt (iDRAC)';
+    }
+    if (portId.includes('-ear-left-power') || portId.includes('-ear-left-nic-power')) {
+      return 'Left Ear PSU 1 Power';
+    }
+    if (portId.includes('-ear-right-power') || portId.includes('-ear-right-nic-power')) {
+      return 'Right Ear PSU 2 Power';
+    }
+
+    // 4. Device ports: <uuid>-port-0 -> Port 1
+    if (portId.includes('-port-')) {
+      const m = /-port-(\d+)$/.exec(portId);
+      if (m) {
+        return `Port ${parseInt(m[1], 10) + 1}`;
+      }
+    }
+
+    // 5. Fallback to purpose or connector
+    if (port && port.purpose && !this.isUuid(port.purpose)) {
+      return port.purpose;
+    }
+    if (port && port.connector) {
+      return `${port.connector} Port`;
+    }
+
+    return portId;
+  }
+
+  /**
+   * Resolves any entity ID (object, rack, cable) to a clean human-readable name.
+   */
+  public static resolveEntityName(id: string, model: PhysicalInfrastructureModel, cableMap?: Map<string, string>): string {
+    if (!id) return '';
+    if (cableMap && cableMap.has(id)) {
+      return cableMap.get(id)!;
+    }
+    const obj = model.getObject(id);
+    if (obj) {
+      return this.resolveObjectName(id, model);
+    }
+    const rack = model.getRack(id);
+    if (rack) {
+      return rack.rackName;
+    }
+    const cable = model.getCables().find(c => c.cableId === id);
+    if (cable) {
+      return cableMap?.get(id) || (this.isUuid(id) ? `Cable ${id.substring(0, 8)}` : id);
+    }
+    return this.resolveObjectName(id, model);
+  }
+
+  /**
+   * Safe stringifier that prevents "[object Object]" from ever leaking.
+   */
+  public static toSafeString(val: any): string {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+    if (typeof val === 'object') {
+      if (typeof val.summary === 'string') return val.summary;
+      if (typeof val.name === 'string') return val.name;
+      if (typeof val.title === 'string') return val.title;
+      if (Array.isArray(val)) return val.map(x => this.toSafeString(x)).join(', ');
+      try {
+        return JSON.stringify(val);
+      } catch {
+        return '';
+      }
+    }
+    return String(val);
+  }
+
+  /**
    * Builds an Excel-native SpreadsheetML 2003 XML document.
    */
   private static buildSpreadsheetXml(sheets: { name: string; rows: string[][] }[]): string {
-    const escapeXml = (str: string) =>
-      str
+    const escapeXml = (val: any) => {
+      const str = ExcelExportEngine.toSafeString(val);
+      return str
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&apos;');
+    };
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -403,7 +589,8 @@ export class ExcelExportEngine {
     for (const sheet of sheets) {
       // Sheet names in Excel must be <= 31 chars and cannot contain: \ / ? * [ ]
       const cleanName = sheet.name.replace(/[\\/?*[\]]/g, '_').substring(0, 31);
-      const ws = XLSX.utils.aoa_to_sheet(sheet.rows);
+      const safeRows = sheet.rows.map(row => row.map(cell => this.toSafeString(cell)));
+      const ws = XLSX.utils.aoa_to_sheet(safeRows);
 
       // Auto-fit column widths
       const colWidths = sheet.rows.reduce((acc: number[], row: any[]) => {
@@ -420,5 +607,221 @@ export class ExcelExportEngine {
 
     const safeName = filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`;
     XLSX.writeFile(wb, safeName);
+  }
+
+  /**
+   * Generates comprehensive, deterministic AI recommendations for the physical infrastructure model.
+   * Synthesizes active proposals, validation audit findings, workflow gap items, and best-practice hardening rules.
+   */
+  private static generateAiRecommendations(
+    model: PhysicalInfrastructureModel,
+    findings: ValidationFinding[],
+    proposals: ChangeProposal[],
+    cableMap?: Map<string, string>
+  ): string[][] {
+    const rows: string[][] = [
+      ['RECOMMENDATION ID', 'CATEGORY', 'PRIORITY', 'TARGET SCOPE', 'ANALYSIS / OBSERVATION', 'RECOMMENDED ACTION', 'EXPECTED BENEFIT / IMPACT', 'STATUS'],
+    ];
+
+    const seenIds = new Set<string>();
+    const addRow = (id: string, category: string, priority: string, scope: string, obs: string, action: string, benefit: string, status: string) => {
+      if (seenIds.has(id)) return;
+      seenIds.add(id);
+      rows.push([
+        this.toSafeString(id),
+        this.toSafeString(category),
+        this.toSafeString(priority),
+        this.toSafeString(scope),
+        this.toSafeString(obs),
+        this.toSafeString(action),
+        this.toSafeString(benefit),
+        this.toSafeString(status),
+      ]);
+    };
+
+    const racks = model.getRacks();
+    const objects = model.getObjects();
+    const cables = model.getCables();
+    const power = model.getPowerMappings();
+
+    // 1. Registered AI Change Proposals
+    for (const pr of proposals) {
+      const objName = this.resolveObjectName(pr.objectId, model);
+      const impactSummary = typeof pr.impact === 'object' && pr.impact !== null
+        ? (pr.impact.summary || 'Optimized physical placement')
+        : (pr.impact || 'Optimized physical placement');
+      addRow(
+        pr.proposalId,
+        `AI PROPOSAL: ${pr.type.replace(/_/g, ' ')}`,
+        'HIGH',
+        objName,
+        pr.reason,
+        pr.type === 'MOVE_OBJECT'
+          ? `Relocate ${objName} to target rack / U-position`
+          : pr.reason,
+        impactSummary,
+        pr.status.toUpperCase()
+      );
+    }
+
+    // 2. Deterministic Validation Audit Findings & Hardening Remediations
+    for (const f of findings) {
+      const targetScope = f.affectedObjectIds.length > 0
+        ? f.affectedObjectIds.map(id => this.resolveEntityName(id, model, cableMap)).join(', ')
+        : (this.resolveEntityName(f.objectId || f.rackId || '', model, cableMap) || 'Cabinet Topology');
+      addRow(
+        f.findingId,
+        `AUDIT: ${f.category.toUpperCase()}`,
+        f.severity,
+        targetScope,
+        f.description,
+        f.recommendation,
+        f.impact,
+        f.status.toUpperCase()
+      );
+    }
+
+    // 3. Workflow Gap Analysis & Redundancy Recommendations
+    try {
+      const orchestrator = getActiveWorkflowOrchestrator();
+      if (orchestrator) {
+        const gaps = orchestrator.getGapItems() || [];
+        for (const gap of gaps) {
+          const recId = `GAP-${gap.id.replace('gap_', '').toUpperCase()}`;
+          const scope = gap.componentToAdd
+            ? `${gap.componentToAdd.name} (${gap.componentToAdd.units}U, ${gap.componentToAdd.watts}W)`
+            : 'Cluster Infrastructure';
+          const action = gap.componentToAdd
+            ? `Add ${gap.componentToAdd.name} to Bill of Materials (${gap.componentToAdd.units}U)`
+            : gap.description;
+          const benefit = gap.id === 'gap_oob'
+            ? 'Isolates BMC/iDRAC management plane from production data network'
+            : gap.id === 'gap_backup'
+            ? 'Guarantees immutable ransomware recovery & 3-2-1 backup compliance'
+            : 'Continuous temperature/humidity gradient monitoring to prevent hotspots';
+          const status = gap.accepted ? 'ACCEPTED' : gap.dismissed ? 'DISMISSED' : 'RECOMMENDED';
+          addRow(recId, `WORKFLOW GAP: ${gap.category.toUpperCase()}`, gap.severity.toUpperCase(), scope, gap.description, action, benefit, status);
+        }
+
+        const limitationReport = orchestrator.getState()?.requirement?.limitationReport || [];
+        for (const lim of limitationReport) {
+          const limId = `SPOF-${lim.id.replace('lim_', '').toUpperCase()}`;
+          const priority = lim.status === 'FAIL_SPOF' ? 'CRITICAL' : lim.status === 'WARN_CHASSIS' ? 'HIGH' : 'RECOMMENDED';
+          addRow(
+            limId,
+            `SPOF ANALYSIS: ${lim.category.toUpperCase()}`,
+            priority,
+            lim.hardwareGiven,
+            lim.limitationText,
+            lim.recommendationToFix,
+            lim.title,
+            lim.status === 'PASS_HA' ? 'VERIFIED' : 'RECOMMENDED'
+          );
+        }
+      }
+    } catch {
+      // Graceful fallback if orchestrator not initialized
+    }
+
+    // 4. Deterministic Architectural Hardening & Best Practice Recommendations
+    // Rule: Vertical Cable Manager (VCM) & EMI Segregation
+    addRow(
+      'REC-CAB-01',
+      'CABLING & ROUTING',
+      'BEST PRACTICE',
+      'All Cabinets (Side VCM Channels)',
+      'High-voltage AC power cords and sensitive high-speed Ethernet/Fiber DAC cables coexist in cabinet enclosure.',
+      'Route Power Feed A through Left VCM and Feed B through Right VCM. Segregate copper/fiber data through center cable channels and ear-ports with minimum 10x OD bend radius.',
+      'Eliminates AC electromagnetic interference (EMI) on 25GbE/100GbE data lines and prevents cable snagging during server hot-swap servicing.',
+      'RECOMMENDED'
+    );
+
+    // Rule: Center of Gravity & Seismic Safety
+    addRow(
+      'REC-PHY-01',
+      'PHYSICAL & STRUCTURAL',
+      'BEST PRACTICE',
+      'Cabinet Base (U1-U12)',
+      'Heavy chassis (UPS battery packs, storage arrays, 4U compute) impact cabinet tipping hazard and floor loading.',
+      'Place heavy equipment (>20kg) strictly in lower rack units (U1-U12). Reserve U38-U42 for lightweight Top-of-Rack switches.',
+      'Maintains low center of mass, preventing cabinet tip hazards during rolling transport and ensuring seismic compliance.',
+      'RECOMMENDED'
+    );
+
+    // Rule: Thermal Airflow Containment & Blanking Panels
+    addRow(
+      'REC-THM-01',
+      'THERMAL & AIRFLOW',
+      'BEST PRACTICE',
+      'Unoccupied RU Slots',
+      'Open vertical rack gaps allow hot rear exhaust air to recirculate into front server cold intake.',
+      'Install 1U/2U snap-in blanking panels in all empty rack unit spaces and 1U brush pass-through panels between ToR switches.',
+      'Maintains static air pressure, prevents localized hot spots, and reduces server cooling fan power consumption by up to 15%.',
+      'RECOMMENDED'
+    );
+
+    // Rule: Dedicated Out-of-Band (OOB/iDRAC) Isolation
+    addRow(
+      'REC-SEC-01',
+      'MANAGEMENT & SECURITY',
+      'RECOMMENDED',
+      'Server BMC / iDRAC / iLO Ports',
+      'Baseboard Management Controllers (BMC) require isolated broadcast domain and dedicated security perimeter.',
+      'Deploy dedicated 1U 24-Port 1GbE Out-of-Band management switch connected exclusively to server BMC/iDRAC ear-ports on an isolated management subnet.',
+      'Protects server hardware management interfaces against production network storms and ensures out-of-band console access during OS kernel panics.',
+      'RECOMMENDED'
+    );
+
+    // Rule: Top-of-Rack Switch Redundancy & MLAG Fabric
+    addRow(
+      'REC-NET-01',
+      'NETWORK & FABRIC',
+      'HIGH',
+      'Top-of-Rack Switches',
+      'Enterprise compute clusters require non-blocking, multi-homed Top-of-Rack redundancy.',
+      'Deploy dual ToR switches (ToR-A & ToR-B) in MLAG / EVPN-VXLAN active-active pair with dual 100G DAC Inter-Switch Links (ISL) and 802.1Q trunked VLANs.',
+      'Provides sub-millisecond failover for live virtual machine migration and eliminates single switch maintenance outages.',
+      'RECOMMENDED'
+    );
+
+    // Rule: Power Feed Diversity & Dual-Corded Feeds
+    addRow(
+      'REC-PWR-01',
+      'POWER ARCHITECTURE',
+      'CRITICAL',
+      'Branch Circuits & PDUs',
+      'Dual-corded compute and storage require independent utility/generator feed paths.',
+      'Verify PSU 1 connects to Feed A (Primary PDU) and PSU 2 connects to Feed B (Secondary PDU on isolated UPS). Use Automatic Transfer Switches (ATS) for any single-corded network appliances.',
+      'Ensures uninterrupted operation during upstream utility brownout, generator transfer, or PDU circuit maintenance.',
+      'RECOMMENDED'
+    );
+
+    // Rule: ANSI/TIA-606-C Structured Cable Labeling
+    addRow(
+      'REC-OPS-01',
+      'OPERATIONS & STANDARDS',
+      'BEST PRACTICE',
+      'All Patch Cables',
+      'Unlabeled or ambiguous patch cords significantly increase troubleshooting time during network and power outages.',
+      'Affix permanent wrap-around machine-printed labels at both cable termination ends following TIA-606-C format: [Source Rack:U:Port] -> [Dest Rack:U:Port].',
+      'Decreases Mean Time To Recovery (MTTR) by ~70% and prevents accidental disconnection of critical uplinks.',
+      'RECOMMENDED'
+    );
+
+    // Rule: Dual-Cabinet High Availability Split (if >= 2 racks)
+    if (racks.length >= 2) {
+      addRow(
+        'REC-HA-01',
+        'HIGH AVAILABILITY',
+        'HIGH',
+        'Cabinet A & Cabinet B',
+        'Multi-cabinet topology detected with distributed compute resources.',
+        'Distribute hypervisor nodes 50/50 across Cabinet A and Cabinet B with cross-rack HA heartbeat and storage synchronization.',
+        'Protects cluster workloads against total physical cabinet isolation or localized PDU failure.',
+        'RECOMMENDED'
+      );
+    }
+
+    return rows;
   }
 }

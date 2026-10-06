@@ -228,6 +228,10 @@ export interface PhysicalCable {
   rackB: string;
   fabric?: string;
   purpose: CablePurpose;
+  vlan?: string;            // e.g. "10", "VLAN 20 (VM Traffic)", "Trunk: 10, 20, 30"
+  vlanMode?: 'access' | 'trunk' | 'routed';
+  portGroup?: string;       // e.g. "dpg-management", "iSCSI-Fabric-A"
+  networkRole?: string;
   status: 'planned' | 'pulled' | 'connected' | 'tested' | 'inactive';
 }
 

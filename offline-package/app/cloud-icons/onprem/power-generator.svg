@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Generator</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <circle fill="#FFFFFF" cx="36" cy="40" r="24"></circle><g stroke="#586069" stroke-width="3" fill="none" stroke-linecap="round"><path d="M26,40 A10,10 0 0,1 46,40"></path><path d="M46,40 A10,10 0 0,1 26,40"></path></g><rect fill="#586069" x="58" y="34" width="14" height="12" rx="2"></rect>
+    </g>
+</svg>

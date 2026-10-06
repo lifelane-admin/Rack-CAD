@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80px" height="80px" viewBox="0 0 80 80" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Local-Resources/Backup Storage</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect fill="#586069" x="0" y="0" width="80" height="80"></rect>
+        <g transform="translate(0, 0)"><path fill="#FFFFFF" d="M14,26 A26,10 0 1,1 66,26 V54 A26,10 0 0,1 14,54 Z"/><ellipse fill="#586069" cx="40" cy="26" rx="26" ry="10"/><polygon fill="#586069" points="40,32 48,44 34,44"/><rect fill="#586069" x="37" y="42" width="6" height="12"/></g>
+    </g>
+</svg>

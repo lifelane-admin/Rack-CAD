@@ -512,6 +512,262 @@ describe('Physical Infrastructure Model & AI Copilot Suite', () => {
       expect(xml).toContain('Dell');
       expect(xml).toContain('R760');
     });
+
+    it('populates AI_Recommendations sheet with rich engineering data and recommendations', () => {
+      model.createRack({ rackId: 'RACK-A', rackName: 'Cabinet A', rackSizeU: 42 });
+      const sheets = ExcelExportEngine.generateSheets(model);
+      const aiSheet = sheets.find(s => s.name === 'AI_Recommendations');
+      expect(aiSheet).toBeDefined();
+      expect(aiSheet!.rows.length).toBeGreaterThan(1);
+      const headers = aiSheet!.rows[0];
+      expect(headers).toContain('RECOMMENDATION ID');
+      expect(headers).toContain('RECOMMENDED ACTION');
+      expect(headers).toContain('EXPECTED BENEFIT / IMPACT');
+
+      const allText = JSON.stringify(aiSheet!.rows);
+      expect(allText).toContain('REC-CAB-01');
+      expect(allText).toContain('CABLING & ROUTING');
+      expect(allText).toContain('REC-PHY-01');
+    });
+
+    it('includes VLAN and Port Group in Cable_Schedule and preserves them during model conversion', () => {
+      model.createRack({ rackId: 'RACK-A', rackName: 'Cabinet A', rackSizeU: 42 });
+      model.createObject({
+        objectId: 'SRV-01',
+        objectName: 'Compute Node 1',
+        category: 'compute',
+        subCategory: 'Server',
+        manufacturer: 'Dell',
+        model: 'R760',
+        rackId: 'RACK-A',
+        uStart: 10,
+        uEnd: 11,
+        heightU: 2,
+        width: 482.6,
+        depth: 750,
+        height: 88.9,
+        weight: 25,
+        positionX: 0,
+        positionY: 0,
+        positionZ: 0,
+        rotation: 0,
+        powerWatts: 450,
+        powerVA: 500,
+        psuCount: 2,
+        psuRedundancy: '1+1',
+        airflowDirection: 'Front-to-Back',
+        frontRearOrientation: 'Front',
+        status: 'Active',
+      });
+      model.createObject({
+        objectId: 'SW-01',
+        objectName: 'ToR Switch 1',
+        category: 'network',
+        subCategory: 'Switch',
+        manufacturer: 'Cisco',
+        model: 'Nexus 93180YC-FX',
+        rackId: 'RACK-A',
+        uStart: 40,
+        uEnd: 40,
+        heightU: 1,
+        width: 482.6,
+        depth: 550,
+        height: 44.45,
+        weight: 10,
+        positionX: 0,
+        positionY: 0,
+        positionZ: 0,
+        rotation: 0,
+        powerWatts: 250,
+        powerVA: 280,
+        psuCount: 2,
+        psuRedundancy: '1+1',
+        airflowDirection: 'Front-to-Back',
+        frontRearOrientation: 'Front',
+        status: 'Active',
+      });
+      model.registerPort({
+        portId: 'SRV-01-port-1',
+        objectId: 'SRV-01',
+        portGroup: 'Data',
+        portType: 'Ethernet',
+        speed: '25GbE',
+        connector: 'SFP28',
+        physicalPosition: { x: 50, y: 10 },
+        label: 'NIC 1',
+        purpose: 'Production Data',
+        status: 'Available',
+      });
+      model.registerPort({
+        portId: 'SW-01-port-1',
+        objectId: 'SW-01',
+        portGroup: 'Data',
+        portType: 'Ethernet',
+        speed: '25GbE',
+        connector: 'SFP28',
+        physicalPosition: { x: 50, y: 10 },
+        label: 'Port 1',
+        purpose: 'Access',
+        status: 'Available',
+      });
+      model.connectCable({
+        cableId: 'CBL-01',
+        sourceObject: 'SRV-01',
+        sourcePort: 'SRV-01-port-1',
+        destinationObject: 'SW-01',
+        destinationPort: 'SW-01-port-1',
+        media: 'Fiber',
+        speed: '25GbE',
+        connectorA: 'SFP28',
+        connectorB: 'SFP28',
+        length: 3,
+        color: '#3b82f6',
+        primaryRoute: 'Right VCM',
+        rackA: 'RACK-A',
+        rackB: 'RACK-A',
+        purpose: 'Production',
+        vlan: 'VLAN 100 (VM Prod)',
+        portGroup: 'dpg-production-vswitch',
+        networkRole: 'Production Traffic',
+        status: 'connected',
+      });
+
+      const sheets = ExcelExportEngine.generateSheets(model);
+      const cableSheet = sheets.find(s => s.name === 'Cable_Schedule');
+      expect(cableSheet).toBeDefined();
+      expect(cableSheet!.rows[0]).toContain('VLAN / SUBNET');
+      expect(cableSheet!.rows[0]).toContain('PORT GROUP / ROLE');
+
+      const dataRow = cableSheet!.rows.find(r => r[0] === 'CBL-01');
+      expect(dataRow).toBeDefined();
+      expect(dataRow).toContain('VLAN 100 (VM Prod)');
+      expect(dataRow).toContain('dpg-production-vswitch');
+    });
+
+    it('formats raw UUID object IDs, port IDs, and cable IDs as human-readable identifiable names across Excel sheets', () => {
+      model.createRack({ rackId: '98d8a295-2da9-4e03-a0f0-66efa92a5ffe', rackName: 'Cabinet 01', rackSizeU: 42 });
+      model.createObject({
+        objectId: '3d5277a2-1893-4694-b83a-e21c02feae75',
+        objectName: 'Primary Compute Node',
+        category: 'compute',
+        subCategory: 'Server',
+        manufacturer: 'Dell',
+        model: 'R760',
+        rackId: '98d8a295-2da9-4e03-a0f0-66efa92a5ffe',
+        uStart: 14,
+        uEnd: 15,
+        heightU: 2,
+        width: 482.6,
+        depth: 750,
+        height: 88.9,
+        weight: 25,
+        positionX: 0,
+        positionY: 0,
+        positionZ: 0,
+        rotation: 0,
+        powerWatts: 450,
+        powerVA: 500,
+        psuCount: 2,
+        psuRedundancy: '1+1',
+        airflowDirection: 'Front-to-Back',
+        frontRearOrientation: 'Front',
+        status: 'Active',
+      });
+      model.createObject({
+        objectId: '990488af-fb42-4ed5-bf17-16c63d32ca80',
+        objectName: 'ToR Switch 1',
+        category: 'network',
+        subCategory: 'Switch',
+        manufacturer: 'Cisco',
+        model: 'Nexus 93180YC',
+        rackId: '98d8a295-2da9-4e03-a0f0-66efa92a5ffe',
+        uStart: 40,
+        uEnd: 40,
+        heightU: 1,
+        width: 482.6,
+        depth: 550,
+        height: 44.45,
+        weight: 10,
+        positionX: 0,
+        positionY: 0,
+        positionZ: 0,
+        rotation: 0,
+        powerWatts: 250,
+        powerVA: 280,
+        psuCount: 2,
+        psuRedundancy: '1+1',
+        airflowDirection: 'Front-to-Back',
+        frontRearOrientation: 'Front',
+        status: 'Active',
+      });
+      model.registerPort({
+        portId: '3d5277a2-1893-4694-b83a-e21c02feae75-ear-left-nic1',
+        objectId: '3d5277a2-1893-4694-b83a-e21c02feae75',
+        portGroup: 'Data',
+        portType: 'rj45',
+        speed: '10GbE',
+        connector: 'RJ45',
+        physicalPosition: { x: 10, y: 10 },
+        label: 'Left Ear Network 1 (RJ45)',
+        purpose: 'Host Data Uplink',
+        status: 'Connected',
+      });
+      model.registerPort({
+        portId: '990488af-fb42-4ed5-bf17-16c63d32ca80-port-0',
+        objectId: '990488af-fb42-4ed5-bf17-16c63d32ca80',
+        portGroup: 'Data',
+        portType: 'sfp28',
+        speed: '10GbE',
+        connector: 'SFP28',
+        physicalPosition: { x: 50, y: 10 },
+        label: 'NIC 1',
+        purpose: 'Access Port',
+        status: 'Connected',
+      });
+      model.connectCable({
+        cableId: 'b90a34dd-20a3-43a5-ac9f-218b66c06661',
+        sourceObject: '3d5277a2-1893-4694-b83a-e21c02feae75',
+        sourcePort: '3d5277a2-1893-4694-b83a-e21c02feae75-ear-left-nic1',
+        destinationObject: '990488af-fb42-4ed5-bf17-16c63d32ca80',
+        destinationPort: '990488af-fb42-4ed5-bf17-16c63d32ca80-port-0',
+        media: 'DAC',
+        speed: '10GbE',
+        connectorA: 'RJ45',
+        connectorB: 'SFP28',
+        length: 2,
+        color: '#3b82f6',
+        primaryRoute: 'Left VCM',
+        rackA: '98d8a295-2da9-4e03-a0f0-66efa92a5ffe',
+        rackB: '98d8a295-2da9-4e03-a0f0-66efa92a5ffe',
+        purpose: 'Production',
+        status: 'connected',
+      });
+
+      const sheets = ExcelExportEngine.generateSheets(model);
+      const connSheet = sheets.find(s => s.name === 'Connectivity')!;
+      expect(connSheet).toBeDefined();
+
+      const cableRow = connSheet.rows[1];
+      // CABLE ID must be formatted as CBL-001 instead of raw UUID
+      expect(cableRow[0]).toBe('CBL-001');
+      // SOURCE OBJECT must be human-readable name with U position
+      expect(cableRow[1]).toBe('Primary Compute Node [U14]');
+      // SOURCE PORT must be human-readable port label
+      expect(cableRow[2]).toBe('Left Ear Network 1 (RJ45)');
+      // DEST OBJECT must be human-readable switch name with U position
+      expect(cableRow[3]).toBe('ToR Switch 1 [U40]');
+      // DEST PORT must be human-readable port label
+      expect(cableRow[4]).toBe('NIC 1');
+
+      // Cable schedule verification
+      const schedSheet = sheets.find(s => s.name === 'Cable_Schedule')!;
+      const schedRow = schedSheet.rows[1];
+      expect(schedRow[0]).toBe('CBL-001');
+      expect(schedRow[1]).toBe('Cabinet 01'); // Source rack name instead of UUID
+      expect(schedRow[2]).toBe('Primary Compute Node [U14]');
+      expect(schedRow[4]).toBe('Cabinet 01'); // Dest rack name instead of UUID
+      expect(schedRow[5]).toBe('ToR Switch 1 [U40]');
+    });
   });
 
   describe('7. Document Generation', () => {
