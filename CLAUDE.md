@@ -98,6 +98,22 @@ npm run test             # run all tests once
 
 Tests use `happy-dom` (no real browser). Vitest globals enabled. Test pattern: `src/__tests__/**/*.test.ts`.
 
+## DCIM Validation Rules & False-Positive Prevention
+
+When working with datacenter validation, power distribution, and cable schedules:
+1. **0U Vertical PDUs & Side-Mount Equipment**:
+   - Side-mount equipment (e.g. `vpdu-legrand-is`, `LCS3-IS`, vertical cable managers) mounts in zero-U side channels with `uStart: 0` and `heightU: 0`.
+   - Never flag `uStart: 0` or `heightU: 0` as invalid U positions or bounds errors in `USpaceEngine` or `DeterministicValidator`.
+   - In Excel exports, format as `0U (Side)` / `0U (Side-Mount)` rather than `U0`.
+2. **Dual PSU & Dual PDU Redundancy**:
+   - Compute devices with 2 PSUs connect Left Ear Power (PSU 1 / Feed A) and Right Ear Power (PSU 2 / Feed B).
+   - `ModelMigrationAdapter` must always detect power cables across both PSUs and feeds regardless of whether `type` is `power`, `c13-power`, or connected to PDU `outlet-*` sockets.
+   - Dual-corded servers on separate PDUs/feeds must evaluate as `1+1 Redundant` with zero power warnings.
+3. **Ear Port Pass-Through Speeds & Transceivers**:
+   - Ear data ports (e.g. `Right Ear S2-P1`) represent physical routing conduits for body PCIe NICs.
+   - They inherit speed and connector (e.g. `10GbE SFP+`) from chassis body ports or connected transceivers/DACs. Never force them to generic 1GbE RJ45.
+   - Power cables and PDU outlets are strictly excluded from network transceiver/speed mismatch checks.
+
 **Coverage target:** 80% minimum. Write tests first (RED → GREEN → REFACTOR).
 
 ## Important Notes
