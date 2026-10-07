@@ -1204,40 +1204,79 @@
 
 /* ---------- AI Natural Language Prompt Bar ---------- */
 .saas-ai-bar {
-  background: linear-gradient(90deg, rgba(20, 16, 48, 0.9), rgba(12, 28, 54, 0.9));
-  border: 1px solid rgba(139, 92, 246, 0.3);
+  background: linear-gradient(90deg, rgba(16, 20, 50, 0.95), rgba(9, 22, 48, 0.95));
+  border: 1px solid rgba(139, 92, 246, 0.35);
   border-radius: 12px;
-  padding: 14px 18px;
-  margin: 28px 32px 0 32px;
+  padding: 12px 18px;
+  margin: 16px 32px 0 32px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   position: relative;
   z-index: 2;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(139, 92, 246, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 24px rgba(139, 92, 246, 0.15);
+}
+
+.saas-ai-robot-wrap {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.saas-ai-robot-icon {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(168, 85, 247, 0.5));
+}
+
+.saas-ai-center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.saas-ai-heading {
+  font-size: 11px;
+  font-weight: 800;
+  color: #c084fc;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .saas-ai-input {
-  flex: 1;
-  background: rgba(5, 11, 23, 0.8);
-  border: 1px solid rgba(139, 92, 246, 0.25);
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(4, 9, 20, 0.85);
+  border: 1px solid rgba(139, 92, 246, 0.3);
   border-radius: 8px;
-  padding: 10px 14px;
-  color: #fff;
-  font-size: 13px;
+  padding: 10px 16px;
+  color: #ffffff;
+  font-size: 13.5px;
   font-family: inherit;
   outline: none;
+  transition: all 0.2s ease;
+}
+
+.saas-ai-input::placeholder {
+  color: #64748b;
 }
 
 .saas-ai-input:focus {
-  border-color: #a78bfa;
-  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+  border-color: #c084fc;
+  background: rgba(6, 12, 26, 0.95);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.25), 0 0 16px rgba(168, 85, 247, 0.2);
 }
 
 .saas-ai-submit-btn {
-  padding: 10px 18px;
+  padding: 11px 22px;
   background: linear-gradient(135deg, #a78bfa, #7c3aed);
-  color: #fff;
+  color: #ffffff;
   border: none;
   border-radius: 8px;
   font-size: 13px;
@@ -1246,14 +1285,16 @@
   white-space: nowrap;
   display: flex;
   align-items: center;
-  gap: 6px;
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
-  transition: all 0.15s ease;
+  gap: 7px;
+  flex: none;
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.35);
+  transition: all 0.18s ease;
 }
 
 .saas-ai-submit-btn:hover {
-  filter: brightness(1.1);
+  filter: brightness(1.12);
   transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.5);
 }
 
 /* Responsive Breakpoints */

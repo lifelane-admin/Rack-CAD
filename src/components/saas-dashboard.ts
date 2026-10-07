@@ -376,7 +376,7 @@ export class SaaSWorkspaceDashboard {
             </div>
           </section>
 
-          <!-- 11 3D Isometric Neon-Pedestal Module Navigation Tiles -->
+          <!-- 10 3D Isometric Neon-Pedestal Module Navigation Tiles -->
           <nav class="saas-module-nav" aria-label="Module navigation">
             ${MODULE_NAV.map(m => `
               <button class="saas-mod-btn" id="${m.id}" data-mod-view="${m.view}" style="--mod-color:${m.color}; --mod-glow:${m.glow};" title="${m.label}">
@@ -388,6 +388,20 @@ export class SaaSWorkspaceDashboard {
               </button>
             `).join('')}
           </nav>
+
+          <!-- AI Natural Language Architecture Prompt (Placed directly below Service Icons) -->
+          <div class="saas-ai-bar">
+            <div class="saas-ai-robot-wrap">
+              <img src="/assets/dashboard/icons/ai-studio-icon.png" alt="AI Studio" class="saas-ai-robot-icon" onerror="this.outerHTML='🤖';" />
+            </div>
+            <div class="saas-ai-center">
+              <div class="saas-ai-heading">AI Studio Architecture Generator</div>
+              <input type="text" id="ai-quick-prompt" class="saas-ai-input" placeholder="e.g. Build a 3-node Proxmox VE cluster with Ceph NVMe storage, dual ToR switches, and redundant 25GbE networking..." />
+            </div>
+            <button id="ai-quick-submit-btn" class="saas-ai-submit-btn">
+              <span>✨</span> Generate Architecture
+            </button>
+          </div>
 
           <!-- Continue Designing Header -->
           <div class="sec-head">
@@ -412,20 +426,6 @@ export class SaaSWorkspaceDashboard {
               </div>
             ` : projects.map((p, idx) => this.renderRevampedCard(p, idx)).join('')}
           </section>
-
-          <!-- AI Natural Language Architecture Prompt -->
-          <div class="saas-ai-bar">
-            <div style="font-size:24px;">🤖</div>
-            <div style="flex:1;">
-              <div style="font-size:12px; font-weight:700; color:#c084fc; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px;">
-                AI Studio Architecture Generator
-              </div>
-              <input type="text" id="ai-quick-prompt" class="saas-ai-input" placeholder="e.g. Create a 3-node Proxmox cluster with Ceph, dual ToR switches, and redundant 25GbE networking..." />
-            </div>
-            <button id="ai-quick-submit-btn" class="saas-ai-submit-btn">
-              <span>✨</span> Generate Architecture
-            </button>
-          </div>
 
           <!-- Reference Architectures & Proven Templates -->
           <div class="sec-head" style="margin-top:40px;">
