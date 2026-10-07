@@ -78,7 +78,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
     // Management 1GbE Switch (U40)
     {
       id: 'dev-ceph-mgmt-sw',
-      templateId: 'switch-24p-1g',
+      templateId: 'rs-sw-24p',
       name: 'Cisco 2960-X 24P OOB Mgmt Switch',
       category: 'switch',
       rackId,
@@ -97,7 +97,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
     // Cat6 Patch Panel (U39)
     {
       id: 'dev-ceph-patch',
-      templateId: 'patch-panel-24p',
+      templateId: 'patch-1u-cat6a-48p',
       name: '24-Port Cat6A Patch Panel',
       category: 'patch-panel',
       rackId,
@@ -370,7 +370,7 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
     // ToR Switch (U41)
     {
       id: 'dev-hv-sw-01',
-      templateId: 'switch-48p-25g',
+      templateId: 'sw-1u-tor-25g-100g',
       name: 'Dell PowerSwitch S5248F-ON 25GbE ToR',
       category: 'switch',
       rackId,
@@ -567,7 +567,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
     // Dual ToR Switches (U41 & U40)
     {
       id: 'dev-proxmox-tor-01',
-      templateId: 'switch-48p-25g',
+      templateId: 'sw-1u-tor-25g-100g',
       name: 'Cisco Nexus 93180YC ToR-01',
       category: 'switch',
       rackId,
@@ -584,7 +584,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
     },
     {
       id: 'dev-proxmox-tor-02',
-      templateId: 'switch-48p-25g',
+      templateId: 'sw-1u-tor-25g-100g',
       name: 'Cisco Nexus 93180YC ToR-02 (MLAG)',
       category: 'switch',
       rackId,
@@ -1143,7 +1143,7 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
     // Quantum-2 InfiniBand Switch 01 (U46)
     {
       id: 'dev-ib-sw-01',
-      templateId: 'switch-48p-25g',
+      templateId: 'sw-1u-leaf-100g-400g',
       name: 'NVIDIA Quantum-2 800Gb/s IB Switch 01',
       category: 'switch',
       rackId,
@@ -1161,7 +1161,7 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
     // Quantum-2 InfiniBand Switch 02 (U45)
     {
       id: 'dev-ib-sw-02',
-      templateId: 'switch-48p-25g',
+      templateId: 'sw-1u-leaf-100g-400g',
       name: 'NVIDIA Quantum-2 800Gb/s IB Switch 02',
       category: 'switch',
       rackId,

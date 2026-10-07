@@ -5549,38 +5549,7 @@ export class App {
           destPos = cable.floatingDest;
         }
         if (sourcePos && destPos) {
-          const srcPort = stateManager.getPort(cable.sourcePortId);
-          const destPort = cable.destPortId ? stateManager.getPort(cable.destPortId) : null;
-
-          let srcVisible = true;
-          let destVisible = true;
-          const isRear = s.cabinetViewMode === 'rear';
-
-          const isPortVisibleOnSide = (p: typeof srcPort, isRearSide: boolean) => {
-            if (!p) return true;
-            const dev = stateManager.getDevice(p.deviceId);
-            const temp = dev ? getTemplate(dev.templateId) : null;
-            const cat = temp?.category || 'server';
-
-            if (p.id.includes('-ear-')) {
-              return !isRearSide;
-            }
-
-            if (cat === 'server' || cat === 'firewall' || cat === 'storage' || cat === 'ups' || cat === 'pdu') {
-              return isRearSide;
-            } else if (cat === 'switch' || cat === 'patch-panel') {
-              if (p.type === 'power') return isRearSide;
-              return !isRearSide;
-            }
-            return true;
-          };
-
-          if (srcPort) srcVisible = isPortVisibleOnSide(srcPort, isRear);
-          if (destPort) destVisible = isPortVisibleOnSide(destPort, isRear);
-
-          if (srcVisible || destVisible) {
-            renderCable(cable, sourcePos, destPos, cableLayer);
-          }
+          renderCable(cable, sourcePos, destPos, cableLayer);
         }
       } catch (err) {
         console.error(`renderAll: failed to render cable "${cable.id}" (${cable.name}) — skipping it so the rest of the canvas can still render`, err);

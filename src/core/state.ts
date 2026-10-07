@@ -465,6 +465,19 @@ class StateManager {
 
     if (!targetPort || !targetDevice) return null;
 
+    if (targetDevice.sideMountPosition) {
+      const template = getTemplate(targetDevice.templateId);
+      const rack = this.getRack(targetDevice.rackId);
+      if (rack) {
+        const pduWidth = template?.pduWidth ?? 40;
+        const baseX = sidePduOffsetX(rack, targetDevice.sideMountPosition, pduWidth);
+        return {
+          x: rack.x + baseX + targetPort.relativeX,
+          y: rack.y + RACK_CONSTANTS.RACK_PADDING_TOP + targetPort.relativeY
+        };
+      }
+    }
+
     const origin = this.getDeviceWorldOrigin(targetDevice.id);
     if (!origin) return null;
 

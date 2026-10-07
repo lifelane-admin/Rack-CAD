@@ -5,6 +5,7 @@ import { importJSON } from '../utils/export';
 import { stateManager } from '../core/state';
 import { ExcelExportEngine } from '../model/excel-export-engine';
 import { physicalInfrastructureModel } from '../model/physical-model';
+import { renderCable } from '../renderers/cable-renderer';
 
 describe('Architecture Blueprint Templates & Excel Export', () => {
   beforeEach(() => {
@@ -71,6 +72,13 @@ describe('Architecture Blueprint Templates & Excel Export', () => {
     expect(s.devices.length).toBeGreaterThanOrEqual(5);
     expect(s.cables.length).toBeGreaterThanOrEqual(8);
 
+    for (const cable of s.cables) {
+      const srcPos = cable.floatingSource || stateManager.getPortWorldPosition(cable.sourcePortId);
+      const destPos = cable.floatingDest || (cable.destPortId ? stateManager.getPortWorldPosition(cable.destPortId) : null);
+      expect(srcPos, `Cable ${cable.id} (${cable.name}) sourcePos should exist for port ${cable.sourcePortId}`).not.toBeNull();
+      expect(destPos, `Cable ${cable.id} (${cable.name}) destPos should exist for port ${cable.destPortId}`).not.toBeNull();
+    }
+
     // Verify physicalInfrastructureModel is synchronized
     const modelRacks = physicalInfrastructureModel.getRacks();
     const modelObjects = physicalInfrastructureModel.getObjects();
@@ -100,5 +108,31 @@ describe('Architecture Blueprint Templates & Excel Export', () => {
     // Verify Cable_Schedule has populated rows
     const cableSheet = sheets.find(s => s.name === 'Cable_Schedule')!;
     expect(cableSheet.rows.length).toBeGreaterThan(1); // Header + cable rows
+  });
+
+  it('verifies that all cables across all rack templates render SVG groups and paths', () => {
+    const rackTemplateIds = ['tpl-ceph-mesh', 'tpl-hyperv-cluster', 'tpl-proxmox-ceph', 'tpl-ai-gpu-pod'];
+
+    for (const tplId of rackTemplateIds) {
+      const payload = getTemplatePayloadJson(tplId);
+      importJSON(payload);
+
+      const s = stateManager.getState();
+      const fakeLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g') as SVGGElement;
+
+      expect(s.cables.length).toBeGreaterThan(0);
+
+      for (const cable of s.cables) {
+        const sourcePos = cable.floatingSource || stateManager.getPortWorldPosition(cable.sourcePortId);
+        const destPos = cable.floatingDest || (cable.destPortId ? stateManager.getPortWorldPosition(cable.destPortId) : null);
+
+        expect(sourcePos, `Template ${tplId} cable ${cable.id} source position`).not.toBeNull();
+        expect(destPos, `Template ${tplId} cable ${cable.id} destination position`).not.toBeNull();
+
+        const group = renderCable(cable, sourcePos!, destPos!, fakeLayer);
+        expect(group).toBeTruthy();
+        expect(fakeLayer.children.length).toBeGreaterThan(0);
+      }
+    }
   });
 });
