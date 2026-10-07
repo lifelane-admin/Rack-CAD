@@ -3,12 +3,29 @@
  * Implements the RackSlicer SaaS Product & UX Blueprint using the 58px topbar,
  * 220px navigation rail, Hyperscale Containment Corridor photo backdrop,
  * real-time telemetry metrics, and high-definition card visuals.
+ *
+ * Performance: Static HTML rendered once, partial DOM updates for dynamic content.
+ * No JS-generated SVG animations on load to prevent layout instability.
  */
 
 import { authStore } from '../auth/auth-store';
 import { projectStore, SaaSProject, ARCHITECTURE_TEMPLATES, ArchitectureTemplate } from '../storage/project-store';
 import { showUserProfileModal } from './user-profile-modal';
 import EventBus from '../core/event-bus';
+
+// Module navigation definitions
+const MODULE_NAV = [
+  { id: 'mod-rack',       label: 'Rack Builder',    icon: '🖥️',  view: 'rack',       color: '#22b8ff' },
+  { id: 'mod-dc',         label: 'Datacenter',       icon: '🏢',  view: 'datacenter', color: '#34d399' },
+  { id: 'mod-aws',        label: 'AWS',              icon: '☁️',  view: 'cloud',      color: '#f59e0b' },
+  { id: 'mod-azure',      label: 'Azure',            icon: '🔷',  view: 'cloud',      color: '#3b82f6' },
+  { id: 'mod-m365',       label: 'Microsoft 365',    icon: '🟦',  view: 'cloud',      color: '#0078d4' },
+  { id: 'mod-oci',        label: 'OCI',              icon: '🔴',  view: 'cloud',      color: '#ef4444' },
+  { id: 'mod-gcp',        label: 'GCP',              icon: '🌐',  view: 'cloud',      color: '#4ade80' },
+  { id: 'mod-ai',         label: 'AI Studio',        icon: '🤖',  view: 'ai',         color: '#c084fc' },
+  { id: 'mod-templates',  label: 'Templates',        icon: '📑',  view: 'template',   color: '#94a3b8' },
+  { id: 'mod-reports',    label: 'Reports',          icon: '📊',  view: 'reports',    color: '#38bdf8' },
+] as const;
 
 export class SaaSWorkspaceDashboard {
   private container: HTMLElement | null = null;
@@ -29,7 +46,6 @@ export class SaaSWorkspaceDashboard {
 
     this.render();
     document.body.appendChild(this.container);
-    this.initHeroRackAisle();
   }
 
   public hide(): void {
@@ -183,60 +199,43 @@ export class SaaSWorkspaceDashboard {
 
         <!-- Main Content Viewport -->
         <main class="main">
-          <!-- Datacenter Aisle Backdrop with Image and Glowing Vector Racks -->
-          <div class="hero-bg" aria-hidden="true">
-            <img class="hero-photo" alt="" src="/assets/dashboard/hero-datacenter.jpg">
-            <div class="hero-bloom"></div>
-            <svg viewBox="0 0 1000 470" preserveAspectRatio="xMaxYMin slice">
-              <defs>
-                <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#0a1a33"/><stop offset="1" stop-color="#040a15"/>
-                </linearGradient>
-                <linearGradient id="rk" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0" stop-color="#0c1628"/><stop offset="1" stop-color="#132440"/>
-                </linearGradient>
-                <radialGradient id="glow" cx=".6" cy=".1" r=".7">
-                  <stop offset="0" stop-color="#1b6dff" stop-opacity=".45"/><stop offset="0" stop-color="#1b6dff" stop-opacity="0"/>
-                </radialGradient>
-              </defs>
-              <rect width="1000" height="470" fill="#040a16"/>
-              <rect width="1000" height="470" fill="url(#glow)"/>
-              <g stroke="#38bdf8" stroke-width="4" stroke-linecap="round" opacity=".8">
-                <path d="M520 40 L760 95"/><path d="M640 18 L900 80"/><path d="M780 10 L990 62"/>
-              </g>
-              <polygon points="300,470 1000,470 1000,330 520,300" fill="url(#floor)"/>
-              <g stroke="#1d4f8a" stroke-width="1" opacity=".4">
-                <path d="M520 300 L1000 360"/><path d="M480 330 L1000 410"/><path d="M420 380 L1000 460"/>
-              </g>
-              <g id="racks"></g>
-            </svg>
-          </div>
 
-          <!-- Hero Greeting -->
-          <section class="hero">
-            <p class="eyebrow">Datacenter Infrastructure Design Platform</p>
-            <h1>Welcome back, ${user.name}! 👋</h1>
-            <p class="sub">Design. Plan. Visualize. Optimize. Your Datacenter Infrastructure.</p>
-
-            <!-- Quick Action Shortcuts -->
-            <div class="saas-quick-actions">
-              <button class="saas-action-pill" id="quick-build-rack">
-                <span>🖥️</span> Build a Rack
-              </button>
-              <button class="saas-action-pill" id="quick-build-dc">
-                <span>🏢</span> Build a Datacenter
-              </button>
-              <button class="saas-action-pill" id="quick-cloud-arch">
-                <span>☁️</span> Cloud Architectures
-              </button>
-              <button class="saas-action-pill" id="quick-templates">
-                <span>📑</span> Use a Template
-              </button>
-              <button class="saas-action-pill" id="quick-ask-ai" style="border-color:rgba(168,85,247,0.4); color:#c084fc;">
-                <span>🤖</span> Ask AI Studio
-              </button>
+          <!-- Hero: Datacenter Photo Backdrop + Greeting + Quick Actions -->
+          <div class="hero-section">
+            <!-- Background photo (right side, fades into dark background) -->
+            <div class="hero-bg" aria-hidden="true">
+              <img class="hero-photo" alt="" src="/assets/dashboard/hero-datacenter.jpg" loading="eager">
+              <div class="hero-bloom"></div>
             </div>
-          </section>
+
+            <!-- Hero content: left text + right action pills -->
+            <div class="hero-inner">
+              <div class="hero-text">
+                <p class="eyebrow">Datacenter Infrastructure Design Platform</p>
+                <h1>Welcome back, ${user.name}! 👋</h1>
+                <p class="sub">Design. Plan. Visualize. Optimize. Your Datacenter Infrastructure.</p>
+              </div>
+
+              <!-- Quick Action Pills — stacked vertically on the right -->
+              <div class="saas-quick-actions">
+                <button class="saas-action-pill" id="quick-build-rack">
+                  <span>🖥️</span> Build a Rack
+                </button>
+                <button class="saas-action-pill" id="quick-build-dc">
+                  <span>🏢</span> Build a Datacenter
+                </button>
+                <button class="saas-action-pill" id="quick-cloud-arch">
+                  <span>☁️</span> Cloud Architectures
+                </button>
+                <button class="saas-action-pill" id="quick-templates">
+                  <span>📑</span> Use a Template
+                </button>
+                <button class="saas-action-pill pill-ai" id="quick-ask-ai">
+                  <span>🤖</span> Ask AI Studio
+                </button>
+              </div>
+            </div>
+          </div>
 
           <!-- Key Metrics Stats -->
           <section class="stats">
@@ -277,6 +276,16 @@ export class SaaSWorkspaceDashboard {
             </div>
           </section>
 
+          <!-- Module Navigation Strip (just below stat cards) -->
+          <nav class="saas-module-nav" aria-label="Module navigation">
+            ${MODULE_NAV.map(m => `
+              <button class="saas-mod-btn" id="${m.id}" data-mod-view="${m.view}" style="--mod-color:${m.color}">
+                <span class="saas-mod-icon">${m.icon}</span>
+                <span class="saas-mod-label">${m.label}</span>
+              </button>
+            `).join('')}
+          </nav>
+
           <!-- Continue Designing Header -->
           <div class="sec-head">
             <div>
@@ -289,7 +298,7 @@ export class SaaSWorkspaceDashboard {
             </a>
           </div>
 
-          <!-- High-Definition Project Cards Grid (Using Preserved Visuals) -->
+          <!-- High-Definition Project Cards Grid -->
           <section class="cards" id="dash-cards-grid">
             ${projects.length === 0 ? `
               <div style="grid-column: 1 / -1; text-align:center; padding:40px 20px; background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.1); border-radius:10px;">
@@ -301,7 +310,7 @@ export class SaaSWorkspaceDashboard {
             ` : projects.map((p, idx) => this.renderRevampedCard(p, idx)).join('')}
           </section>
 
-          <!-- AI Natural Language Architecture Prompt (Section 48) -->
+          <!-- AI Natural Language Architecture Prompt -->
           <div class="saas-ai-bar">
             <div style="font-size:24px;">🤖</div>
             <div style="flex:1;">
@@ -315,7 +324,7 @@ export class SaaSWorkspaceDashboard {
             </button>
           </div>
 
-          <!-- Reference Architectures & Proven Templates (Sections 19-32) -->
+          <!-- Reference Architectures & Proven Templates -->
           <div class="sec-head" style="margin-top:40px;">
             <div>
               <h2>Proven Architecture Templates</h2>
@@ -420,49 +429,6 @@ export class SaaSWorkspaceDashboard {
     `;
   }
 
-  private initHeroRackAisle(): void {
-    if (!this.container) return;
-    const g = this.container.querySelector('#racks');
-    if (!g) return;
-
-    const NS = 'http://www.w3.org/2000/svg';
-    const createEl = (tag: string, attrs: Record<string, string | number>) => {
-      const e = document.createElementNS(NS, tag);
-      for (const k in attrs) e.setAttribute(k, String(attrs[k]));
-      return e;
-    };
-
-    for (let i = 0; i < 7; i++) {
-      const s = 1 - i * 0.11;
-      const x = 960 - i * 78 * s - i * 8;
-      const h = 330 * s;
-      const w = 70 * s;
-      const y = 310 - h + i * 6;
-
-      g.appendChild(createEl('rect', {
-        x, y, width: w, height: h,
-        fill: 'url(#rk)', stroke: '#1e3a62', 'stroke-width': 1,
-      }));
-      g.appendChild(createEl('rect', {
-        x: x + w * 0.86, y, width: w * 0.08, height: h,
-        fill: '#38bdf8', opacity: 0.75, class: 'led',
-      }));
-
-      const rows = Math.floor(h / 9);
-      for (let r = 1; r < rows; r++) {
-        g.appendChild(createEl('rect', {
-          x: x + w * 0.12, y, width: w * 0.62, height: 2.2, fill: '#173156',
-        }));
-        if ((r * 7 + i) % 5 === 0) {
-          g.appendChild(createEl('circle', {
-            cx: x + w * 0.18, cy: y + r * 9 + 1, r: 1.4,
-            fill: (r + i) % 3 ? '#38c4ff' : '#34d399', class: 'led',
-          }));
-        }
-      }
-    }
-  }
-
   private attachEvents(): void {
     if (!this.container) return;
 
@@ -506,6 +472,38 @@ export class SaaSWorkspaceDashboard {
     this.container.querySelector('#quick-ask-ai')?.addEventListener('click', () => {
       this.hide();
       EventBus.emit('ai:studio-open' as any, undefined);
+    });
+
+    // Module Navigation Strip
+    this.container.querySelectorAll('.saas-mod-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const view = (btn as HTMLElement).dataset.modView;
+        const id = (btn as HTMLElement).id;
+
+        if (id === 'mod-ai') {
+          this.hide();
+          EventBus.emit('ai:studio-open' as any, undefined);
+          return;
+        }
+        if (id === 'mod-reports') {
+          this.hide();
+          EventBus.emit('export:report' as any, undefined);
+          return;
+        }
+        if (id === 'mod-templates') {
+          this.currentFilterCategory = 'template';
+          this.render();
+          return;
+        }
+
+        if (view === 'rack' || view === 'datacenter' || view === 'cloud') {
+          this.hide();
+          EventBus.emit('view:switch', view as any);
+          // Show sub-module notification
+          const modName = MODULE_NAV.find(m => m.id === id)?.label || view;
+          EventBus.emit('notification', { message: `🚀 ${modName} module opened`, type: 'info' });
+        }
+      });
     });
 
     // AI Quick Architecture Prompt

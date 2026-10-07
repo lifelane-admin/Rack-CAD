@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SaaS Platform Design System Styles — Glassmorphism, Auth, Dashboard & Plans
+   SaaS Platform Design System Styles â€” Glassmorphism, Auth, Dashboard & Plans
    Matches RackSlicer SaaS Datacenter Infrastructure Dashboard Reference
    ========================================================================== */
 
@@ -457,76 +457,87 @@
 
 .saas-dashboard-container .main {
   position: relative;
-  overflow: hidden;
-  padding: 24px 28px 36px 32px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 0 36px 0;
   background: var(--bg);
 }
 
-/* ---------- Hero Datacenter Backdrop ---------- */
+/* ---------- Hero Section: Photo backdrop + content overlay ---------- */
+.saas-dashboard-container .hero-section {
+  position: relative;
+  min-height: 240px;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* Right-side datacenter photo with left gradient fade */
 .saas-dashboard-container .hero-bg {
   position: absolute;
   top: 0;
   right: 0;
-  width: 56%;
-  height: 320px;
-  pointer-events: none;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 30%), linear-gradient(180deg, #000 65%, transparent 100%);
-  -webkit-mask-composite: source-in;
-  mask-image: linear-gradient(90deg, transparent 0, #000 30%), linear-gradient(180deg, #000 65%, transparent 100%);
-  mask-composite: intersect;
-}
-
-.saas-dashboard-container .hero-bg svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
+  width: 60%;
   height: 100%;
-  display: block;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .saas-dashboard-container .hero-photo {
   position: absolute;
-  top: 0;
-  right: 0;
-  height: 100%;
+  inset: 0;
   width: 100%;
+  height: 100%;
   object-fit: cover;
-  object-position: right top;
-  z-index: 1;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 24%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 24%);
-  filter: saturate(1.2) contrast(1.1) brightness(0.95);
+  object-position: center top;
+  /* Fade from transparent (left) to visible (right) */
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.6) 25%, #000 55%);
+  mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.6) 25%, #000 55%);
+  filter: saturate(1.15) contrast(1.08) brightness(0.85);
 }
 
 .saas-dashboard-container .hero-bloom {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 1;
   pointer-events: none;
-  mix-blend-mode: screen;
-  background: radial-gradient(60% 35% at 75% 15%, rgba(56, 189, 248, 0.25), transparent 75%),
-              radial-gradient(40% 30% at 90% 85%, rgba(37, 99, 235, 0.2), transparent 70%);
-  animation: breathe 6s ease-in-out infinite;
+  background: radial-gradient(55% 70% at 70% 30%, rgba(56, 189, 248, 0.18), transparent 75%),
+              radial-gradient(35% 50% at 95% 80%, rgba(37, 99, 235, 0.15), transparent 70%);
 }
 
-@keyframes breathe {
-  0%, 100% { opacity: 0.75; }
-  50% { opacity: 1; }
-}
-
-.saas-dashboard-container .main::before {
-  content: "";
+/* Full-width dark gradient that overlays the bottom of the hero */
+.saas-dashboard-container .hero-section::after {
+  content: '';
   position: absolute;
-  inset: 0 0 auto 0;
-  height: 320px;
+  inset: 0 0 -1px 0;
   pointer-events: none;
-  background: linear-gradient(90deg, var(--bg) 0, rgba(5, 11, 23, 0.85) 32%, transparent 65%);
+  z-index: 1;
+  background: linear-gradient(90deg,
+    var(--bg) 0%,
+    var(--bg) 28%,
+    rgba(5, 11, 23, 0.75) 48%,
+    transparent 70%
+  ),
+  linear-gradient(180deg, transparent 60%, var(--bg) 100%);
 }
 
-.saas-dashboard-container .hero,
-.saas-dashboard-container .stats {
+/* Hero inner: left text | right pills */
+.saas-dashboard-container .hero-inner {
   position: relative;
-  z-index: 3;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: 100%;
+  padding: 36px 32px 28px 32px;
+}
+
+.saas-dashboard-container .hero-text {
+  flex: 1;
+  min-width: 0;
+  max-width: 600px;
 }
 
 /* ---------- Typography & Hero Content ---------- */
@@ -555,37 +566,51 @@
   color: #94a3b8;
 }
 
-/* ---------- Quick Action Pills (What do you want to build?) ---------- */
+/* ---------- Quick Action Pills (stacked vertically on right of hero) ---------- */
 .saas-quick-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
-  margin-top: 14px;
+  flex-shrink: 0;
+  z-index: 2;
   position: relative;
-  z-index: 3;
 }
 
 .saas-action-pill {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 14px;
+  gap: 8px;
+  padding: 8px 18px;
   border-radius: 99px;
-  background: rgba(22, 37, 59, 0.85);
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: rgba(10, 22, 42, 0.82);
+  border: 1px solid rgba(56, 189, 248, 0.28);
   color: #e0f2fe;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
+  white-space: nowrap;
 }
 
 .saas-action-pill:hover {
   background: rgba(34, 184, 255, 0.18);
   border-color: #22b8ff;
   color: #fff;
-  transform: translateY(-1px);
+  transform: translateX(-2px);
+  box-shadow: 0 0 12px rgba(34, 184, 255, 0.2);
+}
+
+.saas-action-pill.pill-ai {
+  border-color: rgba(168, 85, 247, 0.4);
+  color: #c084fc;
+}
+
+.saas-action-pill.pill-ai:hover {
+  background: rgba(168, 85, 247, 0.18);
+  border-color: #c084fc;
+  color: #e9d5ff;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.25);
 }
 
 /* ---------- Stat Metric Cards ---------- */
@@ -593,8 +618,9 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
-  margin-top: 20px;
-  max-width: 1120px;
+  margin: 0;
+  padding: 0 32px;
+  max-width: 100%;
 }
 
 .saas-dashboard-container .stat {
@@ -685,6 +711,75 @@
   background: linear-gradient(160deg, #fbbf24, #d97706);
 }
 
+/* ---------- Module Navigation Strip ---------- */
+.saas-module-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 32px 0 32px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  position: relative;
+  z-index: 2;
+}
+
+.saas-module-nav::-webkit-scrollbar { display: none; }
+
+.saas-mod-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 14px;
+  min-width: 76px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(14, 26, 46, 0.9), rgba(8, 17, 31, 0.9));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.saas-mod-btn::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--mod-color, #22b8ff);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.saas-mod-btn:hover {
+  background: linear-gradient(180deg, rgba(22, 40, 68, 0.95), rgba(12, 26, 48, 0.95));
+  border-color: var(--mod-color, #22b8ff);
+  color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 10px rgba(34, 184, 255, 0.15);
+}
+
+.saas-mod-btn:hover::before {
+  opacity: 1;
+}
+
+.saas-mod-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.saas-mod-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
 /* ---------- Section Header ---------- */
 .saas-dashboard-container .sec-head {
   position: relative;
@@ -692,7 +787,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  margin: 32px 0 16px 0;
+  margin: 28px 32px 14px 32px;
 }
 
 .saas-dashboard-container .sec-head h2 {
@@ -736,6 +831,7 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
+  padding: 0 32px;
 }
 
 .saas-dashboard-container .card {
@@ -874,6 +970,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+  padding: 0 32px;
   margin-top: 14px;
   position: relative;
   z-index: 2;
@@ -993,7 +1090,7 @@
   border: 1px solid rgba(139, 92, 246, 0.3);
   border-radius: 12px;
   padding: 14px 18px;
-  margin-top: 28px;
+  margin: 28px 32px 0 32px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -1010,6 +1107,7 @@
   padding: 10px 14px;
   color: #fff;
   font-size: 13px;
+  font-family: inherit;
   outline: none;
 }
 
@@ -1040,16 +1138,6 @@
   transform: translateY(-1px);
 }
 
-/* LED Animation */
-@keyframes flick {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.saas-dashboard-container .led {
-  animation: flick 3.5s ease-in-out infinite;
-}
-
 /* Responsive Breakpoints */
 @media (max-width: 1280px) {
   .saas-dashboard-container .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1064,6 +1152,8 @@
   .saas-dashboard-container .brand { min-width: auto; }
   .saas-dashboard-container .brand b { display: none; }
   .saas-dashboard-container .user .meta { display: none; }
+  .saas-quick-actions { display: none; }
+  .saas-dashboard-container .hero-bg { width: 100%; }
 }
 
 @media (max-width: 680px) {
@@ -1076,12 +1166,17 @@
   .saas-dashboard-container .nav { display: flex; gap: 4px; }
   .saas-dashboard-container .nav .gap { display: none; }
   .saas-dashboard-container .nav a { margin: 0; }
-  .saas-dashboard-container .main { padding: 16px 14px; }
-  .saas-dashboard-container .hero-bg { width: 100%; opacity: 0.3; }
+  .saas-dashboard-container .main { padding-bottom: 36px; }
+  .saas-dashboard-container .hero-inner { flex-direction: column; align-items: flex-start; padding: 24px 20px; }
+  .saas-dashboard-container .hero-bg { width: 100%; opacity: 0.35; }
+  .saas-quick-actions { display: flex; flex-direction: row; flex-wrap: wrap; }
   .saas-dashboard-container h1 { font-size: 22px; }
   .saas-dashboard-container .sub { font-size: 12.5px; }
-  .saas-dashboard-container .stats { grid-template-columns: 1fr; }
-  .saas-dashboard-container .cards { grid-template-columns: 1fr; }
-  .saas-templates-grid { grid-template-columns: 1fr; }
-  .saas-dashboard-container .sec-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .saas-dashboard-container .stats { grid-template-columns: 1fr; padding: 0 16px; }
+  .saas-dashboard-container .cards { grid-template-columns: 1fr; padding: 0 16px; }
+  .saas-templates-grid { grid-template-columns: 1fr; padding: 0 16px; }
+  .saas-module-nav { padding: 14px 16px 0; }
+  .saas-dashboard-container .sec-head { flex-direction: column; align-items: flex-start; gap: 8px; margin: 20px 16px 12px; }
+  .saas-ai-bar { margin: 20px 16px 0; }
 }
+
