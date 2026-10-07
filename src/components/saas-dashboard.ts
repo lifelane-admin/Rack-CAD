@@ -4,6 +4,10 @@
  * 220px navigation rail, Hyperscale Containment Corridor photo backdrop,
  * real-time telemetry metrics, and high-definition card visuals.
  *
+ * Visual System:
+ * - 4 High-fidelity 3D Glowing Stat Cards (Active Projects, Server Racks, Datacenter Halls, Cloud Architectures)
+ * - 11 3D Isometric Neon-Pedestal Module Navigation Tiles (Rack Builder, Datacenter, AWS, Azure, M365, OCI, GCP, AI Studio, AI Studios, Templates, Reports)
+ *
  * Performance: Static HTML rendered once, partial DOM updates for dynamic content.
  * No JS-generated SVG animations on load to prevent layout instability.
  */
@@ -13,18 +17,107 @@ import { projectStore, SaaSProject, ARCHITECTURE_TEMPLATES, ArchitectureTemplate
 import { showUserProfileModal } from './user-profile-modal';
 import EventBus from '../core/event-bus';
 
-// Module navigation definitions
+// Module navigation definitions with 3D icons, official branding, and neon pedestals
 const MODULE_NAV = [
-  { id: 'mod-rack',       label: 'Rack Builder',    icon: '🖥️',  view: 'rack',       color: '#22b8ff' },
-  { id: 'mod-dc',         label: 'Datacenter',       icon: '🏢',  view: 'datacenter', color: '#34d399' },
-  { id: 'mod-aws',        label: 'AWS',              icon: '☁️',  view: 'cloud',      color: '#f59e0b' },
-  { id: 'mod-azure',      label: 'Azure',            icon: '🔷',  view: 'cloud',      color: '#3b82f6' },
-  { id: 'mod-m365',       label: 'Microsoft 365',    icon: '🟦',  view: 'cloud',      color: '#0078d4' },
-  { id: 'mod-oci',        label: 'OCI',              icon: '🔴',  view: 'cloud',      color: '#ef4444' },
-  { id: 'mod-gcp',        label: 'GCP',              icon: '🌐',  view: 'cloud',      color: '#4ade80' },
-  { id: 'mod-ai',         label: 'AI Studio',        icon: '🤖',  view: 'ai',         color: '#c084fc' },
-  { id: 'mod-templates',  label: 'Templates',        icon: '📑',  view: 'template',   color: '#94a3b8' },
-  { id: 'mod-reports',    label: 'Reports',          icon: '📊',  view: 'reports',    color: '#38bdf8' },
+  {
+    id: 'mod-rack',
+    label: 'Rack Builder',
+    iconImg: '/assets/dashboard/icons/rack-builder-icon.png',
+    fallbackIcon: '🖥️',
+    view: 'rack',
+    color: '#00a2ff',
+    glow: 'rgba(0, 162, 255, 0.45)'
+  },
+  {
+    id: 'mod-dc',
+    label: 'Datacenter',
+    iconImg: '/assets/dashboard/icons/datacenter-icon.png',
+    fallbackIcon: '🏢',
+    view: 'datacenter',
+    color: '#38bdf8',
+    glow: 'rgba(56, 189, 248, 0.45)'
+  },
+  {
+    id: 'mod-aws',
+    label: 'AWS',
+    iconImg: '/assets/dashboard/icons/aws-icon.png',
+    fallbackIcon: '☁️',
+    view: 'cloud',
+    color: '#ff9900',
+    glow: 'rgba(255, 153, 0, 0.45)'
+  },
+  {
+    id: 'mod-azure',
+    label: 'Azure',
+    iconImg: '/assets/dashboard/icons/azure-icon.png',
+    fallbackIcon: '🔷',
+    view: 'cloud',
+    color: '#0078d4',
+    glow: 'rgba(0, 120, 212, 0.45)'
+  },
+  {
+    id: 'mod-m365',
+    label: 'Microsoft 365',
+    iconImg: '/assets/dashboard/icons/microsoft365-icon.png',
+    fallbackIcon: '🟦',
+    view: 'cloud',
+    color: '#8b5cf6',
+    glow: 'rgba(139, 92, 246, 0.45)'
+  },
+  {
+    id: 'mod-oci',
+    label: 'OCI',
+    iconImg: '/assets/dashboard/icons/oci-icon.png',
+    fallbackIcon: '🔴',
+    view: 'cloud',
+    color: '#ef4444',
+    glow: 'rgba(239, 68, 68, 0.45)'
+  },
+  {
+    id: 'mod-gcp',
+    label: 'GCP',
+    iconImg: '/assets/dashboard/icons/gcp-icon.png',
+    fallbackIcon: '🌐',
+    view: 'cloud',
+    color: '#ea4335',
+    glow: 'rgba(234, 67, 53, 0.45)'
+  },
+  {
+    id: 'mod-ai',
+    label: 'AI Studio',
+    iconImg: '/assets/dashboard/icons/ai-studio-icon.png',
+    fallbackIcon: '🤖',
+    view: 'ai',
+    color: '#c084fc',
+    glow: 'rgba(192, 132, 252, 0.45)'
+  },
+  {
+    id: 'mod-ai-studios',
+    label: 'AI Studios',
+    iconImg: '/assets/dashboard/icons/ai-studios-icon.png',
+    fallbackIcon: '✨',
+    view: 'ai',
+    color: '#38bdf8',
+    glow: 'rgba(56, 189, 248, 0.45)'
+  },
+  {
+    id: 'mod-templates',
+    label: 'Templates',
+    iconImg: '/assets/dashboard/icons/templates-icon.png',
+    fallbackIcon: '📑',
+    view: 'template',
+    color: '#06b6d4',
+    glow: 'rgba(6, 182, 212, 0.45)'
+  },
+  {
+    id: 'mod-reports',
+    label: 'Reports',
+    iconImg: '/assets/dashboard/icons/reports-icon.png',
+    fallbackIcon: '📊',
+    view: 'reports',
+    color: '#6366f1',
+    glow: 'rgba(99, 102, 241, 0.45)'
+  },
 ] as const;
 
 export class SaaSWorkspaceDashboard {
@@ -237,51 +330,70 @@ export class SaaSWorkspaceDashboard {
             </div>
           </div>
 
-          <!-- Key Metrics Stats -->
+          <!-- 4 High-Fidelity 3D Glowing Key Metric Stats -->
           <section class="stats">
-            <div class="stat s1">
-              <div class="ic">
-                <svg viewBox="0 0 24 24" fill="#e0f2fe">
-                  <path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                </svg>
+            <div class="stat s1" id="dash-stat-projects" role="button" tabindex="0" title="View Active Projects">
+              <div class="stat-icon-wrap">
+                <img src="/assets/dashboard/icons/stat-icon-projects.png" alt="Active Projects" class="stat-3d-img" />
               </div>
-              <div><div class="num">${totalProjects}</div><div class="lbl">Active Projects</div></div>
+              <div class="stat-content">
+                <div class="num">${totalProjects}</div>
+                <div class="lbl">Active Projects</div>
+              </div>
+              <div class="stat-chevron">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+              </div>
             </div>
 
-            <div class="stat s2">
-              <div class="ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#ecfdf5" stroke-width="2">
-                  <rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16M4 15h16"/>
-                </svg>
+            <div class="stat s2" id="dash-stat-racks" role="button" tabindex="0" title="View Server Racks">
+              <div class="stat-icon-wrap">
+                <img src="/assets/dashboard/icons/stat-icon-racks.png" alt="Server Racks" class="stat-3d-img" />
               </div>
-              <div><div class="num">${statRacks}</div><div class="lbl">Server Racks</div></div>
+              <div class="stat-content">
+                <div class="num">${statRacks}</div>
+                <div class="lbl">Server Racks</div>
+              </div>
+              <div class="stat-chevron">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+              </div>
             </div>
 
-            <div class="stat s3">
-              <div class="ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#f5f3ff" stroke-width="1.8">
-                  <path d="M4 21V7l8-4 8 4v14M2 21h20M8 10v8M12 10v8M16 10v8"/>
-                </svg>
+            <div class="stat s3" id="dash-stat-halls" role="button" tabindex="0" title="View Datacenter Halls">
+              <div class="stat-icon-wrap">
+                <img src="/assets/dashboard/icons/stat-icon-halls.png" alt="Datacenter Halls" class="stat-3d-img" />
               </div>
-              <div><div class="num">${statHalls}</div><div class="lbl">Datacenter Halls</div></div>
+              <div class="stat-content">
+                <div class="num">${statHalls}</div>
+                <div class="lbl">Datacenter Halls</div>
+              </div>
+              <div class="stat-chevron">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+              </div>
             </div>
 
-            <div class="stat s4">
-              <div class="ic">
-                <svg viewBox="0 0 24 24" fill="#fef3c7">
-                  <path d="M7 19h10a4.5 4.5 0 0 0 .6-9A6 6 0 0 0 6 10a4.5 4.5 0 0 0 1 9z"/>
-                </svg>
+            <div class="stat s4" id="dash-stat-cloud" role="button" tabindex="0" title="View Cloud Architectures">
+              <div class="stat-icon-wrap">
+                <img src="/assets/dashboard/icons/stat-icon-cloud.png" alt="Cloud Architectures" class="stat-3d-img" />
               </div>
-              <div><div class="num">${statCloud}</div><div class="lbl">Cloud Architectures</div></div>
+              <div class="stat-content">
+                <div class="num">${statCloud}</div>
+                <div class="lbl">Cloud Architectures</div>
+              </div>
+              <div class="stat-chevron">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+              </div>
             </div>
           </section>
 
-          <!-- Module Navigation Strip (just below stat cards) -->
+          <!-- 11 3D Isometric Neon-Pedestal Module Navigation Tiles -->
           <nav class="saas-module-nav" aria-label="Module navigation">
             ${MODULE_NAV.map(m => `
-              <button class="saas-mod-btn" id="${m.id}" data-mod-view="${m.view}" style="--mod-color:${m.color}">
-                <span class="saas-mod-icon">${m.icon}</span>
-                <span class="saas-mod-label">${m.label}</span>
+              <button class="saas-mod-btn" id="${m.id}" data-mod-view="${m.view}" style="--mod-color:${m.color}; --mod-glow:${m.glow};" title="${m.label}">
+                <div class="saas-mod-icon-wrap">
+                  <img src="${m.iconImg}" alt="${m.label}" class="saas-mod-3d-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';" />
+                  <span class="saas-mod-fallback-icon" style="display:none;">${m.fallbackIcon}</span>
+                </div>
+                <span class="saas-mod-label">${m.label} <span class="mod-arr">›</span></span>
               </button>
             `).join('')}
           </nav>
@@ -474,13 +586,38 @@ export class SaaSWorkspaceDashboard {
       EventBus.emit('ai:studio-open' as any, undefined);
     });
 
-    // Module Navigation Strip
+    // 4 Stat Cards Click Handlers
+    this.container.querySelector('#dash-stat-projects')?.addEventListener('click', () => {
+      this.currentFilterCategory = 'all-projects';
+      this.searchQuery = '';
+      this.render();
+    });
+
+    this.container.querySelector('#dash-stat-racks')?.addEventListener('click', () => {
+      this.hide();
+      EventBus.emit('view:switch', 'rack');
+      EventBus.emit('notification', { message: '🖥️ Rack Elevation Builder opened', type: 'info' });
+    });
+
+    this.container.querySelector('#dash-stat-halls')?.addEventListener('click', () => {
+      this.hide();
+      EventBus.emit('view:switch', 'datacenter');
+      EventBus.emit('notification', { message: '🏢 Datacenter Hall 2D/3D Builder opened', type: 'info' });
+    });
+
+    this.container.querySelector('#dash-stat-cloud')?.addEventListener('click', () => {
+      this.hide();
+      EventBus.emit('view:switch', 'cloud');
+      EventBus.emit('notification', { message: '☁️ Cloud Architecture Designer opened', type: 'info' });
+    });
+
+    // 11 Module Navigation Buttons
     this.container.querySelectorAll('.saas-mod-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const view = (btn as HTMLElement).dataset.modView;
         const id = (btn as HTMLElement).id;
 
-        if (id === 'mod-ai') {
+        if (id === 'mod-ai' || id === 'mod-ai-studios') {
           this.hide();
           EventBus.emit('ai:studio-open' as any, undefined);
           return;
@@ -499,7 +636,6 @@ export class SaaSWorkspaceDashboard {
         if (view === 'rack' || view === 'datacenter' || view === 'cloud') {
           this.hide();
           EventBus.emit('view:switch', view as any);
-          // Show sub-module notification
           const modName = MODULE_NAV.find(m => m.id === id)?.label || view;
           EventBus.emit('notification', { message: `🚀 ${modName} module opened`, type: 'info' });
         }
