@@ -5,6 +5,8 @@
  * storage nodes, vertical PDUs, and complete cable laying.
  */
 
+import { getTemplate } from '../library/device-catalog';
+
 export interface TemplateProjectData {
   racks: any[];
   devices: any[];
@@ -12,6 +14,34 @@ export interface TemplateProjectData {
   cloudNodes?: any[];
   cloudContainers?: any[];
   cloudConnectors?: any[];
+}
+
+function createStandardDevicePorts(
+  templateId: string,
+  deviceId: string,
+  customPortOverrides: Record<string, Partial<any>> = {}
+): any[] {
+  const tpl = getTemplate(templateId);
+  if (!tpl || !tpl.ports || tpl.ports.length === 0) return [];
+
+  return tpl.ports.map((tp, idx) => {
+    const override = customPortOverrides[tp.id] || customPortOverrides[`port-${idx + 1}`] || customPortOverrides[`p${idx + 1}`];
+    return {
+      ...tp,
+      id: override?.id || `${deviceId}-${tp.id}`,
+      name: override?.name || tp.name,
+      deviceId,
+      type: override?.type || tp.type,
+      speed: override?.speed || tp.speed,
+      relativeX: tp.relativeX,
+      relativeY: tp.relativeY,
+      portW: tp.portW,
+      portH: tp.portH,
+      group: tp.group,
+      connected: false,
+      cableId: null,
+    };
+  });
 }
 
 /**
@@ -86,13 +116,12 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       heightUnits: 1,
       color: '#1e293b',
       powerWatts: 85,
-      ports: [
-        { id: 'sw-p1', name: 'Port 1 (Node 1)', type: 'rj45', relativeX: 80, relativeY: 12, speed: '1 Gbps' },
-        { id: 'sw-p2', name: 'Port 2 (Node 2)', type: 'rj45', relativeX: 95, relativeY: 12, speed: '1 Gbps' },
-        { id: 'sw-p3', name: 'Port 3 (Node 3)', type: 'rj45', relativeX: 110, relativeY: 12, speed: '1 Gbps' },
-        { id: 'sw-uplink', name: 'SFP+ Uplink', type: 'sfp-plus', relativeX: 350, relativeY: 12, speed: '10 Gbps' },
-        { id: 'sw-pwr-1', name: 'PSU 1', type: 'power-c14', relativeX: 380, relativeY: 12, speed: '230V' },
-      ],
+      ports: createStandardDevicePorts('rs-sw-24p', 'dev-ceph-mgmt-sw', {
+        'rsw24-p1': { id: 'sw-p1', name: 'Port 1 (Node 1)' },
+        'rsw24-p2': { id: 'sw-p2', name: 'Port 2 (Node 2)' },
+        'rsw24-p3': { id: 'sw-p3', name: 'Port 3 (Node 3)' },
+        'rsw24-sfp1': { id: 'sw-uplink', name: 'SFP+ Uplink' },
+      }),
     },
     // Cat6 Patch Panel (U39)
     {
@@ -105,7 +134,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       heightUnits: 1,
       color: '#334155',
       powerWatts: 0,
-      ports: [],
+      ports: createStandardDevicePorts('patch-1u-cat6a-48p', 'dev-ceph-patch'),
     },
     // Node 3 (U20-21)
     {
@@ -331,6 +360,8 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       rackColor: '#0a192f',
       x: 200,
       y: 40,
+      leftCableManagerWidth: '4-inch',
+      rightCableManagerWidth: '4-inch',
       leftPduId: 'pdu-hyperv-a',
       rightPduId: 'pdu-hyperv-b',
     },
@@ -378,11 +409,11 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       heightUnits: 1,
       color: '#1e3a5f',
       powerWatts: 280,
-      ports: [
-        { id: 'hv-sw-p1', name: 'Port 1 (Node 1)', type: 'sfp28', relativeX: 60, relativeY: 12, speed: '25 Gbps' },
-        { id: 'hv-sw-p2', name: 'Port 2 (Node 2)', type: 'sfp28', relativeX: 80, relativeY: 12, speed: '25 Gbps' },
-        { id: 'hv-sw-p3', name: 'Port 3 (Azure Arc)', type: 'rj45', relativeX: 120, relativeY: 12, speed: '1 Gbps' },
-      ],
+      ports: createStandardDevicePorts('sw-1u-tor-25g-100g', 'dev-hv-sw-01', {
+        'tor-sfp1': { id: 'hv-sw-p1', name: 'Port 1 (Node 1)' },
+        'tor-sfp2': { id: 'hv-sw-p2', name: 'Port 2 (Node 2)' },
+        'tor-mgmt': { id: 'hv-sw-p3', name: 'Port 3 (Azure Arc)' },
+      }),
     },
     // Azure Arc Gateway (U30)
     {
@@ -524,6 +555,8 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       rackColor: '#111827',
       x: 200,
       y: 40,
+      leftCableManagerWidth: '4-inch',
+      rightCableManagerWidth: '4-inch',
       leftPduId: 'pdu-proxmox-a',
       rightPduId: 'pdu-proxmox-b',
     },
@@ -575,12 +608,12 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       heightUnits: 1,
       color: '#1e293b',
       powerWatts: 300,
-      ports: [
-        { id: 'tor1-p1', name: 'P1 (H1)', type: 'sfp28', relativeX: 60, relativeY: 12, speed: '25 Gbps' },
-        { id: 'tor1-p2', name: 'P2 (H2)', type: 'sfp28', relativeX: 80, relativeY: 12, speed: '25 Gbps' },
-        { id: 'tor1-p3', name: 'P3 (H3)', type: 'sfp28', relativeX: 100, relativeY: 12, speed: '25 Gbps' },
-        { id: 'tor1-p4', name: 'P4 (PBS)', type: 'sfp28', relativeX: 120, relativeY: 12, speed: '10 Gbps' },
-      ],
+      ports: createStandardDevicePorts('sw-1u-tor-25g-100g', 'dev-proxmox-tor-01', {
+        'tor-sfp1': { id: 'tor1-p1', name: 'P1 (H1)' },
+        'tor-sfp2': { id: 'tor1-p2', name: 'P2 (H2)' },
+        'tor-sfp3': { id: 'tor1-p3', name: 'P3 (H3)' },
+        'tor-sfp4': { id: 'tor1-p4', name: 'P4 (PBS)' },
+      }),
     },
     {
       id: 'dev-proxmox-tor-02',
@@ -592,12 +625,12 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       heightUnits: 1,
       color: '#1e293b',
       powerWatts: 300,
-      ports: [
-        { id: 'tor2-p1', name: 'P1 (H1)', type: 'sfp28', relativeX: 60, relativeY: 12, speed: '25 Gbps' },
-        { id: 'tor2-p2', name: 'P2 (H2)', type: 'sfp28', relativeX: 80, relativeY: 12, speed: '25 Gbps' },
-        { id: 'tor2-p3', name: 'P3 (H3)', type: 'sfp28', relativeX: 100, relativeY: 12, speed: '25 Gbps' },
-        { id: 'tor2-p4', name: 'P4 (PBS)', type: 'sfp28', relativeX: 120, relativeY: 12, speed: '10 Gbps' },
-      ],
+      ports: createStandardDevicePorts('sw-1u-tor-25g-100g', 'dev-proxmox-tor-02', {
+        'tor-sfp1': { id: 'tor2-p1', name: 'P1 (H1)' },
+        'tor-sfp2': { id: 'tor2-p2', name: 'P2 (H2)' },
+        'tor-sfp3': { id: 'tor2-p3', name: 'P3 (H3)' },
+        'tor-sfp4': { id: 'tor2-p4', name: 'P4 (PBS)' },
+      }),
     },
     // Proxmox Backup Server (U22)
     {
@@ -1104,6 +1137,8 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       rackColor: '#050c1a',
       x: 200,
       y: 30,
+      leftCableManagerWidth: '4-inch',
+      rightCableManagerWidth: '4-inch',
       leftPduId: 'pdu-h100-a',
       rightPduId: 'pdu-h100-b',
     },
@@ -1151,12 +1186,12 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       heightUnits: 1,
       color: '#10b981',
       powerWatts: 550,
-      ports: [
-        { id: 'ib1-p1', name: 'NDR P1', type: 'qsfp-dd', relativeX: 60, relativeY: 12, speed: '800 Gbps' },
-        { id: 'ib1-p2', name: 'NDR P2', type: 'qsfp-dd', relativeX: 90, relativeY: 12, speed: '800 Gbps' },
-        { id: 'ib1-p3', name: 'NDR P3', type: 'qsfp-dd', relativeX: 120, relativeY: 12, speed: '800 Gbps' },
-        { id: 'ib1-p4', name: 'NDR P4', type: 'qsfp-dd', relativeX: 150, relativeY: 12, speed: '800 Gbps' },
-      ],
+      ports: createStandardDevicePorts('sw-1u-leaf-100g-400g', 'dev-ib-sw-01', {
+        'leaf-q1': { id: 'ib1-p1', name: 'NDR P1' },
+        'leaf-q2': { id: 'ib1-p2', name: 'NDR P2' },
+        'leaf-q3': { id: 'ib1-p3', name: 'NDR P3' },
+        'leaf-q4': { id: 'ib1-p4', name: 'NDR P4' },
+      }),
     },
     // Quantum-2 InfiniBand Switch 02 (U45)
     {
@@ -1169,12 +1204,12 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       heightUnits: 1,
       color: '#10b981',
       powerWatts: 550,
-      ports: [
-        { id: 'ib2-p1', name: 'NDR P5', type: 'qsfp-dd', relativeX: 60, relativeY: 12, speed: '800 Gbps' },
-        { id: 'ib2-p2', name: 'NDR P6', type: 'qsfp-dd', relativeX: 90, relativeY: 12, speed: '800 Gbps' },
-        { id: 'ib2-p3', name: 'NDR P7', type: 'qsfp-dd', relativeX: 120, relativeY: 12, speed: '800 Gbps' },
-        { id: 'ib2-p4', name: 'NDR P8', type: 'qsfp-dd', relativeX: 150, relativeY: 12, speed: '800 Gbps' },
-      ],
+      ports: createStandardDevicePorts('sw-1u-leaf-100g-400g', 'dev-ib-sw-02', {
+        'leaf-q1': { id: 'ib2-p1', name: 'NDR P5' },
+        'leaf-q2': { id: 'ib2-p2', name: 'NDR P6' },
+        'leaf-q3': { id: 'ib2-p3', name: 'NDR P7' },
+        'leaf-q4': { id: 'ib2-p4', name: 'NDR P8' },
+      }),
     },
     // 8U Supermicro HGX H100 8x GPU Server (U20-U27)
     {

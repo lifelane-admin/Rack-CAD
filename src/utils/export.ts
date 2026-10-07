@@ -7,6 +7,7 @@ import reportsCss from '../styles/reports.css?raw';
 import { appendExportSummaryOverlay, Rect } from '../renderers/export-summary-overlay';
 import { ExcelExportEngine } from '../model/excel-export-engine';
 import { physicalInfrastructureModel } from '../model/physical-model';
+import { getTemplate } from '../library/device-catalog';
 
 function unionRect(a: Rect, b: Rect): Rect {
   const x0 = Math.min(a.x, b.x);
@@ -965,12 +966,51 @@ export function importJSON(jsonString: string): void {
  * 3. Unlocks rigid hardcoded canvas anchor points so clean orthogonal paths calculate automatically.
  */
 export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables: CableData[]): { devices: DeviceData[], cables: CableData[] } {
-  // 1. Ensure switches have faceplate ports
+  // 1. Ensure switches and patch panels have full faceplate ports
   const repairedDevices: DeviceData[] = devices.map(d => {
     const isSwitch = d.templateId?.includes('switch') || (d as any).category === 'switch' || d.name?.toLowerCase().includes('switch');
-    const existingNonEarPorts = (d.ports || []).filter(p => !p.id.includes('-ear-'));
+    const isPatch = d.templateId?.includes('patch') || (d as any).category === 'patch-panel' || d.name?.toLowerCase().includes('patch');
+    
+    // Ensure every existing port has deviceId attached
+    let currentPorts: PortData[] = (d.ports || []).map(p => ({
+      ...p,
+      deviceId: p.deviceId || d.id
+    }));
+
+    if (isSwitch || isPatch) {
+      const template = getTemplate(d.templateId);
+      if (template && template.ports && template.ports.length > 0) {
+        const templateNonEar = template.ports.filter(p => !p.id.includes('-ear-'));
+        const currentNonEar = currentPorts.filter(p => !p.id.includes('-ear-'));
+        if (currentNonEar.length < templateNonEar.length) {
+          const existingIds = new Set(currentPorts.map(p => p.id));
+          const earPorts = currentPorts.filter(p => p.id.includes('-ear-'));
+          const nonEarPorts = [...currentNonEar];
+
+          for (const tp of templateNonEar) {
+            const scopedId = tp.id.startsWith(d.id) ? tp.id : `${d.id}-${tp.id}`;
+            if (!existingIds.has(tp.id) && !existingIds.has(scopedId)) {
+              nonEarPorts.push({
+                ...tp,
+                id: scopedId,
+                deviceId: d.id,
+                connected: false,
+                cableId: null
+              });
+              existingIds.add(scopedId);
+            }
+          }
+          return {
+            ...d,
+            ports: [...nonEarPorts, ...earPorts]
+          };
+        }
+      }
+    }
+
+    const existingNonEarPorts = currentPorts.filter(p => !p.id.includes('-ear-'));
     if (isSwitch && existingNonEarPorts.length === 0) {
-      const earPorts = (d.ports || []).filter(p => p.id.includes('-ear-'));
+      const earPorts = currentPorts.filter(p => p.id.includes('-ear-'));
       const numRj45 = (d.deviceConfig as any)?.rj45Count ?? 24;
       const numSfp = (d.deviceConfig as any)?.sfpPlusCount ?? 4;
       const facePorts: PortData[] = [];
@@ -1008,7 +1048,10 @@ export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables:
         ports: [...facePorts, ...earPorts]
       };
     }
-    return d;
+    return {
+      ...d,
+      ports: currentPorts
+    };
   });
 
   // 2. Heal floating cables and unlock hardcoded anchors

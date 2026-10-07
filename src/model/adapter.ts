@@ -104,9 +104,10 @@ export class ModelMigrationAdapter {
       };
 
       // Check HA Pair heuristic
-      if (d.name.toLowerCase().includes('hv-node1') || d.name.toLowerCase().includes('server-a')) {
+      const dName = (d.name || '').toLowerCase();
+      if (dName.includes('hv-node1') || dName.includes('server-a')) {
         const peer = appState.devices.find(
-          x => x.name.toLowerCase().includes('hv-node2') || x.name.toLowerCase().includes('server-b')
+          x => (x.name || '').toLowerCase().includes('hv-node2') || (x.name || '').toLowerCase().includes('server-b')
         );
         if (peer) obj.haPairId = peer.id;
       }

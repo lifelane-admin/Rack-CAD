@@ -741,8 +741,8 @@ export class RackSlicerAIStudio {
             target: `${torADeviceId}-port-${i}`,
             cableType: 'dac-twinax',
             color: '#10b981',
-            name: `Node ${nodeNum}${rackLabel} NIC 1 ⟶ ToR-A Port ${nodeNum} (iSCSI Storage Fabric A)`,
-            details: { sidePreference: 'left', notes: 'iSCSI Primary Storage Link' },
+            name: `Node ${nodeNum}${rackLabel} NIC 1 ⟶ ToR-A Port ${nodeNum} (25GbE Data A)`,
+            details: { sidePreference: 'left', notes: 'Primary 25GbE Data Fabric Link' },
           });
         }
         if (torBDeviceId) {
@@ -752,8 +752,8 @@ export class RackSlicerAIStudio {
             target: `${torBDeviceId}-port-${i}`,
             cableType: 'dac-twinax',
             color: '#10b981',
-            name: `Node ${nodeNum}${rackLabel} NIC 2 ⟶ ToR-B Port ${nodeNum} (iSCSI Storage Fabric B)`,
-            details: { sidePreference: 'right', notes: 'iSCSI Redundant Storage Link' },
+            name: `Node ${nodeNum}${rackLabel} NIC 2 ⟶ ToR-B Port ${nodeNum} (25GbE Data B)`,
+            details: { sidePreference: 'right', notes: 'Redundant 25GbE Data Fabric Link' },
           });
         }
 
@@ -792,13 +792,24 @@ export class RackSlicerAIStudio {
           target: `${torBDeviceId}-port-52`,
           cableType: 'dac-twinax',
           color: '#8b5cf6',
-          name: isMultiRack ? 'ToR-A (Rack A) ⟷ ToR-B (Rack B) (100G MLAG Inter-Rack ISL)' : 'ToR-A ⟷ ToR-B (100G MLAG Switch Trunk)',
-          details: { sidePreference: 'right', notes: isMultiRack ? 'Inter-Rack Switch Link' : 'In-Rack MLAG Switch Peer Link' },
+          name: isMultiRack ? 'ToR-A (Rack A) ⟷ ToR-B (Rack B) (100G MLAG Inter-Rack ISL 1)' : 'ToR-A ⟷ ToR-B (100G MLAG ISL 1)',
+          details: { sidePreference: 'right', notes: isMultiRack ? 'Inter-Rack Switch Link 1' : 'In-Rack MLAG Switch Peer Link 1' },
+        });
+        changes.push({
+          action: 'create_cable',
+          source: `${torADeviceId}-port-53`,
+          target: `${torBDeviceId}-port-53`,
+          cableType: 'dac-twinax',
+          color: '#8b5cf6',
+          name: isMultiRack ? 'ToR-A (Rack A) ⟷ ToR-B (Rack B) (100G MLAG Inter-Rack ISL 2)' : 'ToR-A ⟷ ToR-B (100G MLAG ISL 2)',
+          details: { sidePreference: 'right', notes: isMultiRack ? 'Inter-Rack Switch Link 2' : 'In-Rack MLAG Switch Peer Link 2' },
         });
       }
 
-      // 3. Storage Array iSCSI & iDRAC Links
+      // 3. Storage Array iSCSI / NVMe-oF & iDRAC Links
       if (storageDeviceId) {
+        const isNvme = req.storageType === 'NVMe-oF' || req.storageType?.includes('NVMe');
+        const stLabel = isNvme ? '100G NVMe-oF' : 'iSCSI Storage';
         if (torADeviceId) {
           changes.push({
             action: 'create_cable',
@@ -806,8 +817,8 @@ export class RackSlicerAIStudio {
             target: `${torADeviceId}-port-48`,
             cableType: 'dac-twinax',
             color: '#10b981',
-            name: 'SAN Storage Ctrl 1 ⟶ ToR-A (iSCSI Storage Fabric A)',
-            details: { sidePreference: 'left', notes: 'Primary SAN iSCSI Controller Link' },
+            name: `Storage Array Ctrl 1 ⟶ ToR-A (${stLabel} Fabric A)`,
+            details: { sidePreference: 'left', notes: 'Primary Storage Controller Link' },
           });
           // SAN iDRAC / Mgmt
           changes.push({
@@ -827,8 +838,8 @@ export class RackSlicerAIStudio {
             target: `${torBDeviceId}-port-48`,
             cableType: 'dac-twinax',
             color: '#10b981',
-            name: 'SAN Storage Ctrl 2 ⟶ ToR-B (iSCSI Storage Fabric B)',
-            details: { sidePreference: 'right', notes: 'Secondary SAN iSCSI Controller Link' },
+            name: `Storage Array Ctrl 2 ⟶ ToR-B (${stLabel} Fabric B)`,
+            details: { sidePreference: 'right', notes: 'Secondary Storage Controller Link' },
           });
         }
       }

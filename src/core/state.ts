@@ -147,12 +147,21 @@ class StateManager {
   private prepareDevices(devices: DeviceData[]): DeviceData[] {
     return devices.map(d => {
       const template = getTemplate(d.templateId);
-      if (!template) return d;
+      if (!template) {
+        return {
+          ...d,
+          ports: (d.ports || []).map(p => ({ ...p, deviceId: p.deviceId || d.id }))
+        };
+      }
       const withLocalPorts = injectNetworkLocalPorts(d.id, template, d.deviceConfig, d.ports);
       const withConfigurablePorts = injectConfigurablePorts(d.id, template, d.deviceConfig, withLocalPorts);
+      const finalPorts = injectEarPorts(d.id, template.category, template.heightUnits, withConfigurablePorts, d.deviceConfig).map(p => ({
+        ...p,
+        deviceId: p.deviceId || d.id
+      }));
       return {
         ...d,
-        ports: injectEarPorts(d.id, template.category, template.heightUnits, withConfigurablePorts, d.deviceConfig)
+        ports: finalPorts
       };
     });
   }
@@ -347,8 +356,8 @@ class StateManager {
   getPort(id: string | null): PortData | undefined {
     if (!id) return undefined;
     for (const device of this.state.devices) {
-      const port = device.ports.find(p => p.id === id);
-      if (port) return port;
+      const port = device.ports?.find(p => p.id === id);
+      if (port) return { ...port, deviceId: port.deviceId || device.id };
     }
     return undefined;
   }

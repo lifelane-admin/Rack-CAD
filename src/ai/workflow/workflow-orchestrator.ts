@@ -582,7 +582,32 @@ export class AIWorkflowOrchestrator {
         units: 2,
         power: 450,
         badge: 'User Inventory',
-        alternatives: [],
+        alternatives: [
+          {
+            name: 'HPE ProLiant DL380 Gen11',
+            specs: `2U | 2x Intel Xeon Silver 4410Y | ${ram}GB DDR5 | 4x 25GbE | Dual 1000W PSU (iLO 6 Advanced)`,
+            unitCost: 6870,
+            units: 2,
+            power: 460,
+            reason: 'HPE enterprise platform with Silicon Root of Trust and iLO 6 management.',
+          },
+          {
+            name: 'Supermicro SuperServer 2024US-TRT',
+            specs: `2U | Dual AMD EPYC 9124 16-Core | ${ram}GB DDR5 | 2x 25GbE + 2x 10GbE | Dual 1200W PSU`,
+            unitCost: 5920,
+            units: 2,
+            power: 430,
+            reason: 'High density compute value with lower initial hardware acquisition cost.',
+          },
+          {
+            name: 'Lenovo ThinkSystem SR650 V3',
+            specs: `2U | 2x Intel Xeon Silver 4410Y | ${ram}GB DDR5 | 4x 25GbE | Dual 1100W PSU (XClarity)`,
+            unitCost: 6600,
+            units: 2,
+            power: 450,
+            reason: 'Lenovo enterprise reliability with XClarity deployment automation.',
+          },
+        ],
       },
       {
         id: 'bom-network-primary',

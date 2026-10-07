@@ -6,6 +6,7 @@ import { stateManager } from '../core/state';
 import { ExcelExportEngine } from '../model/excel-export-engine';
 import { physicalInfrastructureModel } from '../model/physical-model';
 import { renderCable } from '../renderers/cable-renderer';
+import { computeSmartRouting } from '../utils/routing';
 
 describe('Architecture Blueprint Templates & Excel Export', () => {
   beforeEach(() => {
@@ -133,6 +134,47 @@ describe('Architecture Blueprint Templates & Excel Export', () => {
         expect(group).toBeTruthy();
         expect(fakeLayer.children.length).toBeGreaterThan(0);
       }
+    }
+  });
+
+  it('verifies that all switches across all templates have standard port counts (>= 24 ports)', () => {
+    const rackTemplateIds = ['tpl-ceph-mesh', 'tpl-hyperv-cluster', 'tpl-proxmox-ceph', 'tpl-ai-gpu-pod'];
+
+    for (const tplId of rackTemplateIds) {
+      const payload = getTemplatePayloadJson(tplId);
+      importJSON(payload);
+
+      const s = stateManager.getState();
+      const switches = s.devices.filter(d => d.templateId.includes('sw-') || d.templateId.includes('switch') || (d as any).category === 'switch');
+      expect(switches.length).toBeGreaterThan(0);
+
+      for (const sw of switches) {
+        const nonEarPorts = (sw.ports || []).filter(p => !p.id.includes('-ear-'));
+        expect(nonEarPorts.length, `Switch ${sw.name} (${sw.id}) in ${tplId} should have >= 24 ports`).toBeGreaterThanOrEqual(24);
+      }
+    }
+  });
+
+  it('verifies that long-distance cables route via side vertical cable managers rather than hanging in the center', () => {
+    const payload = getTemplatePayloadJson('tpl-hyperv-cluster');
+    importJSON(payload);
+
+    const s = stateManager.getState();
+    const rack = s.racks[0];
+
+    // Find ToR uplink cables between servers and switch
+    const uplinks = s.cables.filter(c => c.id === 'cbl-hv1-tor' || c.id === 'cbl-hv2-tor');
+    expect(uplinks.length).toBe(2);
+
+    for (const cable of uplinks) {
+      const srcPos = stateManager.getPortWorldPosition(cable.sourcePortId)!;
+      const destPos = stateManager.getPortWorldPosition(cable.destPortId)!;
+      const anchors = computeSmartRouting(cable, srcPos, destPos);
+
+      expect(anchors.length).toBeGreaterThanOrEqual(2);
+      // The vertical trunk should be routed to the left vertical cable manager (outside rack inner rail, X <= rack.x)
+      const leftVcmTrunk = anchors.find((pt: any) => pt.x <= rack.x);
+      expect(leftVcmTrunk, `Cable ${cable.id} should have a waypoint in the left VCM channel`).toBeDefined();
     }
   });
 });

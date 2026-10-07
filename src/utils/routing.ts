@@ -38,6 +38,15 @@ export function getPortOrientation(
     return port.relativeX > 175 ? 'right' : 'left';
   }
 
+  const s = stateManager.getState();
+  let device = port ? (port.deviceId ? stateManager.getDevice(port.deviceId) : s.devices.find(d => d.ports?.some(p => p.id === port.id))) : null;
+  const template = device ? getTemplate(device.templateId, s.customTemplates || []) : null;
+
+  // Side-mounted devices (e.g. 0U Vertical PDUs): outlets plug horizontally inward
+  if (device && device.sideMountPosition) {
+    return device.sideMountPosition === 'left' ? 'right' : 'left';
+  }
+
   // Power ports / PDU outlets: vertical plug-in orientation
   if (isPower) {
     return 'down';
@@ -46,10 +55,6 @@ export function getPortOrientation(
   if (!port) {
     return cable.sidePreference || 'right';
   }
-
-  const s = stateManager.getState();
-  const device = stateManager.getDevice(port.deviceId);
-  const template = device ? getTemplate(device.templateId, s.customTemplates || []) : null;
 
   // Server-side / storage / ups devices ports align left/right horizontally
   if (device && (device.templateId.includes('server') || template?.category === 'server' || template?.category === 'storage' || template?.category === 'ups')) {
@@ -130,6 +135,10 @@ export function resolveCableChannelSide(
 
   if (srcPort?.id.includes('-ear-')) return srcPort.relativeX <= 175 ? 'left' : 'right';
   if (destPort?.id.includes('-ear-')) return destPort.relativeX <= 175 ? 'left' : 'right';
+
+  // If either endpoint is a side-mounted device (e.g. Left/Right Vertical PDU), route via that side
+  if (destDevice?.sideMountPosition === 'left' || srcDevice?.sideMountPosition === 'left') return 'left';
+  if (destDevice?.sideMountPosition === 'right' || srcDevice?.sideMountPosition === 'right') return 'right';
 
   // Power cables route to the right / PDU side by default
   const isPower = cable.type?.includes('power') || cable.powerCableType === 'power';
@@ -346,16 +355,17 @@ export function computeSmartRouting(
   const isSrcVertical = srcOrient === 'up' || srcOrient === 'down' || srcOrient === 'inward';
   const isDestVertical = destOrient === 'up' || destOrient === 'down' || destOrient === 'inward';
 
-  // Direct Downward-to-Downward connections (e.g. Ear Blade Power / Device to PDU socket)
-  // Clean U-bend with exactly 2 corner waypoints (drop from source -> horizontal run -> rise into dest)
-  if (srcOrient === 'down' && destOrient === 'down') {
+  // Direct Downward-to-Downward connections (e.g. Ear Blade Power / adjacent device jumper)
+  // Clean U-bend ONLY for local jumpers within ~1.5 RU (45px) — cross-rack connections MUST route via the side vertical channel
+  if (srcOrient === 'down' && destOrient === 'down' && Math.abs(sourcePos.y - destPos.y) < 45) {
     const ySag = Math.max(sourcePos.y, destPos.y) + Math.max(18, exitOffset);
     const raw = [sourcePos, { x: sourcePos.x, y: ySag }, { x: destPos.x, y: ySag }, destPos];
     return simplifyCollinearPoints(raw).slice(1, -1);
   }
 
-  // Direct Upward-to-Upward connections
-  if (srcOrient === 'up' && destOrient === 'up') {
+  // Direct Upward-to-Upward connections (e.g. local loop on same switch)
+  // ONLY for local jumpers within ~1.5 RU (45px) — cross-rack connections MUST route via the side vertical channel
+  if (srcOrient === 'up' && destOrient === 'up' && Math.abs(sourcePos.y - destPos.y) < 45) {
     const yRise = Math.min(sourcePos.y, destPos.y) - Math.max(18, exitOffset);
     const raw = [sourcePos, { x: sourcePos.x, y: yRise }, { x: destPos.x, y: yRise }, destPos];
     return simplifyCollinearPoints(raw).slice(1, -1);
