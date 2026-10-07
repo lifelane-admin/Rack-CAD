@@ -473,6 +473,14 @@ export class App {
       this.saasDashboard.show();
     });
 
+    eventBus.on('sidebar:open', () => {
+      this.sidebar.toggleCollapse(false);
+    });
+
+    eventBus.on('export:report', () => {
+      eventBus.emit('reports:toggle');
+    });
+
     // Initialize toast notifications — every export/save/undo/redo/etc. success or failure is
     // emitted as a 'notification' event; without this listener they all resolved into silence.
     new NotificationCenter();

@@ -70,6 +70,7 @@ export class RackSlicerAIStudio {
           <span>RackSlicer</span>
         </div>
         <nav class="ai-studio-nav">
+          <button id="nav-btn-home" title="Return to Launchpad & Home">🏠 Home</button>
           <button class="active" id="nav-btn-ai">✦ AI Studio</button>
           <button id="nav-btn-canvas">♧ Canvas</button>
           <button id="nav-btn-library">▣ Library</button>
@@ -77,6 +78,9 @@ export class RackSlicerAIStudio {
           <button id="nav-btn-reports">▤ Reports</button>
         </nav>
         <div class="ai-studio-project-bar">
+          <button class="ai-studio-header-btn home" id="top-btn-home" title="Return to SaaS Workspace Landing Page" style="font-weight:700; color:#0284c7; border-color:#bae6fd; background:#f0f9ff; cursor:pointer;">
+            🏠 Home
+          </button>
           <button class="ai-studio-header-btn mcp" id="top-btn-mcp" title="Manage MCP Control Plane, Tools & Audit Log">
             🛡️ MCP Control Plane
           </button>
@@ -147,6 +151,16 @@ export class RackSlicerAIStudio {
   private bindEvents(): void {
     // Navigation & Header Links
     this.el.querySelector('.ai-studio-logo')?.addEventListener('click', () => {
+      this.close();
+      eventBus.emit('app:show-landing' as any, undefined);
+    });
+
+    this.el.querySelector('#nav-btn-home')?.addEventListener('click', () => {
+      this.close();
+      eventBus.emit('app:show-landing' as any, undefined);
+    });
+
+    this.el.querySelector('#top-btn-home')?.addEventListener('click', () => {
       this.close();
       eventBus.emit('app:show-landing' as any, undefined);
     });

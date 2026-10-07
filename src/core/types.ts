@@ -1015,6 +1015,8 @@ export interface AppEvents {
   'ai:connection-tested': { providerId: string; result: any };
   'ai:studio-open': void;
   'ai:studio-close': void;
+  'sidebar:open': void;
+  'export:report': void;
 }
 
 // === Constants ===

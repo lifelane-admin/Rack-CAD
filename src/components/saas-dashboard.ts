@@ -92,15 +92,6 @@ const MODULE_NAV = [
     glow: 'rgba(192, 132, 252, 0.45)'
   },
   {
-    id: 'mod-ai-studios',
-    label: 'AI Studios',
-    iconImg: '/assets/dashboard/icons/ai-studios-icon.png',
-    fallbackIcon: '✨',
-    view: 'ai',
-    color: '#38bdf8',
-    glow: 'rgba(56, 189, 248, 0.45)'
-  },
-  {
     id: 'mod-templates',
     label: 'Templates',
     iconImg: '/assets/dashboard/icons/templates-icon.png',
@@ -611,13 +602,13 @@ export class SaaSWorkspaceDashboard {
       EventBus.emit('notification', { message: '☁️ Cloud Architecture Designer opened', type: 'info' });
     });
 
-    // 11 Module Navigation Buttons
+    // 10 Module Navigation Buttons
     this.container.querySelectorAll('.saas-mod-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const view = (btn as HTMLElement).dataset.modView;
         const id = (btn as HTMLElement).id;
 
-        if (id === 'mod-ai' || id === 'mod-ai-studios') {
+        if (id === 'mod-ai') {
           this.hide();
           EventBus.emit('ai:studio-open' as any, undefined);
           return;
