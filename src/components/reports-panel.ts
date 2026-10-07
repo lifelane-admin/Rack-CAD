@@ -66,6 +66,7 @@ export class ReportsPanel {
 
         <div class="reports-footer">
           <div class="reports-actions">
+            <button class="btn-action btn-primary" id="btn-export-excel" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; border: none; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px; cursor: pointer; box-shadow: 0 2px 8px rgba(16,185,129,0.3);">📊 Export Blueprint Excel (.xlsx)</button>
             <button class="btn-action btn-secondary" id="btn-export-csv">📥 Export CSV</button>
             <button class="btn-action btn-secondary" id="btn-export-json">📥 Export JSON</button>
           </div>
@@ -77,6 +78,10 @@ export class ReportsPanel {
     // Bind event listeners
     this.element.querySelector('.reports-close-btn')?.addEventListener('click', () => this.toggle());
     
+    this.element.querySelector('#btn-export-excel')?.addEventListener('click', () => {
+      EventBus.emit('export:excel' as any, undefined);
+    });
+
     this.element.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', (e: any) => {
         this.activeTab = e.target.getAttribute('data-tab') as any;

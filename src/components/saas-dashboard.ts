@@ -14,6 +14,8 @@
 
 import { authStore } from '../auth/auth-store';
 import { projectStore, SaaSProject, ARCHITECTURE_TEMPLATES, ArchitectureTemplate } from '../storage/project-store';
+import { getTemplatePayloadJson } from '../storage/template-data-generator';
+import { importJSON } from '../utils/export';
 import { showUserProfileModal } from './user-profile-modal';
 import EventBus from '../core/event-bus';
 
@@ -486,7 +488,10 @@ export class SaaSWorkspaceDashboard {
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <span class="tag ${info.cls}">${info.label}</span>
-          <div style="display:flex; gap:4px; align-items:center;">
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="proj-excel-btn" data-proj-id="${p.id}" style="background:none; border:none; color:#10b981; font-size:14px; cursor:pointer;" title="Export Architecture Blueprint (.xlsx)">
+              📊
+            </button>
             <button class="proj-fav-btn" data-proj-id="${p.id}" style="background:none; border:none; color:${p.isFavorite ? '#f59e0b' : '#64748b'}; font-size:15px; cursor:pointer;" title="Favorite">
               ★
             </button>
@@ -524,9 +529,14 @@ export class SaaSWorkspaceDashboard {
             <div class="saas-tpl-cost">${tpl.costEstimate}</div>
             ${tpl.savingEstimate ? `<div class="saas-tpl-saving">⚡ ${tpl.savingEstimate}</div>` : ''}
           </div>
-          <button class="saas-tpl-use-btn" data-tpl-id="${tpl.id}">
-            Use Template
-          </button>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="saas-tpl-excel-btn" data-tpl-id="${tpl.id}" title="Download Architecture Blueprint Excel (.xlsx) with Cable Schedules & BOM" style="background:rgba(16, 185, 129, 0.15); border:1px solid rgba(16, 185, 129, 0.4); color:#34d399; font-size:11px; padding:6px 9px; border-radius:6px; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:4px; transition: all 0.2s ease;">
+              📊 Blueprint
+            </button>
+            <button class="saas-tpl-use-btn" data-tpl-id="${tpl.id}">
+              Use Template
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -733,6 +743,24 @@ export class SaaSWorkspaceDashboard {
       showUserProfileModal(() => this.render());
     });
 
+    // Template "Export Blueprint (.xlsx)" Buttons
+    this.container.querySelectorAll('.saas-tpl-excel-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tplId = (btn as HTMLElement).dataset.tplId;
+        if (tplId) {
+          const payloadJson = getTemplatePayloadJson(tplId);
+          try {
+            importJSON(payloadJson);
+            EventBus.emit('export:excel' as any, undefined);
+            EventBus.emit('notification', { message: '📊 Architecture Blueprint (.xlsx) with Cable Routing exported!', type: 'success' });
+          } catch (err: any) {
+            EventBus.emit('notification', { message: `Blueprint export error: ${err.message}`, type: 'error' });
+          }
+        }
+      });
+    });
+
     // Template "Use Template" Buttons
     this.container.querySelectorAll('.saas-tpl-use-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -748,11 +776,31 @@ export class SaaSWorkspaceDashboard {
       });
     });
 
+    // Project Card Direct Excel Blueprint Download
+    this.container.querySelectorAll('.proj-excel-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const projId = (btn as HTMLElement).dataset.projId;
+        if (projId) {
+          const proj = projectStore.getProjectById(projId);
+          if (proj && proj.dataJson && proj.dataJson !== '{}') {
+            try {
+              importJSON(proj.dataJson);
+              EventBus.emit('export:excel' as any, undefined);
+              EventBus.emit('notification', { message: `📊 Blueprint for "${proj.name}" exported to Excel!`, type: 'success' });
+            } catch (err: any) {
+              EventBus.emit('notification', { message: `Export error: ${err.message}`, type: 'error' });
+            }
+          }
+        }
+      });
+    });
+
     // Project Cards Click / Open
     this.container.querySelectorAll('.card').forEach(card => {
       card.addEventListener('click', (e) => {
         const target = e.target as HTMLElement;
-        if (target.closest('.proj-delete-btn') || target.closest('.proj-fav-btn')) {
+        if (target.closest('.proj-delete-btn') || target.closest('.proj-fav-btn') || target.closest('.proj-excel-btn')) {
           return;
         }
         const projId = (card as HTMLElement).dataset.projId;

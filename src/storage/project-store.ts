@@ -3,6 +3,7 @@
  * Implements Multi-tenant organization & project model specified in the RackSlicer SaaS Blueprint.
  */
 import { authStore } from '../auth/auth-store';
+import { getTemplatePayloadJson } from './template-data-generator';
 
 export interface SaaSProject {
   id: string;
@@ -38,7 +39,7 @@ const SAMPLE_STARTER_PROJECTS: SaaSProject[] = [
     name: 'Enterprise DC Hall v2.0',
     description: 'Hyperscale containment corridor with cold-aisle ceiling airflow and dual 30A PDU distribution.',
     category: 'datacenter',
-    dataJson: '{}',
+    dataJson: getTemplatePayloadJson('tpl-proxmox-ceph'),
     updatedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
     createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
     thumbnailUrl: '/assets/dashboard/card-dc-hall.jpg',
@@ -55,7 +56,7 @@ const SAMPLE_STARTER_PROJECTS: SaaSProject[] = [
     name: 'ESD Raised Floor Design',
     description: '1500 sq ft ESD tile grid with underfloor airflow dampers, cable trays, and rack footprints.',
     category: 'template',
-    dataJson: '{}',
+    dataJson: getTemplatePayloadJson('tpl-hyperv-cluster'),
     updatedAt: new Date(Date.now() - 3600000 * 5).toISOString(),
     createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
     thumbnailUrl: '/assets/dashboard/card-esd-floor.jpg',
@@ -73,7 +74,7 @@ const SAMPLE_STARTER_PROJECTS: SaaSProject[] = [
     name: 'AWS Hybrid Transit Gateway',
     description: 'Multi-VPC architecture connected to on-prem server racks via redundant AWS DirectConnect.',
     category: 'cloud-aws',
-    dataJson: '{}',
+    dataJson: getTemplatePayloadJson('tpl-aws-transit'),
     updatedAt: new Date(Date.now() - 86400000 * 1).toISOString(),
     createdAt: new Date(Date.now() - 86400000 * 12).toISOString(),
     thumbnailUrl: '/assets/dashboard/card-aws-transit.jpg',
@@ -90,7 +91,7 @@ const SAMPLE_STARTER_PROJECTS: SaaSProject[] = [
     name: 'New Server Rack – Branch',
     description: '42U edge datacenter rack with redundant Dell PowerEdge compute, Cisco ToR switches, and ATS.',
     category: 'rack',
-    dataJson: '{}',
+    dataJson: getTemplatePayloadJson('tpl-ceph-mesh'),
     updatedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
     createdAt: new Date(Date.now() - 86400000 * 14).toISOString(),
     thumbnailUrl: '/assets/dashboard/card-server-rack.jpg',
@@ -202,6 +203,26 @@ class ProjectStore {
     const existing = localStorage.getItem(STORAGE_KEY_PROJECTS);
     if (!existing) {
       localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(SAMPLE_STARTER_PROJECTS));
+    } else {
+      // Upgrade any existing starter projects with full blueprint payloads if they were previously empty
+      try {
+        const all: SaaSProject[] = JSON.parse(existing);
+        let modified = false;
+        for (const p of all) {
+          if (!p.dataJson || p.dataJson === '{}') {
+            const starter = SAMPLE_STARTER_PROJECTS.find(s => s.id === p.id);
+            if (starter) {
+              p.dataJson = starter.dataJson;
+              modified = true;
+            }
+          }
+        }
+        if (modified) {
+          localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(all));
+        }
+      } catch (e) {
+        // ignore JSON parse error in init
+      }
     }
   }
 
@@ -215,6 +236,15 @@ class ProjectStore {
         localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(SAMPLE_STARTER_PROJECTS));
         return SAMPLE_STARTER_PROJECTS;
       }
+      // Guarantee any starter project has populated dataJson even if read from earlier cache
+      for (const p of all) {
+        if (!p.dataJson || p.dataJson === '{}') {
+          const starter = SAMPLE_STARTER_PROJECTS.find(s => s.id === p.id);
+          if (starter) {
+            p.dataJson = starter.dataJson;
+          }
+        }
+      }
       return all;
     } catch (e) {
       return SAMPLE_STARTER_PROJECTS;
@@ -223,7 +253,14 @@ class ProjectStore {
 
   public getProjectById(id: string): SaaSProject | null {
     const projects = this.getAllProjects();
-    return projects.find(p => p.id === id) || null;
+    const proj = projects.find(p => p.id === id) || null;
+    if (proj && (!proj.dataJson || proj.dataJson === '{}')) {
+      const starter = SAMPLE_STARTER_PROJECTS.find(s => s.id === id);
+      if (starter) {
+        proj.dataJson = starter.dataJson;
+      }
+    }
+    return proj;
   }
 
   public saveProject(name: string, category: SaaSProject['category'], dataJson: string, description?: string): SaaSProject {
@@ -261,12 +298,12 @@ class ProjectStore {
     return project;
   }
 
-  public createNewProject(name: string, category: SaaSProject['category'], dataJson: string = '{}'): SaaSProject {
+  public createNewProject(name: string, category: SaaSProject['category'], dataJson: string = '{}', description?: string): SaaSProject {
     const user = authStore.getCurrentUser();
     const raw = localStorage.getItem(STORAGE_KEY_PROJECTS);
     const all: SaaSProject[] = raw ? JSON.parse(raw) : [];
 
-    const project = this.createNewProjectObject(user.id, name, category, dataJson);
+    const project = this.createNewProjectObject(user.id, name, category, dataJson, description);
     all.unshift(project);
     this.activeProjectId = project.id;
 
@@ -275,7 +312,8 @@ class ProjectStore {
   }
 
   public createProjectFromTemplate(template: ArchitectureTemplate): SaaSProject {
-    return this.createNewProject(template.title, template.targetCategory, '{}');
+    const payloadJson = getTemplatePayloadJson(template.id);
+    return this.createNewProject(template.title, template.targetCategory, payloadJson, template.description);
   }
 
   private createNewProjectObject(userId: string, name: string, category: SaaSProject['category'], dataJson: string, description?: string): SaaSProject {

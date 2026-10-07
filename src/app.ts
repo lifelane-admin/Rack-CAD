@@ -453,17 +453,28 @@ export class App {
           console.warn('Failed to load SaaS project state:', e);
         }
       }
-      if (category) {
-        if (category === 'rack') {
-          stateManager.setState({ workflowMode: 'rack', activeElevationRackId: null });
-          eventBus.emit('view:switch', 'rack');
-        } else if (category === 'datacenter') {
-          stateManager.setState({ workflowMode: 'datacenter' });
-          eventBus.emit('view:switch', 'datacenter');
-        } else if (category.startsWith('cloud')) {
-          stateManager.setState({ workflowMode: 'cloud', activeElevationRackId: null });
-          eventBus.emit('view:switch', 'cloud');
-        }
+      const state = stateManager.getState();
+      const hasCloud = (state.cloudNodes && state.cloudNodes.length > 0) || (state.cloudContainers && state.cloudContainers.length > 0);
+      const hasRacks = state.racks && state.racks.length > 0;
+
+      if (category === 'datacenter') {
+        stateManager.setState({ workflowMode: 'datacenter' });
+        eventBus.emit('view:switch', 'datacenter');
+      } else if (category && (category.startsWith('cloud') || category === 'hybrid')) {
+        stateManager.setState({ workflowMode: 'cloud', activeElevationRackId: null });
+        eventBus.emit('view:switch', 'cloud');
+      } else if (hasCloud && !hasRacks) {
+        stateManager.setState({ workflowMode: 'cloud', activeElevationRackId: null });
+        eventBus.emit('view:switch', 'cloud');
+      } else {
+        stateManager.setState({ workflowMode: 'rack', activeElevationRackId: null });
+        eventBus.emit('view:switch', 'rack');
+      }
+
+      try {
+        this.canvas.setTransform({ x: 60, y: 50, scale: 0.85 });
+      } catch (e) {
+        // canvas transform fallback
       }
       this.renderAll();
       this.renderCloudAll();
