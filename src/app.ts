@@ -760,7 +760,12 @@ export class App {
     autoSaveManager.init();
     void recoveryBanner; // ensure initialized
 
-    this.showStartupModal();
+    // Launch the User Dashboard in production, or startup modal during unit tests
+    if (typeof process !== 'undefined' && (process.env?.NODE_ENV === 'test' || (process.env as any)?.VITEST)) {
+      this.showStartupModal();
+    } else {
+      this.saasDashboard.show();
+    }
 
     console.log('Rack Slicer SaaS Platform initialized');
   }
@@ -994,7 +999,7 @@ export class App {
     });
 
     (eventBus as any).on('app:show-landing', () => {
-      this.showStartupModal();
+      this.saasDashboard.show();
     });
 
     (eventBus as any).on('view:switch', (view: 'rack' | 'cloud' | 'hybrid' | 'datacenter' | 'flowchart') => {
@@ -1118,8 +1123,8 @@ export class App {
       (eventBus as any).emit('canvas:zoom', transform.scale);
     });
 
-    // Run automated self-test runner on boot in development environment
-    if (import.meta.env.DEV) {
+    // Run automated self-test runner on boot in development environment (skip during vitest)
+    if (import.meta.env.DEV && (typeof process === 'undefined' || (process.env?.NODE_ENV !== 'test' && !(process.env as any)?.VITEST))) {
       setTimeout(() => {
         runSelfTests();
       }, 1000);

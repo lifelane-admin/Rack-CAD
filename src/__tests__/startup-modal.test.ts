@@ -39,6 +39,8 @@ function mountAppSkeleton(): void {
 
 describe('Startup modal', () => {
   beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
     eventBus.clear();
     stateManager.setState({
       racks: [], devices: [], cables: [], bundles: [], textLabels: [], imageAssets: [],

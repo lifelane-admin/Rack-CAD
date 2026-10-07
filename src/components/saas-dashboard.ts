@@ -1,11 +1,12 @@
 /**
  * Revamped High-Fidelity SaaS Workspace Dashboard & Project Hub
- * Designed according to user experience specifications with photo-grade
- * datacenter perspective backdrop, real-time metrics, navigation rail, and project cards.
+ * Implements the RackSlicer SaaS Product & UX Blueprint using the 58px topbar,
+ * 220px navigation rail, Hyperscale Containment Corridor photo backdrop,
+ * real-time telemetry metrics, and high-definition card visuals.
  */
 
 import { authStore } from '../auth/auth-store';
-import { projectStore, SaaSProject } from '../storage/project-store';
+import { projectStore, SaaSProject, ARCHITECTURE_TEMPLATES, ArchitectureTemplate } from '../storage/project-store';
 import { showUserProfileModal } from './user-profile-modal';
 import EventBus from '../core/event-bus';
 
@@ -49,7 +50,7 @@ export class SaaSWorkspaceDashboard {
       : 'SA'
     ).toUpperCase();
 
-    // Compute stats
+    // Compute live metrics
     const totalProjects = Math.max(allProjects.length, 12);
     const rackProjects = allProjects.filter(p => p.category === 'rack');
     const dcProjects = allProjects.filter(p => p.category === 'datacenter');
@@ -59,34 +60,34 @@ export class SaaSWorkspaceDashboard {
     const statHalls = Math.max(dcProjects.length + 3, 6);
     const statCloud = Math.max(cloudProjects.length + 1, 3);
 
+    const filteredTemplates = this.getFilteredTemplates();
+
     this.container.innerHTML = `
-      <!-- Topbar Header (84px) -->
+      <!-- Compact High-End Top Bar (58px) -->
       <header class="topbar">
         <div class="brand" id="dash-brand-btn" title="Return to Active Design Canvas">
           <div class="logo">RS</div>
           <b>RackSlicer SaaS</b>
         </div>
 
-        <!-- Global Search Input -->
         <label class="search">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
           </svg>
           <input id="q" type="search" placeholder="Search projects, racks, devices, templates..." value="${this.searchQuery}" aria-label="Search">
           <span class="kbd">Ctrl K</span>
         </label>
 
-        <!-- Right Top Actions -->
         <div class="top-actions">
           <button class="btn-primary" id="dash-btn-new-project">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M12 5v14M5 12h14"/>
             </svg>
             New Design Project
           </button>
 
           <button class="bell" id="dash-btn-notifications" aria-label="Notifications" title="Notifications & System Updates">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>
             </svg>
             <span class="dot"></span>
@@ -98,23 +99,19 @@ export class SaaSWorkspaceDashboard {
               <div class="n">${user.name}</div>
               <div class="p">
                 ${user.plan.charAt(0).toUpperCase() + user.plan.slice(1)} Plan
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <path d="m6 9 6 6 6-6"/>
-                </svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
               </div>
             </div>
           </div>
 
-          <!-- Close / Return Button -->
           <button class="topbar-close-btn" id="dash-btn-close" title="Close Dashboard & Return to Canvas (Esc)">
             ✕ <span>Canvas</span>
           </button>
         </div>
       </header>
 
-      <!-- Main Shell with Navigation Rail & Content -->
+      <!-- Dashboard Layout with 220px Navigation Rail -->
       <div class="shell">
-        <!-- Sidebar Navigation (260px) -->
         <aside class="side">
           <nav class="nav" id="nav">
             <a href="#" class="nav-item ${this.currentFilterCategory === 'all' ? 'active' : ''}" data-cat="all">
@@ -184,99 +181,99 @@ export class SaaSWorkspaceDashboard {
           </nav>
         </aside>
 
-        <!-- Main Dashboard Viewport -->
+        <!-- Main Content Viewport -->
         <main class="main">
-          <!-- Datacenter Aisle Backdrop -->
+          <!-- Datacenter Aisle Backdrop with Image and Glowing Vector Racks -->
           <div class="hero-bg" aria-hidden="true">
+            <img class="hero-photo" alt="" src="/assets/dashboard/hero-datacenter.jpg">
             <div class="hero-bloom"></div>
             <svg viewBox="0 0 1000 470" preserveAspectRatio="xMaxYMin slice">
               <defs>
-                <linearGradient id="rs-floor" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#0a1a33"/>
-                  <stop offset="1" stop-color="#040a15"/>
+                <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#0a1a33"/><stop offset="1" stop-color="#040a15"/>
                 </linearGradient>
-                <linearGradient id="rs-rk" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0" stop-color="#0c1628"/>
-                  <stop offset="1" stop-color="#132440"/>
+                <linearGradient id="rk" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#0c1628"/><stop offset="1" stop-color="#132440"/>
                 </linearGradient>
-                <radialGradient id="rs-glow" cx=".6" cy=".1" r=".7">
-                  <stop offset="0" stop-color="#1b6dff" stop-opacity=".45"/>
-                  <stop offset="1" stop-color="#1b6dff" stop-opacity="0"/>
+                <radialGradient id="glow" cx=".6" cy=".1" r=".7">
+                  <stop offset="0" stop-color="#1b6dff" stop-opacity=".45"/><stop offset="0" stop-color="#1b6dff" stop-opacity="0"/>
                 </radialGradient>
               </defs>
               <rect width="1000" height="470" fill="#040a16"/>
-              <rect width="1000" height="470" fill="url(#rs-glow)"/>
-              <!-- ceiling light strips -->
-              <g stroke="#43c8ff" stroke-width="5" stroke-linecap="round" opacity=".85">
-                <path d="M520 40 L760 95"/>
-                <path d="M640 18 L900 80"/>
-                <path d="M780 10 L990 62"/>
+              <rect width="1000" height="470" fill="url(#glow)"/>
+              <g stroke="#38bdf8" stroke-width="4" stroke-linecap="round" opacity=".8">
+                <path d="M520 40 L760 95"/><path d="M640 18 L900 80"/><path d="M780 10 L990 62"/>
               </g>
-              <polygon points="300,470 1000,470 1000,330 520,300" fill="url(#rs-floor)"/>
-              <g stroke="#1d4f8a" stroke-width="1" opacity=".5">
-                <path d="M520 300 L1000 360"/>
-                <path d="M480 330 L1000 410"/>
-                <path d="M420 380 L1000 460"/>
+              <polygon points="300,470 1000,470 1000,330 520,300" fill="url(#floor)"/>
+              <g stroke="#1d4f8a" stroke-width="1" opacity=".4">
+                <path d="M520 300 L1000 360"/><path d="M480 330 L1000 410"/><path d="M420 380 L1000 460"/>
               </g>
-              <g id="rs-racks-aisle"></g>
+              <g id="racks"></g>
             </svg>
           </div>
 
           <!-- Hero Greeting -->
           <section class="hero">
-            <p class="eyebrow">DATACENTER INFRASTRUCTURE DESIGN PLATFORM</p>
+            <p class="eyebrow">Datacenter Infrastructure Design Platform</p>
             <h1>Welcome back, ${user.name}! 👋</h1>
             <p class="sub">Design. Plan. Visualize. Optimize. Your Datacenter Infrastructure.</p>
+
+            <!-- Quick Action Shortcuts -->
+            <div class="saas-quick-actions">
+              <button class="saas-action-pill" id="quick-build-rack">
+                <span>🖥️</span> Build a Rack
+              </button>
+              <button class="saas-action-pill" id="quick-build-dc">
+                <span>🏢</span> Build a Datacenter
+              </button>
+              <button class="saas-action-pill" id="quick-cloud-arch">
+                <span>☁️</span> Cloud Architectures
+              </button>
+              <button class="saas-action-pill" id="quick-templates">
+                <span>📑</span> Use a Template
+              </button>
+              <button class="saas-action-pill" id="quick-ask-ai" style="border-color:rgba(168,85,247,0.4); color:#c084fc;">
+                <span>🤖</span> Ask AI Studio
+              </button>
+            </div>
           </section>
 
-          <!-- Real-Time Metrics Stats -->
+          <!-- Key Metrics Stats -->
           <section class="stats">
             <div class="stat s1">
               <div class="ic">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="#e9f8ff">
+                <svg viewBox="0 0 24 24" fill="#e0f2fe">
                   <path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
                 </svg>
               </div>
-              <div>
-                <div class="num">${totalProjects}</div>
-                <div class="lbl">Active Projects</div>
-              </div>
+              <div><div class="num">${totalProjects}</div><div class="lbl">Active Projects</div></div>
             </div>
 
             <div class="stat s2">
               <div class="ic">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#eafff7" stroke-width="2">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#ecfdf5" stroke-width="2">
                   <rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16M4 15h16"/>
                 </svg>
               </div>
-              <div>
-                <div class="num">${statRacks}</div>
-                <div class="lbl">Server Racks</div>
-              </div>
+              <div><div class="num">${statRacks}</div><div class="lbl">Server Racks</div></div>
             </div>
 
             <div class="stat s3">
               <div class="ic">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#f1ecff" stroke-width="1.8">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#f5f3ff" stroke-width="1.8">
                   <path d="M4 21V7l8-4 8 4v14M2 21h20M8 10v8M12 10v8M16 10v8"/>
                 </svg>
               </div>
-              <div>
-                <div class="num">${statHalls}</div>
-                <div class="lbl">Datacenter Halls</div>
-              </div>
+              <div><div class="num">${statHalls}</div><div class="lbl">Datacenter Halls</div></div>
             </div>
 
             <div class="stat s4">
               <div class="ic">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff5e6">
+                <svg viewBox="0 0 24 24" fill="#fef3c7">
                   <path d="M7 19h10a4.5 4.5 0 0 0 .6-9A6 6 0 0 0 6 10a4.5 4.5 0 0 0 1 9z"/>
                 </svg>
               </div>
-              <div>
-                <div class="num">${statCloud}</div>
-                <div class="lbl">Cloud Architectures</div>
-              </div>
+              <div><div class="num">${statCloud}</div><div class="lbl">Cloud Architectures</div></div>
             </div>
           </section>
 
@@ -288,25 +285,47 @@ export class SaaSWorkspaceDashboard {
             </div>
             <a class="view-all" id="dash-link-view-all" href="#">
               View All Projects
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
-                <path d="M5 12h14M13 6l6 6-6 6"/>
-              </svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
             </a>
           </div>
 
-          <!-- Project Cards Grid -->
+          <!-- High-Definition Project Cards Grid (Using Preserved Visuals) -->
           <section class="cards" id="dash-cards-grid">
             ${projects.length === 0 ? `
-              <div style="grid-column: 1 / -1; text-align:center; padding:50px 20px; background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.1); border-radius:14px;">
-                <div style="font-size:36px; margin-bottom:12px;">📂</div>
-                <h3 style="margin:0 0 6px; font-size:16px; color:#fff;">No Projects Match Your Search</h3>
-                <p style="margin:0 0 16px; font-size:13px; color:#94a3b8;">Try clearing the search query or start a new design.</p>
-                <button id="dash-empty-new-btn" class="btn-primary" style="display:inline-flex; height:42px; padding:0 18px; font-size:13px;">
-                  + New Design Project
-                </button>
+              <div style="grid-column: 1 / -1; text-align:center; padding:40px 20px; background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.1); border-radius:10px;">
+                <div style="font-size:32px; margin-bottom:8px;">📂</div>
+                <h3 style="margin:0 0 4px; font-size:15px; color:#fff;">No Projects Match Your Filter</h3>
+                <p style="margin:0 0 14px; font-size:12.5px; color:#94a3b8;">Try clearing the search query or start a new design.</p>
+                <button id="dash-empty-new-btn" class="btn-primary" style="display:inline-flex;">+ New Design Project</button>
               </div>
             ` : projects.map((p, idx) => this.renderRevampedCard(p, idx)).join('')}
           </section>
+
+          <!-- AI Natural Language Architecture Prompt (Section 48) -->
+          <div class="saas-ai-bar">
+            <div style="font-size:24px;">🤖</div>
+            <div style="flex:1;">
+              <div style="font-size:12px; font-weight:700; color:#c084fc; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px;">
+                AI Studio Architecture Generator
+              </div>
+              <input type="text" id="ai-quick-prompt" class="saas-ai-input" placeholder="e.g. Create a 3-node Proxmox cluster with Ceph, dual ToR switches, and redundant 25GbE networking..." />
+            </div>
+            <button id="ai-quick-submit-btn" class="saas-ai-submit-btn">
+              <span>✨</span> Generate Architecture
+            </button>
+          </div>
+
+          <!-- Reference Architectures & Proven Templates (Sections 19-32) -->
+          <div class="sec-head" style="margin-top:40px;">
+            <div>
+              <h2>Proven Architecture Templates</h2>
+              <p>Start from certified reference architectures instead of designing from zero</p>
+            </div>
+          </div>
+
+          <div class="saas-templates-grid">
+            ${filteredTemplates.map(tpl => this.renderTemplateCard(tpl)).join('')}
+          </div>
         </main>
       </div>
     `;
@@ -315,19 +334,19 @@ export class SaaSWorkspaceDashboard {
   }
 
   private renderRevampedCard(p: SaaSProject, idx: number): string {
-    const tagMap: Record<string, { label: string; cls: string; progress: number }> = {
-      datacenter: { label: 'DATACENTER HALL', cls: 't-hall', progress: 75 },
-      template: { label: 'TEMPLATE', cls: 't-tpl', progress: 40 },
-      'cloud-aws': { label: 'CLOUD', cls: 't-cloud', progress: 60 },
-      'cloud-azure': { label: 'CLOUD', cls: 't-cloud', progress: 55 },
-      'cloud-gcp': { label: 'CLOUD', cls: 't-cloud', progress: 65 },
-      hybrid: { label: 'CLOUD', cls: 't-cloud', progress: 50 },
-      rack: { label: 'RACK', cls: 't-rack', progress: 25 },
-      flowchart: { label: 'FLOWCHART', cls: 't-tpl', progress: 45 },
+    const tagMap: Record<string, { label: string; cls: string; progress: number; fallbackImg: string }> = {
+      datacenter: { label: 'DATACENTER HALL', cls: 't-hall', progress: 75, fallbackImg: '/assets/dashboard/card-dc-hall.jpg' },
+      template: { label: 'TEMPLATE', cls: 't-tpl', progress: 40, fallbackImg: '/assets/dashboard/card-esd-floor.jpg' },
+      'cloud-aws': { label: 'CLOUD', cls: 't-cloud', progress: 60, fallbackImg: '/assets/dashboard/card-aws-transit.jpg' },
+      'cloud-azure': { label: 'CLOUD', cls: 't-cloud', progress: 55, fallbackImg: '/assets/dashboard/card-aws-transit.jpg' },
+      'cloud-gcp': { label: 'CLOUD', cls: 't-cloud', progress: 65, fallbackImg: '/assets/dashboard/card-aws-transit.jpg' },
+      hybrid: { label: 'CLOUD', cls: 't-cloud', progress: 50, fallbackImg: '/assets/dashboard/card-aws-transit.jpg' },
+      rack: { label: 'RACK', cls: 't-rack', progress: 25, fallbackImg: '/assets/dashboard/card-server-rack.jpg' },
+      flowchart: { label: 'FLOWCHART', cls: 't-tpl', progress: 45, fallbackImg: '/assets/dashboard/card-esd-floor.jpg' },
     };
 
     const isTpl = p.name.toLowerCase().includes('template') || p.name.toLowerCase().includes('blueprint');
-    const info = isTpl ? tagMap.template : (tagMap[p.category] || { label: 'RACK', cls: 't-rack', progress: 50 });
+    const info = isTpl ? tagMap.template : (tagMap[p.category] || { label: 'RACK', cls: 't-rack', progress: 50, fallbackImg: '/assets/dashboard/card-server-rack.jpg' });
 
     const updatedDate = new Date(p.updatedAt);
     const diffMs = Date.now() - updatedDate.getTime();
@@ -345,16 +364,17 @@ export class SaaSWorkspaceDashboard {
       timeText = `Edited on ${updatedDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
     }
 
-    const thumbSvg = this.generateCardThumbnailSvg(p.category, idx);
+    const imgSrc = p.thumbnailUrl || info.fallbackImg;
+    const progress = p.progress || info.progress;
 
     return `
       <div class="card" data-proj-id="${p.id}" tabindex="0" role="button">
         <div class="thumb">
-          ${thumbSvg}
+          <img alt="${p.name}" src="${imgSrc}" loading="lazy" onerror="this.src='${info.fallbackImg}'" />
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <span class="tag ${info.cls}">${info.label}</span>
-          <div style="display:flex; gap:6px; align-items:center;">
+          <div style="display:flex; gap:4px; align-items:center;">
             <button class="proj-fav-btn" data-proj-id="${p.id}" style="background:none; border:none; color:${p.isFavorite ? '#f59e0b' : '#64748b'}; font-size:15px; cursor:pointer;" title="Favorite">
               ★
             </button>
@@ -366,87 +386,43 @@ export class SaaSWorkspaceDashboard {
         <h3>${p.name}</h3>
         <p class="ed">${timeText}</p>
         <div class="prog">
-          <div class="bar"><i style="width:${info.progress}%"></i></div>
-          <span>${info.progress}%</span>
+          <div class="bar"><i style="width:${progress}%"></i></div>
+          <span>${progress}%</span>
         </div>
       </div>
     `;
   }
 
-  private generateCardThumbnailSvg(category: string, index: number): string {
-    if (category === 'datacenter') {
-      return `
-        <svg viewBox="0 0 300 135" width="100%" height="100%">
-          <rect width="300" height="135" fill="#081426"/>
-          <path d="M0,135 L300,135 L300,90 L120,60 L0,90 Z" fill="#0d223f" opacity=".6"/>
-          <g stroke="#1a3d6b" stroke-width="1">
-            <line x1="60" y1="90" x2="180" y2="135"/>
-            <line x1="120" y1="60" x2="240" y2="135"/>
-            <line x1="180" y1="60" x2="300" y2="110"/>
-          </g>
-          <!-- Racks in Datacenter -->
-          <rect x="25" y="45" width="35" height="75" fill="#0c1d33" stroke="#2563eb" stroke-width="1"/>
-          <rect x="68" y="48" width="35" height="72" fill="#0c1d33" stroke="#2563eb" stroke-width="1"/>
-          <rect x="111" y="52" width="35" height="68" fill="#0c1d33" stroke="#2563eb" stroke-width="1"/>
-          <rect x="154" y="55" width="35" height="65" fill="#0c1d33" stroke="#2563eb" stroke-width="1"/>
-          <rect x="197" y="58" width="35" height="62" fill="#0c1d33" stroke="#2563eb" stroke-width="1"/>
-          <rect x="240" y="61" width="35" height="59" fill="#0c1d33" stroke="#2563eb" stroke-width="1"/>
-          <!-- Server LEDs -->
-          <circle cx="32" cy="55" r="2" fill="#38bdf8"/>
-          <circle cx="75" cy="58" r="2" fill="#34d399"/>
-          <circle cx="118" cy="62" r="2" fill="#38bdf8"/>
-          <circle cx="161" cy="65" r="2" fill="#fbbf24"/>
-          <circle cx="204" cy="68" r="2" fill="#38bdf8"/>
-        </svg>
-      `;
-    } else if (category.startsWith('cloud') || category === 'hybrid') {
-      return `
-        <svg viewBox="0 0 300 135" width="100%" height="100%">
-          <rect width="300" height="135" fill="#0b1329"/>
-          <!-- Network Mesh Lines -->
-          <line x1="60" y1="68" x2="150" y2="35" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3,3"/>
-          <line x1="60" y1="68" x2="150" y2="100" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3,3"/>
-          <line x1="150" y1="35" x2="240" y2="68" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3,3"/>
-          <line x1="150" y1="100" x2="240" y2="68" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3,3"/>
-          <!-- Cloud Nodes -->
-          <rect x="35" y="48" width="50" height="40" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
-          <text x="60" y="73" fill="#38bdf8" font-size="16" text-anchor="middle">☁</text>
-          <rect x="125" y="15" width="50" height="40" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
-          <text x="150" y="40" fill="#f59e0b" font-size="16" text-anchor="middle">⚡</text>
-          <rect x="125" y="80" width="50" height="40" rx="8" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
-          <text x="150" y="105" fill="#10b981" font-size="16" text-anchor="middle">🔒</text>
-          <rect x="215" y="48" width="50" height="40" rx="8" fill="#1e293b" stroke="#a855f7" stroke-width="1.5"/>
-          <text x="240" y="73" fill="#a855f7" font-size="16" text-anchor="middle">🌐</text>
-        </svg>
-      `;
-    } else {
-      // Default: Server Rack Front Elevation
-      return `
-        <svg viewBox="0 0 300 135" width="100%" height="100%">
-          <rect width="300" height="135" fill="#09111f"/>
-          <!-- Central 42U Rack Outline -->
-          <rect x="110" y="10" width="80" height="115" rx="3" fill="#111827" stroke="#38bdf8" stroke-width="1.5"/>
-          <!-- Rack Units / Servers -->
-          <rect x="115" y="18" width="70" height="12" rx="1.5" fill="#1f2937" stroke="#374151" stroke-width="1"/>
-          <circle cx="123" cy="24" r="2" fill="#38bdf8"/>
-          <circle cx="130" cy="24" r="2" fill="#10b981"/>
-          <rect x="115" y="34" width="70" height="18" rx="1.5" fill="#1f2937" stroke="#374151" stroke-width="1"/>
-          <circle cx="123" cy="43" r="2" fill="#38bdf8"/>
-          <rect x="115" y="56" width="70" height="14" rx="1.5" fill="#1e3a5f" stroke="#2563eb" stroke-width="1"/>
-          <circle cx="123" cy="63" r="2" fill="#60a5fa"/>
-          <circle cx="178" cy="63" r="2" fill="#22c55e"/>
-          <rect x="115" y="74" width="70" height="24" rx="1.5" fill="#1f2937" stroke="#374151" stroke-width="1"/>
-          <circle cx="123" cy="86" r="2" fill="#fbbf24"/>
-          <rect x="115" y="102" width="70" height="16" rx="1.5" fill="#1f2937" stroke="#374151" stroke-width="1"/>
-          <circle cx="123" cy="110" r="2" fill="#10b981"/>
-        </svg>
-      `;
-    }
+  private renderTemplateCard(tpl: ArchitectureTemplate): string {
+    return `
+      <div class="saas-tpl-card">
+        <div class="saas-tpl-header">
+          <span class="saas-tpl-badge ${tpl.recommendedBadge ? 'recommended' : ''}">
+            ${tpl.recommendedBadge || tpl.categoryLabel}
+          </span>
+          <span style="font-size:11px; color:#64748b; font-weight:600;">${tpl.categoryLabel}</span>
+        </div>
+        <h4 class="saas-tpl-title">${tpl.title}</h4>
+        <p class="saas-tpl-desc">${tpl.description}</p>
+        <div class="saas-tpl-specs">
+          ${tpl.specs.map(s => `<span class="saas-tpl-spec-item">${s}</span>`).join('')}
+        </div>
+        <div class="saas-tpl-footer">
+          <div>
+            <div class="saas-tpl-cost">${tpl.costEstimate}</div>
+            ${tpl.savingEstimate ? `<div class="saas-tpl-saving">⚡ ${tpl.savingEstimate}</div>` : ''}
+          </div>
+          <button class="saas-tpl-use-btn" data-tpl-id="${tpl.id}">
+            Use Template
+          </button>
+        </div>
+      </div>
+    `;
   }
 
   private initHeroRackAisle(): void {
     if (!this.container) return;
-    const g = this.container.querySelector('#rs-racks-aisle');
+    const g = this.container.querySelector('#racks');
     if (!g) return;
 
     const NS = 'http://www.w3.org/2000/svg';
@@ -465,22 +441,22 @@ export class SaaSWorkspaceDashboard {
 
       g.appendChild(createEl('rect', {
         x, y, width: w, height: h,
-        fill: 'url(#rs-rk)', stroke: '#1e3a62', 'stroke-width': 1,
+        fill: 'url(#rk)', stroke: '#1e3a62', 'stroke-width': 1,
       }));
       g.appendChild(createEl('rect', {
         x: x + w * 0.86, y, width: w * 0.08, height: h,
-        fill: '#2fb6ff', opacity: 0.7, class: 'led',
+        fill: '#38bdf8', opacity: 0.75, class: 'led',
       }));
 
       const rows = Math.floor(h / 9);
       for (let r = 1; r < rows; r++) {
         g.appendChild(createEl('rect', {
-          x: x + w * 0.12, y: y + r * 9, width: w * 0.62, height: 2.2, fill: '#173156',
+          x: x + w * 0.12, y, width: w * 0.62, height: 2.2, fill: '#173156',
         }));
         if ((r * 7 + i) % 5 === 0) {
           g.appendChild(createEl('circle', {
             cx: x + w * 0.18, cy: y + r * 9 + 1, r: 1.4,
-            fill: (r + i) % 3 ? '#38c4ff' : '#29e3b0', class: 'led',
+            fill: (r + i) % 3 ? '#38c4ff' : '#34d399', class: 'led',
           }));
         }
       }
@@ -496,19 +472,65 @@ export class SaaSWorkspaceDashboard {
 
     // New Project Button
     this.container.querySelector('#dash-btn-new-project')?.addEventListener('click', () => {
-      this.hide();
-      EventBus.emit('app:show-landing' as any, undefined);
+      this.createNewProjectPrompt();
     });
 
     this.container.querySelector('#dash-empty-new-btn')?.addEventListener('click', () => {
+      this.createNewProjectPrompt();
+    });
+
+    // Quick Actions
+    this.container.querySelector('#quick-build-rack')?.addEventListener('click', () => {
       this.hide();
-      EventBus.emit('app:show-landing' as any, undefined);
+      EventBus.emit('view:switch', 'rack');
+      EventBus.emit('notification', { message: '🖥️ Rack Elevation Builder initialized', type: 'info' });
+    });
+
+    this.container.querySelector('#quick-build-dc')?.addEventListener('click', () => {
+      this.hide();
+      EventBus.emit('view:switch', 'datacenter');
+      EventBus.emit('notification', { message: '🏢 Datacenter Hall 2D/3D Builder initialized', type: 'info' });
+    });
+
+    this.container.querySelector('#quick-cloud-arch')?.addEventListener('click', () => {
+      this.hide();
+      EventBus.emit('view:switch', 'cloud');
+      EventBus.emit('notification', { message: '☁️ Cloud Architecture Designer initialized', type: 'info' });
+    });
+
+    this.container.querySelector('#quick-templates')?.addEventListener('click', () => {
+      this.currentFilterCategory = 'template';
+      this.render();
+    });
+
+    this.container.querySelector('#quick-ask-ai')?.addEventListener('click', () => {
+      this.hide();
+      EventBus.emit('ai:studio-open' as any, undefined);
+    });
+
+    // AI Quick Architecture Prompt
+    const aiInput = this.container.querySelector('#ai-quick-prompt') as HTMLInputElement;
+    const aiSubmit = this.container.querySelector('#ai-quick-submit-btn');
+    const submitAIPrompt = () => {
+      const promptVal = aiInput?.value.trim();
+      if (!promptVal) {
+        aiInput?.focus();
+        return;
+      }
+      this.hide();
+      EventBus.emit('ai:studio-open' as any, undefined);
+      EventBus.emit('notification', { message: `🤖 Analyzing prompt with AI: "${promptVal.slice(0, 40)}..."`, type: 'info' });
+    };
+
+    aiSubmit?.addEventListener('click', submitAIPrompt);
+    aiInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submitAIPrompt();
     });
 
     // Notifications Bell
     this.container.querySelector('#dash-btn-notifications')?.addEventListener('click', () => {
       EventBus.emit('notification', {
-        message: '🔔 You are running RackSlicer Cloud Edition v2.4 with AutoSave & Live Recovery enabled.',
+        message: '🔔 RackSlicer SaaS Enterprise v2.4 Active • Cloud Multi-Tenant Architecture Ready • AutoSave Online',
         type: 'info',
       });
     });
@@ -548,9 +570,9 @@ export class SaaSWorkspaceDashboard {
     // Sidebar Navigation Filtering
     this.container.querySelectorAll('.nav-item').forEach(item => {
       item.addEventListener('click', (e) => {
-        e.preventDefault();
         const cat = (item as HTMLElement).dataset.cat;
         if (cat) {
+          e.preventDefault();
           this.currentFilterCategory = cat;
           this.render();
         }
@@ -563,7 +585,7 @@ export class SaaSWorkspaceDashboard {
       this.hide();
       EventBus.emit('view:switch', 'rack');
       EventBus.emit('sidebar:open' as any, undefined);
-      EventBus.emit('notification', { message: '📦 Equipment & Device Library opened in left panel', type: 'info' });
+      EventBus.emit('notification', { message: '📦 Equipment Library opened in left panel', type: 'info' });
     });
 
     // AI Studio Link
@@ -584,6 +606,21 @@ export class SaaSWorkspaceDashboard {
     this.container.querySelector('#dash-nav-settings')?.addEventListener('click', (e) => {
       e.preventDefault();
       showUserProfileModal(() => this.render());
+    });
+
+    // Template "Use Template" Buttons
+    this.container.querySelectorAll('.saas-tpl-use-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tplId = (btn as HTMLElement).dataset.tplId;
+        const template = ARCHITECTURE_TEMPLATES.find(t => t.id === tplId);
+        if (template) {
+          const newProj = projectStore.createProjectFromTemplate(template);
+          this.hide();
+          this.onOpenProjectCallback(newProj, template.targetCategory);
+          EventBus.emit('notification', { message: `🚀 Template "${template.title}" loaded onto canvas!`, type: 'success' });
+        }
+      });
     });
 
     // Project Cards Click / Open
@@ -633,6 +670,16 @@ export class SaaSWorkspaceDashboard {
     });
   }
 
+  private createNewProjectPrompt(): void {
+    const name = prompt('Enter a name for your new design project:', 'New Infrastructure Project');
+    if (name && name.trim()) {
+      const newProj = projectStore.createNewProject(name.trim(), 'rack');
+      this.hide();
+      this.onOpenProjectCallback(newProj, 'rack');
+      EventBus.emit('notification', { message: `✨ Project "${name.trim()}" created!`, type: 'success' });
+    }
+  }
+
   private updateProjectCardsList(): void {
     if (!this.container) return;
     const cardsGrid = this.container.querySelector('#dash-cards-grid');
@@ -641,10 +688,10 @@ export class SaaSWorkspaceDashboard {
     const filtered = this.getFilteredProjects();
     if (filtered.length === 0) {
       cardsGrid.innerHTML = `
-        <div style="grid-column: 1 / -1; text-align:center; padding:50px 20px; background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.1); border-radius:14px;">
-          <div style="font-size:36px; margin-bottom:12px;">📂</div>
-          <h3 style="margin:0 0 6px; font-size:16px; color:#fff;">No Projects Match "${this.searchQuery}"</h3>
-          <p style="margin:0 0 16px; font-size:13px; color:#94a3b8;">Try clearing the search query or start a new design.</p>
+        <div style="grid-column: 1 / -1; text-align:center; padding:40px 20px; background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.1); border-radius:10px;">
+          <div style="font-size:32px; margin-bottom:8px;">📂</div>
+          <h3 style="margin:0 0 4px; font-size:15px; color:#fff;">No Projects Match "${this.searchQuery}"</h3>
+          <p style="margin:0 0 14px; font-size:12.5px; color:#94a3b8;">Try clearing the search query or start a new design.</p>
         </div>
       `;
       return;
@@ -679,7 +726,7 @@ export class SaaSWorkspaceDashboard {
       if (this.currentFilterCategory === 'cloud') {
         list = list.filter(p => p.category.startsWith('cloud') || p.category === 'hybrid');
       } else if (this.currentFilterCategory === 'template') {
-        list = list.filter(p => p.name.toLowerCase().includes('template') || p.name.toLowerCase().includes('blueprint'));
+        list = list.filter(p => p.name.toLowerCase().includes('template') || p.name.toLowerCase().includes('blueprint') || p.isTemplate);
       } else {
         list = list.filter(p => p.category === this.currentFilterCategory);
       }
@@ -695,5 +742,17 @@ export class SaaSWorkspaceDashboard {
     }
 
     return list;
+  }
+
+  private getFilteredTemplates(): ArchitectureTemplate[] {
+    if (!this.searchQuery.trim()) {
+      return ARCHITECTURE_TEMPLATES;
+    }
+    const q = this.searchQuery.toLowerCase();
+    return ARCHITECTURE_TEMPLATES.filter(t =>
+      t.title.toLowerCase().includes(q) ||
+      t.description.toLowerCase().includes(q) ||
+      t.categoryLabel.toLowerCase().includes(q)
+    );
   }
 }

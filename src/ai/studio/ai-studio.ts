@@ -48,10 +48,10 @@ export class RackSlicerAIStudio {
     this.bindEvents();
 
     this.orchestrator.subscribe(() => {
-      this.renderWorkflow();
+      if (this.isOpen) {
+        this.renderWorkflow();
+      }
     });
-
-    this.renderWorkflow();
   }
 
   private buildDOM(): HTMLElement {
