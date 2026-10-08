@@ -473,12 +473,12 @@
   padding: 0;
 }
 
-/* Right-side datacenter photo with left gradient fade */
+/* Datacenter panoramic backdrop with smooth left gradient fade */
 .saas-dashboard-container .hero-bg {
   position: absolute;
   top: 0;
   right: 0;
-  width: 60%;
+  width: 85%;
   height: 100%;
   pointer-events: none;
   z-index: 0;
@@ -490,11 +490,11 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center top;
-  /* Fade from transparent (left) to visible (right) */
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.6) 25%, #000 55%);
-  mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.6) 25%, #000 55%);
-  filter: saturate(1.15) contrast(1.08) brightness(0.85);
+  object-position: center 38%;
+  /* Fade from subtle/transparent (left) to full clarity (right) */
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 20%, rgba(0,0,0,0.85) 55%, #000 80%);
+  mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 20%, rgba(0,0,0,0.85) 55%, #000 80%);
+  filter: saturate(1.2) contrast(1.1) brightness(0.9);
 }
 
 .saas-dashboard-container .hero-bloom {
