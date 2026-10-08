@@ -160,7 +160,7 @@ describe('ear-hole proximity-snap radius', () => {
       } as DeviceData, {
         id: 'dB', templateId: 'custom-switch-1u', rackId: 'r1', startUnit: 10, name: 'Switch B',
         hostname: '', managementIp: '', serialNumber: '', description: '',
-        ports: [{ id: 'dB-custom-0', deviceId: 'dB', name: 'Custom Port', type: 'rj45', relativeX: -3.5, relativeY: 3.75, connected: false, cableId: null }],
+        ports: [{ id: 'dB-custom-0', deviceId: 'dB', name: 'Custom Port', type: 'rj45', relativeX: -10.5, relativeY: 3.75, connected: false, cableId: null }],
       } as DeviceData],
     });
     (app as any).renderAll();
@@ -169,7 +169,7 @@ describe('ear-hole proximity-snap radius', () => {
     const sourceEl = document.querySelector('[data-port-id="dA-port-0"]') as SVGElement;
     sourceEl.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 0, clientY: 0 }));
 
-    const earPortId = 'dB-ear-left-nic1'; // at (-12.5, 3.75)
+    const earPortId = 'dB-ear-left-nic1'; // at (-19.5, 3.75)
     const earPos = stateManager.getPortWorldPosition(earPortId)!;
     const realPortPos = stateManager.getPortWorldPosition('dB-custom-0')!;
 

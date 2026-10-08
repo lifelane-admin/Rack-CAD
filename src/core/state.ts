@@ -792,8 +792,10 @@ export function injectEarPorts(
 
   const filtered = basePorts.filter(p => !p.id.includes('-ear-'));
 
-  const leftX  = -12.5;
-  const rightX = 350 + 12.5;
+  // Push ear blade holes towards the outer edges so that plugged cables and connectors
+  // never cross or obscure the ear slot/port/power labels situated inward towards the chassis.
+  const leftX  = -19.5;
+  const rightX = 350 + 19.5;
 
   const maxHoles     = getMaxEarHoles(heightUnits);
   const maxDataHoles = maxHoles - 1; // 1 hole always reserved for power

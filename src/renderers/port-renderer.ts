@@ -220,43 +220,103 @@ export function renderPort(port: PortData, deviceGroup: SVGGElement, portIndex?:
     }
 
     // ── Labels (slot/port or type abbreviation) ───────────────────────────
-    // e.g. "Left Ear S2-P3" → 'S2' / 'P3'  |  "Right Ear Power" → 'PW' / ''
-    //      "Right Ear iDRAC" → 'MG' / 'iDR'  |  "Right Ear iLO" → 'MG' / 'iLO'
-    let leftVal = 'PW';
-    let rightVal = '';
-    if (isMgmt) {
-      const typeName = port.name.replace(/^(Left|Right)\s+Ear\s+/i, ''); // 'iDRAC', 'iLO', 'BMC'…
-      leftVal  = 'MG';
-      rightVal = typeName.slice(0, 3); // 'iDR', 'iLO', 'BMC', 'IMM', 'XCC'
-    } else if (!isPower) {
+    // Holes are pushed to the outer edges towards the end (x = -19.5 on left, x = 369.5 on right).
+    // Cables exit outward towards the vertical cable managers (leftward on left ear, rightward on right ear).
+    // Therefore, labels MUST be placed inward towards the server chassis so the laid cable never obscures them:
+    // • Left Ear: cable exits to the left -> labels sit cleanly to the RIGHT of the hole.
+    // • Right Ear: cable exits to the right -> labels sit cleanly to the LEFT of the hole.
+    const isLeftEar = port.relativeX < 175;
+
+    let slotText = '';
+    let portText = '';
+    if (isPower) {
+      slotText = 'PW';
+    } else if (isMgmt) {
+      const typeName = port.name.replace(/^(Left|Right)\s+Ear\s+/i, '');
+      slotText = typeName.length > 5 ? typeName.slice(0, 4) : typeName;
+    } else {
       const nameMatch = port.name.match(/S(\d+)-P(\d+)/);
       if (nameMatch) {
-        leftVal  = `S${nameMatch[1]}`;
-        rightVal = `P${nameMatch[2]}`;
+        slotText = `S${nameMatch[1]}`;
+        portText = `P${nameMatch[2]}`;
+      } else {
+        slotText = port.name.replace(/^(Left|Right)\s+Ear\s+/i, '');
       }
     }
 
-    const leftText = createText(-bezelRadius - 1.2, 0, leftVal, {
-      fill: 'rgba(255, 255, 255, 0.4)',
-      'font-size': '3.8',
-      'font-family': 'sans-serif',
-      'font-weight': 'bold',
-      'text-anchor': 'end',
-      'dominant-baseline': 'central',
-      'pointer-events': 'none'
-    });
-    portGroup.appendChild(leftText);
-
-    const rightText = createText(bezelRadius + 1.2, 0, rightVal, {
-      fill: 'rgba(255, 255, 255, 0.4)',
-      'font-size': '3.8',
-      'font-family': 'sans-serif',
-      'font-weight': 'bold',
-      'text-anchor': 'start',
-      'dominant-baseline': 'central',
-      'pointer-events': 'none'
-    });
-    portGroup.appendChild(rightText);
+    if (isLeftEar) {
+      // Left ear: hole is at outer edge (left). Cable exits leftward.
+      // Place labels to the right of the hole (inward towards the server faceplate).
+      if (slotText && portText) {
+        const sEl = createText(bezelRadius + 1.8, 0, slotText, {
+          fill: 'rgba(255, 255, 255, 0.45)',
+          'font-size': '3.6',
+          'font-family': 'sans-serif',
+          'font-weight': 'bold',
+          'text-anchor': 'start',
+          'dominant-baseline': 'central',
+          'pointer-events': 'none'
+        });
+        const pEl = createText(bezelRadius + 7.2, 0, portText, {
+          fill: 'rgba(255, 255, 255, 0.85)',
+          'font-size': '3.6',
+          'font-family': 'sans-serif',
+          'font-weight': 'bold',
+          'text-anchor': 'start',
+          'dominant-baseline': 'central',
+          'pointer-events': 'none'
+        });
+        portGroup.appendChild(sEl);
+        portGroup.appendChild(pEl);
+      } else if (slotText) {
+        const textEl = createText(bezelRadius + 2.0, 0, slotText, {
+          fill: isPower ? 'rgba(255, 180, 180, 0.85)' : isMgmt ? '#fbbf24' : 'rgba(255, 255, 255, 0.75)',
+          'font-size': '3.6',
+          'font-family': 'sans-serif',
+          'font-weight': 'bold',
+          'text-anchor': 'start',
+          'dominant-baseline': 'central',
+          'pointer-events': 'none'
+        });
+        portGroup.appendChild(textEl);
+      }
+    } else {
+      // Right ear: hole is at outer edge (right). Cable exits rightward.
+      // Place labels to the left of the hole (inward towards the server faceplate).
+      if (slotText && portText) {
+        const sEl = createText(-bezelRadius - 7.2, 0, slotText, {
+          fill: 'rgba(255, 255, 255, 0.45)',
+          'font-size': '3.6',
+          'font-family': 'sans-serif',
+          'font-weight': 'bold',
+          'text-anchor': 'end',
+          'dominant-baseline': 'central',
+          'pointer-events': 'none'
+        });
+        const pEl = createText(-bezelRadius - 1.8, 0, portText, {
+          fill: 'rgba(255, 255, 255, 0.85)',
+          'font-size': '3.6',
+          'font-family': 'sans-serif',
+          'font-weight': 'bold',
+          'text-anchor': 'end',
+          'dominant-baseline': 'central',
+          'pointer-events': 'none'
+        });
+        portGroup.appendChild(sEl);
+        portGroup.appendChild(pEl);
+      } else if (slotText) {
+        const textEl = createText(-bezelRadius - 2.0, 0, slotText, {
+          fill: isPower ? 'rgba(180, 210, 255, 0.85)' : isMgmt ? '#fbbf24' : 'rgba(255, 255, 255, 0.75)',
+          'font-size': '3.6',
+          'font-family': 'sans-serif',
+          'font-weight': 'bold',
+          'text-anchor': 'end',
+          'dominant-baseline': 'central',
+          'pointer-events': 'none'
+        });
+        portGroup.appendChild(textEl);
+      }
+    }
 
   } else {
     if (hasCustomPanel) {
