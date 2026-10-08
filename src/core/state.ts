@@ -359,6 +359,28 @@ class StateManager {
       const port = device.ports?.find(p => p.id === id);
       if (port) return { ...port, deviceId: port.deviceId || device.id };
     }
+
+    // Resolve synthetic PDU outlet IDs (e.g. outlet-pdu-hyperv-a-0)
+    const outletMatch = /^outlet-(.+)-(\d+)$/.exec(id);
+    if (outletMatch) {
+      const pduDeviceId = outletMatch[1];
+      const outletIdx = Number(outletMatch[2]);
+      const pduDevice = this.getDevice(pduDeviceId);
+      if (pduDevice) {
+        return {
+          id,
+          deviceId: pduDeviceId,
+          name: `PDU Outlet ${outletIdx + 1}`,
+          type: 'power',
+          speed: '230V 16A',
+          relativeX: 20,
+          relativeY: 0,
+          connected: true,
+          cableId: null,
+        };
+      }
+    }
+
     return undefined;
   }
 

@@ -45,7 +45,7 @@ const SAMPLE_STARTER_PROJECTS: SaaSProject[] = [
     thumbnailUrl: '/assets/dashboard/card-dc-hall.jpg',
     tags: ['DATACENTER HALL', 'CONTAINMENT'],
     isFavorite: true,
-    version: 2,
+    version: 3,
     progress: 75,
   },
   {
@@ -62,7 +62,7 @@ const SAMPLE_STARTER_PROJECTS: SaaSProject[] = [
     thumbnailUrl: '/assets/dashboard/card-esd-floor.jpg',
     tags: ['TEMPLATE', 'RAISED FLOOR'],
     isFavorite: false,
-    version: 1,
+    version: 3,
     progress: 40,
     isTemplate: true,
   },
@@ -80,7 +80,7 @@ const SAMPLE_STARTER_PROJECTS: SaaSProject[] = [
     thumbnailUrl: '/assets/dashboard/card-aws-transit.jpg',
     tags: ['CLOUD', 'TRANSIT GATEWAY'],
     isFavorite: true,
-    version: 2,
+    version: 3,
     progress: 60,
   },
   {
@@ -97,7 +97,7 @@ const SAMPLE_STARTER_PROJECTS: SaaSProject[] = [
     thumbnailUrl: '/assets/dashboard/card-server-rack.jpg',
     tags: ['RACK', '42U EDGE'],
     isFavorite: false,
-    version: 1,
+    version: 3,
     progress: 25,
   },
 ];
@@ -204,17 +204,17 @@ class ProjectStore {
     if (!existing) {
       localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(SAMPLE_STARTER_PROJECTS));
     } else {
-      // Upgrade any existing starter projects with full blueprint payloads if they were previously empty
+      // Upgrade any existing starter projects with full blueprint payloads if they were previously empty or outdated
       try {
         const all: SaaSProject[] = JSON.parse(existing);
         let modified = false;
+        const CURRENT_STARTER_VERSION = 3;
         for (const p of all) {
-          if (!p.dataJson || p.dataJson === '{}') {
-            const starter = SAMPLE_STARTER_PROJECTS.find(s => s.id === p.id);
-            if (starter) {
-              p.dataJson = starter.dataJson;
-              modified = true;
-            }
+          const starter = SAMPLE_STARTER_PROJECTS.find(s => s.id === p.id);
+          if (starter && (!p.dataJson || p.dataJson === '{}' || (p.version || 0) < CURRENT_STARTER_VERSION)) {
+            p.dataJson = starter.dataJson;
+            p.version = CURRENT_STARTER_VERSION;
+            modified = true;
           }
         }
         if (modified) {
@@ -237,12 +237,12 @@ class ProjectStore {
         return SAMPLE_STARTER_PROJECTS;
       }
       // Guarantee any starter project has populated dataJson even if read from earlier cache
+      const CURRENT_STARTER_VERSION = 3;
       for (const p of all) {
-        if (!p.dataJson || p.dataJson === '{}') {
-          const starter = SAMPLE_STARTER_PROJECTS.find(s => s.id === p.id);
-          if (starter) {
-            p.dataJson = starter.dataJson;
-          }
+        const starter = SAMPLE_STARTER_PROJECTS.find(s => s.id === p.id);
+        if (starter && (!p.dataJson || p.dataJson === '{}' || (p.version || 0) < CURRENT_STARTER_VERSION)) {
+          p.dataJson = starter.dataJson;
+          p.version = CURRENT_STARTER_VERSION;
         }
       }
       return all;
@@ -254,10 +254,12 @@ class ProjectStore {
   public getProjectById(id: string): SaaSProject | null {
     const projects = this.getAllProjects();
     const proj = projects.find(p => p.id === id) || null;
-    if (proj && (!proj.dataJson || proj.dataJson === '{}')) {
+    const CURRENT_STARTER_VERSION = 3;
+    if (proj) {
       const starter = SAMPLE_STARTER_PROJECTS.find(s => s.id === id);
-      if (starter) {
+      if (starter && (!proj.dataJson || proj.dataJson === '{}' || (proj.version || 0) < CURRENT_STARTER_VERSION)) {
         proj.dataJson = starter.dataJson;
+        proj.version = CURRENT_STARTER_VERSION;
       }
     }
     return proj;

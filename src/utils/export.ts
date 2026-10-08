@@ -1048,13 +1048,32 @@ export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables:
         ports: [...facePorts, ...earPorts]
       };
     }
+
+    // For switches with predefined templates (e.g. sw-1u-tor-25g-100g), heal stale/wrong port mappings
+    if (d.templateId === 'sw-1u-tor-25g-100g' || d.id === 'dev-hv-sw-01') {
+      const template = getTemplate(d.templateId);
+      if (template && template.ports) {
+        // Fix hv-sw-p3: ensure it aligns with tor-sfp3 (SFP28 data port), NOT tor-mgmt
+        const sfp3 = template.ports.find(p => p.id === 'tor-sfp3');
+        const p3 = currentPorts.find(p => p.id === 'hv-sw-p3');
+        if (p3 && sfp3) {
+          p3.relativeX = sfp3.relativeX;
+          p3.relativeY = sfp3.relativeY;
+          p3.portW = sfp3.portW;
+          p3.portH = sfp3.portH;
+          p3.type = sfp3.type;
+          p3.speed = sfp3.speed;
+        }
+      }
+    }
+
     return {
       ...d,
       ports: currentPorts
     };
   });
 
-  // 2. Heal floating cables and unlock hardcoded anchors
+  // 2. Heal floating cables, convert legacy PDU outlets, enforce Feed A/B rule book, and fix switch port mappings
   const allPortsMap = new Map<string, PortData>();
   repairedDevices.forEach(d => {
     (d.ports || []).forEach(p => allPortsMap.set(p.id, p));
@@ -1065,8 +1084,77 @@ export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables:
     let floatingDest = c.floatingDest;
     let anchorsLocked = c.anchorsLocked;
     let anchorPoints = c.anchorPoints;
+    let color = c.color;
+    let powerCableType = c.powerCableType;
 
-    const isDestBroken = !destPortId || !allPortsMap.has(destPortId);
+    const isPower = c.type === 'power' || c.type?.startsWith('power-') || powerCableType === 'power' ||
+      c.name?.toLowerCase().includes('pwr') || c.name?.toLowerCase().includes('psu') || c.name?.toLowerCase().includes('power') ||
+      c.sourcePortId?.toLowerCase().includes('psu') || destPortId?.toLowerCase().includes('psu') || destPortId?.toLowerCase().includes('pdu');
+
+    if (isPower) {
+      powerCableType = 'power';
+      const cName = (c.name || '').toLowerCase();
+      const sPort = (c.sourcePortId || '').toLowerCase();
+      const dPort = (destPortId || '').toLowerCase();
+
+      const isFeedB = cName.includes('feed b') || cName.includes('feed-b') || cName.includes('psu 2') || cName.includes('psu-2') || cName.includes('psu-b') ||
+                      sPort.includes('psu-b') || sPort.includes('psu-2') || sPort.includes('feed-b') ||
+                      dPort.includes('feed-b') || dPort.includes('pdu-b') || dPort.includes('pdu-hyperv-b') || dPort.includes('pdu-px-b') || dPort.includes('pdu-h100-b') || dPort.includes('pdu-ceph-feed-b');
+
+      color = isFeedB ? '#2563eb' : '#dc2626';
+
+      // Auto-migrate legacy PDU destPortId (e.g. pdu-hv-a1 -> outlet-pdu-hyperv-a-0, pdu-a-out1 -> outlet-pdu-ceph-feed-a-0)
+      if (destPortId && !destPortId.startsWith('outlet-')) {
+        const dp = destPortId;
+        const pduDev = repairedDevices.find(d => 
+          ((d as any).category === 'pdu' || d.sideMountPosition || d.templateId?.includes('pdu')) && (
+            (d.ports && d.ports.some(p => p.id === dp)) ||
+            dp.includes(d.id) ||
+            (d.id.includes('pdu') && (
+              (d.sideMountPosition === 'left' && (dp.includes('-a') || dp.includes('pdu-a') || dp.includes('feed-a') || dp.includes('out1') || dp.includes('out2') || dp.includes('out3'))) ||
+              (d.sideMountPosition === 'right' && (dp.includes('-b') || dp.includes('pdu-b') || dp.includes('feed-b') || dp.includes('out1') || dp.includes('out2') || dp.includes('out3')))
+            ))
+          )
+        );
+        if (pduDev) {
+          const digitMatch = /(\d+)$/.exec(dp);
+          const outletIdx = digitMatch ? Math.max(0, parseInt(digitMatch[1], 10) - 1) : 0;
+          destPortId = `outlet-${pduDev.id}-${outletIdx}`;
+        }
+      }
+    }
+
+    // Check if non-mgmt high-speed data cable is wrongly connected to an OOB MGMT or CONSOLE port
+    const isMgmtCable = c.type === 'idrac' || (c.type as string) === 'management' || (c.type as string) === 'console' || c.name?.toLowerCase().includes('oob') || c.name?.toLowerCase().includes('idrac') || c.name?.toLowerCase().includes('console');
+    if (!isPower && !isMgmtCable && destPortId) {
+      const destPort = allPortsMap.get(destPortId);
+      const destDev = destPort ? repairedDevices.find(d => d.id === destPort.deviceId) : null;
+      const isSw = destDev && (destDev.templateId?.includes('switch') || (destDev as any).category === 'switch' || destDev.name?.toLowerCase().includes('switch'));
+      
+      if (isSw && destPort && (destPort.id.includes('mgmt') || destPort.id.includes('console') || destPort.name.toLowerCase().includes('mgmt') || destPort.name.toLowerCase().includes('console') || destPort.type === 'management' || destPort.type === 'console')) {
+        // Re-map to the first available high-speed data port (SFP28, SFP, or RJ45 data port) on this switch
+        const availDataPort = (destDev.ports || []).find(p => 
+          !p.id.includes('-ear-') &&
+          !p.id.includes('mgmt') &&
+          !p.id.includes('console') &&
+          !p.name.toLowerCase().includes('mgmt') &&
+          !p.name.toLowerCase().includes('console') &&
+          p.type !== 'management' &&
+          p.type !== 'console' &&
+          !p.connected &&
+          p.id !== destPortId
+        );
+        if (availDataPort) {
+          destPortId = availDataPort.id;
+          availDataPort.connected = true;
+          availDataPort.cableId = c.id;
+          destPort.connected = false;
+          destPort.cableId = null;
+        }
+      }
+    }
+
+    const isDestBroken = !destPortId || (!allPortsMap.has(destPortId) && !destPortId.startsWith('outlet-'));
     if (isDestBroken && (floatingDest || !destPortId)) {
       const srcPort = c.sourcePortId ? allPortsMap.get(c.sourcePortId) : null;
       const srcDev = srcPort ? repairedDevices.find(d => d.id === srcPort.deviceId) : null;
@@ -1103,6 +1191,8 @@ export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables:
     return {
       ...c,
       destPortId,
+      color,
+      powerCableType,
       floatingDest,
       anchorsLocked,
       anchorPoints,

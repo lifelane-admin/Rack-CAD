@@ -196,10 +196,43 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
   }
 
   // Detect power cable override
-  const isPowerCable = cable.powerCableType === 'power';
-  const powerStrokeColor = cable.color && cable.color !== '#212529' ? cable.color : '#ff4422';
-  const effectiveThickness = isPowerCable ? 3.2 : (cable.thickness || mat.renderThicknessPx || 3.0);
-  const baseColor = isPowerCable ? powerStrokeColor : (cable.color || mat.defaultColor);
+  const isPowerCable = cable.powerCableType === 'power'
+    || cable.type === 'power'
+    || cable.type?.startsWith('power-')
+    || isPower;
+
+  // Power Cabling Standard (Application Rule Book):
+  // - Primary Feed A: Red (#dc2626) with distinct Primary Power pattern (long dash)
+  // - Secondary Feed B: Blue (#2563eb) with distinct Secondary Power stitch pattern (short stitch)
+  const cName = (cable.name || '').toLowerCase();
+  const sPort = (cable.sourcePortId || '').toLowerCase();
+  const dPort = (cable.destPortId || '').toLowerCase();
+
+  const isFeedB = cName.includes('feed b') || cName.includes('feed-b') || cName.includes('psu 2') || cName.includes('psu-2') || cName.includes('psu-b') ||
+                  sPort.includes('psu-b') || sPort.includes('psu-2') || sPort.includes('feed-b') ||
+                  dPort.includes('feed-b') || dPort.includes('pdu-b') || dPort.includes('pdu-hyperv-b') || dPort.includes('pdu-px-b') || dPort.includes('pdu-h100-b') || dPort.includes('pdu-ceph-feed-b');
+
+  const isFeedA = !isFeedB && (
+                  cName.includes('feed a') || cName.includes('feed-a') || cName.includes('psu 1') || cName.includes('psu-1') || cName.includes('psu-a') ||
+                  sPort.includes('psu-a') || sPort.includes('psu-1') || sPort.includes('feed-a') ||
+                  dPort.includes('feed-a') || dPort.includes('pdu-a') || dPort.includes('pdu-hyperv-a') || dPort.includes('pdu-px-a') || dPort.includes('pdu-h100-a') || dPort.includes('pdu-ceph-feed-a')
+  );
+
+  let powerColor = cable.color || '#dc2626';
+  let powerDash: string | undefined = undefined;
+
+  if (isPowerCable) {
+    if (isFeedB) {
+      powerColor = (!cable.color || cable.color === '#1e293b' || cable.color === '#212529') ? '#2563eb' : cable.color;
+      powerDash = '4 4'; // Distinct Secondary Feed B stitch pattern
+    } else {
+      powerColor = (!cable.color || cable.color === '#1e293b' || cable.color === '#212529') ? '#dc2626' : cable.color;
+      powerDash = '12 4'; // Distinct Primary Feed A pattern
+    }
+  }
+
+  const effectiveThickness = isPowerCable ? 3.4 : (cable.thickness || mat.renderThicknessPx || 3.0);
+  const baseColor = isPowerCable ? powerColor : (cable.color || mat.defaultColor);
 
   // 1. Soft Ambient Optical Drop Shadow (directional shadow onto rack background)
   const shadowPath = createPath(pathData, {
@@ -232,7 +265,7 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     'stroke-linejoin': 'round',
     'pointer-events': 'none',
     opacity: 1.0,
-    ...(isPowerCable ? { 'stroke-dasharray': '6 3' } : {})
+    ...(isPowerCable && powerDash ? { 'stroke-dasharray': powerDash } : {})
   });
   group.appendChild(path);
 

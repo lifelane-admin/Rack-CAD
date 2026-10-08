@@ -43,6 +43,16 @@ export function getPortOrientation(
   const template = device ? getTemplate(device.templateId, s.customTemplates || []) : null;
 
   // Side-mounted devices (e.g. 0U Vertical PDUs): outlets plug horizontally inward
+  if (portId && portId.startsWith('outlet-')) {
+    const outletMatch = /^outlet-(.+)-(\d+)$/.exec(portId);
+    if (outletMatch) {
+      const pduDev = stateManager.getDevice(outletMatch[1]);
+      if (pduDev && pduDev.sideMountPosition) {
+        return pduDev.sideMountPosition === 'left' ? 'right' : 'left';
+      }
+    }
+  }
+
   if (device && device.sideMountPosition) {
     return device.sideMountPosition === 'left' ? 'right' : 'left';
   }
@@ -139,6 +149,15 @@ export function resolveCableChannelSide(
   // If either endpoint is a side-mounted device (e.g. Left/Right Vertical PDU), route via that side
   if (destDevice?.sideMountPosition === 'left' || srcDevice?.sideMountPosition === 'left') return 'left';
   if (destDevice?.sideMountPosition === 'right' || srcDevice?.sideMountPosition === 'right') return 'right';
+
+  const outletId = cable.destPortId?.startsWith('outlet-') ? cable.destPortId : (cable.sourcePortId?.startsWith('outlet-') ? cable.sourcePortId : null);
+  if (outletId) {
+    const match = /^outlet-(.+)-(\d+)$/.exec(outletId);
+    if (match) {
+      const pdu = stateManager.getDevice(match[1]);
+      if (pdu?.sideMountPosition) return pdu.sideMountPosition;
+    }
+  }
 
   // Power cables route to the right / PDU side by default
   const isPower = cable.type?.includes('power') || cable.powerCableType === 'power';

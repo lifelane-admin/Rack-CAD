@@ -155,6 +155,49 @@ describe('Architecture Blueprint Templates & Excel Export', () => {
     }
   });
 
+  it('verifies switch data port mappings and Application Rule Book power cabling standard', () => {
+    const payload = getTemplatePayloadJson('tpl-hyperv-cluster');
+    importJSON(payload);
+
+    const s = stateManager.getState();
+    const sw = s.devices.find(d => d.id === 'dev-hv-sw-01')!;
+
+    // 1. Switch data ports must be SFP28/data, leaving MGMT & Console separate
+    const p1 = sw.ports.find(p => p.id === 'hv-sw-p1')!;
+    const p2 = sw.ports.find(p => p.id === 'hv-sw-p2')!;
+    const p3 = sw.ports.find(p => p.id === 'hv-sw-p3')!;
+    expect(p1.type).toBe('sfp28');
+    expect(p2.type).toBe('sfp28');
+    expect(p3.type).toBe('sfp28');
+    expect(p3.id).not.toBe('tor-mgmt');
+
+    // 2. Uplink to switch terminates at SFP28 data port
+    const arcCable = s.cables.find(c => c.id === 'cbl-arc-tor')!;
+    expect(arcCable.destPortId).toBe('hv-sw-p3');
+    const arcDestPos = stateManager.getPortWorldPosition(arcCable.destPortId)!;
+    expect(arcDestPos).toBeDefined();
+
+    // 3. Power Cabling Standard (Feed A: Red #dc2626, Feed B: Blue #2563eb)
+    const pwrA = s.cables.filter(c => c.id.includes('pwr-a'));
+    const pwrB = s.cables.filter(c => c.id.includes('pwr-b'));
+    expect(pwrA.length).toBeGreaterThan(0);
+    expect(pwrB.length).toBeGreaterThan(0);
+
+    for (const ca of pwrA) {
+      expect(ca.color).toBe('#dc2626');
+      expect(ca.destPortId).toMatch(/^outlet-pdu-hyperv-a-\d+$/);
+      const pos = stateManager.getPortWorldPosition(ca.destPortId);
+      expect(pos).not.toBeNull();
+    }
+
+    for (const cb of pwrB) {
+      expect(cb.color).toBe('#2563eb');
+      expect(cb.destPortId).toMatch(/^outlet-pdu-hyperv-b-\d+$/);
+      const pos = stateManager.getPortWorldPosition(cb.destPortId);
+      expect(pos).not.toBeNull();
+    }
+  });
+
   it('verifies that long-distance cables route via side vertical cable managers rather than hanging in the center', () => {
     const payload = getTemplatePayloadJson('tpl-hyperv-cluster');
     importJSON(payload);

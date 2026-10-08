@@ -844,7 +844,7 @@ export class RackSlicerAIStudio {
         }
       }
 
-      // 4. Dual A/B Power Feeds to Vertical Side-Mount PDUs (Feed A = Left PDU, Feed B = Right PDU)
+      // 4. Dual A/B Power Feeds to Vertical Side-Mount PDUs (Application Rule Book: Feed A = Red #dc2626, Feed B = Blue #2563eb)
       for (let i = 0; i < nodeCount; i++) {
         const nId = nodeDeviceIds[i];
         const nodeNum = i + 1;
@@ -857,9 +857,9 @@ export class RackSlicerAIStudio {
             source: `${nId}-port-5`,
             target: `${targetPduLeft}${i}`,
             cableType: 'power-c13',
-            color: '#2563eb',
+            color: '#dc2626',
             name: `Node ${nodeNum} PSU 1 ⟶ PDU-A Outlet ${nodeNum} (Feed A)`,
-            details: { sidePreference: 'left', powerCableType: 'power', notes: '230V 32A Feed A Branch' },
+            details: { sidePreference: 'left', powerCableType: 'power', notes: '230V 32A Feed A Branch (Primary Red)' },
           });
         }
         if (hasRightPdu) {
@@ -868,9 +868,9 @@ export class RackSlicerAIStudio {
             source: `${nId}-port-6`,
             target: `${targetPduRight}${i}`,
             cableType: 'power-c13',
-            color: '#dc2626',
+            color: '#2563eb',
             name: `Node ${nodeNum} PSU 2 ⟶ PDU-B Outlet ${nodeNum} (Feed B)`,
-            details: { sidePreference: 'right', powerCableType: 'power', notes: '230V 32A Feed B Branch' },
+            details: { sidePreference: 'right', powerCableType: 'power', notes: '230V 32A Feed B Branch (Secondary Blue)' },
           });
         }
       }
@@ -883,7 +883,7 @@ export class RackSlicerAIStudio {
           source: `${torADeviceId}-port-56`,
           target: isMultiRack ? `outlet-ai-pdu-left-r1-${pduOffsetSw}` : `outlet-ai-pdu-left-${pduOffsetSw}`,
           cableType: 'power-c13',
-          color: '#2563eb',
+          color: '#dc2626',
           name: 'ToR-A PSU 1 ⟶ PDU-A (Feed A)',
           details: { sidePreference: 'left', powerCableType: 'power' },
         });
@@ -894,7 +894,7 @@ export class RackSlicerAIStudio {
           source: `${torBDeviceId}-port-56`,
           target: isMultiRack ? `outlet-ai-pdu-right-r2-${pduOffsetSw}` : `outlet-ai-pdu-right-${pduOffsetSw}`,
           cableType: 'power-c13',
-          color: '#dc2626',
+          color: '#2563eb',
           name: 'ToR-B PSU 2 ⟶ PDU-B (Feed B)',
           details: { sidePreference: 'right', powerCableType: 'power' },
         });
@@ -909,7 +909,7 @@ export class RackSlicerAIStudio {
             source: `${storageDeviceId}-port-7`,
             target: `outlet-ai-pdu-left-${pduOffsetStorage}`,
             cableType: 'power-c13',
-            color: '#2563eb',
+            color: '#dc2626',
             name: 'Storage Array PSU 1 ⟶ PDU-A (Feed A)',
             details: { sidePreference: 'left', powerCableType: 'power' },
           });
@@ -920,7 +920,7 @@ export class RackSlicerAIStudio {
             source: `${storageDeviceId}-port-8`,
             target: `outlet-ai-pdu-right-${pduOffsetStorage}`,
             cableType: 'power-c13',
-            color: '#dc2626',
+            color: '#2563eb',
             name: 'Storage Array PSU 2 ⟶ PDU-B (Feed B)',
             details: { sidePreference: 'right', powerCableType: 'power' },
           });

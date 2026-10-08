@@ -277,15 +277,15 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       destPortId: 'sw-p3',
       status: 'ok',
     },
-    // Redundant A/B Power Cabling (Feed A: Black, Feed B: Royal Blue)
+    // Redundant A/B Power Cabling (Application Rule Book: Feed A = Red #dc2626, Feed B = Blue #2563eb)
     {
       id: 'cbl-pwr-n1-a',
       name: 'Node 1 PSU 1 to Feed A PDU',
       type: 'power',
-      color: '#1e293b',
+      color: '#dc2626',
       lengthMeters: 1.5,
       sourcePortId: 'n1-psu-a',
-      destPortId: 'pdu-a-out1',
+      destPortId: 'outlet-pdu-ceph-feed-a-0',
       status: 'ok',
     },
     {
@@ -295,17 +295,17 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       color: '#2563eb',
       lengthMeters: 1.5,
       sourcePortId: 'n1-psu-b',
-      destPortId: 'pdu-b-out1',
+      destPortId: 'outlet-pdu-ceph-feed-b-0',
       status: 'ok',
     },
     {
       id: 'cbl-pwr-n2-a',
       name: 'Node 2 PSU 1 to Feed A PDU',
       type: 'power',
-      color: '#1e293b',
+      color: '#dc2626',
       lengthMeters: 1.5,
       sourcePortId: 'n2-psu-a',
-      destPortId: 'pdu-a-out2',
+      destPortId: 'outlet-pdu-ceph-feed-a-1',
       status: 'ok',
     },
     {
@@ -315,17 +315,17 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       color: '#2563eb',
       lengthMeters: 1.5,
       sourcePortId: 'n2-psu-b',
-      destPortId: 'pdu-b-out2',
+      destPortId: 'outlet-pdu-ceph-feed-b-1',
       status: 'ok',
     },
     {
       id: 'cbl-pwr-n3-a',
       name: 'Node 3 PSU 1 to Feed A PDU',
       type: 'power',
-      color: '#1e293b',
+      color: '#dc2626',
       lengthMeters: 1.5,
       sourcePortId: 'n3-psu-a',
-      destPortId: 'pdu-a-out3',
+      destPortId: 'outlet-pdu-ceph-feed-a-2',
       status: 'ok',
     },
     {
@@ -335,7 +335,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       color: '#2563eb',
       lengthMeters: 1.5,
       sourcePortId: 'n3-psu-b',
-      destPortId: 'pdu-b-out3',
+      destPortId: 'outlet-pdu-ceph-feed-b-2',
       status: 'ok',
     },
   ];
@@ -412,7 +412,7 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       ports: createStandardDevicePorts('sw-1u-tor-25g-100g', 'dev-hv-sw-01', {
         'tor-sfp1': { id: 'hv-sw-p1', name: 'Port 1 (Node 1)' },
         'tor-sfp2': { id: 'hv-sw-p2', name: 'Port 2 (Node 2)' },
-        'tor-mgmt': { id: 'hv-sw-p3', name: 'Port 3 (Azure Arc)' },
+        'tor-sfp3': { id: 'hv-sw-p3', name: 'Port 3 (Azure Arc)' },
       }),
     },
     // Azure Arc Gateway (U30)
@@ -514,15 +514,15 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       destPortId: 'hv-sw-p3',
       status: 'ok',
     },
-    // Power connections
+    // Power connections (Application Rule Book: Feed A = Red #dc2626, Feed B = Blue #2563eb)
     {
       id: 'cbl-hv1-pwr-a',
       name: 'Host 01 PSU 1 to Feed A',
       type: 'power',
-      color: '#1e293b',
+      color: '#dc2626',
       lengthMeters: 1.5,
       sourcePortId: 'hv1-psu-a',
-      destPortId: 'pdu-hv-a1',
+      destPortId: 'outlet-pdu-hyperv-a-0',
     },
     {
       id: 'cbl-hv1-pwr-b',
@@ -531,7 +531,25 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       color: '#2563eb',
       lengthMeters: 1.5,
       sourcePortId: 'hv1-psu-b',
-      destPortId: 'pdu-hv-b1',
+      destPortId: 'outlet-pdu-hyperv-b-0',
+    },
+    {
+      id: 'cbl-hv2-pwr-a',
+      name: 'Host 02 PSU 1 to Feed A',
+      type: 'power',
+      color: '#dc2626',
+      lengthMeters: 1.5,
+      sourcePortId: 'hv2-psu-a',
+      destPortId: 'outlet-pdu-hyperv-a-1',
+    },
+    {
+      id: 'cbl-hv2-pwr-b',
+      name: 'Host 02 PSU 2 to Feed B',
+      type: 'power',
+      color: '#2563eb',
+      lengthMeters: 1.5,
+      sourcePortId: 'hv2-psu-b',
+      destPortId: 'outlet-pdu-hyperv-b-1',
     },
   ];
 
@@ -784,15 +802,15 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       destPortId: 'tor1-p4',
       status: 'ok',
     },
-    // Power connections
+    // Power connections (Application Rule Book: Feed A = Red #dc2626, Feed B = Blue #2563eb)
     {
       id: 'cbl-h1-pwr-a',
       name: 'Host 1 PSU 1 to Feed A',
       type: 'power',
-      color: '#1e293b',
+      color: '#dc2626',
       lengthMeters: 1.5,
       sourcePortId: 'h1-psu-a',
-      destPortId: 'pdu-px-a1',
+      destPortId: 'outlet-pdu-proxmox-a-0',
     },
     {
       id: 'cbl-h1-pwr-b',
@@ -801,7 +819,43 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       color: '#2563eb',
       lengthMeters: 1.5,
       sourcePortId: 'h1-psu-b',
-      destPortId: 'pdu-px-b1',
+      destPortId: 'outlet-pdu-proxmox-b-0',
+    },
+    {
+      id: 'cbl-h2-pwr-a',
+      name: 'Host 2 PSU 1 to Feed A',
+      type: 'power',
+      color: '#dc2626',
+      lengthMeters: 1.5,
+      sourcePortId: 'h2-psu-a',
+      destPortId: 'outlet-pdu-proxmox-a-1',
+    },
+    {
+      id: 'cbl-h2-pwr-b',
+      name: 'Host 2 PSU 2 to Feed B',
+      type: 'power',
+      color: '#2563eb',
+      lengthMeters: 1.5,
+      sourcePortId: 'h2-psu-b',
+      destPortId: 'outlet-pdu-proxmox-b-1',
+    },
+    {
+      id: 'cbl-h3-pwr-a',
+      name: 'Host 3 PSU 1 to Feed A',
+      type: 'power',
+      color: '#dc2626',
+      lengthMeters: 1.5,
+      sourcePortId: 'h3-psu-a',
+      destPortId: 'outlet-pdu-proxmox-a-2',
+    },
+    {
+      id: 'cbl-h3-pwr-b',
+      name: 'Host 3 PSU 2 to Feed B',
+      type: 'power',
+      color: '#2563eb',
+      lengthMeters: 1.5,
+      sourcePortId: 'h3-psu-b',
+      destPortId: 'outlet-pdu-proxmox-b-2',
     },
   ];
 
@@ -1292,15 +1346,15 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       destPortId: 'ib1-p4',
       status: 'ok',
     },
-    // Heavy 16A C19/C20 Power cords
+    // Heavy 16A C19/C20 Power cords (Application Rule Book: Feed A = Red #dc2626, Feed B = Blue #2563eb)
     {
       id: 'cbl-gpu-pwr-a',
       name: 'HGX H100 PSU 1 to Feed A PDU',
       type: 'power',
-      color: '#1e293b',
+      color: '#dc2626',
       lengthMeters: 2.0,
       sourcePortId: 'gpu-psu-1',
-      destPortId: 'pdu-h100-a1',
+      destPortId: 'outlet-pdu-h100-a-0',
     },
     {
       id: 'cbl-gpu-pwr-b',
@@ -1309,7 +1363,7 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       color: '#2563eb',
       lengthMeters: 2.0,
       sourcePortId: 'gpu-psu-2',
-      destPortId: 'pdu-h100-b1',
+      destPortId: 'outlet-pdu-h100-b-0',
     },
   ];
 
