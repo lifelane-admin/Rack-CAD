@@ -220,4 +220,138 @@ describe('Architecture Blueprint Templates & Excel Export', () => {
       expect(leftVcmTrunk, `Cable ${cable.id} should have a waypoint in the left VCM channel`).toBeDefined();
     }
   });
+
+  it('verifies that server cables terminate at Side Ear Holes and legacy floating body ports heal automatically', () => {
+    // 1. Verify standard template loads all server cables terminating at Side Ear Holes
+    const payload = getTemplatePayloadJson('tpl-hyperv-cluster');
+    importJSON(payload);
+    const s = stateManager.getState();
+
+    const hv1Uplink = s.cables.find(c => c.id === 'cbl-hv1-tor')!;
+    expect(hv1Uplink.sourcePortId).toBe('dev-hyperv-node-01-ear-left-nic1');
+
+    const s2dCable = s.cables.find(c => c.id === 'cbl-s2d-sync')!;
+    expect(s2dCable.sourcePortId).toBe('dev-hyperv-node-01-ear-left-nic2');
+    expect(s2dCable.destPortId).toBe('dev-hyperv-node-02-ear-left-nic2');
+
+    const pwrA = s.cables.find(c => c.id === 'cbl-hv1-pwr-a')!;
+    expect(pwrA.sourcePortId).toBe('dev-hyperv-node-01-ear-left-power');
+
+    const pwrB = s.cables.find(c => c.id === 'cbl-hv1-pwr-b')!;
+    expect(pwrB.sourcePortId).toBe('dev-hyperv-node-01-ear-right-power');
+
+    // 2. Test auto-repair healing on legacy project payload containing floating server body ports
+    const legacyProjectJson = JSON.stringify({
+      version: 1,
+      racks: [
+        { id: 'rack-test', name: 'Test Rack', units: 42, depthMm: 1070, rackType: 'server', mounting: 'floor', x: 200, y: 40 }
+      ],
+      devices: [
+        {
+          id: 'dev-legacy-server',
+          templateId: 'server-2u',
+          name: 'Legacy Server Node',
+          category: 'server',
+          rackId: 'rack-test',
+          startUnit: 10,
+          heightUnits: 2,
+          ports: [
+            { id: 'legacy-p1', name: 'NIC 1', type: 'rj45', relativeX: 120, relativeY: 20 },
+            { id: 'legacy-p2', name: 'NIC 2', type: 'rj45', relativeX: 140, relativeY: 20 },
+            { id: 'legacy-psu1', name: 'PSU 1 Feed A', type: 'power', relativeX: 340, relativeY: 20 },
+            { id: 'legacy-psu2', name: 'PSU 2 Feed B', type: 'power', relativeX: 360, relativeY: 20 },
+            { id: 'legacy-idrac', name: 'iDRAC OOB', type: 'management', relativeX: 300, relativeY: 20 },
+          ]
+        },
+        {
+          id: 'dev-pdu-a',
+          templateId: 'vpdu-apc-ap8858',
+          name: 'PDU Feed A',
+          category: 'pdu',
+          rackId: 'rack-test',
+          startUnit: 0,
+          heightUnits: 0,
+          sideMountPosition: 'left',
+          ports: []
+        },
+        {
+          id: 'dev-pdu-b',
+          templateId: 'vpdu-apc-ap8858',
+          name: 'PDU Feed B',
+          category: 'pdu',
+          rackId: 'rack-test',
+          startUnit: 0,
+          heightUnits: 0,
+          sideMountPosition: 'right',
+          ports: []
+        },
+        {
+          id: 'dev-test-sw',
+          templateId: 'rs-sw-24p',
+          name: 'ToR Switch',
+          category: 'switch',
+          rackId: 'rack-test',
+          startUnit: 35,
+          heightUnits: 1,
+          ports: []
+        }
+      ],
+      cables: [
+        {
+          id: 'cbl-leg-pwr-a',
+          name: 'Server PSU 1 Feed A',
+          type: 'power',
+          sourcePortId: 'legacy-psu1',
+          destPortId: 'pdu-a-out1'
+        },
+        {
+          id: 'cbl-leg-pwr-b',
+          name: 'Server PSU 2 Feed B',
+          type: 'power',
+          sourcePortId: 'legacy-psu2',
+          destPortId: 'pdu-b-out1'
+        },
+        {
+          id: 'cbl-leg-mgmt',
+          name: 'Server iDRAC Mgmt',
+          type: 'idrac',
+          sourcePortId: 'legacy-idrac',
+          destPortId: 'dev-test-sw-port-0'
+        },
+        {
+          id: 'cbl-leg-uplink',
+          name: 'Server NIC 1 Uplink',
+          type: 'cat6',
+          sourcePortId: 'legacy-p1',
+          destPortId: 'dev-test-sw-port-1'
+        }
+      ]
+    });
+
+    importJSON(legacyProjectJson);
+    const healedState = stateManager.getState();
+
+    // Verify power feeds healed to Left Ear Power (Feed A) and Right Ear Power (Feed B)
+    const healedPwrA = healedState.cables.find(c => c.id === 'cbl-leg-pwr-a')!;
+    expect(healedPwrA.sourcePortId).toBe('dev-legacy-server-ear-left-power');
+    expect(healedPwrA.color).toBe('#dc2626');
+
+    const healedPwrB = healedState.cables.find(c => c.id === 'cbl-leg-pwr-b')!;
+    expect(healedPwrB.sourcePortId).toBe('dev-legacy-server-ear-right-power');
+    expect(healedPwrB.color).toBe('#2563eb');
+
+    // Verify management cable healed to Right Ear Mgmt hole
+    const healedMgmt = healedState.cables.find(c => c.id === 'cbl-leg-mgmt')!;
+    expect(healedMgmt.sourcePortId).toBe('dev-legacy-server-ear-right-mgmt');
+
+    // Verify data cable healed to Side Ear NIC hole
+    const healedUplink = healedState.cables.find(c => c.id === 'cbl-leg-uplink')!;
+    expect(healedUplink.sourcePortId).toBe('dev-legacy-server-ear-left-nic1');
+
+    // Verify all endpoints have valid world coordinates on the rack rails/ears
+    for (const c of healedState.cables) {
+      const srcPos = stateManager.getPortWorldPosition(c.sourcePortId);
+      expect(srcPos, `Cable ${c.id} source position should exist`).not.toBeNull();
+    }
+  });
 });

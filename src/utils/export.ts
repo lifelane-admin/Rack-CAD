@@ -1,5 +1,5 @@
 import { eventBus } from '../core/event-bus';
-import { stateManager } from '../core/state';
+import { stateManager, injectEarPorts } from '../core/state';
 import { buildReport, ReportMetadata } from '../export/report-builder';
 import { DeviceTemplate, RACK_CONSTANTS, RackData, DeviceData, CableData, PortData } from '../core/types';
 import canvasCss from '../styles/canvas.css?raw';
@@ -966,16 +966,46 @@ export function importJSON(jsonString: string): void {
  * 3. Unlocks rigid hardcoded canvas anchor points so clean orthogonal paths calculate automatically.
  */
 export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables: CableData[]): { devices: DeviceData[], cables: CableData[] } {
-  // 1. Ensure switches and patch panels have full faceplate ports
+  // Map legacy server body port IDs to their parent device before ports get sanitized
+  const oldServerPortToDevMap = new Map<string, DeviceData>();
+  devices.forEach(d => {
+    const isServer = (d as any).category === 'server' || d.templateId?.includes('server') || d.templateId?.startsWith('srv-') || d.name?.toLowerCase().includes('server') || d.name?.toLowerCase().includes('node') || d.name?.toLowerCase().includes('host');
+    if (isServer && d.ports) {
+      d.ports.forEach(p => {
+        if (!p.id.includes('-ear-')) {
+          oldServerPortToDevMap.set(p.id, d);
+        }
+      });
+    }
+  });
+
+  // 1. Ensure switches, patch panels, and servers have correct ports
   const repairedDevices: DeviceData[] = devices.map(d => {
     const isSwitch = d.templateId?.includes('switch') || (d as any).category === 'switch' || d.name?.toLowerCase().includes('switch');
     const isPatch = d.templateId?.includes('patch') || (d as any).category === 'patch-panel' || d.name?.toLowerCase().includes('patch');
+    const isServer = (d as any).category === 'server' || d.templateId?.includes('server') || d.templateId?.startsWith('srv-') || d.name?.toLowerCase().includes('server') || d.name?.toLowerCase().includes('node') || d.name?.toLowerCase().includes('host');
     
     // Ensure every existing port has deviceId attached
     let currentPorts: PortData[] = (d.ports || []).map(p => ({
       ...p,
       deviceId: p.deviceId || d.id
     }));
+
+    if (isServer) {
+      // Ensure servers have full Side Ear Holes (S1-P1..P4, MGMT, Power Feed A/B)
+      const template = getTemplate(d.templateId);
+      const heightUnits = template?.heightUnits ?? (d as any).heightUnits ?? 2;
+      const earPorts = injectEarPorts(d.id, 'server', heightUnits, currentPorts, d.deviceConfig);
+      // Remove legacy floating body ports on servers so only clean ear holes exist
+      const cleanEarPorts = earPorts.filter(p => p.id.includes('-ear-')).map(p => ({
+        ...p,
+        deviceId: p.deviceId || d.id
+      }));
+      return {
+        ...d,
+        ports: cleanEarPorts
+      };
+    }
 
     if (isSwitch || isPatch) {
       const template = getTemplate(d.templateId);
@@ -1073,13 +1103,33 @@ export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables:
     };
   });
 
-  // 2. Heal floating cables, convert legacy PDU outlets, enforce Feed A/B rule book, and fix switch port mappings
+  // 2. Heal floating cables, convert legacy PDU outlets, enforce Feed A/B rule book, and route server cables to Side Ear Holes
   const allPortsMap = new Map<string, PortData>();
   repairedDevices.forEach(d => {
     (d.ports || []).forEach(p => allPortsMap.set(p.id, p));
   });
 
+  // Track already used ear ports on each device to avoid overlap when assigning
+  const usedEarPortsByDev = new Map<string, Set<string>>();
+  cables.forEach(c => {
+    if (c.sourcePortId?.includes('-ear-')) {
+      const match = /^(.+)-ear-(?:left|right)-(?:nic\d+|power|pwr|mgmt)$/.exec(c.sourcePortId);
+      if (match) {
+        if (!usedEarPortsByDev.has(match[1])) usedEarPortsByDev.set(match[1], new Set());
+        usedEarPortsByDev.get(match[1])!.add(c.sourcePortId);
+      }
+    }
+    if (c.destPortId?.includes('-ear-')) {
+      const match = /^(.+)-ear-(?:left|right)-(?:nic\d+|power|pwr|mgmt)$/.exec(c.destPortId);
+      if (match) {
+        if (!usedEarPortsByDev.has(match[1])) usedEarPortsByDev.set(match[1], new Set());
+        usedEarPortsByDev.get(match[1])!.add(c.destPortId);
+      }
+    }
+  });
+
   const repairedCables: CableData[] = cables.map((c, idx) => {
+    let sourcePortId = c.sourcePortId;
     let destPortId = c.destPortId;
     let floatingDest = c.floatingDest;
     let anchorsLocked = c.anchorsLocked;
@@ -1154,9 +1204,111 @@ export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables:
       }
     }
 
+    // Heal server endpoints so cables terminate at Side Ear Holes instead of floating in the center of servers
+    const healServerPort = (portId: string | null | undefined): string | null | undefined => {
+      if (!portId) return portId;
+      // Already valid ear power port
+      if (/^(.+)-ear-(left|right)-(?:power|pwr)$/.test(portId)) {
+        return portId;
+      }
+      // Migrate legacy ear nic power naming to ear power
+      const nicPowerMatch = /^(.+)-ear-(left|right)-nic(\d+)$/.exec(portId);
+      if (isPower && nicPowerMatch) {
+        return `${nicPowerMatch[1]}-ear-${nicPowerMatch[2]}-power`;
+      }
+      if (portId.includes('-ear-')) {
+        return portId;
+      }
+
+      // Find if this port belongs to a server
+      const targetDev = oldServerPortToDevMap.get(portId) || repairedDevices.find(d => {
+        const isSrv = (d as any).category === 'server' || d.templateId?.includes('server') || d.templateId?.startsWith('srv-') || d.name?.toLowerCase().includes('server') || d.name?.toLowerCase().includes('node') || d.name?.toLowerCase().includes('host');
+        if (!isSrv) return false;
+        if (portId.startsWith(d.id)) return true;
+        const dId = d.id.toLowerCase();
+        const pId = portId.toLowerCase();
+        if (pId.startsWith('hv1') && dId.includes('hyperv-node-01')) return true;
+        if (pId.startsWith('hv2') && dId.includes('hyperv-node-02')) return true;
+        if (pId.startsWith('arc') && dId.includes('arc')) return true;
+        if (pId.startsWith('n1') && dId.includes('node-01')) return true;
+        if (pId.startsWith('n2') && dId.includes('node-02')) return true;
+        if (pId.startsWith('n3') && dId.includes('node-03')) return true;
+        if (pId.startsWith('h1') && dId.includes('h1')) return true;
+        if (pId.startsWith('h2') && dId.includes('h2')) return true;
+        if (pId.startsWith('h3') && dId.includes('h3')) return true;
+        if (pId.startsWith('pbs') && dId.includes('pbs')) return true;
+        if (pId.startsWith('gpu') && dId.includes('gpu')) return true;
+        return false;
+      });
+
+      if (!targetDev) return portId;
+
+      if (!usedEarPortsByDev.has(targetDev.id)) {
+        usedEarPortsByDev.set(targetDev.id, new Set<string>());
+      }
+      const usedPorts = usedEarPortsByDev.get(targetDev.id)!;
+
+      // 1. Power cable -> Side Ear Power Hole (Left for Feed A, Right for Feed B)
+      if (isPower) {
+        const cName = (c.name || '').toLowerCase();
+        const pLower = portId.toLowerCase();
+        const isFeedB = cName.includes('feed b') || cName.includes('feed-b') || cName.includes('psu 2') || cName.includes('psu-2') || cName.includes('psu-b') ||
+                        pLower.includes('psu-b') || pLower.includes('psu-2') || pLower.includes('feed-b') || pLower.includes('psu2') || pLower.includes('pwr-b') || pLower.includes('power-b') || pLower.includes('out2');
+        const targetEarPower = isFeedB ? `${targetDev.id}-ear-right-power` : `${targetDev.id}-ear-left-power`;
+        usedPorts.add(targetEarPower);
+        anchorsLocked = false;
+        anchorPoints = [];
+        return targetEarPower;
+      }
+
+      // 2. Management cable -> Right Ear iDRAC/BMC Hole
+      if (isMgmtCable) {
+        const targetEarMgmt = `${targetDev.id}-ear-right-mgmt`;
+        usedPorts.add(targetEarMgmt);
+        anchorsLocked = false;
+        anchorPoints = [];
+        return targetEarMgmt;
+      }
+
+      // 3. Network / Data cable -> Side Ear NIC Holes (S1-P1..P4)
+      const pLower = portId.toLowerCase();
+      const cName = (c.name || '').toLowerCase();
+      let preferredEar: string | null = null;
+
+      if (pLower.includes('nic1') || pLower.includes('p1') || pLower.includes('eth1') || pLower.includes('mesh-1') || pLower.includes('cx7-1') || pLower.includes('uplink') || pLower.includes('tor-uplink') || cName.includes('tor') || cName.includes('uplink')) {
+        preferredEar = `${targetDev.id}-ear-left-nic1`;
+      } else if (pLower.includes('nic2') || pLower.includes('p2') || pLower.includes('eth2') || pLower.includes('mesh-2') || pLower.includes('cx7-2') || pLower.includes('s2d') || cName.includes('s2d')) {
+        preferredEar = `${targetDev.id}-ear-left-nic2`;
+      } else if (pLower.includes('nic3') || pLower.includes('p3') || pLower.includes('eth3') || pLower.includes('mesh-3') || pLower.includes('cx7-3')) {
+        preferredEar = `${targetDev.id}-ear-right-nic1`;
+      } else if (pLower.includes('nic4') || pLower.includes('p4') || pLower.includes('eth4') || pLower.includes('mesh-4') || pLower.includes('cx7-4')) {
+        preferredEar = `${targetDev.id}-ear-right-nic2`;
+      }
+
+      const availableCandidates = [
+        `${targetDev.id}-ear-left-nic1`,
+        `${targetDev.id}-ear-left-nic2`,
+        `${targetDev.id}-ear-right-nic1`,
+        `${targetDev.id}-ear-right-nic2`
+      ];
+
+      let selectedEar = preferredEar && !usedPorts.has(preferredEar) ? preferredEar : null;
+      if (!selectedEar) {
+        selectedEar = availableCandidates.find(p => !usedPorts.has(p)) || availableCandidates[0];
+      }
+
+      usedPorts.add(selectedEar);
+      anchorsLocked = false;
+      anchorPoints = [];
+      return selectedEar;
+    };
+
+    sourcePortId = healServerPort(sourcePortId) || sourcePortId;
+    destPortId = healServerPort(destPortId) || destPortId;
+
     const isDestBroken = !destPortId || (!allPortsMap.has(destPortId) && !destPortId.startsWith('outlet-'));
     if (isDestBroken && (floatingDest || !destPortId)) {
-      const srcPort = c.sourcePortId ? allPortsMap.get(c.sourcePortId) : null;
+      const srcPort = sourcePortId ? allPortsMap.get(sourcePortId) : null;
       const srcDev = srcPort ? repairedDevices.find(d => d.id === srcPort.deviceId) : null;
       const targetRackId = srcDev?.rackId;
       const switchesInRack = repairedDevices.filter(d => 
@@ -1190,6 +1342,7 @@ export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables:
 
     return {
       ...c,
+      sourcePortId,
       destPortId,
       color,
       powerCableType,

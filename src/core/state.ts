@@ -381,6 +381,30 @@ class StateManager {
       }
     }
 
+    // Resolve ear power aliases (e.g. dev-ear-left-power <-> dev-ear-left-nic3)
+    const earPowerMatch = /^(.+)-ear-(left|right)-(?:power|pwr)$/.exec(id);
+    if (earPowerMatch) {
+      const devId = earPowerMatch[1];
+      const side = earPowerMatch[2];
+      const dev = this.getDevice(devId);
+      if (dev && dev.ports) {
+        const port = dev.ports.find(p => p.id.includes(`-ear-${side}`) && (p.type === 'power' || p.name.toLowerCase().includes('power')));
+        if (port) return { ...port, deviceId: dev.id };
+      }
+    }
+
+    // Resolve ear nic power legacy IDs (e.g. dev-ear-left-nic3 -> power port)
+    const earNicMatch = /^(.+)-ear-(left|right)-nic(\d+)$/.exec(id);
+    if (earNicMatch) {
+      const devId = earNicMatch[1];
+      const side = earNicMatch[2];
+      const dev = this.getDevice(devId);
+      if (dev && dev.ports) {
+        const port = dev.ports.find(p => p.id === `${devId}-ear-${side}-power` || (p.id.includes(`-ear-${side}`) && p.type === 'power'));
+        if (port) return { ...port, deviceId: dev.id };
+      }
+    }
+
     return undefined;
   }
 
@@ -491,6 +515,14 @@ class StateManager {
         targetPort = port;
         targetDevice = device;
         break;
+      }
+    }
+
+    if (!targetPort) {
+      const resolved = this.getPort(portId);
+      if (resolved && resolved.deviceId) {
+        targetPort = resolved;
+        targetDevice = this.getDevice(resolved.deviceId) || null;
       }
     }
 
@@ -801,17 +833,21 @@ export function injectEarPorts(
   const leftDataEntries  = dataEntries.slice(0, leftCount);
   const rightDataEntries = dataEntries.slice(leftCount);
 
-  // Resolve management port label from body port name
+  // Resolve management port label from body port name or device context
   const mgmtBodyPort = filtered.find(p => p.type === 'management');
-  const hasMgmt = !!mgmtBodyPort;
+  const hasMgmt = !!mgmtBodyPort || category === 'server';
   const mgmtLabel = (() => {
-    if (!mgmtBodyPort) return 'BMC';
-    const n = mgmtBodyPort.name.toLowerCase();
-    return n.includes('idrac') || n.includes('drac') ? 'iDRAC'
-         : n.includes('ilo')                          ? 'iLO'
-         : n.includes('imm')                          ? 'IMM'
-         : n.includes('xcc')                          ? 'XCC'
-         : 'BMC';
+    if (mgmtBodyPort) {
+      const n = mgmtBodyPort.name.toLowerCase();
+      if (n.includes('idrac') || n.includes('drac')) return 'iDRAC';
+      if (n.includes('ilo')) return 'iLO';
+      if (n.includes('imm')) return 'IMM';
+      if (n.includes('xcc')) return 'XCC';
+    }
+    const dLower = deviceId.toLowerCase();
+    if (dLower.includes('dell') || dLower.includes('r750') || dLower.includes('r650') || dLower.includes('ceph')) return 'iDRAC';
+    if (dLower.includes('hpe') || dLower.includes('proliant') || dLower.includes('dl380')) return 'iLO';
+    return 'BMC';
   })();
 
   const height   = heightUnits * RACK_CONSTANTS.RU_HEIGHT;
@@ -828,8 +864,8 @@ export function injectEarPorts(
       id: `${deviceId}-ear-left-nic${idx + 1}`,
       deviceId,
       name: `Left Ear S${entry.slotNumber}-P${entry.portInSlot}`,
-      type: (refPort?.type as any) || 'rj45',
-      speed: refPort?.speed,
+      type: (refPort?.type as any) || (category === 'server' ? 'sfp28' : 'rj45'),
+      speed: refPort?.speed || (category === 'server' ? '25 Gbps' : '1 Gbps'),
       relativeX: leftX,
       relativeY: (idx + 0.5) * leftPitch,
       connected: false,
@@ -838,7 +874,7 @@ export function injectEarPorts(
   });
   // Left power hole — Primary PSU exits through left cable manager
   earPorts.push({
-    id: `${deviceId}-ear-left-nic${leftDataEntries.length + 1}`,
+    id: `${deviceId}-ear-left-power`,
     deviceId,
     name: 'Left Ear Power',
     type: 'power' as const,
@@ -861,8 +897,8 @@ export function injectEarPorts(
       id: `${deviceId}-ear-right-nic${idx + 1}`,
       deviceId,
       name: `Right Ear S${entry.slotNumber}-P${entry.portInSlot}`,
-      type: (refPort?.type as any) || 'rj45',
-      speed: refPort?.speed,
+      type: (refPort?.type as any) || (category === 'server' ? 'sfp28' : 'rj45'),
+      speed: refPort?.speed || (category === 'server' ? '25 Gbps' : '1 Gbps'),
       relativeX: rightX,
       relativeY: (idx + 0.5) * rightPitch,
       connected: false,
@@ -889,7 +925,7 @@ export function injectEarPorts(
 
   // Right power hole — Secondary PSU exits through right cable manager
   earPorts.push({
-    id: `${deviceId}-ear-right-nic${rightIdx + 1}`,
+    id: `${deviceId}-ear-right-power`,
     deviceId,
     name: 'Right Ear Power',
     type: 'power' as const,

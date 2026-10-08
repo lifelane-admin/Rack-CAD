@@ -147,13 +147,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       heightUnits: 2,
       color: '#0f172a',
       powerWatts: 450,
-      ports: [
-        { id: 'n3-mesh-1', name: '25G Mesh P1', type: 'sfp28', relativeX: 120, relativeY: 20, speed: '25 Gbps' },
-        { id: 'n3-mesh-2', name: '25G Mesh P2', type: 'sfp28', relativeX: 140, relativeY: 20, speed: '25 Gbps' },
-        { id: 'n3-mgmt', name: 'iDRAC / Mgmt', type: 'management', relativeX: 300, relativeY: 20, speed: '1 Gbps' },
-        { id: 'n3-psu-a', name: 'PSU 1 (Feed A)', type: 'power-c14', relativeX: 340, relativeY: 20, speed: '1100W' },
-        { id: 'n3-psu-b', name: 'PSU 2 (Feed B)', type: 'power-c14', relativeX: 360, relativeY: 20, speed: '1100W' },
-      ],
+      ports: [],
     },
     // Node 2 (U16-17)
     {
@@ -166,13 +160,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       heightUnits: 2,
       color: '#0f172a',
       powerWatts: 450,
-      ports: [
-        { id: 'n2-mesh-1', name: '25G Mesh P1', type: 'sfp28', relativeX: 120, relativeY: 20, speed: '25 Gbps' },
-        { id: 'n2-mesh-2', name: '25G Mesh P2', type: 'sfp28', relativeX: 140, relativeY: 20, speed: '25 Gbps' },
-        { id: 'n2-mgmt', name: 'iDRAC / Mgmt', type: 'management', relativeX: 300, relativeY: 20, speed: '1 Gbps' },
-        { id: 'n2-psu-a', name: 'PSU 1 (Feed A)', type: 'power-c14', relativeX: 340, relativeY: 20, speed: '1100W' },
-        { id: 'n2-psu-b', name: 'PSU 2 (Feed B)', type: 'power-c14', relativeX: 360, relativeY: 20, speed: '1100W' },
-      ],
+      ports: [],
     },
     // Node 1 (U12-13)
     {
@@ -185,13 +173,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       heightUnits: 2,
       color: '#0f172a',
       powerWatts: 450,
-      ports: [
-        { id: 'n1-mesh-1', name: '25G Mesh P1', type: 'sfp28', relativeX: 120, relativeY: 20, speed: '25 Gbps' },
-        { id: 'n1-mesh-2', name: '25G Mesh P2', type: 'sfp28', relativeX: 140, relativeY: 20, speed: '25 Gbps' },
-        { id: 'n1-mgmt', name: 'iDRAC / Mgmt', type: 'management', relativeX: 300, relativeY: 20, speed: '1 Gbps' },
-        { id: 'n1-psu-a', name: 'PSU 1 (Feed A)', type: 'power-c14', relativeX: 340, relativeY: 20, speed: '1100W' },
-        { id: 'n1-psu-b', name: 'PSU 2 (Feed B)', type: 'power-c14', relativeX: 360, relativeY: 20, speed: '1100W' },
-      ],
+      ports: [],
     },
     // Battery Backup UPS (U1-U2)
     {
@@ -209,7 +191,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
   ];
 
   const cables: any[] = [
-    // Mesh Direct Ring Cabling (Orange 25G DAC cables)
+    // Mesh Direct Ring Cabling (Orange 25G DAC cables) — Side Ear Holes S1-P1 & S1-P2
     {
       id: 'cbl-mesh-1-2',
       name: 'Node 1 <-> Node 2 Direct 25G Mesh Link',
@@ -217,8 +199,8 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       color: '#f59e0b',
       lengthMeters: 1.5,
       speed: '25 Gbps',
-      sourcePortId: 'n1-mesh-1',
-      destPortId: 'n2-mesh-1',
+      sourcePortId: 'dev-ceph-node-01-ear-left-nic1',
+      destPortId: 'dev-ceph-node-02-ear-left-nic1',
       status: 'ok',
     },
     {
@@ -228,8 +210,8 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       color: '#f59e0b',
       lengthMeters: 1.5,
       speed: '25 Gbps',
-      sourcePortId: 'n2-mesh-2',
-      destPortId: 'n3-mesh-1',
+      sourcePortId: 'dev-ceph-node-02-ear-left-nic2',
+      destPortId: 'dev-ceph-node-03-ear-left-nic1',
       status: 'ok',
     },
     {
@@ -239,11 +221,11 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       color: '#f59e0b',
       lengthMeters: 2.0,
       speed: '25 Gbps',
-      sourcePortId: 'n3-mesh-2',
-      destPortId: 'n1-mesh-2',
+      sourcePortId: 'dev-ceph-node-03-ear-left-nic2',
+      destPortId: 'dev-ceph-node-01-ear-left-nic2',
       status: 'ok',
     },
-    // Out-of-Band Management Links (Blue Cat6)
+    // Out-of-Band Management Links (Blue Cat6) — Right Ear iDRAC Mgmt Hole
     {
       id: 'cbl-mgmt-1',
       name: 'Node 1 iDRAC to Mgmt Switch P1',
@@ -251,7 +233,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       color: '#38bdf8',
       lengthMeters: 2.5,
       speed: '1 Gbps',
-      sourcePortId: 'n1-mgmt',
+      sourcePortId: 'dev-ceph-node-01-ear-right-mgmt',
       destPortId: 'sw-p1',
       status: 'ok',
     },
@@ -262,7 +244,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       color: '#38bdf8',
       lengthMeters: 2.0,
       speed: '1 Gbps',
-      sourcePortId: 'n2-mgmt',
+      sourcePortId: 'dev-ceph-node-02-ear-right-mgmt',
       destPortId: 'sw-p2',
       status: 'ok',
     },
@@ -273,7 +255,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       color: '#38bdf8',
       lengthMeters: 1.5,
       speed: '1 Gbps',
-      sourcePortId: 'n3-mgmt',
+      sourcePortId: 'dev-ceph-node-03-ear-right-mgmt',
       destPortId: 'sw-p3',
       status: 'ok',
     },
@@ -284,7 +266,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       type: 'power',
       color: '#dc2626',
       lengthMeters: 1.5,
-      sourcePortId: 'n1-psu-a',
+      sourcePortId: 'dev-ceph-node-01-ear-left-power',
       destPortId: 'outlet-pdu-ceph-feed-a-0',
       status: 'ok',
     },
@@ -294,7 +276,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       type: 'power',
       color: '#2563eb',
       lengthMeters: 1.5,
-      sourcePortId: 'n1-psu-b',
+      sourcePortId: 'dev-ceph-node-01-ear-right-power',
       destPortId: 'outlet-pdu-ceph-feed-b-0',
       status: 'ok',
     },
@@ -304,7 +286,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       type: 'power',
       color: '#dc2626',
       lengthMeters: 1.5,
-      sourcePortId: 'n2-psu-a',
+      sourcePortId: 'dev-ceph-node-02-ear-left-power',
       destPortId: 'outlet-pdu-ceph-feed-a-1',
       status: 'ok',
     },
@@ -314,7 +296,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       type: 'power',
       color: '#2563eb',
       lengthMeters: 1.5,
-      sourcePortId: 'n2-psu-b',
+      sourcePortId: 'dev-ceph-node-02-ear-right-power',
       destPortId: 'outlet-pdu-ceph-feed-b-1',
       status: 'ok',
     },
@@ -324,7 +306,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       type: 'power',
       color: '#dc2626',
       lengthMeters: 1.5,
-      sourcePortId: 'n3-psu-a',
+      sourcePortId: 'dev-ceph-node-03-ear-left-power',
       destPortId: 'outlet-pdu-ceph-feed-a-2',
       status: 'ok',
     },
@@ -334,7 +316,7 @@ export function generateCephMeshTemplate(): TemplateProjectData {
       type: 'power',
       color: '#2563eb',
       lengthMeters: 1.5,
-      sourcePortId: 'n3-psu-b',
+      sourcePortId: 'dev-ceph-node-03-ear-right-power',
       destPortId: 'outlet-pdu-ceph-feed-b-2',
       status: 'ok',
     },
@@ -426,9 +408,7 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       heightUnits: 1,
       color: '#0078d4',
       powerWatts: 150,
-      ports: [
-        { id: 'arc-uplink', name: 'WAN / Uplink', type: 'rj45', relativeX: 320, relativeY: 8, speed: '1 Gbps' },
-      ],
+      ports: [],
     },
     // Node 2 (U16-17)
     {
@@ -441,12 +421,7 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       heightUnits: 2,
       color: '#0f172a',
       powerWatts: 500,
-      ports: [
-        { id: 'hv2-s2d-direct', name: 'S2D RDMA Direct', type: 'sfp28', relativeX: 120, relativeY: 20, speed: '25 Gbps' },
-        { id: 'hv2-tor-uplink', name: 'ToR Uplink', type: 'sfp28', relativeX: 140, relativeY: 20, speed: '25 Gbps' },
-        { id: 'hv2-psu-a', name: 'PSU 1', type: 'power-c14', relativeX: 340, relativeY: 20 },
-        { id: 'hv2-psu-b', name: 'PSU 2', type: 'power-c14', relativeX: 360, relativeY: 20 },
-      ],
+      ports: [],
     },
     // Node 1 (U12-13)
     {
@@ -459,17 +434,12 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       heightUnits: 2,
       color: '#0f172a',
       powerWatts: 500,
-      ports: [
-        { id: 'hv1-s2d-direct', name: 'S2D RDMA Direct', type: 'sfp28', relativeX: 120, relativeY: 20, speed: '25 Gbps' },
-        { id: 'hv1-tor-uplink', name: 'ToR Uplink', type: 'sfp28', relativeX: 140, relativeY: 20, speed: '25 Gbps' },
-        { id: 'hv1-psu-a', name: 'PSU 1', type: 'power-c14', relativeX: 340, relativeY: 20 },
-        { id: 'hv1-psu-b', name: 'PSU 2', type: 'power-c14', relativeX: 360, relativeY: 20 },
-      ],
+      ports: [],
     },
   ];
 
   const cables: any[] = [
-    // S2D Direct RoCEv2 Storage Cross-connect (Purple)
+    // S2D Direct RoCEv2 Storage Cross-connect (Purple) — Terminates at Side Ear Holes (S1-P2)
     {
       id: 'cbl-s2d-sync',
       name: 'Storage Spaces Direct 25GbE RDMA Sync',
@@ -477,11 +447,11 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       color: '#8b5cf6',
       lengthMeters: 1.0,
       speed: '25 Gbps',
-      sourcePortId: 'hv1-s2d-direct',
-      destPortId: 'hv2-s2d-direct',
+      sourcePortId: 'dev-hyperv-node-01-ear-left-nic2',
+      destPortId: 'dev-hyperv-node-02-ear-left-nic2',
       status: 'ok',
     },
-    // ToR Switch Uplinks (Cyan)
+    // ToR Switch Uplinks (Cyan) — Terminates at Server Left Ear (S1-P1) to Switch Data Ports
     {
       id: 'cbl-hv1-tor',
       name: 'Host 01 to Dell ToR Switch',
@@ -489,7 +459,7 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       color: '#06b6d4',
       lengthMeters: 2.0,
       speed: '25 Gbps',
-      sourcePortId: 'hv1-tor-uplink',
+      sourcePortId: 'dev-hyperv-node-01-ear-left-nic1',
       destPortId: 'hv-sw-p1',
       status: 'ok',
     },
@@ -500,7 +470,7 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       color: '#06b6d4',
       lengthMeters: 1.8,
       speed: '25 Gbps',
-      sourcePortId: 'hv2-tor-uplink',
+      sourcePortId: 'dev-hyperv-node-02-ear-left-nic1',
       destPortId: 'hv-sw-p2',
       status: 'ok',
     },
@@ -510,18 +480,18 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       type: 'cat6',
       color: '#0078d4',
       lengthMeters: 1.2,
-      sourcePortId: 'arc-uplink',
+      sourcePortId: 'dev-azure-arc-edge-ear-left-nic1',
       destPortId: 'hv-sw-p3',
       status: 'ok',
     },
-    // Power connections (Application Rule Book: Feed A = Red #dc2626, Feed B = Blue #2563eb)
+    // Power connections (Application Rule Book: Feed A = Red #dc2626 from Left Ear Power PW; Feed B = Blue #2563eb from Right Ear Power PW)
     {
       id: 'cbl-hv1-pwr-a',
       name: 'Host 01 PSU 1 to Feed A',
       type: 'power',
       color: '#dc2626',
       lengthMeters: 1.5,
-      sourcePortId: 'hv1-psu-a',
+      sourcePortId: 'dev-hyperv-node-01-ear-left-power',
       destPortId: 'outlet-pdu-hyperv-a-0',
     },
     {
@@ -530,7 +500,7 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       type: 'power',
       color: '#2563eb',
       lengthMeters: 1.5,
-      sourcePortId: 'hv1-psu-b',
+      sourcePortId: 'dev-hyperv-node-01-ear-right-power',
       destPortId: 'outlet-pdu-hyperv-b-0',
     },
     {
@@ -539,7 +509,7 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       type: 'power',
       color: '#dc2626',
       lengthMeters: 1.5,
-      sourcePortId: 'hv2-psu-a',
+      sourcePortId: 'dev-hyperv-node-02-ear-left-power',
       destPortId: 'outlet-pdu-hyperv-a-1',
     },
     {
@@ -548,7 +518,7 @@ export function generateHyperVClusterTemplate(): TemplateProjectData {
       type: 'power',
       color: '#2563eb',
       lengthMeters: 1.5,
-      sourcePortId: 'hv2-psu-b',
+      sourcePortId: 'dev-hyperv-node-02-ear-right-power',
       destPortId: 'outlet-pdu-hyperv-b-1',
     },
   ];
@@ -661,10 +631,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       heightUnits: 1,
       color: '#047857',
       powerWatts: 180,
-      ports: [
-        { id: 'pbs-uplink-1', name: 'Backup 10G', type: 'sfp-plus', relativeX: 320, relativeY: 8, speed: '10 Gbps' },
-        { id: 'pbs-psu-a', name: 'PSU 1', type: 'power-c14', relativeX: 360, relativeY: 8 },
-      ],
+      ports: [],
     },
     // Host 3 (U18-19)
     {
@@ -677,12 +644,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       heightUnits: 2,
       color: '#0f172a',
       powerWatts: 420,
-      ports: [
-        { id: 'h3-eth1', name: '25G Bond 1', type: 'sfp28', relativeX: 120, relativeY: 20, speed: '25 Gbps' },
-        { id: 'h3-eth2', name: '25G Bond 2', type: 'sfp28', relativeX: 140, relativeY: 20, speed: '25 Gbps' },
-        { id: 'h3-psu-a', name: 'PSU 1', type: 'power-c14', relativeX: 340, relativeY: 20 },
-        { id: 'h3-psu-b', name: 'PSU 2', type: 'power-c14', relativeX: 360, relativeY: 20 },
-      ],
+      ports: [],
     },
     // Host 2 (U14-15)
     {
@@ -695,12 +657,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       heightUnits: 2,
       color: '#0f172a',
       powerWatts: 420,
-      ports: [
-        { id: 'h2-eth1', name: '25G Bond 1', type: 'sfp28', relativeX: 120, relativeY: 20, speed: '25 Gbps' },
-        { id: 'h2-eth2', name: '25G Bond 2', type: 'sfp28', relativeX: 140, relativeY: 20, speed: '25 Gbps' },
-        { id: 'h2-psu-a', name: 'PSU 1', type: 'power-c14', relativeX: 340, relativeY: 20 },
-        { id: 'h2-psu-b', name: 'PSU 2', type: 'power-c14', relativeX: 360, relativeY: 20 },
-      ],
+      ports: [],
     },
     // Host 1 (U10-11)
     {
@@ -713,17 +670,12 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       heightUnits: 2,
       color: '#0f172a',
       powerWatts: 420,
-      ports: [
-        { id: 'h1-eth1', name: '25G Bond 1', type: 'sfp28', relativeX: 120, relativeY: 20, speed: '25 Gbps' },
-        { id: 'h1-eth2', name: '25G Bond 2', type: 'sfp28', relativeX: 140, relativeY: 20, speed: '25 Gbps' },
-        { id: 'h1-psu-a', name: 'PSU 1', type: 'power-c14', relativeX: 340, relativeY: 20 },
-        { id: 'h1-psu-b', name: 'PSU 2', type: 'power-c14', relativeX: 360, relativeY: 20 },
-      ],
+      ports: [],
     },
   ];
 
   const cables: any[] = [
-    // Dual-homed 25GbE LACP Active/Active Cabling (Cyan & Emerald)
+    // Dual-homed 25GbE LACP Active/Active Cabling (Cyan & Emerald) — Side Ear Holes S1-P1 & S1-P2
     {
       id: 'cbl-h1-to-tor1',
       name: 'Host 1 to ToR-01 Primary Link',
@@ -731,7 +683,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       color: '#06b6d4',
       lengthMeters: 2.5,
       speed: '25 Gbps',
-      sourcePortId: 'h1-eth1',
+      sourcePortId: 'dev-proxmox-h1-ear-left-nic1',
       destPortId: 'tor1-p1',
       status: 'ok',
     },
@@ -742,7 +694,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       color: '#10b981',
       lengthMeters: 2.5,
       speed: '25 Gbps',
-      sourcePortId: 'h1-eth2',
+      sourcePortId: 'dev-proxmox-h1-ear-left-nic2',
       destPortId: 'tor2-p1',
       status: 'ok',
     },
@@ -753,7 +705,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       color: '#06b6d4',
       lengthMeters: 2.0,
       speed: '25 Gbps',
-      sourcePortId: 'h2-eth1',
+      sourcePortId: 'dev-proxmox-h2-ear-left-nic1',
       destPortId: 'tor1-p2',
       status: 'ok',
     },
@@ -764,7 +716,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       color: '#10b981',
       lengthMeters: 2.0,
       speed: '25 Gbps',
-      sourcePortId: 'h2-eth2',
+      sourcePortId: 'dev-proxmox-h2-ear-left-nic2',
       destPortId: 'tor2-p2',
       status: 'ok',
     },
@@ -775,7 +727,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       color: '#06b6d4',
       lengthMeters: 1.8,
       speed: '25 Gbps',
-      sourcePortId: 'h3-eth1',
+      sourcePortId: 'dev-proxmox-h3-ear-left-nic1',
       destPortId: 'tor1-p3',
       status: 'ok',
     },
@@ -786,7 +738,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       color: '#10b981',
       lengthMeters: 1.8,
       speed: '25 Gbps',
-      sourcePortId: 'h3-eth2',
+      sourcePortId: 'dev-proxmox-h3-ear-left-nic2',
       destPortId: 'tor2-p3',
       status: 'ok',
     },
@@ -798,18 +750,18 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       color: '#3b82f6',
       lengthMeters: 1.5,
       speed: '10 Gbps',
-      sourcePortId: 'pbs-uplink-1',
+      sourcePortId: 'dev-proxmox-pbs-ear-left-nic1',
       destPortId: 'tor1-p4',
       status: 'ok',
     },
-    // Power connections (Application Rule Book: Feed A = Red #dc2626, Feed B = Blue #2563eb)
+    // Power connections (Application Rule Book: Feed A = Red #dc2626 from Left Ear Power; Feed B = Blue #2563eb from Right Ear Power)
     {
       id: 'cbl-h1-pwr-a',
       name: 'Host 1 PSU 1 to Feed A',
       type: 'power',
       color: '#dc2626',
       lengthMeters: 1.5,
-      sourcePortId: 'h1-psu-a',
+      sourcePortId: 'dev-proxmox-h1-ear-left-power',
       destPortId: 'outlet-pdu-proxmox-a-0',
     },
     {
@@ -818,7 +770,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       type: 'power',
       color: '#2563eb',
       lengthMeters: 1.5,
-      sourcePortId: 'h1-psu-b',
+      sourcePortId: 'dev-proxmox-h1-ear-right-power',
       destPortId: 'outlet-pdu-proxmox-b-0',
     },
     {
@@ -827,7 +779,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       type: 'power',
       color: '#dc2626',
       lengthMeters: 1.5,
-      sourcePortId: 'h2-psu-a',
+      sourcePortId: 'dev-proxmox-h2-ear-left-power',
       destPortId: 'outlet-pdu-proxmox-a-1',
     },
     {
@@ -836,7 +788,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       type: 'power',
       color: '#2563eb',
       lengthMeters: 1.5,
-      sourcePortId: 'h2-psu-b',
+      sourcePortId: 'dev-proxmox-h2-ear-right-power',
       destPortId: 'outlet-pdu-proxmox-b-1',
     },
     {
@@ -845,7 +797,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       type: 'power',
       color: '#dc2626',
       lengthMeters: 1.5,
-      sourcePortId: 'h3-psu-a',
+      sourcePortId: 'dev-proxmox-h3-ear-left-power',
       destPortId: 'outlet-pdu-proxmox-a-2',
     },
     {
@@ -854,7 +806,7 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       type: 'power',
       color: '#2563eb',
       lengthMeters: 1.5,
-      sourcePortId: 'h3-psu-b',
+      sourcePortId: 'dev-proxmox-h3-ear-right-power',
       destPortId: 'outlet-pdu-proxmox-b-2',
     },
   ];
@@ -1276,14 +1228,7 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       heightUnits: 8,
       color: '#022c22',
       powerWatts: 7200,
-      ports: [
-        { id: 'gpu-cx7-1', name: 'CX7 NDR 1', type: 'qsfp-dd', relativeX: 80, relativeY: 40, speed: '400 Gbps' },
-        { id: 'gpu-cx7-2', name: 'CX7 NDR 2', type: 'qsfp-dd', relativeX: 110, relativeY: 40, speed: '400 Gbps' },
-        { id: 'gpu-cx7-3', name: 'CX7 NDR 3', type: 'qsfp-dd', relativeX: 140, relativeY: 40, speed: '400 Gbps' },
-        { id: 'gpu-cx7-4', name: 'CX7 NDR 4', type: 'qsfp-dd', relativeX: 170, relativeY: 40, speed: '400 Gbps' },
-        { id: 'gpu-psu-1', name: 'PSU 1 (3000W)', type: 'power-c20', relativeX: 340, relativeY: 40 },
-        { id: 'gpu-psu-2', name: 'PSU 2 (3000W)', type: 'power-c20', relativeX: 360, relativeY: 40 },
-      ],
+      ports: [],
     },
     // Liquid Cooling CDU Manifold (U4-U7)
     {
@@ -1301,7 +1246,7 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
   ];
 
   const cables: any[] = [
-    // 400G / 800G NDR InfiniBand Cables (Neon Emerald)
+    // 400G / 800G NDR InfiniBand Cables (Neon Emerald) — Side Ear Holes S1-P1..P4
     {
       id: 'cbl-ib-1',
       name: 'H100 CX7-1 to Quantum-2 SW01 P1',
@@ -1309,7 +1254,7 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       color: '#10b981',
       lengthMeters: 2.0,
       speed: '400 Gbps',
-      sourcePortId: 'gpu-cx7-1',
+      sourcePortId: 'dev-h100-gpu-server-ear-left-nic1',
       destPortId: 'ib1-p1',
       status: 'ok',
     },
@@ -1320,7 +1265,7 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       color: '#10b981',
       lengthMeters: 2.0,
       speed: '400 Gbps',
-      sourcePortId: 'gpu-cx7-2',
+      sourcePortId: 'dev-h100-gpu-server-ear-left-nic2',
       destPortId: 'ib1-p2',
       status: 'ok',
     },
@@ -1331,7 +1276,7 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       color: '#10b981',
       lengthMeters: 2.0,
       speed: '400 Gbps',
-      sourcePortId: 'gpu-cx7-3',
+      sourcePortId: 'dev-h100-gpu-server-ear-right-nic1',
       destPortId: 'ib1-p3',
       status: 'ok',
     },
@@ -1342,7 +1287,7 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       color: '#10b981',
       lengthMeters: 2.0,
       speed: '400 Gbps',
-      sourcePortId: 'gpu-cx7-4',
+      sourcePortId: 'dev-h100-gpu-server-ear-right-nic2',
       destPortId: 'ib1-p4',
       status: 'ok',
     },
@@ -1353,7 +1298,7 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       type: 'power',
       color: '#dc2626',
       lengthMeters: 2.0,
-      sourcePortId: 'gpu-psu-1',
+      sourcePortId: 'dev-h100-gpu-server-ear-left-power',
       destPortId: 'outlet-pdu-h100-a-0',
     },
     {
@@ -1362,7 +1307,7 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       type: 'power',
       color: '#2563eb',
       lengthMeters: 2.0,
-      sourcePortId: 'gpu-psu-2',
+      sourcePortId: 'dev-h100-gpu-server-ear-right-power',
       destPortId: 'outlet-pdu-h100-b-0',
     },
   ];
