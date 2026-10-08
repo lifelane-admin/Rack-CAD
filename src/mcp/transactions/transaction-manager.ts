@@ -397,7 +397,7 @@ export class McpTransactionManager {
             sourcePortId: item.source || null,
             destPortId: item.target || null,
             bendPoints: [],
-            thickness: 2.2,
+            thickness: 2,
             bendRadius: 22,
             bundleId: null,
             notes: (item.details?.notes as string) || 'AI Automated Smart Cable',

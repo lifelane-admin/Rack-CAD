@@ -185,7 +185,7 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     const underlayGlow = createPath(pathData, {
       fill: 'none',
       stroke: errorPulseColor,
-      'stroke-width': (cable.thickness || mat.renderThicknessPx || 3) + 6,
+      'stroke-width': ((cable.thickness && cable.thickness > 0) ? cable.thickness : 2) + 6,
       'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
       opacity: 0.3,
@@ -231,7 +231,7 @@ export function renderCable(cable: CableData, sourcePos: Point, destPos: Point, 
     }
   }
 
-  const effectiveThickness = isPowerCable ? 3.4 : (cable.thickness || mat.renderThicknessPx || 3.0);
+  const effectiveThickness = (cable.thickness && cable.thickness > 0) ? cable.thickness : 2.0;
   const baseColor = isPowerCable ? powerColor : (cable.color || mat.defaultColor);
 
   // 1. Soft Ambient Optical Drop Shadow (directional shadow onto rack background)

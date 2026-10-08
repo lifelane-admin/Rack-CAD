@@ -3834,7 +3834,7 @@ export class BuildFloorView {
 
     el.innerHTML = `
       <div style="padding: 10px 10px 6px;">
-        <input type="text" class="dc-catalog-search-box" id="dc-cat-search-input" placeholder="Search components..." value="${this.catalogSearchQuery}" style="width: 100%; background: #0d1117; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 7px 12px; color: #f0f6fc; font-size: 12px; outline: none; box-sizing: border-box;" />
+        <input type="text" class="dc-catalog-search-box" id="dc-cat-search-input" name="dc-component-search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search components..." value="${this.catalogSearchQuery}" style="width: 100%; background: #0d1117; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 7px 12px; color: #f0f6fc; font-size: 12px; outline: none; box-sizing: border-box;" />
       </div>
       <div id="dc-cat-accordion-list" style="overflow-y: auto; flex: 1;"></div>
     `;

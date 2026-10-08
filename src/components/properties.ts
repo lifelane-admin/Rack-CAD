@@ -2549,7 +2549,7 @@ export class PropertiesPanel {
       </div>
       <div class="form-group">
         <label>Thickness (px)</label>
-        <input type="number" id="prop-cab-thick" value="${cable.thickness || 3}" />
+        <input type="number" id="prop-cab-thick" value="${cable.thickness || 2}" />
       </div>
       <div class="form-group">
         <label>Cable Bend Roundness</label>

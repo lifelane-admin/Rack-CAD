@@ -194,3 +194,54 @@ describe('Sidebar cloud palette', () => {
     expect(categories[0].classList.contains('collapsed')).toBe(true);
   });
 });
+
+describe('Sidebar search reset behavior', () => {
+  beforeEach(() => {
+    stateManager.setState({ activeView: 'rack', workflowMode: 'rack', selection: [] });
+  });
+
+  it('clears search input and filtered banner when resetSearch() is called', () => {
+    const sidebar = mountSidebar();
+    const input = document.querySelector('.sidebar-search input') as HTMLInputElement;
+    input.value = '100';
+    input.dispatchEvent(new Event('input'));
+
+    expect(document.querySelector('.sidebar-catalog')?.textContent).toContain('Filtered by "100"');
+
+    sidebar.resetSearch();
+    sidebar.render();
+
+    const updatedInput = document.querySelector('.sidebar-search input') as HTMLInputElement;
+    expect(updatedInput.value).toBe('');
+    expect(document.querySelector('.sidebar-catalog')?.textContent).not.toContain('Filtered by "100"');
+  });
+
+  it('resets search when view:switch is emitted', () => {
+    const sidebar = mountSidebar();
+    const input = document.querySelector('.sidebar-search input') as HTMLInputElement;
+    input.value = '100';
+    input.dispatchEvent(new Event('input'));
+
+    eventBus.emit('view:switch', 'rack');
+    sidebar.render();
+
+    const updatedInput = document.querySelector('.sidebar-search input') as HTMLInputElement;
+    expect(updatedInput.value).toBe('');
+    expect(document.querySelector('.sidebar-catalog')?.textContent).not.toContain('Filtered by "100"');
+  });
+
+  it('resets search when sidebar:reset-search is emitted', () => {
+    const sidebar = mountSidebar();
+    const input = document.querySelector('.sidebar-search input') as HTMLInputElement;
+    input.value = '100';
+    input.dispatchEvent(new Event('input'));
+
+    eventBus.emit('sidebar:reset-search' as any, undefined);
+    sidebar.render();
+
+    const updatedInput = document.querySelector('.sidebar-search input') as HTMLInputElement;
+    expect(updatedInput.value).toBe('');
+    expect(document.querySelector('.sidebar-catalog')?.textContent).not.toContain('Filtered by "100"');
+  });
+});
+

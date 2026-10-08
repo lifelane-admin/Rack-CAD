@@ -126,7 +126,7 @@ class StateManager {
       cables.push({
         id: cableId, name: `Cable ${cableCount - 1}`, type, color,
         sourcePortId: srcPort.id, destPortId: destPort.id,
-        bendPoints: [], thickness: 2.2, bendRadius: 22,
+        bendPoints: [], thickness: 2, bendRadius: 22,
         bundleId: null, notes: '', anchorPoints: [], anchorsLocked: false,
       });
       srcPort.connected = true;

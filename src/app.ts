@@ -445,6 +445,7 @@ export class App {
 
     // Initialize SaaS Workspace Dashboard
     this.saasDashboard = new SaaSWorkspaceDashboard((project, category) => {
+      this.sidebar.resetSearch();
       if (project && project.dataJson && project.dataJson !== '{}') {
         try {
           importJSON(project.dataJson);
@@ -797,6 +798,7 @@ export class App {
    *  choice (✕ / Escape) leaves the view exactly as it already was. */
   private showStartupModal(): void {
     showStartupModal((choice: StartupChoice | null) => {
+      this.sidebar.resetSearch();
       if (!choice) return;
       if (choice === 'ai') {
         stateManager.setState({ aiMode: true });
@@ -5395,6 +5397,7 @@ export class App {
    * native file-picker still lets the user choose the source, just without a remembered handle.
    */
   private async openProject(): Promise<void> {
+    this.sidebar.resetSearch();
     const hasPicker = typeof (window as any).showOpenFilePicker === 'function';
 
     if (hasPicker) {
@@ -6234,6 +6237,7 @@ export class App {
    *  behavior. */
   setActiveView(view: 'rack' | 'cloud' | 'hybrid' | 'datacenter' | 'flowchart'): void {
     stateManager.setState({ activeView: view });
+    this.sidebar.resetSearch();
 
     const rackViewport = document.getElementById('canvas-viewport');
     const cloudViewport = document.getElementById('cloud-viewport');

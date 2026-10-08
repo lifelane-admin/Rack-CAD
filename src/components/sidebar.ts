@@ -53,6 +53,34 @@ export class Sidebar {
         this.render();
       }
     });
+
+    EventBus.on('view:switch', () => {
+      this.resetSearch();
+    });
+    EventBus.on('sidebar:reset-search' as any, () => {
+      this.resetSearch();
+    });
+    EventBus.on('project:load' as any, () => {
+      this.resetSearch();
+    });
+    EventBus.on('file:new' as any, () => {
+      this.resetSearch();
+    });
+    EventBus.on('file:open' as any, () => {
+      this.resetSearch();
+    });
+    EventBus.on('file:demo' as any, () => {
+      this.resetSearch();
+    });
+  }
+
+  /** Clears the current search term, input box, and clear button */
+  public resetSearch(): void {
+    this.searchTerm = '';
+    const searchInput = this.container.querySelector('.sidebar-search input') as HTMLInputElement | null;
+    if (searchInput) searchInput.value = '';
+    const clearBtn = this.container.querySelector('.sidebar-search-clear') as HTMLElement | null;
+    if (clearBtn) clearBtn.style.display = 'none';
   }
 
   /** Sets which cloud provider's palette section auto-expands, from outside the nav-tree click
@@ -62,7 +90,7 @@ export class Sidebar {
   focusCloudProvider(provider: CloudProvider | null, category: string | null = null): void {
     this.focusedCloudProvider = provider;
     this.focusedCloudCategory = category;
-    this.searchTerm = '';
+    this.resetSearch();
   }
 
   render() {
@@ -159,6 +187,12 @@ export class Sidebar {
     searchContainer.style.cssText = 'position:relative;display:flex;align-items:center;';
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
+    searchInput.name = 'component-catalog-search';
+    searchInput.autocomplete = 'off';
+    searchInput.setAttribute('autocomplete', 'off');
+    searchInput.setAttribute('autocorrect', 'off');
+    searchInput.setAttribute('autocapitalize', 'off');
+    searchInput.setAttribute('spellcheck', 'false');
     searchInput.value = this.searchTerm;
     searchInput.style.paddingRight = '28px';
     const providerLabels: Record<CloudProvider, string> = { aws: 'AWS', azure: 'Azure', gcp: 'GCP', onprem: 'Local Resources' };
@@ -359,6 +393,12 @@ export class Sidebar {
     searchContainer.className = 'sidebar-search';
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
+    searchInput.name = 'flowchart-palette-search';
+    searchInput.autocomplete = 'off';
+    searchInput.setAttribute('autocomplete', 'off');
+    searchInput.setAttribute('autocorrect', 'off');
+    searchInput.setAttribute('autocapitalize', 'off');
+    searchInput.setAttribute('spellcheck', 'false');
     searchInput.placeholder = 'Search flowchart shapes & logic...';
     searchContainer.appendChild(searchInput);
 

@@ -43,6 +43,34 @@ function isSwitchDevice(d: DeviceData): boolean {
   return getTemplate(d.templateId)?.category === 'switch';
 }
 
+function getSortedSwitchDataPorts(sw: DeviceData): PortData[] {
+  return (sw.ports || [])
+    .filter(p =>
+      !p.id.includes('-ear-') &&
+      !p.id.includes('mgmt') &&
+      !p.id.includes('console') &&
+      p.type !== 'management' &&
+      p.type !== 'console' &&
+      p.type !== 'power'
+    )
+    .sort((a, b) => {
+      // 1st terminate cables on top row only, then on 2nd row (smaller relativeY first, then left-to-right)
+      const yDiff = a.relativeY - b.relativeY;
+      if (Math.abs(yDiff) > 2) return yDiff;
+      return a.relativeX - b.relativeX;
+    });
+}
+
+function getSortedSwitchMgmtPorts(sw: DeviceData): PortData[] {
+  return (sw.ports || [])
+    .filter(p => !p.id.includes('-ear-') && p.type !== 'power')
+    .sort((a, b) => {
+      const yDiff = a.relativeY - b.relativeY;
+      if (Math.abs(yDiff) > 2) return yDiff;
+      return a.relativeX - b.relativeX;
+    });
+}
+
 function makeAiCable(
   sourcePortId: string,
   destPortId: string,
@@ -149,25 +177,25 @@ export class CableLayingOrchestrator {
       const earRightMgmt  = device.ports.filter(p => p.id === `${device.id}-ear-right-mgmt`);
 
       // ── Power cables — exit through dedicated ear power holes into cable managers for ALL active devices ──
-      // Primary PSU → left ear power hole → left cable manager → PDU-A (Feed A)
+      // Primary PSU → left ear power hole → left cable manager → PDU-A (Feed A: Red #dc2626)
       const primaryPsuPort = earLeftPower ?? psuPorts[0];
       if (pduA && primaryPsuPort && outletIdx[pduA.id] < pduAMaxOutlets) {
         const syntheticOutletA = `outlet-${pduA.id}-${outletIdx[pduA.id]}`;
         const pair = `${primaryPsuPort.id}|${syntheticOutletA}`;
         if (!existingPairs.has(pair)) {
-          newCables.push(makeAiCable(primaryPsuPort.id, syntheticOutletA, 'power', '#f97316', 'left', `Power — ${device.name} Primary PSU → Feed A`));
+          newCables.push(makeAiCable(primaryPsuPort.id, syntheticOutletA, 'power', '#dc2626', 'left', `Power — ${device.name} Primary PSU → Feed A`));
           existingPairs.add(pair);
         }
         outletIdx[pduA.id]++;
       }
 
-      // Secondary PSU → right ear power hole → right cable manager → PDU-B (Feed B)
+      // Secondary PSU → right ear power hole → right cable manager → PDU-B (Feed B: Blue #2563eb)
       const secondaryPsuPort = earRightPower ?? psuPorts[1];
       if (pduB && secondaryPsuPort && outletIdx[pduB.id] < pduBMaxOutlets) {
         const syntheticOutletB = `outlet-${pduB.id}-${outletIdx[pduB.id]}`;
         const pair = `${secondaryPsuPort.id}|${syntheticOutletB}`;
         if (!existingPairs.has(pair)) {
-          newCables.push(makeAiCable(secondaryPsuPort.id, syntheticOutletB, 'power', '#dc2626', 'right', `Power — ${device.name} Secondary PSU → Feed B`));
+          newCables.push(makeAiCable(secondaryPsuPort.id, syntheticOutletB, 'power', '#2563eb', 'right', `Power — ${device.name} Secondary PSU → Feed B`));
           existingPairs.add(pair);
         }
         outletIdx[pduB.id]++;
@@ -180,8 +208,10 @@ export class CableLayingOrchestrator {
       const mgmtSourcePorts = earRightMgmt.length > 0 ? earRightMgmt : mgmtPorts;
 
       // ── Data cables (via left ear holes → left cable manager) ─────
+      // Terminate on switch TOP ROW FIRST before 2nd row
       if (torA && dataSourcePorts[0]) {
-        const torAPort = torA.ports[switchPortIdx[torA.id]];
+        const sortedPortsA = getSortedSwitchDataPorts(torA);
+        const torAPort = sortedPortsA[switchPortIdx[torA.id]];
         if (torAPort) {
           const pair = `${dataSourcePorts[0].id}|${torAPort.id}`;
           if (!existingPairs.has(pair)) {
@@ -193,7 +223,8 @@ export class CableLayingOrchestrator {
       }
 
       if (torB && dataSourcePorts[1]) {
-        const torBPort = torB.ports[switchPortIdx[torB.id]];
+        const sortedPortsB = getSortedSwitchDataPorts(torB);
+        const torBPort = sortedPortsB[switchPortIdx[torB.id]];
         if (torBPort) {
           const pair = `${dataSourcePorts[1].id}|${torBPort.id}`;
           if (!existingPairs.has(pair)) {
@@ -206,7 +237,8 @@ export class CableLayingOrchestrator {
 
       // ── Management cables (via right ear iDRAC/iLO/BMC hole) ──────
       if (oobSwitch && mgmtSourcePorts.length > 0) {
-        const oobPort = oobSwitch.ports[oobPortIdx];
+        const sortedMgmtPorts = getSortedSwitchMgmtPorts(oobSwitch);
+        const oobPort = sortedMgmtPorts[oobPortIdx];
         if (oobPort) {
           const mgmtSide: 'left' | 'right' = earRightMgmt.length > 0 ? 'right' : 'left';
           const pair = `${mgmtSourcePorts[0].id}|${oobPort.id}`;

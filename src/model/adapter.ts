@@ -475,7 +475,7 @@ export class ModelMigrationAdapter {
         sourcePortId: c.sourcePort,
         destPortId: c.destinationPort,
         bendPoints: existing?.bendPoints || [],
-        thickness: existing?.thickness || 2.2,
+        thickness: existing?.thickness || 2,
         bendRadius: existing?.bendRadius || 22,
         bundleId: existing?.bundleId || null,
         notes: c.purpose,

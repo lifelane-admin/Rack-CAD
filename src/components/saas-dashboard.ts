@@ -561,6 +561,7 @@ export class SaaSWorkspaceDashboard {
     // Quick Actions
     this.container.querySelector('#quick-build-rack')?.addEventListener('click', () => {
       this.hide();
+      EventBus.emit('sidebar:reset-search' as any, undefined);
       EventBus.emit('view:switch', 'rack');
       EventBus.emit('notification', { message: '🖥️ Rack Elevation Builder initialized', type: 'info' });
     });
@@ -596,18 +597,21 @@ export class SaaSWorkspaceDashboard {
 
     this.container.querySelector('#dash-stat-racks')?.addEventListener('click', () => {
       this.hide();
+      EventBus.emit('sidebar:reset-search' as any, undefined);
       EventBus.emit('view:switch', 'rack');
       EventBus.emit('notification', { message: '🖥️ Rack Elevation Builder opened', type: 'info' });
     });
 
     this.container.querySelector('#dash-stat-halls')?.addEventListener('click', () => {
       this.hide();
+      EventBus.emit('sidebar:reset-search' as any, undefined);
       EventBus.emit('view:switch', 'datacenter');
       EventBus.emit('notification', { message: '🏢 Datacenter Hall 2D/3D Builder opened', type: 'info' });
     });
 
     this.container.querySelector('#dash-stat-cloud')?.addEventListener('click', () => {
       this.hide();
+      EventBus.emit('sidebar:reset-search' as any, undefined);
       EventBus.emit('view:switch', 'cloud');
       EventBus.emit('notification', { message: '☁️ Cloud Architecture Designer opened', type: 'info' });
     });
@@ -636,6 +640,7 @@ export class SaaSWorkspaceDashboard {
 
         if (view === 'rack' || view === 'datacenter' || view === 'cloud') {
           this.hide();
+          EventBus.emit('sidebar:reset-search' as any, undefined);
           EventBus.emit('view:switch', view as any);
           const modName = MODULE_NAV.find(m => m.id === id)?.label || view;
           EventBus.emit('notification', { message: `🚀 ${modName} module opened`, type: 'info' });
@@ -770,6 +775,7 @@ export class SaaSWorkspaceDashboard {
         if (template) {
           const newProj = projectStore.createProjectFromTemplate(template);
           this.hide();
+          EventBus.emit('sidebar:reset-search' as any, undefined);
           this.onOpenProjectCallback(newProj, template.targetCategory);
           EventBus.emit('notification', { message: `🚀 Template "${template.title}" loaded onto canvas!`, type: 'success' });
         }
@@ -809,6 +815,7 @@ export class SaaSWorkspaceDashboard {
           if (proj) {
             projectStore.setActiveProjectId(proj.id);
             this.hide();
+            EventBus.emit('sidebar:reset-search' as any, undefined);
             this.onOpenProjectCallback(proj, proj.category);
           }
         }
@@ -848,6 +855,7 @@ export class SaaSWorkspaceDashboard {
     if (name && name.trim()) {
       const newProj = projectStore.createNewProject(name.trim(), 'rack');
       this.hide();
+      EventBus.emit('sidebar:reset-search' as any, undefined);
       this.onOpenProjectCallback(newProj, 'rack');
       EventBus.emit('notification', { message: `✨ Project "${name.trim()}" created!`, type: 'success' });
     }

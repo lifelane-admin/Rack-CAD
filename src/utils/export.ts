@@ -1083,17 +1083,22 @@ export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables:
     if (d.templateId === 'sw-1u-tor-25g-100g' || d.id === 'dev-hv-sw-01') {
       const template = getTemplate(d.templateId);
       if (template && template.ports) {
-        // Fix hv-sw-p3: ensure it aligns with tor-sfp3 (SFP28 data port), NOT tor-mgmt
-        const sfp3 = template.ports.find(p => p.id === 'tor-sfp3');
-        const p3 = currentPorts.find(p => p.id === 'hv-sw-p3');
-        if (p3 && sfp3) {
-          p3.relativeX = sfp3.relativeX;
-          p3.relativeY = sfp3.relativeY;
-          p3.portW = sfp3.portW;
-          p3.portH = sfp3.portH;
-          p3.type = sfp3.type;
-          p3.speed = sfp3.speed;
-        }
+        // Terminate on top row first: hv-sw-p1 -> tor-sfp1, hv-sw-p2 -> tor-sfp3, hv-sw-p3 -> tor-sfp5
+        const alignPort = (customPortId: string, templatePortId: string) => {
+          const tp = template.ports.find(p => p.id === templatePortId);
+          const cp = currentPorts.find(p => p.id === customPortId);
+          if (cp && tp) {
+            cp.relativeX = tp.relativeX;
+            cp.relativeY = tp.relativeY;
+            cp.portW = tp.portW;
+            cp.portH = tp.portH;
+            cp.type = tp.type;
+            cp.speed = tp.speed;
+          }
+        };
+        alignPort('hv-sw-p1', 'tor-sfp1');
+        alignPort('hv-sw-p2', 'tor-sfp3');
+        alignPort('hv-sw-p3', 'tor-sfp5');
       }
     }
 
@@ -1183,17 +1188,25 @@ export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables:
       
       if (isSw && destPort && (destPort.id.includes('mgmt') || destPort.id.includes('console') || destPort.name.toLowerCase().includes('mgmt') || destPort.name.toLowerCase().includes('console') || destPort.type === 'management' || destPort.type === 'console')) {
         // Re-map to the first available high-speed data port (SFP28, SFP, or RJ45 data port) on this switch
-        const availDataPort = (destDev.ports || []).find(p => 
-          !p.id.includes('-ear-') &&
-          !p.id.includes('mgmt') &&
-          !p.id.includes('console') &&
-          !p.name.toLowerCase().includes('mgmt') &&
-          !p.name.toLowerCase().includes('console') &&
-          p.type !== 'management' &&
-          p.type !== 'console' &&
-          !p.connected &&
-          p.id !== destPortId
-        );
+        // Terminate on TOP ROW FIRST before 2nd row (smaller relativeY first, then left-to-right)
+        const availDataPort = (destDev.ports || [])
+          .filter(p =>
+            !p.id.includes('-ear-') &&
+            !p.id.includes('mgmt') &&
+            !p.id.includes('console') &&
+            !p.name.toLowerCase().includes('mgmt') &&
+            !p.name.toLowerCase().includes('console') &&
+            p.type !== 'management' &&
+            p.type !== 'console' &&
+            p.type !== 'power' &&
+            !p.connected &&
+            p.id !== destPortId
+          )
+          .sort((a, b) => {
+            const yDiff = a.relativeY - b.relativeY;
+            if (Math.abs(yDiff) > 2) return yDiff;
+            return a.relativeX - b.relativeX;
+          })[0];
         if (availDataPort) {
           destPortId = availDataPort.id;
           availDataPort.connected = true;
@@ -1320,14 +1333,30 @@ export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables:
         const isTorB = c.type === 'ceph-secondary' || c.name?.includes('TOR B') || c.name?.includes('Secondary') || (idx % 2 === 1 && c.type !== 'idrac');
         const targetSwitch = (isTorB && switchesInRack.length > 1) ? switchesInRack[1] : switchesInRack[0];
         
+        const candidatePorts = (targetSwitch.ports || [])
+          .filter(p =>
+            !p.id.includes('-ear-') &&
+            !p.id.includes('mgmt') &&
+            !p.id.includes('console') &&
+            p.type !== 'management' &&
+            p.type !== 'console' &&
+            p.type !== 'power' &&
+            !p.connected &&
+            p.id !== destPortId
+          )
+          .sort((a, b) => {
+            // 1st terminate on top row only, then on 2nd row (smaller relativeY first, then left-to-right)
+            const yDiff = a.relativeY - b.relativeY;
+            if (Math.abs(yDiff) > 2) return yDiff;
+            return a.relativeX - b.relativeX;
+          });
+
         let targetPort: PortData | null = null;
         if (c.type === 'ceph-primary' || c.type === 'ceph-secondary' || c.type === 'live-migration') {
-          const availSfp = (targetSwitch.ports || []).find(p => p.type === 'sfp' && !p.connected && p.id !== destPortId);
-          if (availSfp) targetPort = availSfp;
+          targetPort = candidatePorts.find(p => p.type === 'sfp' || p.type === 'sfp28') || null;
         }
         if (!targetPort) {
-          const availRj45 = (targetSwitch.ports || []).find(p => p.type === 'rj45' && !p.id.includes('-ear-') && !p.connected && p.id !== destPortId);
-          if (availRj45) targetPort = availRj45;
+          targetPort = candidatePorts.find(p => p.type === 'rj45') || candidatePorts[0] || null;
         }
         if (targetPort) {
           destPortId = targetPort.id;
