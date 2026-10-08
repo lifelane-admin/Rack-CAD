@@ -473,12 +473,12 @@
   padding: 0;
 }
 
-/* Datacenter panoramic backdrop with smooth left gradient fade */
+/* Datacenter panoramic backdrop with clean left gradient fade */
 .saas-dashboard-container .hero-bg {
   position: absolute;
   top: 0;
   right: 0;
-  width: 85%;
+  width: 90%;
   height: 100%;
   pointer-events: none;
   z-index: 0;
@@ -490,23 +490,20 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 38%;
-  /* Fade from subtle/transparent (left) to full clarity (right) */
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 20%, rgba(0,0,0,0.85) 55%, #000 80%);
-  mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 20%, rgba(0,0,0,0.85) 55%, #000 80%);
-  filter: saturate(1.2) contrast(1.1) brightness(0.9);
+  object-position: center 42%;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
+  /* Crisp directional fade leaving the server racks in full razor-sharp clarity */
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.1) 12%, rgba(0,0,0,0.6) 28%, #000 48%);
+  mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.1) 12%, rgba(0,0,0,0.6) 28%, #000 48%);
+  filter: contrast(1.06) brightness(0.96);
 }
 
 .saas-dashboard-container .hero-bloom {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background: radial-gradient(55% 70% at 70% 30%, rgba(56, 189, 248, 0.18), transparent 75%),
-              radial-gradient(35% 50% at 95% 80%, rgba(37, 99, 235, 0.15), transparent 70%);
+  display: none;
 }
 
-/* Full-width dark gradient that overlays the bottom of the hero */
+/* Subtle edge blend overlay to ground the hero neatly into the dashboard background */
 .saas-dashboard-container .hero-section::after {
   content: '';
   position: absolute;
@@ -515,11 +512,11 @@
   z-index: 1;
   background: linear-gradient(90deg,
     var(--bg) 0%,
-    var(--bg) 28%,
-    rgba(5, 11, 23, 0.75) 48%,
-    transparent 70%
+    var(--bg) 20%,
+    rgba(5, 11, 23, 0.4) 35%,
+    transparent 50%
   ),
-  linear-gradient(180deg, transparent 60%, var(--bg) 100%);
+  linear-gradient(180deg, transparent 75%, var(--bg) 100%);
 }
 
 /* Hero inner: left text | right pills */
