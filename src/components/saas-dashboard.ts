@@ -114,7 +114,7 @@ const MODULE_NAV = [
   {
     id: 'mod-design-hub',
     label: 'Design Hub',
-    iconImg: '/assets/dashboard/icons/datacenter-icon.png',
+    iconImg: '/assets/dashboard/icons/design-hub-icon.png',
     fallbackIcon: '🌐',
     view: 'design-hub',
     color: '#0284c7',
