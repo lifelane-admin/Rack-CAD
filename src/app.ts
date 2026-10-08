@@ -73,6 +73,11 @@ import { showStartupModal, StartupChoice } from './components/startup-modal';
 import { SaaSWorkspaceDashboard } from './components/saas-dashboard';
 import { autoSaveManager } from './storage/autosave-manager';
 import { recoveryBanner } from './components/recovery-banner';
+import { designHubView } from './components/design-hub-view';
+import { publishDesignModal } from './components/publish-design-modal';
+import { socialShareModal } from './components/social-share-modal';
+import { designDetailModal } from './components/design-detail-modal';
+import { PublishedArchitecture } from './community/design-hub-types';
 
 type CloudConnectorSegmentKind = 'entryStub' | 'entry' | 'crossbar' | 'exit' | 'exitStub';
 /** Maps a dragged segment's `kind` (see routeHandlesFor() in cloud-connector-renderer.ts) to the
@@ -491,6 +496,26 @@ export class App {
 
     eventBus.on('export:report', () => {
       eventBus.emit('reports:toggle');
+    });
+
+    eventBus.on('design-hub:open' as any, () => {
+      this.showDesignHub();
+    });
+
+    eventBus.on('design:publish' as any, () => {
+      publishDesignModal.open();
+    });
+
+    eventBus.on('design:share' as any, (design: PublishedArchitecture) => {
+      socialShareModal.open(design);
+    });
+
+    eventBus.on('design:detail' as any, (design: PublishedArchitecture) => {
+      designDetailModal.open(design);
+    });
+
+    eventBus.on('design:open-in-builder' as any, (design: PublishedArchitecture) => {
+      this.openDesignInBuilder(design);
     });
 
     // Initialize toast notifications — every export/save/undo/redo/etc. success or failure is
@@ -6242,6 +6267,9 @@ export class App {
     const rackViewport = document.getElementById('canvas-viewport');
     const cloudViewport = document.getElementById('cloud-viewport');
     const dcViewport = document.getElementById('dc-viewport');
+    const designHubViewport = document.getElementById('design-hub-viewport');
+    designHubViewport?.classList.add('hidden');
+    designHubView.unmount();
     const hybridSplitter = document.getElementById('splitter-hybrid');
     const splitter = document.getElementById('splitter-3d');
     const rulerCorner = document.getElementById('ruler-corner');
@@ -6288,6 +6316,52 @@ export class App {
       document.getElementById('rack-empty-canvas-prompt')?.remove();
     }
     if (isDc) this.buildFloorView?.show();
+  }
+
+  showDesignHub(): void {
+    const rackViewport = document.getElementById('canvas-viewport');
+    const cloudViewport = document.getElementById('cloud-viewport');
+    const dcViewport = document.getElementById('dc-viewport');
+    const designHubViewport = document.getElementById('design-hub-viewport');
+
+    rackViewport?.classList.add('hidden');
+    cloudViewport?.classList.add('hidden');
+    dcViewport?.classList.add('hidden');
+
+    if (designHubViewport) {
+      designHubViewport.classList.remove('hidden');
+      designHubView.mount(designHubViewport);
+    }
+  }
+
+  openDesignInBuilder(design: PublishedArchitecture): void {
+    const designHubViewport = document.getElementById('design-hub-viewport');
+    designHubViewport?.classList.add('hidden');
+    designHubView.unmount();
+
+    if (design.dataJson && design.dataJson !== '{}') {
+      try {
+        importJSON(design.dataJson);
+        autoSaveManager.markExplicitlySaved(design.title);
+      } catch (e) {
+        console.warn('Failed to load design data:', e);
+      }
+    }
+
+    const target = design.targetCategory || 'rack';
+    if (target === 'datacenter') {
+      stateManager.setState({ workflowMode: 'datacenter' });
+      eventBus.emit('view:switch', 'datacenter');
+    } else if (target === 'cloud' || target === 'hybrid') {
+      stateManager.setState({ workflowMode: 'cloud', activeElevationRackId: null });
+      eventBus.emit('view:switch', target);
+    } else {
+      stateManager.setState({ workflowMode: 'rack', activeElevationRackId: null });
+      eventBus.emit('view:switch', 'rack');
+    }
+
+    this.renderAll();
+    this.renderCloudAll();
   }
 
   /** Re-renders every CloudContainer/CloudNode/CloudConnector from current state. Mirrors

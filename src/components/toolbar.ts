@@ -149,6 +149,9 @@ export class Toolbar {
       'sep',
       { label: 'Recover Previous Session…', icon: ICONS.vault, action: () => EventBus.emit('autosave:open-vault' as any, undefined) },
       'sep',
+      { label: '🚀 Publish to Design Hub…', icon: '🚀', action: () => EventBus.emit('design:publish' as any, undefined) },
+      { label: '🌐 Open Design Hub…', icon: '🌐', action: () => EventBus.emit('design-hub:open' as any, undefined) },
+      'sep',
       { label: 'Load Demo…', icon: ICONS.demo, action: () => EventBus.emit('file:demo', undefined) },
       { label: 'Insert Image…', icon: ICONS.image, action: () => EventBus.emit('image:insert' as any, undefined) },
     ]);
@@ -272,6 +275,24 @@ export class Toolbar {
     dashBtn.title = 'Open SaaS Workspace & Projects Dashboard';
     dashBtn.addEventListener('click', () => EventBus.emit('saas:open-dashboard', undefined));
     right.appendChild(dashBtn);
+
+    // Design Hub launcher button
+    const hubBtn = document.createElement('button');
+    hubBtn.className = 'toolbar-btn-pill';
+    hubBtn.style.cssText = 'background:rgba(168,85,247,0.15);border:1px solid rgba(192,132,252,0.4);color:#c084fc;font-weight:700;font-size:12px;border-radius:6px;padding:4px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;';
+    hubBtn.innerHTML = '<span style="font-size:14px;">🌐</span> <span>Design Hub</span>';
+    hubBtn.title = 'Explore Community Architecture Blueprints';
+    hubBtn.addEventListener('click', () => EventBus.emit('design-hub:open' as any, undefined));
+    right.appendChild(hubBtn);
+
+    // 🚀 Publish to Design Hub button
+    const publishBtn = document.createElement('button');
+    publishBtn.className = 'toolbar-btn-pill tb-publish-btn';
+    publishBtn.style.cssText = 'display:flex;align-items:center;gap:6px;background:linear-gradient(135deg, rgba(2,132,199,0.35) 0%, rgba(37,99,235,0.35) 100%);border:1px solid rgba(56,189,248,0.55);color:#38bdf8;font-weight:700;font-size:12px;padding:4px 12px;border-radius:6px;cursor:pointer;transition:all 0.15s ease;white-space:nowrap;';
+    publishBtn.innerHTML = '<span style="font-size:13px;">🚀</span> <span>Publish to Design Hub</span>';
+    publishBtn.title = 'Publish current architecture to Design Hub (Private, Invite Only, or Public)';
+    publishBtn.onclick = () => EventBus.emit('design:publish' as any, undefined);
+    right.appendChild(publishBtn);
 
     // Float toggle
     const floatToggle = document.createElement('button');

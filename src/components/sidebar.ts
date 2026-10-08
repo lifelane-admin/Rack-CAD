@@ -143,16 +143,19 @@ export class Sidebar {
       this.toggleCollapse();
     });
 
-    // Quick Navigation Bar: 1-click switch between Landing Page & SaaS Projects Hub
+    // Quick Navigation Bar: 1-click switch between Landing Page, Projects Hub & Design Hub
     const quickBar = document.createElement('div');
     quickBar.className = 'sb-quickbar';
-    quickBar.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 10px;background:#161b22;border-bottom:1px solid rgba(255,255,255,0.06);font-size:11px;';
+    quickBar.style.cssText = 'display:flex;align-items:center;gap:4px;padding:6px 8px;background:#161b22;border-bottom:1px solid rgba(255,255,255,0.06);font-size:11px;';
     quickBar.innerHTML = `
-      <button id="sb-quick-landing" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.22);color:#38bdf8;padding:4px 6px;border-radius:4px;font-weight:600;font-size:11px;cursor:pointer;transition:all 0.15s ease;" title="Open Design Launchpad & Landing Page">
-        <span style="font-size:12px;">🏠</span> <span>Landing Page</span>
+      <button id="sb-quick-landing" style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.22);color:#38bdf8;padding:4px 4px;border-radius:4px;font-weight:600;font-size:10px;cursor:pointer;transition:all 0.15s ease;" title="Open Design Launchpad & Landing Page">
+        <span style="font-size:11px;">🏠</span> <span>Home</span>
       </button>
-      <button id="sb-quick-projects" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#c9d1d9;padding:4px 6px;border-radius:4px;font-weight:600;font-size:11px;cursor:pointer;transition:all 0.15s ease;" title="Open SaaS Projects Hub & Dashboard">
-        <span style="font-size:12px;">📁</span> <span>Projects Hub</span>
+      <button id="sb-quick-projects" style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#c9d1d9;padding:4px 4px;border-radius:4px;font-weight:600;font-size:10px;cursor:pointer;transition:all 0.15s ease;" title="Open SaaS Projects Hub & Dashboard">
+        <span style="font-size:11px;">📁</span> <span>Projects</span>
+      </button>
+      <button id="sb-quick-hub" style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:#c084fc;padding:4px 4px;border-radius:4px;font-weight:600;font-size:10px;cursor:pointer;transition:all 0.15s ease;" title="Open Architecture Design Hub & Community">
+        <span style="font-size:11px;">🌐</span> <span>Hub</span>
       </button>
     `;
     quickBar.querySelector('#sb-quick-landing')?.addEventListener('click', () => {
@@ -160,6 +163,9 @@ export class Sidebar {
     });
     quickBar.querySelector('#sb-quick-projects')?.addEventListener('click', () => {
       EventBus.emit('saas:open-dashboard' as any, undefined);
+    });
+    quickBar.querySelector('#sb-quick-hub')?.addEventListener('click', () => {
+      EventBus.emit('design-hub:open' as any, undefined);
     });
 
     // Workspace tab bar (replaces nav tree)

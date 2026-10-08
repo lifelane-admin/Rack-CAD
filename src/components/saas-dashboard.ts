@@ -111,6 +111,15 @@ const MODULE_NAV = [
     color: '#6366f1',
     glow: 'rgba(99, 102, 241, 0.45)'
   },
+  {
+    id: 'mod-design-hub',
+    label: 'Design Hub',
+    iconImg: '/assets/dashboard/icons/datacenter-icon.png',
+    fallbackIcon: '🌐',
+    view: 'design-hub',
+    color: '#0284c7',
+    glow: 'rgba(2, 132, 199, 0.45)'
+  },
 ] as const;
 
 export class SaaSWorkspaceDashboard {
@@ -274,6 +283,12 @@ export class SaaSWorkspaceDashboard {
               </svg>
               <span>Reports</span>
             </a>
+            <a href="#" class="nav-item" id="dash-nav-design-hub" style="color: #38bdf8;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+              <span>Design Hub</span>
+            </a>
             <a href="#" class="nav-item" id="dash-nav-settings">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                 <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
@@ -318,6 +333,9 @@ export class SaaSWorkspaceDashboard {
                 </button>
                 <button class="saas-action-pill pill-ai" id="quick-ask-ai">
                   <span>🤖</span> Ask AI Studio
+                </button>
+                <button class="saas-action-pill" id="quick-design-hub" style="border-color: rgba(56,189,248,0.4); color: #38bdf8;">
+                  <span>🌐</span> Design Hub
                 </button>
               </div>
             </div>
@@ -588,6 +606,11 @@ export class SaaSWorkspaceDashboard {
       EventBus.emit('ai:studio-open' as any, undefined);
     });
 
+    this.container.querySelector('#quick-design-hub')?.addEventListener('click', () => {
+      this.hide();
+      EventBus.emit('design-hub:open' as any, undefined);
+    });
+
     // 4 Stat Cards Click Handlers
     this.container.querySelector('#dash-stat-projects')?.addEventListener('click', () => {
       this.currentFilterCategory = 'all-projects';
@@ -635,6 +658,11 @@ export class SaaSWorkspaceDashboard {
         if (id === 'mod-templates') {
           this.currentFilterCategory = 'template';
           this.render();
+          return;
+        }
+        if (id === 'mod-design-hub' || view === 'design-hub') {
+          this.hide();
+          EventBus.emit('design-hub:open' as any, undefined);
           return;
         }
 
@@ -740,6 +768,13 @@ export class SaaSWorkspaceDashboard {
       e.preventDefault();
       this.hide();
       EventBus.emit('export:report' as any, undefined);
+    });
+
+    // Design Hub Link
+    this.container.querySelector('#dash-nav-design-hub')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.hide();
+      EventBus.emit('design-hub:open' as any, undefined);
     });
 
     // Settings Link
