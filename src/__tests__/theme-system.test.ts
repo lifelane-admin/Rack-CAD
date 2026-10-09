@@ -74,4 +74,33 @@ describe('Theme & Design Template System', () => {
     expect(localStorage.getItem('rackslicer_theme')).toBe('slate-light');
     expect(localStorage.getItem('rackslicer_design_theme')).toBe('high-contrast-accessible');
   });
+
+  it('updates ThemeModal cards in-place without destroying modal overlay', async () => {
+    const { ThemeModal } = await import('../components/theme-modal');
+    const modal = new ThemeModal();
+    modal.open();
+
+    const overlay = document.querySelector('.theme-modal-overlay');
+    expect(overlay).toBeTruthy();
+
+    const lightCard = overlay?.querySelector('[data-theme-id="light"]') as HTMLElement;
+    expect(lightCard).toBeTruthy();
+    expect(lightCard.classList.contains('active')).toBe(false);
+
+    // Simulate clicking Clean Lite theme
+    lightCard.click();
+
+    // Verify state updated
+    expect(stateManager.getState().theme).toBe('light');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    expect(document.body.getAttribute('data-theme')).toBe('light');
+
+    // Verify card is now active in-place and overlay remains the same instance
+    expect(lightCard.classList.contains('active')).toBe(true);
+    const activeBadge = lightCard.querySelector('.theme-active-badge') as HTMLElement;
+    expect(activeBadge.style.display).toBe('block');
+
+    modal.close();
+    expect(document.querySelector('.theme-modal-overlay')).toBeNull();
+  });
 });

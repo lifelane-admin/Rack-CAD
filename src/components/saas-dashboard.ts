@@ -554,14 +554,12 @@ export class SaaSWorkspaceDashboard {
       <div class="saas-tpl-card">
         <div class="saas-tpl-header">
           <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-            <span class="saas-tpl-badge ${tpl.recommendedBadge ? 'recommended' : ''}">
-              ${tpl.recommendedBadge || tpl.categoryLabel}
-            </span>
+            ${tpl.recommendedBadge ? `<span class="saas-tpl-badge recommended">${tpl.recommendedBadge}</span>` : ''}
             <span class="badge-origin ${tpl.generationSource === 'ai-generated' ? 'badge-ai-origin' : 'badge-human-origin'}">
               ${tpl.generationSource === 'ai-generated' ? '🤖 AI Generated' : '👤 Human Generated'}
             </span>
           </div>
-          <span style="font-size:11px; color:#64748b; font-weight:600;">${tpl.categoryLabel}</span>
+          <span class="saas-tpl-category">${tpl.categoryLabel}</span>
         </div>
         <h4 class="saas-tpl-title">${tpl.title}</h4>
         <p class="saas-tpl-desc">${tpl.description}</p>
@@ -570,7 +568,7 @@ export class SaaSWorkspaceDashboard {
         </div>
         <div class="saas-tpl-footer">
           <div style="display:flex; gap:8px; align-items:center; width:100%; justify-content:flex-end;">
-            <button class="saas-tpl-excel-btn" data-tpl-id="${tpl.id}" title="Download Architecture Blueprint Excel (.xlsx) with Cable Schedules & BOM" style="background:rgba(16, 185, 129, 0.15); border:1px solid rgba(16, 185, 129, 0.4); color:#34d399; font-size:11px; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:5px; transition: all 0.2s ease;">
+            <button class="saas-tpl-excel-btn" data-tpl-id="${tpl.id}" title="Download Architecture Blueprint Excel (.xlsx) with Cable Schedules & BOM">
               📊 Blueprint
             </button>
             <button class="saas-tpl-use-btn" data-tpl-id="${tpl.id}" style="padding:6px 14px;">

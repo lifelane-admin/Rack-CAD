@@ -235,11 +235,9 @@ export class ThemeModal {
 
                     <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">${t.description}</div>
                     
-                    ${isSelected ? `
-                      <div style="position: absolute; top: -8px; right: 8px; background: var(--accent-primary); color: #fff; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 10px;">
-                        ✓ ACTIVE
-                      </div>
-                    ` : ''}
+                    <div class="theme-active-badge" style="position: absolute; top: -8px; right: 8px; background: var(--accent-primary); color: #fff; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 10px; display: ${isSelected ? 'block' : 'none'};">
+                      ✓ ACTIVE
+                    </div>
                   </div>
                 `;
               }).join('')}
@@ -287,11 +285,9 @@ export class ThemeModal {
                       </span>
                     </div>
 
-                    ${isSelected ? `
-                      <div style="position: absolute; top: -8px; right: 8px; background: var(--accent-primary); color: #fff; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 10px;">
-                        ✓ ACTIVE
-                      </div>
-                    ` : ''}
+                    <div class="theme-active-badge" style="position: absolute; top: -8px; right: 8px; background: var(--accent-primary); color: #fff; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 10px; display: ${isSelected ? 'block' : 'none'};">
+                      ✓ ACTIVE
+                    </div>
                   </div>
                 `;
               }).join('')}
@@ -314,6 +310,34 @@ export class ThemeModal {
 
     document.body.appendChild(this.overlay);
     this.attachEventListeners();
+  }
+
+  private updateActiveThemeCard(themeId: Theme): void {
+    if (!this.overlay) return;
+    this.overlay.querySelectorAll<HTMLElement>('.theme-card').forEach(card => {
+      const isSelected = card.getAttribute('data-theme-id') === themeId;
+      card.classList.toggle('active', isSelected);
+      card.style.borderColor = isSelected ? 'var(--accent-primary)' : 'var(--border-color)';
+      card.style.background = isSelected ? 'var(--btn-mode-active-bg)' : 'var(--bg-app)';
+      const badge = card.querySelector<HTMLElement>('.theme-active-badge');
+      if (badge) {
+        badge.style.display = isSelected ? 'block' : 'none';
+      }
+    });
+  }
+
+  private updateActiveTemplateCard(tmplId: DesignThemeTemplate): void {
+    if (!this.overlay) return;
+    this.overlay.querySelectorAll<HTMLElement>('.design-template-card').forEach(card => {
+      const isSelected = card.getAttribute('data-template-id') === tmplId;
+      card.classList.toggle('active', isSelected);
+      card.style.borderColor = isSelected ? 'var(--accent-primary)' : 'var(--border-color)';
+      card.style.background = isSelected ? 'var(--btn-mode-active-bg)' : 'var(--bg-app)';
+      const badge = card.querySelector<HTMLElement>('.theme-active-badge');
+      if (badge) {
+        badge.style.display = isSelected ? 'block' : 'none';
+      }
+    });
   }
 
   private attachEventListeners(): void {
@@ -343,8 +367,8 @@ export class ThemeModal {
         document.body.setAttribute('data-theme', themeId);
         EventBus.emit('theme:changed', themeId);
 
-        // Re-render modal to refresh selection UI
-        this.render();
+        // Update card active state in-place with 0ms DOM churn
+        this.updateActiveThemeCard(themeId);
       });
     });
 
@@ -363,8 +387,8 @@ export class ThemeModal {
         document.body.setAttribute('data-design-theme', tmplId);
         EventBus.emit('design-theme:changed', tmplId);
 
-        // Re-render modal to refresh selection UI
-        this.render();
+        // Update template active state in-place with 0ms DOM churn
+        this.updateActiveTemplateCard(tmplId);
       });
     });
 
@@ -385,7 +409,8 @@ export class ThemeModal {
       EventBus.emit('theme:changed', defaultTheme);
       EventBus.emit('design-theme:changed', defaultDesignTheme);
 
-      this.render();
+      this.updateActiveThemeCard(defaultTheme);
+      this.updateActiveTemplateCard(defaultDesignTheme);
     });
   }
 }

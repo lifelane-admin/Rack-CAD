@@ -1031,10 +1031,6 @@ export class App {
       } catch (_) {}
       document.documentElement.setAttribute('data-theme', newTheme);
       document.body.setAttribute('data-theme', newTheme);
-      if (this.saasDashboard) {
-        this.saasDashboard.render();
-      }
-      this.renderAll();
     });
 
     (eventBus as any).on('design-theme:changed', (newDesignTheme: any) => {
@@ -1056,10 +1052,7 @@ export class App {
       } catch (_) {}
       document.documentElement.setAttribute('data-theme', newTheme);
       document.body.setAttribute('data-theme', newTheme);
-      if (this.saasDashboard) {
-        this.saasDashboard.render();
-      }
-      this.renderAll();
+      (eventBus as any).emit('theme:changed', newTheme);
     });
 
     (eventBus as any).on('view:toggle-legends', () => {
