@@ -202,6 +202,8 @@ export class Toolbar {
       { label: '3D Panel', icon: ICONS.threeD, action: () => EventBus.emit('view:toggle-3d-panel', undefined) },
       { label: 'Theme & Design Studio…', icon: '🎨', action: () => EventBus.emit('view:open-theme-modal' as any, undefined) },
       { label: 'Toggle Light/Dark Theme', icon: ICONS.theme, action: () => EventBus.emit('view:toggle-theme', undefined) },
+      'sep',
+      { label: 'My Profile & Showcase…', icon: '👤', action: () => showUserProfileModal(() => this.render()) },
     ]);
     menuBar.appendChild(viewMenu);
 

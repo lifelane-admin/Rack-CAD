@@ -78,6 +78,7 @@ import { publishDesignModal } from './components/publish-design-modal';
 import { socialShareModal } from './components/social-share-modal';
 import { designDetailModal } from './components/design-detail-modal';
 import { ThemeModal } from './components/theme-modal';
+import { showUserProfileModal } from './components/user-profile-modal';
 import { PublishedArchitecture } from './community/design-hub-types';
 
 type CloudConnectorSegmentKind = 'entryStub' | 'entry' | 'crossbar' | 'exit' | 'exitStub';
@@ -1022,6 +1023,10 @@ export class App {
 
     (eventBus as any).on('view:open-theme-modal', () => {
       this.themeModal.open();
+    });
+
+    (eventBus as any).on('view:open-profile-modal', (tab?: any) => {
+      showUserProfileModal(undefined, tab || 'showcase');
     });
 
     (eventBus as any).on('theme:changed', (newTheme: any) => {

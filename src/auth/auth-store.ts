@@ -20,12 +20,53 @@ export interface Workspace {
   type: 'personal' | 'team' | 'customer';
 }
 
+export interface UserAchievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  earnedDate: string;
+  category: 'architecture' | 'cabling' | 'ai' | 'compliance' | 'efficiency';
+  highlightBadge?: string;
+  shareable?: boolean;
+}
+
+export interface UserShowcaseProject {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  rackCount?: number;
+  ruCount?: number;
+  date: string;
+  isPublished?: boolean;
+  featured?: boolean;
+}
+
+export interface UserProfileStats {
+  racksDesigned: number;
+  totalRuDeployed: number;
+  cablesRouted: number;
+  pueOptimized: number;
+  designsPublished: number;
+}
+
 export interface AuthUser {
   id: string;
   email: string;
   name: string;
   avatarUrl?: string;
   company?: string;
+  title?: string;
+  bio?: string;
+  location?: string;
+  linkedinUrl?: string;
+  githubUrl?: string;
+  websiteUrl?: string;
+  skills?: string[];
+  achievements?: UserAchievement[];
+  showcaseProjects?: UserShowcaseProject[];
+  stats?: UserProfileStats;
   role: 'owner' | 'admin' | 'architect' | 'engineer' | 'viewer';
   plan: 'free' | 'pro' | 'enterprise';
   createdAt: string;
@@ -69,13 +110,105 @@ const DEFAULT_ORG: Organization = {
   membersCount: 16,
 };
 
+export const DEFAULT_ACHIEVEMENTS: UserAchievement[] = [
+  {
+    id: 'ach-tier4',
+    title: 'Tier IV Hyperscale Architect',
+    description: 'Engineered multi-hall mission-critical datacenter infrastructure with dual-active power feeds and concurrent maintainability.',
+    icon: '🏆',
+    earnedDate: 'Oct 2026',
+    category: 'architecture',
+    highlightBadge: 'Master Level',
+    shareable: true,
+  },
+  {
+    id: 'ach-cables',
+    title: 'Zero-Crossing Optical Master',
+    description: 'Constructed 340+ single-mode fiber and copper runs with 100% compliant bend radius and zero cable runway bottlenecks.',
+    icon: '⚡',
+    earnedDate: 'Sep 2026',
+    category: 'cabling',
+    highlightBadge: 'Certified',
+    shareable: true,
+  },
+  {
+    id: 'ach-ai-copilot',
+    title: 'AI Copilot Pioneer',
+    description: 'Generated and refined 50+ enterprise architectures using RackSlicer AI Studio natural language synthesis.',
+    icon: '🤖',
+    earnedDate: 'Aug 2026',
+    category: 'ai',
+    highlightBadge: 'Pioneer',
+    shareable: true,
+  },
+  {
+    id: 'ach-pue-eco',
+    title: 'PUE 1.14 Eco Champion',
+    description: 'Optimized airflow CFD and cold-aisle containment, slashing datacenter thermal overhead to an ultra-efficient 1.14 PUE.',
+    icon: '🌿',
+    earnedDate: 'Jul 2026',
+    category: 'efficiency',
+    highlightBadge: 'Eco Pro',
+    shareable: true,
+  },
+  {
+    id: 'ach-true-scale',
+    title: 'True-Scale Precisionist',
+    description: 'Drafted millimeter-accurate 48U server enclosures with modular equipment alignment and custom door specifications.',
+    icon: '📐',
+    earnedDate: 'Jun 2026',
+    category: 'compliance',
+    highlightBadge: 'Standard',
+    shareable: true,
+  },
+  {
+    id: 'ach-excel-bom',
+    title: 'Enterprise Excel & BOM Master',
+    description: 'Produced 25-sheet master workbooks with complete port schedules, power budgets, and itemized bill-of-materials.',
+    icon: '📊',
+    earnedDate: 'May 2026',
+    category: 'compliance',
+    highlightBadge: 'Executive',
+    shareable: true,
+  },
+];
+
+export const DEFAULT_SKILLS: string[] = [
+  '48U High-Density Server Racks',
+  'Spine-and-Leaf Fiber Architecture (OS2 / MTP-12)',
+  'Top-of-Rack Switch Stacking',
+  'Liquid Cooling & Rear Door Heat Exchangers',
+  'ANSI/TIA-942 Tier IV Architecture',
+  'Thermal CFD & Hot/Cold Aisle Containment',
+  '3-Phase Power Distribution & PDU Budgeting',
+  'Three.js 3D Virtual Datacenter Inspection',
+  'Automated Cable Schedules & BOM Excel Export',
+];
+
+export const DEFAULT_STATS: UserProfileStats = {
+  racksDesigned: 68,
+  totalRuDeployed: 2840,
+  cablesRouted: 348,
+  pueOptimized: 1.14,
+  designsPublished: 12,
+};
+
 // Pre-seeded demo accounts
 const MOCK_PRESET_USERS: AuthUser[] = [
   {
     id: 'user-demo-srinivas',
     email: 'srinivas@rackslicer.io',
     name: 'Srinivas Anand',
+    title: 'Principal Datacenter Infrastructure Architect',
+    bio: 'Designing next-generation hyperscale datacenter halls, 48U high-density server racks, and AI compute clusters with zero-loss optical cable routing and sub-1.15 PUE thermal efficiency. ANSI/TIA-942 Tier IV certified.',
     company: 'Enterprise Infrastructure Architecture',
+    location: 'San Jose, CA & Hyderabad, India',
+    linkedinUrl: 'https://www.linkedin.com/in/srinivas-datacenter-architect',
+    githubUrl: 'https://github.com/rackslicer-architect',
+    websiteUrl: 'https://rackslicer.io',
+    skills: [...DEFAULT_SKILLS],
+    achievements: [...DEFAULT_ACHIEVEMENTS],
+    stats: { ...DEFAULT_STATS },
     role: 'architect',
     plan: 'enterprise',
     createdAt: new Date(Date.now() - 86400000 * 60).toISOString(),
@@ -92,7 +225,14 @@ const MOCK_PRESET_USERS: AuthUser[] = [
     id: 'user-demo-admin',
     email: 'admin@rackslicer.io',
     name: 'Alex Mercer',
+    title: 'Lead Systems Architect & Infrastructure Director',
+    bio: 'Managing enterprise datacenter deployments and cloud-edge interconnects across multi-site regions.',
     company: 'Nexus Datacenters',
+    location: 'Seattle, WA',
+    linkedinUrl: 'https://www.linkedin.com/in/alex-mercer-dc',
+    skills: ['Spine-and-Leaf Architecture', 'Multi-Site Interconnect', 'High-Density Racks', 'Power Budgeting'],
+    achievements: DEFAULT_ACHIEVEMENTS.slice(0, 3),
+    stats: { racksDesigned: 42, totalRuDeployed: 1760, cablesRouted: 210, pueOptimized: 1.18, designsPublished: 8 },
     role: 'admin',
     plan: 'pro',
     createdAt: new Date(Date.now() - 86400000 * 30).toISOString(),
@@ -103,7 +243,14 @@ const MOCK_PRESET_USERS: AuthUser[] = [
     id: 'user-demo-eng',
     email: 'engineer@enterprise.com',
     name: 'Sarah Chen',
+    title: 'Senior Network Cabling & Optical Systems Engineer',
+    bio: 'Specializing in MTP-12 fiber trunking, patch panel management, and structured cabling compliance.',
     company: 'CloudScale Infrastructure',
+    location: 'Austin, TX',
+    linkedinUrl: 'https://www.linkedin.com/in/sarah-chen-optical',
+    skills: ['Optical Fiber (OS2/OM4)', 'Structured Cabling', 'Cable Runway Design', 'Patch Panel Mapping'],
+    achievements: DEFAULT_ACHIEVEMENTS.slice(1, 4),
+    stats: { racksDesigned: 35, totalRuDeployed: 1420, cablesRouted: 290, pueOptimized: 1.19, designsPublished: 5 },
     role: 'engineer',
     plan: 'enterprise',
     createdAt: new Date(Date.now() - 86400000 * 15).toISOString(),
@@ -129,7 +276,20 @@ class AuthStore implements AuthService {
     const savedSession = localStorage.getItem(STORAGE_KEY_SESSION);
     if (savedSession) {
       try {
-        this.currentUser = JSON.parse(savedSession);
+        const parsed = JSON.parse(savedSession);
+        const defaults = this.createDefaultUser();
+        this.currentUser = {
+          ...defaults,
+          ...parsed,
+          skills: parsed.skills && parsed.skills.length > 0 ? parsed.skills : defaults.skills,
+          achievements: parsed.achievements && parsed.achievements.length > 0 ? parsed.achievements : defaults.achievements,
+          stats: parsed.stats || defaults.stats,
+          linkedinUrl: parsed.linkedinUrl || defaults.linkedinUrl,
+          title: parsed.title || defaults.title,
+          bio: parsed.bio || defaults.bio,
+          location: parsed.location || defaults.location,
+          company: parsed.company || defaults.company,
+        };
       } catch (e) {
         this.currentUser = this.createDefaultUser();
       }
