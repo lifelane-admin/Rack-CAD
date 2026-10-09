@@ -339,6 +339,7 @@ export class ThemeModal {
         try {
           localStorage.setItem('rackslicer_theme', themeId);
         } catch (_) {}
+        document.documentElement.setAttribute('data-theme', themeId);
         document.body.setAttribute('data-theme', themeId);
         EventBus.emit('theme:changed', themeId);
 
@@ -358,6 +359,7 @@ export class ThemeModal {
         try {
           localStorage.setItem('rackslicer_design_theme', tmplId);
         } catch (_) {}
+        document.documentElement.setAttribute('data-design-theme', tmplId);
         document.body.setAttribute('data-design-theme', tmplId);
         EventBus.emit('design-theme:changed', tmplId);
 
@@ -376,7 +378,9 @@ export class ThemeModal {
         localStorage.setItem('rackslicer_theme', defaultTheme);
         localStorage.setItem('rackslicer_design_theme', defaultDesignTheme);
       } catch (_) {}
+      document.documentElement.setAttribute('data-theme', defaultTheme);
       document.body.setAttribute('data-theme', defaultTheme);
+      document.documentElement.setAttribute('data-design-theme', defaultDesignTheme);
       document.body.setAttribute('data-design-theme', defaultDesignTheme);
       EventBus.emit('theme:changed', defaultTheme);
       EventBus.emit('design-theme:changed', defaultDesignTheme);

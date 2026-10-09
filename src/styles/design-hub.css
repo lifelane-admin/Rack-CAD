@@ -1138,3 +1138,70 @@
   font-size: 12px;
   outline: none;
 }
+
+/* ─── Universal Theme Adaptation for Design Hub ─── */
+[data-theme="light"] .design-hub-view {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .dh-hero {
+  background: #ffffff !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+
+[data-theme="light"] .dh-hero-title {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .dh-hero-desc {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .dh-kpi-card {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+[data-theme="light"] .dh-kpi-value {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .dh-kpi-label {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .dh-card {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+}
+
+[data-theme="light"] .dh-card-title {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .dh-card-desc {
+  color: #475569 !important;
+}
+
+[data-theme="slate-light"] .design-hub-view {
+  background: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+
+[data-theme="slate-light"] .dh-hero,
+[data-theme="slate-light"] .dh-kpi-card,
+[data-theme="slate-light"] .dh-card {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
+[data-theme="slate-light"] .dh-hero-title,
+[data-theme="slate-light"] .dh-kpi-value,
+[data-theme="slate-light"] .dh-card-title {
+  color: #1e293b !important;
+}
+

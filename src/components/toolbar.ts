@@ -108,7 +108,7 @@ export class Toolbar {
     // Clickable Brand Logo (navigates to Landing Page / Launchpad)
     const brand = document.createElement('button');
     brand.className = 'tb-brand tb-brand-btn';
-    brand.style.cssText = 'display:flex;align-items:center;gap:6px;font-weight:800;font-size:13px;color:#f0f6fc;margin-right:2px;letter-spacing:0.3px;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;transition:all 0.15s ease;';
+    brand.style.cssText = 'display:flex;align-items:center;gap:6px;font-weight:800;font-size:13px;color:var(--text-primary);margin-right:2px;letter-spacing:0.3px;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;transition:all 0.15s ease;';
     brand.innerHTML = '<span style="font-size:16px;">📦</span> <span>RACKSLICER</span>';
     brand.title = 'Return to Landing Page & Launchpad (Home)';
     brand.addEventListener('mouseenter', () => brand.style.background = 'rgba(255,255,255,0.08)');

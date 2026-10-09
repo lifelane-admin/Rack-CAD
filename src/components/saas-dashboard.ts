@@ -149,7 +149,7 @@ export class SaaSWorkspaceDashboard {
     this.container = null;
   }
 
-  private render(): void {
+  public render(): void {
     if (!this.container) return;
 
     const user = authStore.getCurrentUser();

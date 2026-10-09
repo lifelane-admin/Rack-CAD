@@ -23,6 +23,16 @@
   <link rel="stylesheet" href="/src/styles/datacenter.css" />
   <link rel="stylesheet" href="/src/styles/saas-platform.css" />
   <link rel="stylesheet" href="/src/styles/design-hub.css" />
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('rackslicer_theme') || 'dark';
+        var dt = localStorage.getItem('rackslicer_design_theme') || 'enterprise-modern';
+        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.setAttribute('data-design-theme', dt);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <!-- Global Shared SVG Definitions for Cable Graphics, Gradients & Shading -->

@@ -800,10 +800,12 @@ export class App {
       this.renderAll();
     });
 
-    // Set theme and design theme on body
+    // Set theme and design theme on html and body
     const initialTheme = stateManager.getState().theme || 'dark';
     const initialDesignTheme = stateManager.getState().designTheme || 'enterprise-modern';
+    document.documentElement.setAttribute('data-theme', initialTheme);
     document.body.setAttribute('data-theme', initialTheme);
+    document.documentElement.setAttribute('data-design-theme', initialDesignTheme);
     document.body.setAttribute('data-design-theme', initialDesignTheme);
 
     // Initialize AutoSave & Crash Recovery Protection
@@ -1027,7 +1029,11 @@ export class App {
       try {
         localStorage.setItem('rackslicer_theme', newTheme);
       } catch (_) {}
+      document.documentElement.setAttribute('data-theme', newTheme);
       document.body.setAttribute('data-theme', newTheme);
+      if (this.saasDashboard) {
+        this.saasDashboard.render();
+      }
       this.renderAll();
     });
 
@@ -1036,6 +1042,7 @@ export class App {
       try {
         localStorage.setItem('rackslicer_design_theme', newDesignTheme);
       } catch (_) {}
+      document.documentElement.setAttribute('data-design-theme', newDesignTheme);
       document.body.setAttribute('data-design-theme', newDesignTheme);
       this.renderAll();
     });
@@ -1047,7 +1054,11 @@ export class App {
       try {
         localStorage.setItem('rackslicer_theme', newTheme);
       } catch (_) {}
+      document.documentElement.setAttribute('data-theme', newTheme);
       document.body.setAttribute('data-theme', newTheme);
+      if (this.saasDashboard) {
+        this.saasDashboard.render();
+      }
       this.renderAll();
     });
 

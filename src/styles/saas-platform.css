@@ -1395,3 +1395,418 @@
   .saas-ai-bar { margin: 20px 16px 0; }
 }
 
+/* ==========================================================================
+   Universal Theme Adaptation for SaaS Dashboard (.saas-dashboard-container)
+   ========================================================================== */
+
+/* ─── 1. Clean Lite Theme (Light) ─── */
+[data-theme="light"] .saas-dashboard-container {
+  --bg: #f8fafc;
+  --bg2: #ffffff;
+  --panel: #ffffff;
+  --panel2: #f1f5f9;
+  --line: #e2e8f0;
+  --line2: #cbd5e1;
+  --text: #0f172a;
+  --muted: #475569;
+  --dim: #64748b;
+  --cyan: #0284c7;
+  --cyan2: #0369a1;
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .topbar {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .brand b {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .search {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .search input {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .search input::placeholder {
+  color: #94a3b8 !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .kbd {
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .user .n {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .user .p {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .side {
+  background: #f1f5f9 !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .nav a {
+  color: #334155 !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .nav a svg {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .nav a:hover {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .nav a.active {
+  background: #e0f2fe !important;
+  border-color: #7dd3fc !important;
+  color: #0284c7 !important;
+  box-shadow: none !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .nav a.active svg {
+  color: #0284c7 !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .main {
+  background: #f8fafc !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .hero-section::after {
+  background: linear-gradient(90deg, #f8fafc 0%, #f8fafc 20%, rgba(248, 250, 252, 0.4) 35%, transparent 50%),
+              linear-gradient(180deg, transparent 75%, #f8fafc 100%) !important;
+}
+
+[data-theme="light"] .saas-dashboard-container h1 {
+  color: #0f172a !important;
+  text-shadow: none !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .sub {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .saas-action-pill {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .saas-action-pill:hover {
+  background: #e0f2fe !important;
+  border-color: #0284c7 !important;
+  color: #0369a1 !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .stat {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .stat .val {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .stat .lbl {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .saas-mod-btn {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .saas-mod-btn:hover {
+  background: #f1f5f9 !important;
+  border-color: var(--mod-color, #0284c7) !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .saas-mod-label {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .saas-ai-bar {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06) !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .saas-ai-input {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .saas-ai-input::placeholder {
+  color: #94a3b8 !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .sec-head h2 {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .sec-head p {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06) !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .card:hover {
+  border-color: #0284c7 !important;
+  box-shadow: 0 8px 24px rgba(2, 132, 199, 0.15) !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .card-name {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .card-meta {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .saas-tpl-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06) !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .saas-tpl-card:hover {
+  border-color: #0284c7 !important;
+  box-shadow: 0 8px 24px rgba(2, 132, 199, 0.15) !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .saas-tpl-title {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .saas-dashboard-container .saas-tpl-desc {
+  color: #475569 !important;
+}
+
+/* ─── 2. Slate Lite Theme ─── */
+[data-theme="slate-light"] .saas-dashboard-container {
+  --bg: #f1f5f9;
+  --bg2: #f8fafc;
+  --panel: #f8fafc;
+  --panel2: #e2e8f0;
+  --line: #cbd5e1;
+  --line2: #94a3b8;
+  --text: #1e293b;
+  --muted: #475569;
+  --dim: #64748b;
+  --cyan: #4f46e5;
+  --cyan2: #4338ca;
+  background: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container .topbar {
+  background: rgba(241, 245, 249, 0.96) !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container .brand b {
+  color: #1e293b !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container .side {
+  background: #e2e8f0 !important;
+  border-right: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container .nav a {
+  color: #334155 !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container .nav a:hover {
+  background: #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container .nav a.active {
+  background: #e0e7ff !important;
+  border-color: #818cf8 !important;
+  color: #3730a3 !important;
+  box-shadow: none !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container .main {
+  background: #f1f5f9 !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container .hero-section::after {
+  background: linear-gradient(90deg, #f1f5f9 0%, #f1f5f9 20%, rgba(241, 245, 249, 0.4) 35%, transparent 50%),
+              linear-gradient(180deg, transparent 75%, #f1f5f9 100%) !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container h1 {
+  color: #1e293b !important;
+  text-shadow: none !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container .sub {
+  color: #475569 !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container .search {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container .search input {
+  color: #1e293b !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container .stat,
+[data-theme="slate-light"] .saas-dashboard-container .saas-mod-btn,
+[data-theme="slate-light"] .saas-dashboard-container .card,
+[data-theme="slate-light"] .saas-dashboard-container .saas-tpl-card {
+  background: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
+[data-theme="slate-light"] .saas-dashboard-container .stat .val,
+[data-theme="slate-light"] .saas-dashboard-container .saas-mod-label,
+[data-theme="slate-light"] .saas-dashboard-container .sec-head h2,
+[data-theme="slate-light"] .saas-dashboard-container .card-name,
+[data-theme="slate-light"] .saas-dashboard-container .saas-tpl-title {
+  color: #1e293b !important;
+}
+
+/* ─── 3. High-Contrast Lite Theme ─── */
+[data-theme="high-contrast-light"] .saas-dashboard-container {
+  --bg: #ffffff;
+  --bg2: #ffffff;
+  --panel: #ffffff;
+  --panel2: #f8fafc;
+  --line: #000000;
+  --line2: #000000;
+  --text: #000000;
+  --muted: #000000;
+  --dim: #1e293b;
+  --cyan: #000000;
+  --cyan2: #000000;
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+[data-theme="high-contrast-light"] .saas-dashboard-container .topbar,
+[data-theme="high-contrast-light"] .saas-dashboard-container .side {
+  background: #ffffff !important;
+  border-color: #000000 !important;
+}
+
+[data-theme="high-contrast-light"] .saas-dashboard-container .search,
+[data-theme="high-contrast-light"] .saas-dashboard-container .stat,
+[data-theme="high-contrast-light"] .saas-dashboard-container .saas-mod-btn,
+[data-theme="high-contrast-light"] .saas-dashboard-container .card,
+[data-theme="high-contrast-light"] .saas-dashboard-container .saas-tpl-card,
+[data-theme="high-contrast-light"] .saas-dashboard-container .saas-action-pill,
+[data-theme="high-contrast-light"] .saas-dashboard-container .saas-ai-bar {
+  background: #ffffff !important;
+  border: 2px solid #000000 !important;
+  color: #000000 !important;
+}
+
+[data-theme="high-contrast-light"] .saas-dashboard-container h1,
+[data-theme="high-contrast-light"] .saas-dashboard-container .sub,
+[data-theme="high-contrast-light"] .saas-dashboard-container .val,
+[data-theme="high-contrast-light"] .saas-dashboard-container .lbl,
+[data-theme="high-contrast-light"] .saas-dashboard-container .saas-mod-label,
+[data-theme="high-contrast-light"] .saas-dashboard-container .sec-head h2,
+[data-theme="high-contrast-light"] .saas-dashboard-container .card-name,
+[data-theme="high-contrast-light"] .saas-dashboard-container .saas-tpl-title,
+[data-theme="high-contrast-light"] .saas-dashboard-container .nav a {
+  color: #000000 !important;
+  font-weight: 700 !important;
+}
+
+/* ─── 4. Midnight Navy Theme ─── */
+[data-theme="midnight-navy"] .saas-dashboard-container {
+  --bg: #070e1c;
+  --bg2: #0b1528;
+  --panel: #0b1528;
+  --panel2: #101f3b;
+  --line: #1e3a6e;
+  --line2: #254685;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --dim: #64748b;
+  --cyan: #3b82f6;
+  --cyan2: #2563eb;
+  background: #070e1c !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="midnight-navy"] .saas-dashboard-container .topbar {
+  background: rgba(7, 14, 28, 0.96) !important;
+  border-bottom: 1px solid #1e3a6e !important;
+}
+
+[data-theme="midnight-navy"] .saas-dashboard-container .side {
+  background: #0b1528 !important;
+  border-right: 1px solid #1e3a6e !important;
+}
+
+[data-theme="midnight-navy"] .saas-dashboard-container .stat,
+[data-theme="midnight-navy"] .saas-dashboard-container .card,
+[data-theme="midnight-navy"] .saas-dashboard-container .saas-tpl-card {
+  background: #0b1528 !important;
+  border: 1px solid #1e3a6e !important;
+}
+
+/* ─── 5. High-Contrast Dark Theme ─── */
+[data-theme="high-contrast-dark"] .saas-dashboard-container {
+  --bg: #000000;
+  --bg2: #0a0a0a;
+  --panel: #0a0a0a;
+  --panel2: #141414;
+  --line: #ffffff;
+  --line2: #ffffff;
+  --text: #ffffff;
+  --muted: #e5e5e5;
+  --dim: #a3a3a3;
+  --cyan: #facc15;
+  --cyan2: #eab308;
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="high-contrast-dark"] .saas-dashboard-container .topbar,
+[data-theme="high-contrast-dark"] .saas-dashboard-container .side {
+  background: #000000 !important;
+  border-color: #ffffff !important;
+}
+
+[data-theme="high-contrast-dark"] .saas-dashboard-container .search,
+[data-theme="high-contrast-dark"] .saas-dashboard-container .stat,
+[data-theme="high-contrast-dark"] .saas-dashboard-container .saas-mod-btn,
+[data-theme="high-contrast-dark"] .saas-dashboard-container .card,
+[data-theme="high-contrast-dark"] .saas-dashboard-container .saas-tpl-card {
+  background: #0a0a0a !important;
+  border: 2px solid #ffffff !important;
+  color: #ffffff !important;
+}
+
+

@@ -3793,5 +3793,40 @@
   background: #475569;
 }
 
+/* ─── Universal Theme Adaptation for AI Studio ─── */
+[data-theme="dark"] .rackslicer-ai-studio,
+[data-theme="midnight-navy"] .rackslicer-ai-studio,
+[data-theme="high-contrast-dark"] .rackslicer-ai-studio {
+  background: var(--bg-app, #080a0f) !important;
+  color: var(--text-primary, #e2e8f0) !important;
+}
+
+[data-theme="dark"] .ai-studio-top,
+[data-theme="midnight-navy"] .ai-studio-top,
+[data-theme="high-contrast-dark"] .ai-studio-top {
+  background: var(--bg-header, #0a0d12) !important;
+  border-bottom-color: var(--border-color, rgba(255, 255, 255, 0.1)) !important;
+}
+
+[data-theme="dark"] .ai-studio-logo,
+[data-theme="midnight-navy"] .ai-studio-logo,
+[data-theme="high-contrast-dark"] .ai-studio-logo {
+  color: var(--text-primary, #f8fafc) !important;
+}
+
+[data-theme="dark"] .ai-studio-nav button,
+[data-theme="midnight-navy"] .ai-studio-nav button,
+[data-theme="high-contrast-dark"] .ai-studio-nav button {
+  color: var(--text-secondary, #94a3b8) !important;
+}
+
+[data-theme="dark"] .ai-studio-nav button.active,
+[data-theme="midnight-navy"] .ai-studio-nav button.active,
+[data-theme="high-contrast-dark"] .ai-studio-nav button.active {
+  color: var(--accent-primary, #38bdf8) !important;
+  border-bottom-color: var(--accent-primary, #38bdf8) !important;
+}
+
+
 
 
