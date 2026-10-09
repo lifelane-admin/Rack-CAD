@@ -204,6 +204,12 @@ export class SaaSWorkspaceDashboard {
             <span class="dot"></span>
           </button>
 
+          <!-- 🎨 Themes & Design Studio Pill Button -->
+          <button class="dash-theme-btn" id="dash-btn-theme" title="Themes & Design Studio (Choose Light/Dark Themes & Templates)" style="display:flex; align-items:center; gap:6px; background:rgba(234,179,8,0.12); border:1px solid rgba(234,179,8,0.4); color:#eab308; font-weight:700; font-size:12px; padding:5px 12px; border-radius:8px; cursor:pointer; transition:all 0.15s ease; white-space:nowrap;">
+            <span style="font-size:14px;">🎨</span>
+            <span>Themes</span>
+          </button>
+
           <div class="user" id="dash-user-profile-btn" title="Click to view User Profile & Account Settings">
             <div class="avatar">${initials}</div>
             <div class="meta">
@@ -288,6 +294,16 @@ export class SaaSWorkspaceDashboard {
                 <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
               </svg>
               <span>Design Hub</span>
+            </a>
+            <a href="#" class="nav-item" id="dash-nav-themes" style="color: #eab308;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-4.96-4.49-9-10-9z"/>
+                <circle cx="6.5" cy="11.5" r="1.5" fill="currentColor"/>
+                <circle cx="9.5" cy="7.5" r="1.5" fill="currentColor"/>
+                <circle cx="14.5" cy="7.5" r="1.5" fill="currentColor"/>
+                <circle cx="17.5" cy="11.5" r="1.5" fill="currentColor"/>
+              </svg>
+              <span>Themes & Studio</span>
             </a>
             <a href="#" class="nav-item" id="dash-nav-settings">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -787,6 +803,16 @@ export class SaaSWorkspaceDashboard {
     this.container.querySelector('#dash-nav-settings')?.addEventListener('click', (e) => {
       e.preventDefault();
       showUserProfileModal(() => this.render());
+    });
+
+    // 🎨 Themes & Design Studio Links
+    this.container.querySelector('#dash-btn-theme')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      EventBus.emit('view:open-theme-modal' as any, undefined);
+    });
+    this.container.querySelector('#dash-nav-themes')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      EventBus.emit('view:open-theme-modal' as any, undefined);
     });
 
     // Template "Export Blueprint (.xlsx)" Buttons

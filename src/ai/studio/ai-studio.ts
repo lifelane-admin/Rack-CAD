@@ -76,10 +76,14 @@ export class RackSlicerAIStudio {
           <button id="nav-btn-library">▣ Library</button>
           <button id="nav-btn-designs">▧ Designs</button>
           <button id="nav-btn-reports">▤ Reports</button>
+          <button id="nav-btn-themes" title="Customize Themes & Templates">🎨 Themes</button>
         </nav>
         <div class="ai-studio-project-bar">
           <button class="ai-studio-header-btn home" id="top-btn-home" title="Return to SaaS Workspace Landing Page" style="font-weight:700; color:#0284c7; border-color:#bae6fd; background:#f0f9ff; cursor:pointer;">
             🏠 Home
+          </button>
+          <button class="ai-studio-header-btn theme" id="top-btn-theme" title="Themes & Design Studio (Choose Light/Dark Themes & Templates)" style="font-weight:700; color:#eab308; border-color:rgba(234,179,8,0.4); background:rgba(234,179,8,0.1); cursor:pointer;">
+            🎨 Themes
           </button>
           <button class="ai-studio-header-btn mcp" id="top-btn-mcp" title="Manage MCP Control Plane, Tools & Audit Log">
             🛡️ MCP Control Plane
@@ -189,6 +193,14 @@ export class RackSlicerAIStudio {
     this.el.querySelector('#nav-btn-reports')?.addEventListener('click', () => {
       this.close();
       eventBus.emit('export:report' as any, undefined);
+    });
+
+    this.el.querySelector('#nav-btn-themes')?.addEventListener('click', () => {
+      eventBus.emit('view:open-theme-modal' as any, undefined);
+    });
+
+    this.el.querySelector('#top-btn-theme')?.addEventListener('click', () => {
+      eventBus.emit('view:open-theme-modal' as any, undefined);
     });
 
     this.el.querySelector('#top-project-pill')?.addEventListener('click', () => {

@@ -90,7 +90,10 @@ export class DesignHubView {
               Every architecture is AI-validated for high availability, power redundancy, and cabling integrity.
             </p>
           </div>
-          <div class="dh-hero-actions">
+          <div class="dh-hero-actions" style="display: flex; gap: 8px; align-items: center;">
+            <button class="dh-btn-action" id="dh-header-themes-btn" title="Themes & Design Studio" style="background: rgba(234,179,8,0.15); border: 1px solid rgba(234,179,8,0.4); color: #eab308; padding: 10px 18px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <span>🎨 Themes</span>
+            </button>
             <button class="dh-btn-publish" id="dh-header-publish-btn">
               <span>🚀 Publish to Design Hub</span>
             </button>
@@ -292,6 +295,14 @@ export class DesignHubView {
     if (pubBtn) {
       pubBtn.addEventListener('click', () => {
         publishDesignModal.open();
+      });
+    }
+
+    // 🎨 Themes button
+    const themesBtn = this.container.querySelector('#dh-header-themes-btn');
+    if (themesBtn) {
+      themesBtn.addEventListener('click', () => {
+        EventBus.emit('view:open-theme-modal' as any, undefined);
       });
     }
 
