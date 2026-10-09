@@ -77,6 +77,7 @@ import { designHubView } from './components/design-hub-view';
 import { publishDesignModal } from './components/publish-design-modal';
 import { socialShareModal } from './components/social-share-modal';
 import { designDetailModal } from './components/design-detail-modal';
+import { ThemeModal } from './components/theme-modal';
 import { PublishedArchitecture } from './community/design-hub-types';
 
 type CloudConnectorSegmentKind = 'entryStub' | 'entry' | 'crossbar' | 'exit' | 'exitStub';
@@ -125,6 +126,7 @@ export class App {
   private hybridTransformUnsync: (() => void) | null = null;
   private presenterDashboard!: PresenterDashboard;
   private saasDashboard!: SaaSWorkspaceDashboard;
+  private themeModal = new ThemeModal();
 
   // Clipboard for copy/paste — one snapshot per currently-selected object, so a multi-select
   // copy pastes back as a group. Deliberately NOT a stack/history — pasting repeatedly re-clones
@@ -798,8 +800,11 @@ export class App {
       this.renderAll();
     });
 
-    // Set dark theme on body
-    document.body.setAttribute('data-theme', stateManager.getState().theme);
+    // Set theme and design theme on body
+    const initialTheme = stateManager.getState().theme || 'dark';
+    const initialDesignTheme = stateManager.getState().designTheme || 'enterprise-modern';
+    document.body.setAttribute('data-theme', initialTheme);
+    document.body.setAttribute('data-design-theme', initialDesignTheme);
 
     // Initialize AutoSave & Crash Recovery Protection
     autoSaveManager.init();
@@ -1013,11 +1018,37 @@ export class App {
       if (rc) rc.style.display = s.rulersVisible ? 'none' : '';
     });
 
+    (eventBus as any).on('view:open-theme-modal', () => {
+      this.themeModal.open();
+    });
+
+    (eventBus as any).on('theme:changed', (newTheme: any) => {
+      stateManager.setState({ theme: newTheme });
+      try {
+        localStorage.setItem('rackslicer_theme', newTheme);
+      } catch (_) {}
+      document.body.setAttribute('data-theme', newTheme);
+      this.renderAll();
+    });
+
+    (eventBus as any).on('design-theme:changed', (newDesignTheme: any) => {
+      stateManager.setState({ designTheme: newDesignTheme });
+      try {
+        localStorage.setItem('rackslicer_design_theme', newDesignTheme);
+      } catch (_) {}
+      document.body.setAttribute('data-design-theme', newDesignTheme);
+      this.renderAll();
+    });
+
     (eventBus as any).on('view:toggle-theme', () => {
       const s = stateManager.getState();
-      const newTheme = s.theme === 'dark' ? 'light' : 'dark';
+      const newTheme = s.theme === 'light' ? 'dark' : 'light';
       stateManager.setState({ theme: newTheme });
+      try {
+        localStorage.setItem('rackslicer_theme', newTheme);
+      } catch (_) {}
       document.body.setAttribute('data-theme', newTheme);
+      this.renderAll();
     });
 
     (eventBus as any).on('view:toggle-legends', () => {

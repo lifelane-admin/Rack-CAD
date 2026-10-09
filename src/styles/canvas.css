@@ -53,7 +53,7 @@
   flex: 1;
   position: relative;
   overflow: hidden; /* Prevent browser scrollbar conflict with pan/zoom */
-  background-color: var(--bg-canvas);
+  background-color: var(--canvas-bg, var(--bg-canvas));
 }
 
 #canvas {
@@ -67,7 +67,12 @@
   flex: 1;
   position: relative;
   overflow: hidden;
-  background-color: var(--bg-canvas);
+  background-color: var(--canvas-bg, var(--bg-canvas));
+}
+
+#grid-pattern circle,
+#cloud-grid-pattern circle {
+  fill: var(--canvas-grid-color, rgba(148, 163, 184, 0.25));
 }
 
 #cloud-canvas {

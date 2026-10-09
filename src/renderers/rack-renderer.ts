@@ -174,6 +174,7 @@ export function renderRack(rack: RackData, parentGroup: SVGGElement, stateOverri
 
   // === 1. CABINET OUTER CABINET FRAME ===
   const outerFrame = createRect(-pduOffset, 0, OUTER_W_TOTAL, totalHeight, {
+    class: 'rack-outer-frame',
     fill: isSkel ? 'rgba(56, 189, 248, 0.05)' : `url(#rack-gradient-${rack.id})`,
     stroke: isSkel ? '#38bdf8' : 'none',
     'stroke-width': isSkel ? 1.5 : 0,

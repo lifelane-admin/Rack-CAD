@@ -61,7 +61,7 @@ export class CloudCanvasManager {
     circle.setAttribute('cx', '1');
     circle.setAttribute('cy', '1');
     circle.setAttribute('r', '1');
-    circle.setAttribute('fill', '#888');
+    circle.setAttribute('fill', 'var(--canvas-grid-color, rgba(148, 163, 184, 0.25))');
     gridPattern.appendChild(circle);
     defs.appendChild(gridPattern);
 

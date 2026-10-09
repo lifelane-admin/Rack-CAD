@@ -200,8 +200,8 @@ export class Toolbar {
       { label: 'Switch to Hybrid', icon: ICONS.hybridView, action: () => EventBus.emit('view:switch', 'hybrid') },
       'sep',
       { label: '3D Panel', icon: ICONS.threeD, action: () => EventBus.emit('view:toggle-3d-panel', undefined) },
-      { label: 'Properties Panel', kbd: 'Alt+P', icon: ICONS.props, action: () => EventBus.emit('properties:toggle', undefined) },
-      { label: 'Toggle Theme', icon: ICONS.theme, action: () => EventBus.emit('view:toggle-theme', undefined) },
+      { label: 'Theme & Design Studio…', icon: '🎨', action: () => EventBus.emit('view:open-theme-modal' as any, undefined) },
+      { label: 'Toggle Light/Dark Theme', icon: ICONS.theme, action: () => EventBus.emit('view:toggle-theme', undefined) },
     ]);
     menuBar.appendChild(viewMenu);
 
@@ -293,6 +293,15 @@ export class Toolbar {
     publishBtn.title = 'Publish current architecture to Design Hub (Private, Invite Only, or Public)';
     publishBtn.onclick = () => EventBus.emit('design:publish' as any, undefined);
     right.appendChild(publishBtn);
+
+    // 🎨 Themes & Design Studio launcher button
+    const themeBtn = document.createElement('button');
+    themeBtn.className = 'toolbar-btn-pill tb-theme-btn';
+    themeBtn.style.cssText = 'background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.4);color:#eab308;font-weight:700;font-size:12px;border-radius:6px;padding:4px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;';
+    themeBtn.innerHTML = '<span style="font-size:14px;">🎨</span> <span>Themes</span>';
+    themeBtn.title = 'Open Theme & Design Studio (Choose Light/Dark Themes & Diagram Templates)';
+    themeBtn.addEventListener('click', () => EventBus.emit('view:open-theme-modal' as any, undefined));
+    right.appendChild(themeBtn);
 
     // Float toggle
     const floatToggle = document.createElement('button');

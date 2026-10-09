@@ -747,7 +747,19 @@ export interface CableData {
 
 // === Application State ===
 export type ToolMode = 'select' | 'pan' | 'cable' | 'power' | 'text' | 'label' | 'zoom-in' | 'zoom-out' | 'export-area' | 'cloud-container' | 'cloud-connect' | 'cloud-export-area';
-export type Theme = 'dark' | 'light';
+export type Theme =
+  | 'dark'
+  | 'light'
+  | 'slate-light'
+  | 'high-contrast-light'
+  | 'midnight-navy'
+  | 'high-contrast-dark';
+
+export type DesignThemeTemplate =
+  | 'enterprise-modern'
+  | 'technical-blueprint'
+  | 'high-contrast-accessible'
+  | 'clean-minimalist';
 
 export type SelectableItem =
   | { type: 'rack'; id: string }
@@ -843,6 +855,7 @@ export interface AppState {
   cloudHierarchies: CloudHierarchy[];
   activeElevationRackId?: string | null;
   workflowMode?: 'rack' | 'datacenter' | 'cloud' | 'hybrid' | 'flowchart';
+  designTheme?: DesignThemeTemplate;
 }
 
 // === Events ===
@@ -877,6 +890,7 @@ export interface AppEvents {
   'selection:changed': SelectableItem[];
   'tool:changed': ToolMode;
   'theme:changed': Theme;
+  'design-theme:changed': DesignThemeTemplate;
   'canvas:transformed': Transform;
   'canvas:click': Point;
   'canvas:rightclick': { point: Point; target: any; screenPoint?: Point };

@@ -37,14 +37,14 @@ export class WorkflowStageRenderers {
           <p class="landing-sub">Choose your input strategy: Interactive natural language prompting or enterprise deterministic Excel intent.</p>
 
           <!-- Input Mode Switcher -->
-          <div class="input-mode-switcher" style="display:flex; justify-content:center; gap:12px; margin-top:16px;">
-            <button class="btn-mode-tab active" id="tab-mode-nl" style="padding:10px 18px; border-radius:8px; border:1px solid #38bdf8; background:rgba(56,189,248,0.15); color:#f8fafc; font-weight:700; cursor:pointer;">
+          <div class="input-mode-switcher">
+            <button class="btn-mode-tab active" id="tab-mode-nl">
               💬 Approach 1: Natural Language
             </button>
-            <button class="btn-mode-tab" id="tab-mode-excel" style="padding:10px 18px; border-radius:8px; border:1px solid #334155; background:rgba(30,41,59,0.7); color:#94a3b8; font-weight:700; cursor:pointer;">
+            <button class="btn-mode-tab" id="tab-mode-excel">
               📊 Approach 2: Excel Architecture Input (.xlsx)
             </button>
-            <button class="btn-mode-tab" id="tab-mode-hybrid" style="padding:10px 18px; border-radius:8px; border:1px solid #334155; background:rgba(30,41,59,0.7); color:#94a3b8; font-weight:700; cursor:pointer;">
+            <button class="btn-mode-tab" id="tab-mode-hybrid">
               ⚡ Hybrid Mode (Excel + Overlay)
             </button>
           </div>
@@ -145,29 +145,17 @@ export class WorkflowStageRenderers {
     // Tab Mode Switching
     const setMode = (mode: 'nl' | 'excel' | 'hybrid') => {
       currentInputMode = mode;
-      [tabNL, tabExcel, tabHybrid].forEach((t) => {
-        if (!t) return;
-        t.style.background = 'rgba(30,41,59,0.7)';
-        t.style.borderColor = '#334155';
-        t.style.color = '#94a3b8';
-      });
+      tabNL?.classList.toggle('active', mode === 'nl');
+      tabExcel?.classList.toggle('active', mode === 'excel');
+      tabHybrid?.classList.toggle('active', mode === 'hybrid');
 
       if (mode === 'nl') {
-        tabNL.style.background = 'rgba(56,189,248,0.15)';
-        tabNL.style.borderColor = '#38bdf8';
-        tabNL.style.color = '#f8fafc';
         boxNL.style.display = 'block';
         boxExcel.style.display = 'none';
       } else if (mode === 'excel') {
-        tabExcel.style.background = 'rgba(56,189,248,0.15)';
-        tabExcel.style.borderColor = '#38bdf8';
-        tabExcel.style.color = '#f8fafc';
         boxNL.style.display = 'none';
         boxExcel.style.display = 'block';
       } else {
-        tabHybrid.style.background = 'rgba(56,189,248,0.15)';
-        tabHybrid.style.borderColor = '#38bdf8';
-        tabHybrid.style.color = '#f8fafc';
         boxNL.style.display = 'block';
         boxExcel.style.display = 'block';
       }

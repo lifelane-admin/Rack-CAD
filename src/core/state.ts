@@ -28,8 +28,8 @@ class StateManager {
   constructor() {
     setCustomTemplatesProvider(() => this.state?.customTemplates ?? []);
     this.state = {
-
-      theme: 'dark',
+      theme: (typeof localStorage !== 'undefined' && (localStorage.getItem('rackslicer_theme') as any)) || 'dark',
+      designTheme: (typeof localStorage !== 'undefined' && (localStorage.getItem('rackslicer_design_theme') as any)) || 'enterprise-modern',
       tool: 'select',
       transform: { x: 0, y: 0, scale: 1 },
       gridVisible: true,
