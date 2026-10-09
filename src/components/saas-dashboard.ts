@@ -505,7 +505,12 @@ export class SaaSWorkspaceDashboard {
           <img alt="${p.name}" src="${imgSrc}" loading="lazy" onerror="this.src='${info.fallbackImg}'" />
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span class="tag ${info.cls}">${info.label}</span>
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+            <span class="tag ${info.cls}">${info.label}</span>
+            <span class="badge-origin ${p.generationSource === 'ai-generated' ? 'badge-ai-origin' : 'badge-human-origin'}">
+              ${p.generationSource === 'ai-generated' ? '🤖 AI Generated' : '👤 Human Generated'}
+            </span>
+          </div>
           <div style="display:flex; gap:6px; align-items:center;">
             <button class="proj-excel-btn" data-proj-id="${p.id}" style="background:none; border:none; color:#10b981; font-size:14px; cursor:pointer;" title="Export Architecture Blueprint (.xlsx)">
               📊
@@ -532,9 +537,14 @@ export class SaaSWorkspaceDashboard {
     return `
       <div class="saas-tpl-card">
         <div class="saas-tpl-header">
-          <span class="saas-tpl-badge ${tpl.recommendedBadge ? 'recommended' : ''}">
-            ${tpl.recommendedBadge || tpl.categoryLabel}
-          </span>
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+            <span class="saas-tpl-badge ${tpl.recommendedBadge ? 'recommended' : ''}">
+              ${tpl.recommendedBadge || tpl.categoryLabel}
+            </span>
+            <span class="badge-origin ${tpl.generationSource === 'ai-generated' ? 'badge-ai-origin' : 'badge-human-origin'}">
+              ${tpl.generationSource === 'ai-generated' ? '🤖 AI Generated' : '👤 Human Generated'}
+            </span>
+          </div>
           <span style="font-size:11px; color:#64748b; font-weight:600;">${tpl.categoryLabel}</span>
         </div>
         <h4 class="saas-tpl-title">${tpl.title}</h4>

@@ -629,39 +629,39 @@ export function generateProxmoxCephTemplate(): TemplateProjectData {
       ],
       powerWatts: 0,
     },
-    // Dual ToR Switches (U41 & U40)
+    // Dual ToR Switches (U41 & U40) — Right-sized 24-Port 25G/100G Leaf Switches
     {
       id: 'dev-proxmox-tor-01',
-      templateId: 'sw-1u-tor-25g-100g',
-      name: 'Cisco Nexus 93180YC ToR-01',
+      templateId: 'sw-1u-tor-24x25g',
+      name: 'Arista 7050SX3 / Nexus 24x25G ToR-01',
       category: 'switch',
       rackId,
       startUnit: 41,
       heightUnits: 1,
       color: '#1e293b',
-      powerWatts: 300,
-      ports: createStandardDevicePorts('sw-1u-tor-25g-100g', 'dev-proxmox-tor-01', {
-        'tor-sfp1': { id: 'tor1-p1', name: 'P1 (H1)' },
-        'tor-sfp3': { id: 'tor1-p2', name: 'P2 (H2)' },
-        'tor-sfp5': { id: 'tor1-p3', name: 'P3 (H3)' },
-        'tor-sfp7': { id: 'tor1-p4', name: 'P4 (PBS)' },
+      powerWatts: 240,
+      ports: createStandardDevicePorts('sw-1u-tor-24x25g', 'dev-proxmox-tor-01', {
+        'tor24-sfp1': { id: 'tor1-p1', name: 'P1 (H1)' },
+        'tor24-sfp3': { id: 'tor1-p2', name: 'P2 (H2)' },
+        'tor24-sfp5': { id: 'tor1-p3', name: 'P3 (H3)' },
+        'tor24-sfp7': { id: 'tor1-p4', name: 'P4 (PBS)' },
       }),
     },
     {
       id: 'dev-proxmox-tor-02',
-      templateId: 'sw-1u-tor-25g-100g',
-      name: 'Cisco Nexus 93180YC ToR-02 (MLAG)',
+      templateId: 'sw-1u-tor-24x25g',
+      name: 'Arista 7050SX3 / Nexus 24x25G ToR-02 (MLAG)',
       category: 'switch',
       rackId,
       startUnit: 40,
       heightUnits: 1,
       color: '#1e293b',
-      powerWatts: 300,
-      ports: createStandardDevicePorts('sw-1u-tor-25g-100g', 'dev-proxmox-tor-02', {
-        'tor-sfp1': { id: 'tor2-p1', name: 'P1 (H1)' },
-        'tor-sfp3': { id: 'tor2-p2', name: 'P2 (H2)' },
-        'tor-sfp5': { id: 'tor2-p3', name: 'P3 (H3)' },
-        'tor-sfp7': { id: 'tor2-p4', name: 'P4 (PBS)' },
+      powerWatts: 240,
+      ports: createStandardDevicePorts('sw-1u-tor-24x25g', 'dev-proxmox-tor-02', {
+        'tor24-sfp1': { id: 'tor2-p1', name: 'P1 (H1)' },
+        'tor24-sfp3': { id: 'tor2-p2', name: 'P2 (H2)' },
+        'tor24-sfp5': { id: 'tor2-p3', name: 'P3 (H3)' },
+        'tor24-sfp7': { id: 'tor2-p4', name: 'P4 (PBS)' },
       }),
     },
     // Proxmox Backup Server (U22)
@@ -1297,9 +1297,9 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       powerWatts: 550,
       ports: createStandardDevicePorts('sw-1u-leaf-100g-400g', 'dev-ib-sw-01', {
         'leaf-q1': { id: 'ib1-p1', name: 'NDR P1' },
-        'leaf-q2': { id: 'ib1-p2', name: 'NDR P2' },
-        'leaf-q3': { id: 'ib1-p3', name: 'NDR P3' },
-        'leaf-q4': { id: 'ib1-p4', name: 'NDR P4' },
+        'leaf-q3': { id: 'ib1-p2', name: 'NDR P2' },
+        'leaf-q5': { id: 'ib1-p3', name: 'NDR P3' },
+        'leaf-q7': { id: 'ib1-p4', name: 'NDR P4' },
       }),
     },
     // Quantum-2 InfiniBand Switch 02 (U45)
@@ -1315,9 +1315,9 @@ export function generateH100AIPodTemplate(): TemplateProjectData {
       powerWatts: 550,
       ports: createStandardDevicePorts('sw-1u-leaf-100g-400g', 'dev-ib-sw-02', {
         'leaf-q1': { id: 'ib2-p1', name: 'NDR P5' },
-        'leaf-q2': { id: 'ib2-p2', name: 'NDR P6' },
-        'leaf-q3': { id: 'ib2-p3', name: 'NDR P7' },
-        'leaf-q4': { id: 'ib2-p4', name: 'NDR P8' },
+        'leaf-q3': { id: 'ib2-p2', name: 'NDR P6' },
+        'leaf-q5': { id: 'ib2-p3', name: 'NDR P7' },
+        'leaf-q7': { id: 'ib2-p4', name: 'NDR P8' },
       }),
     },
     // 8U Supermicro HGX H100 8x GPU Server (U20-U27)

@@ -4,6 +4,7 @@
  */
 import { authStore } from '../auth/auth-store';
 import { getTemplatePayloadJson } from './template-data-generator';
+import { GenerationSource } from '../community/design-hub-types';
 
 export interface SaaSProject {
   id: string;
@@ -25,6 +26,7 @@ export interface SaaSProject {
   isTemplate?: boolean;
   costEstimate?: string;
   confidenceScore?: number;
+  generationSource?: GenerationSource;
 }
 
 const STORAGE_KEY_PROJECTS = 'rackslicer_projects_store';
@@ -47,6 +49,7 @@ const SAMPLE_STARTER_PROJECTS: SaaSProject[] = [
     isFavorite: true,
     version: 5,
     progress: 75,
+    generationSource: 'human-generated',
   },
   {
     id: 'proj-sample-02',
@@ -65,6 +68,7 @@ const SAMPLE_STARTER_PROJECTS: SaaSProject[] = [
     version: 5,
     progress: 40,
     isTemplate: true,
+    generationSource: 'human-generated',
   },
   {
     id: 'proj-sample-03',
@@ -82,6 +86,7 @@ const SAMPLE_STARTER_PROJECTS: SaaSProject[] = [
     isFavorite: true,
     version: 5,
     progress: 60,
+    generationSource: 'human-generated',
   },
   {
     id: 'proj-sample-04',
@@ -99,6 +104,7 @@ const SAMPLE_STARTER_PROJECTS: SaaSProject[] = [
     isFavorite: false,
     version: 5,
     progress: 25,
+    generationSource: 'human-generated',
   },
 ];
 
@@ -115,6 +121,7 @@ export interface ArchitectureTemplate {
   cons?: string[];
   recommendedBadge?: string;
   targetCategory: SaaSProject['category'];
+  generationSource?: GenerationSource;
 }
 
 export const ARCHITECTURE_TEMPLATES: ArchitectureTemplate[] = [
@@ -129,6 +136,7 @@ export const ARCHITECTURE_TEMPLATES: ArchitectureTemplate[] = [
     cons: ['Scalability limit to 3-5 nodes', 'Routing complexity compared to switched'],
     recommendedBadge: '★ AI Recommended',
     targetCategory: 'rack',
+    generationSource: 'human-generated',
   },
   {
     id: 'tpl-hyperv-cluster',
@@ -139,6 +147,7 @@ export const ARCHITECTURE_TEMPLATES: ArchitectureTemplate[] = [
     specs: ['2x 2U Compute Nodes', 'Storage Spaces Direct', 'Dual 10GbE RDMA', 'Azure Arc Enabled'],
     pros: ['Zero external SAN cost', 'Seamless Azure Portal governance', 'Automated VM live migration'],
     targetCategory: 'rack',
+    generationSource: 'human-generated',
   },
   {
     id: 'tpl-proxmox-ceph',
@@ -150,6 +159,7 @@ export const ARCHITECTURE_TEMPLATES: ArchitectureTemplate[] = [
     pros: ['No hypervisor licensing tax', 'Native incremental backups', 'Full API automation'],
     recommendedBadge: 'Popular',
     targetCategory: 'rack',
+    generationSource: 'human-generated',
   },
   {
     id: 'tpl-azure-hub-spoke',
@@ -160,6 +170,7 @@ export const ARCHITECTURE_TEMPLATES: ArchitectureTemplate[] = [
     specs: ['Central Hub VNet', '3x Spoke Workloads', 'Azure Firewall Premium', 'VPN / ExpressRoute'],
     pros: ['Zero-Trust perimeter isolation', 'Centralized traffic inspection', 'Scalable to hundreds of VNets'],
     targetCategory: 'cloud-azure',
+    generationSource: 'ai-generated',
   },
   {
     id: 'tpl-aws-transit',
@@ -170,6 +181,7 @@ export const ARCHITECTURE_TEMPLATES: ArchitectureTemplate[] = [
     specs: ['AWS Transit Gateway', 'Direct Connect Gateway', 'Multi-AZ NAT Gateways', 'Security VPC'],
     pros: ['Unified routing table', 'Cross-VPC isolation', 'Simplified hybrid connectivity'],
     targetCategory: 'cloud-aws',
+    generationSource: 'human-generated',
   },
   {
     id: 'tpl-ai-gpu-pod',
@@ -181,6 +193,7 @@ export const ARCHITECTURE_TEMPLATES: ArchitectureTemplate[] = [
     pros: ['Maximum compute density per U', 'Sub-microsecond RoCE v2 networking', 'Ready for LLM training'],
     recommendedBadge: 'High Density',
     targetCategory: 'rack',
+    generationSource: 'ai-generated',
   },
 ];
 
@@ -236,6 +249,9 @@ class ProjectStore {
           p.dataJson = starter.dataJson;
           p.version = CURRENT_STARTER_VERSION;
         }
+        if (!p.generationSource) {
+          p.generationSource = starter ? starter.generationSource : 'human-generated';
+        }
       }
       return all;
     } catch (e) {
@@ -253,11 +269,14 @@ class ProjectStore {
         proj.dataJson = starter.dataJson;
         proj.version = CURRENT_STARTER_VERSION;
       }
+      if (!proj.generationSource) {
+        proj.generationSource = starter ? starter.generationSource : 'human-generated';
+      }
     }
     return proj;
   }
 
-  public saveProject(name: string, category: SaaSProject['category'], dataJson: string, description?: string): SaaSProject {
+  public saveProject(name: string, category: SaaSProject['category'], dataJson: string, description?: string, generationSource?: GenerationSource): SaaSProject {
     const user = authStore.getCurrentUser();
     const raw = localStorage.getItem(STORAGE_KEY_PROJECTS);
     const all: SaaSProject[] = raw ? JSON.parse(raw) : [];
@@ -274,16 +293,17 @@ class ProjectStore {
           category,
           dataJson,
           description: description ?? all[index].description,
+          generationSource: generationSource ?? all[index].generationSource ?? 'human-generated',
           updatedAt: now,
           version: (all[index].version || 1) + 1,
         };
         project = all[index];
       } else {
-        project = this.createNewProjectObject(user.id, name, category, dataJson, description);
+        project = this.createNewProjectObject(user.id, name, category, dataJson, description, generationSource);
         all.unshift(project);
       }
     } else {
-      project = this.createNewProjectObject(user.id, name, category, dataJson, description);
+      project = this.createNewProjectObject(user.id, name, category, dataJson, description, generationSource);
       all.unshift(project);
     }
 
@@ -292,12 +312,12 @@ class ProjectStore {
     return project;
   }
 
-  public createNewProject(name: string, category: SaaSProject['category'], dataJson: string = '{}', description?: string): SaaSProject {
+  public createNewProject(name: string, category: SaaSProject['category'], dataJson: string = '{}', description?: string, generationSource?: GenerationSource): SaaSProject {
     const user = authStore.getCurrentUser();
     const raw = localStorage.getItem(STORAGE_KEY_PROJECTS);
     const all: SaaSProject[] = raw ? JSON.parse(raw) : [];
 
-    const project = this.createNewProjectObject(user.id, name, category, dataJson, description);
+    const project = this.createNewProjectObject(user.id, name, category, dataJson, description, generationSource);
     all.unshift(project);
     this.activeProjectId = project.id;
 
@@ -307,10 +327,10 @@ class ProjectStore {
 
   public createProjectFromTemplate(template: ArchitectureTemplate): SaaSProject {
     const payloadJson = getTemplatePayloadJson(template.id);
-    return this.createNewProject(template.title, template.targetCategory, payloadJson, template.description);
+    return this.createNewProject(template.title, template.targetCategory, payloadJson, template.description, template.generationSource || 'human-generated');
   }
 
-  private createNewProjectObject(userId: string, name: string, category: SaaSProject['category'], dataJson: string, description?: string): SaaSProject {
+  private createNewProjectObject(userId: string, name: string, category: SaaSProject['category'], dataJson: string, description?: string, generationSource?: GenerationSource): SaaSProject {
     const now = new Date().toISOString();
     const user = authStore.getCurrentUser();
 
@@ -328,6 +348,7 @@ class ProjectStore {
       name,
       description: description || 'Datacenter Architecture & CAD Design',
       category,
+      generationSource: generationSource || 'human-generated',
       dataJson,
       createdAt: now,
       updatedAt: now,

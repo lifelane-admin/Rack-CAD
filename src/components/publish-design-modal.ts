@@ -12,6 +12,7 @@ import {
   PublicationClassification,
   DesignHubCategory,
   InvitedUser,
+  GenerationSource,
 } from '../community/design-hub-types';
 import { projectStore, SaaSProject } from '../storage/project-store';
 import EventBus from '../core/event-bus';
@@ -27,6 +28,7 @@ export class PublishDesignModal {
   private category: DesignHubCategory = 'Storage & HCI';
   private tagsStr: string = 'Production, Enterprise, High-Availability';
   private classification: PublicationClassification = 'public';
+  private generationSource: GenerationSource = 'human-generated';
   private license: string = 'RackSlicer Community License (RCL-1.0)';
   private invitedUsers: InvitedUser[] = [];
 
@@ -56,6 +58,7 @@ export class PublishDesignModal {
 
     this.title = this.project?.name || 'Enterprise High-Density Infrastructure';
     this.description = this.project?.description || 'Production-grade enterprise infrastructure blueprint configured for high availability.';
+    this.generationSource = this.project?.generationSource || 'human-generated';
     this.currentStep = 1;
 
     this.render();
@@ -132,6 +135,21 @@ export class PublishDesignModal {
           <div>
             <label style="display: block; font-size: 12px; font-weight: 700; color: #cbd5e1; margin-bottom: 6px;">Description & Architectural Purpose</label>
             <textarea id="dh-pub-desc" rows="3" style="width: 100%; padding: 10px 14px; background: rgba(15, 23, 42, 0.8); border: 1px solid #334155; border-radius: 8px; color: #ffffff; font-size: 13px; resize: vertical;" placeholder="Explain the workload, design rationale, high availability and cable topology...">${this.description}</textarea>
+          </div>
+
+          <!-- Authorship & Generation Source Selection -->
+          <div>
+            <label style="display: block; font-size: 12px; font-weight: 700; color: #cbd5e1; margin-bottom: 8px;">Authorship & Generation Source</label>
+            <div style="display: flex; gap: 16px; background: rgba(15, 23, 42, 0.6); padding: 12px 14px; border: 1px solid #334155; border-radius: 8px;">
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #f1f5f9; cursor: pointer;">
+                <input type="radio" name="dh-pub-generation" value="human-generated" ${this.generationSource === 'human-generated' ? 'checked' : ''} />
+                <span>👤 <strong>Human Generated</strong> (Handcrafted by Architect)</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #f1f5f9; cursor: pointer;">
+                <input type="radio" name="dh-pub-generation" value="ai-generated" ${this.generationSource === 'ai-generated' ? 'checked' : ''} />
+                <span>🤖 <strong>AI Generated</strong> (AI Studio / Copilot)</span>
+              </label>
+            </div>
           </div>
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
@@ -351,6 +369,9 @@ export class PublishDesignModal {
       if (descInput) this.description = descInput.value.trim();
       if (catSelect) this.category = catSelect.value as DesignHubCategory;
       if (tagsInput) this.tagsStr = tagsInput.value.trim();
+
+      const genRadio = this.overlay.querySelector('input[name="dh-pub-generation"]:checked') as HTMLInputElement;
+      if (genRadio) this.generationSource = genRadio.value as GenerationSource;
     }
 
     if (this.currentStep === 3) {
@@ -413,6 +434,7 @@ export class PublishDesignModal {
         category: this.category,
         tags: tags.length > 0 ? tags : ['Infrastructure', 'Production'],
         classification: this.classification,
+        generationSource: this.generationSource,
         license: this.license,
         invitedUsers: this.invitedUsers,
         communitySettings: {

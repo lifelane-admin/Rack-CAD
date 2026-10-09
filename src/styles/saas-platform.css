@@ -1041,6 +1041,37 @@
   border: 1px solid #047857;
 }
 
+/* Origin Classification Badges (AI vs Human Generated) */
+.saas-dashboard-container .badge-origin {
+  align-self: flex-start;
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.saas-dashboard-container .badge-ai-origin {
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid rgba(192, 132, 252, 0.5);
+  color: #e9d5ff;
+}
+
+.saas-dashboard-container .badge-human-origin {
+  background: rgba(14, 165, 233, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  color: #bae6fd;
+}
+
+.saas-dashboard-container .saas-tpl-header .badge-origin {
+  margin-top: 0;
+}
+
 .saas-dashboard-container .card h3 {
   margin: 8px 0 0;
   font-size: 14px;

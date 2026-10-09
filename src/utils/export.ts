@@ -1079,11 +1079,11 @@ export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables:
       };
     }
 
-    // For switches with predefined templates (e.g. sw-1u-tor-25g-100g), heal stale/wrong port mappings
-    if (d.templateId === 'sw-1u-tor-25g-100g' || d.id === 'dev-hv-sw-01') {
+    // For switches with predefined templates, heal stale/wrong port mappings to match template
+    if (d.templateId === 'sw-1u-tor-25g-100g' || d.templateId === 'sw-1u-tor-16x25g' || d.templateId === 'sw-1u-tor-24x25g' || d.templateId === 'sw-1u-leaf-100g-400g' || d.id === 'dev-hv-sw-01') {
       const template = getTemplate(d.templateId);
       if (template && template.ports) {
-        // Terminate on top row first: hv-sw-p1 -> tor-sfp1, hv-sw-p2 -> tor-sfp3, hv-sw-p3 -> tor-sfp5
+        // Terminate on top row first
         const alignPort = (customPortId: string, templatePortId: string) => {
           const tp = template.ports.find(p => p.id === templatePortId);
           const cp = currentPorts.find(p => p.id === customPortId);
@@ -1099,6 +1099,26 @@ export function sanitizeAndRepairDevicesAndCables(devices: DeviceData[], cables:
         alignPort('hv-sw-p1', 'tor-sfp1');
         alignPort('hv-sw-p2', 'tor-sfp3');
         alignPort('hv-sw-p3', 'tor-sfp5');
+
+        // Proxmox ToR 1 & 2
+        alignPort('tor1-p1', 'tor16-sfp1');
+        alignPort('tor1-p2', 'tor16-sfp3');
+        alignPort('tor1-p3', 'tor16-sfp5');
+        alignPort('tor1-p4', 'tor16-sfp7');
+        alignPort('tor2-p1', 'tor16-sfp1');
+        alignPort('tor2-p2', 'tor16-sfp3');
+        alignPort('tor2-p3', 'tor16-sfp5');
+        alignPort('tor2-p4', 'tor16-sfp7');
+
+        // AI GPU InfiniBand Leaf 1 & 2 (top row: q1, q3, q5, q7)
+        alignPort('ib1-p1', 'leaf-q1');
+        alignPort('ib1-p2', 'leaf-q3');
+        alignPort('ib1-p3', 'leaf-q5');
+        alignPort('ib1-p4', 'leaf-q7');
+        alignPort('ib2-p1', 'leaf-q1');
+        alignPort('ib2-p2', 'leaf-q3');
+        alignPort('ib2-p3', 'leaf-q5');
+        alignPort('ib2-p4', 'leaf-q7');
       }
     }
 

@@ -9,6 +9,7 @@ import {
   PublishedArchitecture,
   DesignHubCategory,
   RankingSortTab,
+  GenerationSource,
 } from '../community/design-hub-types';
 import { publishDesignModal } from './publish-design-modal';
 import { socialShareModal } from './social-share-modal';
@@ -19,6 +20,7 @@ export class DesignHubView {
   private container: HTMLElement | null = null;
   private currentTab: RankingSortTab = 'trending';
   private currentCategory: DesignHubCategory | 'all' = 'all';
+  private currentOrigin: 'all' | GenerationSource = 'all';
   private searchQuery: string = '';
 
   private readonly CATEGORIES: Array<DesignHubCategory | 'all'> = [
@@ -58,11 +60,15 @@ export class DesignHubView {
   public render(): void {
     if (!this.container) return;
 
-    const designs = designHubStore.queryDesigns({
+    let designs = designHubStore.queryDesigns({
       search: this.searchQuery,
       category: this.currentCategory,
       tab: this.currentTab,
     });
+
+    if (this.currentOrigin !== 'all') {
+      designs = designs.filter(d => d.generationSource === this.currentOrigin);
+    }
 
     const allDesigns = designHubStore.getAllDesigns();
     const totalForks = allDesigns.reduce((acc, d) => acc + (d.forks || 0), 0);
@@ -157,6 +163,22 @@ export class DesignHubView {
             `
             ).join('')}
           </div>
+
+          <!-- Origin Filter Pills (AI Generated vs Human Generated) -->
+          <div class="dh-origin-filter-row">
+            <span class="dh-origin-filter-title">Classification:</span>
+            <div class="dh-origin-pills-wrap">
+              <button class="dh-origin-pill ${this.currentOrigin === 'all' ? 'active' : ''}" data-origin="all">
+                All Origins
+              </button>
+              <button class="dh-origin-pill ${this.currentOrigin === 'human-generated' ? 'active' : ''}" data-origin="human-generated">
+                👤 Human Generated
+              </button>
+              <button class="dh-origin-pill ${this.currentOrigin === 'ai-generated' ? 'active' : ''}" data-origin="ai-generated">
+                🤖 AI Generated
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Architecture Grid -->
@@ -167,7 +189,7 @@ export class DesignHubView {
             <div class="dh-empty-state">
               <div class="dh-empty-icon">🔎</div>
               <div class="dh-empty-title">No matching architectures found</div>
-              <div>Try adjusting your search terms or selecting a different category filter.</div>
+              <div>Try adjusting your search terms or selecting a different origin or category filter.</div>
             </div>
           `
               : `
@@ -194,6 +216,9 @@ export class DesignHubView {
             <span class="dh-classification-badge ${design.classification}">
               ${design.classification === 'private' ? '🔒' : design.classification === 'invite-only' ? '👥' : '🌐'}
               ${design.classification}
+            </span>
+            <span class="dh-origin-badge ${design.generationSource === 'ai-generated' ? 'ai-gen' : 'human-gen'}">
+              ${design.generationSource === 'ai-generated' ? '🤖 AI Generated' : '👤 Human Generated'}
             </span>
             <span class="dh-category-badge">${design.category}</span>
           </div>
@@ -293,6 +318,15 @@ export class DesignHubView {
     chipButtons.forEach(chip => {
       chip.addEventListener('click', () => {
         this.currentCategory = (chip.getAttribute('data-category') as any) || 'all';
+        this.render();
+      });
+    });
+
+    // Origin classification pills
+    const originPills = this.container.querySelectorAll('.dh-origin-pill');
+    originPills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        this.currentOrigin = (pill.getAttribute('data-origin') as any) || 'all';
         this.render();
       });
     });

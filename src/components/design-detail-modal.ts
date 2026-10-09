@@ -55,6 +55,9 @@ export class DesignDetailModal {
               ${this.design.classification === 'private' ? '🔒' : this.design.classification === 'invite-only' ? '👥' : '🌐'}
               ${this.design.classification}
             </span>
+            <span class="dh-origin-badge ${this.design.generationSource === 'ai-generated' ? 'ai-gen' : 'human-gen'}">
+              ${this.design.generationSource === 'ai-generated' ? '🤖 AI Generated' : '👤 Human Generated'}
+            </span>
             <span class="dh-category-badge">${this.design.category}</span>
             <span style="font-size: 13px; font-weight: 700; color: #cbd5e1;">${this.design.version}</span>
           </div>
@@ -75,6 +78,8 @@ export class DesignDetailModal {
                 <h2 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 800; color: #ffffff;">${this.design.title}</h2>
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 12px; color: #94a3b8;">
                   <span>By <strong style="color: #f1f5f9;">@${this.design.author.username}</strong> (${this.design.author.title})</span>
+                  <span>•</span>
+                  <span>Origin: <strong style="color: ${this.design.generationSource === 'ai-generated' ? '#c084fc' : '#38bdf8'};">${this.design.generationSource === 'ai-generated' ? '🤖 AI Generated' : '👤 Human Generated'}</strong></span>
                   <span>•</span>
                   <span>License: <strong style="color: #cbd5e1;">${this.design.license}</strong></span>
                 </div>

@@ -125,4 +125,43 @@ describe('RackSlicer Design Hub & Community Platform', () => {
     expect(published.invitedUsers?.length).toBe(1);
     expect(published.invitedUsers?.[0].emailOrUsername).toBe('auditor@enterprise.com');
   });
+
+  it('labels and classifies architectures as AI Generated or Human Generated', () => {
+    const designs = designHubStore.getAllDesigns();
+    const aiDesigns = designs.filter(d => d.generationSource === 'ai-generated');
+    const humanDesigns = designs.filter(d => d.generationSource === 'human-generated');
+
+    expect(aiDesigns.length).toBeGreaterThanOrEqual(1);
+    expect(humanDesigns.length).toBeGreaterThanOrEqual(1);
+
+    // AI generated examples
+    expect(aiDesigns.some(d => d.id === 'pub-h100-gpu-03')).toBe(true);
+    expect(aiDesigns.some(d => d.id === 'pub-azure-hub-02')).toBe(true);
+
+    // Human generated examples
+    expect(humanDesigns.some(d => d.id === 'pub-ceph-mesh-01')).toBe(true);
+    expect(humanDesigns.some(d => d.id === 'pub-proxmox-ceph-04')).toBe(true);
+
+    // Publish with explicit generationSource
+    const testProject = projectStore.getAllProjects()[0];
+    const pubAi = designHubStore.publishProject(testProject, {
+      title: 'AI Copilot Synthesized Pod',
+      description: 'AI-generated high-density topology',
+      category: 'AI Infrastructure',
+      tags: ['AI', 'Generated'],
+      classification: 'public',
+      generationSource: 'ai-generated',
+      license: 'MIT',
+      communitySettings: {
+        allowRatings: true,
+        allowReviews: true,
+        allowDiscussions: true,
+        allowFork: true,
+        allowSocialSharing: true,
+        includeAiScore: true,
+      },
+    });
+
+    expect(pubAi.generationSource).toBe('ai-generated');
+  });
 });

@@ -61,6 +61,7 @@ interface SwitchLayout {
   chassisW: number; bladeW: number; totW: number;
   rjX: number; sfpX: number; stackX: number; mgmtX: number; consoleJackX: number; usbX: number; rstX: number;
   rjTop: number; sfpTop: number; stackTop: number; blkW: number;
+  sfpRows: number; sfpTop0: number; sfpTop1: number;
 }
 
 /** Single source of truth for switchPorts() (catalog port positions) and renderSwitchPanel()
@@ -80,7 +81,11 @@ function computeSwitchLayout(
     ? blks * blkW + (blks - 1) * BLOCK_GAP - (blks * CPB - units) * (RJ_W + RJ_COL_GAP)
     : 0;
   totRjW = Math.max(0, totRjW);
-  const sfpRowW = sfpTotal > 0 ? sfpTotal * SFP_W + (sfpTotal - 1) * SFP_GAP_X : 0;
+
+  // SFP ports stacked in 2 rows when sfpTotal >= 4 (2x2, 2x4, 2x6 patterns) or 1 row when <= 2 (1x2 pattern)
+  const sfpRows = sfpTotal >= 4 ? 2 : 1;
+  const sfpCols = sfpRows === 1 ? sfpTotal : Math.ceil(sfpTotal / 2);
+  const sfpRowW = sfpCols > 0 ? sfpCols * SFP_W + (sfpCols - 1) * SFP_GAP_X : 0;
   const stackRowW = stack > 0 ? stack * RJ_W + (stack - 1) * RJ_COL_GAP : 0;
 
   const trailItemWidths = [
@@ -113,9 +118,11 @@ function computeSwitchLayout(
   const rstX = usbX + (usbPort ? USB_W + TRAIL_GAP : 0);
   const rjTop = (U1 - (rows === 1 ? RJ_H : RJ_H * 2 + RJ_ROW_GAP)) / 2;
   const sfpTop = (U1 - SFP_H) / 2;
+  const sfpTop0 = sfpRows === 1 ? sfpTop : 20;
+  const sfpTop1 = sfpRows === 1 ? sfpTop : 68;
   const stackTop = (U1 - RJ_H) / 2;
 
-  return { totRjW, sfpRowW, stackRowW, trailW, consoleW, chassisW, bladeW, totW, rjX, sfpX, stackX, mgmtX, consoleJackX, usbX, rstX, rjTop, sfpTop, stackTop, blkW };
+  return { totRjW, sfpRowW, stackRowW, trailW, consoleW, chassisW, bladeW, totW, rjX, sfpX, stackX, mgmtX, consoleJackX, usbX, rstX, rjTop, sfpTop, stackTop, blkW, sfpRows, sfpTop0, sfpTop1 };
 }
 
 /** One combined transceiver uplink row, ordered SFP → SFP+ → QSFP. QSFP+/QSFP56/QSFP-DD all
@@ -130,11 +137,11 @@ export function switchPorts(
   const { sfp = 0, qsfp = 0, stack = 0, mgmt = true, consolePort = true, usbPort = true } = extra ?? {};
   const W = 350, H = 30;
   const sfpTotal = sfp + sfpPlus + qsfp;
-  const { blkW, totW, rjX, sfpX, stackX, mgmtX, consoleJackX, rjTop, sfpTop, stackTop } =
+  const { blkW, totW, rjX, sfpX, stackX, mgmtX, consoleJackX, rjTop, sfpTop, stackTop, sfpRows, sfpTop0, sfpTop1 } =
     computeSwitchLayout(rj45, sfpTotal, rows, stack, mgmt, consolePort, usbPort);
 
   const sx = W / totW;
-  const sy = H / U1;
+  const sy = 28.5 / U1;
 
   type PortEntry = Omit<PortData, 'deviceId' | 'connected' | 'cableId'>;
   const out: PortEntry[] = [];
@@ -153,10 +160,6 @@ export function switchPorts(
     }
     out.push({
       id: `${idPfx}p${n}`, name: `Port ${n}`, type: 'rj45', speed: '1 Gbps',
-      // Not rounded — the panel SVG scales this exact same geometry by the exact same (sx, sy)
-      // factors via preserveAspectRatio="none", so keeping full precision here is what makes the
-      // hover/neon-glow overlay (drawn from these relativeX/Y/portW/portH values) land pixel-
-      // perfect on the actual jack instead of drifting off by rounding error.
       relativeX: (jx + RJ_W / 2) * sx, relativeY: (jy + RJ_H / 2) * sy,
       portW: RJ_W * sx, portH: RJ_H * sy,
     });
@@ -169,10 +172,13 @@ export function switchPorts(
   ];
   transceivers.forEach((t, idx) => {
     const n = idx + 1;
-    const jx = sfpX + idx * (SFP_W + SFP_GAP_X);
+    const col = sfpRows === 1 ? idx : Math.floor(idx / 2);
+    const row = sfpRows === 1 ? 0 : idx % 2;
+    const jx = sfpX + col * (SFP_W + SFP_GAP_X);
+    const jy = row === 0 ? sfpTop0 : sfpTop1;
     out.push({
       id: `${idPfx}sfp${n}`, name: `${t.label} ${n}`, type: t.type, speed: t.speed,
-      relativeX: (jx + SFP_W / 2) * sx, relativeY: (sfpTop + SFP_H / 2) * sy,
+      relativeX: (jx + SFP_W / 2) * sx, relativeY: (jy + SFP_H / 2) * sy,
       portW: SFP_W * sx, portH: SFP_H * sy,
       group: 'UPLINK',
     });
@@ -271,12 +277,22 @@ export function torSwitchPorts(
     });
   }
 
+  // Calculate QSFP X position dynamically after SFP block
+  const totalSfpCols = Math.ceil(sfp28Count / 2);
+  const sfpBlocks = totalSfpCols > 0 ? Math.floor((totalSfpCols - 1) / 4) : 0;
+  const lastColInBlock = totalSfpCols > 0 ? (totalSfpCols - 1) % 4 : 0;
+  const sfpEndJx = totalSfpCols > 0
+    ? TOR_SFP_X + sfpBlocks * (4 * TOR_SFP_W + 3 * TOR_SFP_COL_GAP + TOR_SFP_BLK_GAP) + lastColInBlock * (TOR_SFP_W + TOR_SFP_COL_GAP) + TOR_SFP_W
+    : TOR_SFP_X;
+  const sep2X = sfp28Count < 48 ? sfpEndJx + 20 : TOR_SEP2_X;
+  const qsfpStartX = sfp28Count < 48 ? sep2X + 10 : TOR_QSFP_X;
+
   // QSFP28 100G Uplink Ports (Q1, Q3, Q5 top row; Q2, Q4, Q6 bottom row)
   for (let n = 1; n <= qsfp28Count; n++) {
     const isOdd = n % 2 === 1;
     const col = Math.floor((n - 1) / 2);
     const row = isOdd ? 0 : 1;
-    const jx = TOR_QSFP_X + col * (TOR_QSFP_W + TOR_QSFP_COL_GAP);
+    const jx = qsfpStartX + col * (TOR_QSFP_W + TOR_QSFP_COL_GAP);
     const jy = row === 0 ? TOR_QSFP_TOP0 : TOR_QSFP_TOP1;
 
     out.push({
@@ -340,6 +356,90 @@ export function torSwitchPorts(
   return out;
 }
 
+/** High-density Spine-Leaf switch port generator (32x 100G/400G QSFP-DD). */
+export function leafSwitchPorts(
+  qsfpDdCount = 32,
+  idPfx = 'leaf-',
+): DeviceTemplate['ports'] {
+  const W = 350, H = 28.5;
+  const sx = W / TOR_RW;
+  const sy = H / TOR_U1;
+
+  type PortEntry = Omit<PortData, 'deviceId' | 'connected' | 'cableId'>;
+  const out: PortEntry[] = [];
+
+  const startX = 240;
+  const colW = 50;
+  const top0 = 26;
+  const top1 = 68;
+
+  for (let n = 1; n <= qsfpDdCount; n++) {
+    const isOdd = n % 2 === 1;
+    const col = Math.floor((n - 1) / 2);
+    const row = isOdd ? 0 : 1;
+    const jx = startX + col * colW;
+    const jy = row === 0 ? top0 : top1;
+
+    out.push({
+      id: `${idPfx}q${n}`,
+      name: `400G QSFP-DD ${n}`,
+      type: 'qsfp-dd',
+      speed: '400 Gbps',
+      relativeX: (jx + TOR_QSFP_W / 2) * sx,
+      relativeY: (jy + TOR_QSFP_H / 2) * sy,
+      portW: TOR_QSFP_W * sx,
+      portH: TOR_QSFP_H * sy,
+      group: 'DATA',
+    });
+  }
+
+  // Out-of-band MGMT RJ45 Port
+  out.push({
+    id: `${idPfx}mgmt`,
+    name: 'MGMT',
+    type: 'management',
+    speed: '1 Gbps',
+    relativeX: (TOR_MGMT_X + RJ_W / 2) * sx,
+    relativeY: (TOR_U1 / 2) * sy,
+    portW: RJ_W * sx,
+    portH: RJ_H * sy,
+    group: 'MGMT',
+  });
+
+  // Console Serial RJ45 Port
+  out.push({
+    id: `${idPfx}console`,
+    name: 'Console',
+    type: 'console',
+    speed: '115.2 Kbps',
+    relativeX: (TOR_CONSOLE_JACK_X + RJ_W / 2) * sx,
+    relativeY: (TOR_U1 / 2) * sy,
+    portW: RJ_W * sx,
+    portH: RJ_H * sy,
+    group: 'MGMT',
+  });
+
+  // Dual redundant power inlets in rear
+  out.push({
+    id: `${idPfx}psu1`,
+    name: 'PSU 1 (C14)',
+    type: 'power',
+    speed: '230V',
+    relativeX: 15,
+    relativeY: 10,
+  });
+  out.push({
+    id: `${idPfx}psu2`,
+    name: 'PSU 2 (C14)',
+    type: 'power',
+    speed: '230V',
+    relativeX: 30,
+    relativeY: 10,
+  });
+
+  return out;
+}
+
 /**
  * Photorealistic Faceplate Renderer for 1U Top-of-Rack / High-Density Switches.
  * Displays 48x 25G SFP28 optical cages (2 stacked rows of 24) and 6x 100G QSFP28 cages (2 stacked rows of 3),
@@ -371,8 +471,9 @@ function renderTorSwitchPanel(
 
   const sfp28Ports = uplinkPorts.filter(p => p.type !== 'qsfp' && p.type !== 'qsfp28' && p.type !== 'qsfp-dd');
   const qsfpPorts = uplinkPorts.filter(p => p.type === 'qsfp' || p.type === 'qsfp28' || p.type === 'qsfp-dd');
-  const sfpCount = sfp28Ports.length > 0 ? sfp28Ports.length : 48;
-  const qsfpCount = qsfpPorts.length > 0 ? qsfpPorts.length : 6;
+  const isLeaf32 = template?.id === 'sw-1u-leaf-100g-400g' || (sfp28Ports.length === 0 && qsfpPorts.length >= 16);
+  const sfpCount = isLeaf32 ? 0 : (sfp28Ports.length > 0 ? sfp28Ports.length : 48);
+  const qsfpCount = isLeaf32 ? (qsfpPorts.length > 0 ? qsfpPorts.length : 32) : (qsfpPorts.length > 0 ? qsfpPorts.length : 6);
 
   const connectedCount = connectedPortIndices.size;
   const totalPortCount = ports.filter(p => p.type !== 'power').length || (sfpCount + qsfpCount + 2);
@@ -554,7 +655,9 @@ function renderTorSwitchPanel(
 
   const lcdLine = connectedCount > 0
     ? `${connectedCount}/${totalPortCount} PORTS UP`
-    : `48× 25G SFP28 + 6× 100G QSFP28 • 1U`;
+    : isLeaf32
+      ? `${qsfpCount}× 400G QSFP-DD • 1U`
+      : `${sfpCount}× 25G SFP28${qsfpCount ? ` + ${qsfpCount}× 100G` : ''} • 1U`;
   const statT = el('text', { x: 62, y: cy + 24, 'font-size': 7, fill: '#38bdf8', 'letter-spacing': 0.8 });
   statT.textContent = lcdLine;
   con.appendChild(statT);
@@ -601,97 +704,153 @@ function renderTorSwitchPanel(
   rstT.textContent = 'RST'; rstG.appendChild(rstT);
   ns.appendChild(rstG);
 
-  // 5. Vertical Separator & Header (SFP28 Section)
-  ns.appendChild(el('line', { x1: TOR_SEP1_X, y1: 16, x2: TOR_SEP1_X, y2: TOR_U1 - 16, stroke: '#334155', 'stroke-width': 1 }));
-  const sfpHeadT = el('text', { x: TOR_SFP_X, y: 16, 'font-size': 8.5, 'font-weight': 700, fill: '#38bdf8', 'letter-spacing': 1.2 });
-  sfpHeadT.textContent = '25G SFP28 PORTS (1–48)';
-  ns.appendChild(sfpHeadT);
+  if (isLeaf32) {
+    // 5. 32-Port Spine-Leaf Fabric Section (2 stacked rows of 16 QSFP-DD)
+    ns.appendChild(el('line', { x1: 228, y1: 16, x2: 228, y2: TOR_U1 - 16, stroke: '#334155', 'stroke-width': 1 }));
+    const leafHeadT = el('text', { x: 240, y: 16, 'font-size': 8.5, 'font-weight': 700, fill: '#a855f7', 'letter-spacing': 1.2 });
+    leafHeadT.textContent = `400G QSFP-DD PORTS (Q1–Q${qsfpCount})`;
+    ns.appendChild(leafHeadT);
 
-  // 6. 48x SFP28 Optical Ports (2 stacked rows of 24)
-  for (let n = 1; n <= sfpCount; n++) {
-    const isOdd = n % 2 === 1;
-    const col = Math.floor((n - 1) / 2);
-    const row = isOdd ? 0 : 1;
-    const b = Math.floor(col / 4);
-    const ci = col % 4;
-    const jx = TOR_SFP_X + b * (4 * TOR_SFP_W + 3 * TOR_SFP_COL_GAP + TOR_SFP_BLK_GAP) + ci * (TOR_SFP_W + TOR_SFP_COL_GAP);
-    const jy = row === 0 ? TOR_SFP_TOP0 : TOR_SFP_TOP1;
+    const startX = 240;
+    const colW = 50;
+    const top0 = 26;
+    const top1 = 68;
 
-    const port = sfp28Ports[n - 1] ?? ports[n - 1];
-    const globalIdx = port ? ports.indexOf(port) : (n - 1);
-    const connected = connectedPortIndices.has(globalIdx);
-    const symId = connected ? `tor-sfpPlug-${uid}` : `tor-sfpCage-${uid}`;
+    for (let n = 1; n <= qsfpCount; n++) {
+      const isOdd = n % 2 === 1;
+      const col = Math.floor((n - 1) / 2);
+      const row = isOdd ? 0 : 1;
+      const jx = startX + col * colW;
+      const jy = row === 0 ? top0 : top1;
 
-    const pg = g(); pg.setAttribute('transform', `translate(${jx} ${jy})`);
-    pg.setAttribute('role', 'button'); pg.setAttribute('tabindex', '0');
-    pg.setAttribute('aria-label', `25G SFP28 port ${n}${connected ? ' (Connected)' : ''}`);
-    pg.setAttribute('style', 'cursor:pointer;outline:none');
+      const port = qsfpPorts[n - 1];
+      const globalIdx = port ? ports.indexOf(port) : (n - 1);
+      const connected = connectedPortIndices.has(globalIdx);
+      const symId = connected ? `tor-qsfpPlug-${uid}` : `tor-qsfpCage-${uid}`;
 
-    const u = el('use'); u.setAttribute('href', `#${symId}`);
-    u.setAttribute('width', String(TOR_SFP_W)); u.setAttribute('height', String(TOR_SFP_H));
-    pg.appendChild(u);
+      const qg = g(); qg.setAttribute('transform', `translate(${jx} ${jy})`);
+      qg.setAttribute('role', 'button'); qg.setAttribute('tabindex', '0');
+      qg.setAttribute('aria-label', `400G QSFP-DD port Q${n}${connected ? ' (Connected)' : ''}`);
+      qg.setAttribute('style', 'cursor:pointer;outline:none');
 
-    // Link/Activity LED
-    const ledY = row === 0 ? 4.5 : TOR_SFP_H - 4.5;
-    switchLed(pg, uid, TOR_SFP_W / 2, ledY, connected ? linkOn : 'off', 1.2);
+      const u = el('use'); u.setAttribute('href', `#${symId}`);
+      u.setAttribute('width', String(TOR_QSFP_W)); u.setAttribute('height', String(TOR_QSFP_H));
+      qg.appendChild(u);
 
-    const hov = el('rect', { x: 0, y: 0, width: TOR_SFP_W, height: TOR_SFP_H, rx: 2, fill: accent, opacity: 0 });
-    hov.setAttribute('class', `hov-${uid}`); hov.setAttribute('pointer-events', 'none');
-    pg.appendChild(hov);
-    ns.appendChild(pg);
+      const ledY = row === 0 ? 4.5 : TOR_QSFP_H - 4.5;
+      switchLed(qg, uid, TOR_QSFP_W / 2 - 6, ledY, connected ? linkOn : 'off', 1.2);
+      switchLed(qg, uid, TOR_QSFP_W / 2 + 6, ledY, connected ? actOn : 'off', 1.2);
 
-    // Port Number Label
-    const lblY = row === 0 ? jy - 4 : jy + TOR_SFP_H + 9;
-    const pt = el('text', { x: jx + TOR_SFP_W / 2, y: lblY, 'text-anchor': 'middle', 'font-size': 6.8, 'font-weight': 600, fill: txt.label });
-    pt.textContent = String(n);
-    pt.setAttribute('pointer-events', 'none');
-    ns.appendChild(pt);
-  }
+      const hov = el('rect', { x: 0, y: 0, width: TOR_QSFP_W, height: TOR_QSFP_H, rx: 2, fill: accent, opacity: 0 });
+      hov.setAttribute('class', `hov-${uid}`); hov.setAttribute('pointer-events', 'none');
+      qg.appendChild(hov);
+      ns.appendChild(qg);
 
-  // 7. Vertical Separator & Header (QSFP28 Section)
-  ns.appendChild(el('line', { x1: TOR_SEP2_X, y1: 16, x2: TOR_SEP2_X, y2: TOR_U1 - 16, stroke: '#334155', 'stroke-width': 1 }));
-  const qsfpHeadT = el('text', { x: TOR_QSFP_X, y: 16, 'font-size': 8.5, 'font-weight': 700, fill: '#a855f7', 'letter-spacing': 1.2 });
-  qsfpHeadT.textContent = '100G QSFP28 (Q1–Q6)';
-  ns.appendChild(qsfpHeadT);
+      const lblY = row === 0 ? jy - 4 : jy + TOR_QSFP_H + 9;
+      const qt = el('text', { x: jx + TOR_QSFP_W / 2, y: lblY, 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 700, fill: '#c084fc' });
+      qt.textContent = `Q${n}`;
+      qt.setAttribute('pointer-events', 'none');
+      ns.appendChild(qt);
+    }
+  } else {
+    // 5. Vertical Separator & Header (SFP28 Section)
+    ns.appendChild(el('line', { x1: TOR_SEP1_X, y1: 16, x2: TOR_SEP1_X, y2: TOR_U1 - 16, stroke: '#334155', 'stroke-width': 1 }));
+    const sfpHeadT = el('text', { x: TOR_SFP_X, y: 16, 'font-size': 8.5, 'font-weight': 700, fill: '#38bdf8', 'letter-spacing': 1.2 });
+    sfpHeadT.textContent = `25G SFP28 PORTS (1–${sfpCount})`;
+    ns.appendChild(sfpHeadT);
 
-  // 8. 6x QSFP28 100G Fabric Ports (2 stacked rows of 3)
-  for (let n = 1; n <= qsfpCount; n++) {
-    const isOdd = n % 2 === 1;
-    const col = Math.floor((n - 1) / 2);
-    const row = isOdd ? 0 : 1;
-    const jx = TOR_QSFP_X + col * (TOR_QSFP_W + TOR_QSFP_COL_GAP);
-    const jy = row === 0 ? TOR_QSFP_TOP0 : TOR_QSFP_TOP1;
+    // 6. SFP28 Optical Ports (2 stacked rows)
+    for (let n = 1; n <= sfpCount; n++) {
+      const isOdd = n % 2 === 1;
+      const col = Math.floor((n - 1) / 2);
+      const row = isOdd ? 0 : 1;
+      const b = Math.floor(col / 4);
+      const ci = col % 4;
+      const jx = TOR_SFP_X + b * (4 * TOR_SFP_W + 3 * TOR_SFP_COL_GAP + TOR_SFP_BLK_GAP) + ci * (TOR_SFP_W + TOR_SFP_COL_GAP);
+      const jy = row === 0 ? TOR_SFP_TOP0 : TOR_SFP_TOP1;
 
-    const port = qsfpPorts[n - 1];
-    const globalIdx = port ? ports.indexOf(port) : (sfpCount + n - 1);
-    const connected = connectedPortIndices.has(globalIdx);
-    const symId = connected ? `tor-qsfpPlug-${uid}` : `tor-qsfpCage-${uid}`;
+      const port = sfp28Ports[n - 1] ?? ports[n - 1];
+      const globalIdx = port ? ports.indexOf(port) : (n - 1);
+      const connected = connectedPortIndices.has(globalIdx);
+      const symId = connected ? `tor-sfpPlug-${uid}` : `tor-sfpCage-${uid}`;
 
-    const qg = g(); qg.setAttribute('transform', `translate(${jx} ${jy})`);
-    qg.setAttribute('role', 'button'); qg.setAttribute('tabindex', '0');
-    qg.setAttribute('aria-label', `100G QSFP28 port Q${n}${connected ? ' (Connected)' : ''}`);
-    qg.setAttribute('style', 'cursor:pointer;outline:none');
+      const pg = g(); pg.setAttribute('transform', `translate(${jx} ${jy})`);
+      pg.setAttribute('role', 'button'); pg.setAttribute('tabindex', '0');
+      pg.setAttribute('aria-label', `25G SFP28 port ${n}${connected ? ' (Connected)' : ''}`);
+      pg.setAttribute('style', 'cursor:pointer;outline:none');
 
-    const u = el('use'); u.setAttribute('href', `#${symId}`);
-    u.setAttribute('width', String(TOR_QSFP_W)); u.setAttribute('height', String(TOR_QSFP_H));
-    qg.appendChild(u);
+      const u = el('use'); u.setAttribute('href', `#${symId}`);
+      u.setAttribute('width', String(TOR_SFP_W)); u.setAttribute('height', String(TOR_SFP_H));
+      pg.appendChild(u);
 
-    // Quad LED indicators
-    const ledY = row === 0 ? 4.5 : TOR_QSFP_H - 4.5;
-    switchLed(qg, uid, TOR_QSFP_W / 2 - 6, ledY, connected ? linkOn : 'off', 1.2);
-    switchLed(qg, uid, TOR_QSFP_W / 2 + 6, ledY, connected ? actOn : 'off', 1.2);
+      const ledY = row === 0 ? 4.5 : TOR_SFP_H - 4.5;
+      switchLed(pg, uid, TOR_SFP_W / 2, ledY, connected ? linkOn : 'off', 1.2);
 
-    const hov = el('rect', { x: 0, y: 0, width: TOR_QSFP_W, height: TOR_QSFP_H, rx: 2, fill: accent, opacity: 0 });
-    hov.setAttribute('class', `hov-${uid}`); hov.setAttribute('pointer-events', 'none');
-    qg.appendChild(hov);
-    ns.appendChild(qg);
+      const hov = el('rect', { x: 0, y: 0, width: TOR_SFP_W, height: TOR_SFP_H, rx: 2, fill: accent, opacity: 0 });
+      hov.setAttribute('class', `hov-${uid}`); hov.setAttribute('pointer-events', 'none');
+      pg.appendChild(hov);
+      ns.appendChild(pg);
 
-    // QSFP Label (Q1..Q6)
-    const lblY = row === 0 ? jy - 4 : jy + TOR_QSFP_H + 9;
-    const qt = el('text', { x: jx + TOR_QSFP_W / 2, y: lblY, 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 700, fill: '#c084fc' });
-    qt.textContent = `Q${n}`;
-    qt.setAttribute('pointer-events', 'none');
-    ns.appendChild(qt);
+      const lblY = row === 0 ? jy - 4 : jy + TOR_SFP_H + 9;
+      const pt = el('text', { x: jx + TOR_SFP_W / 2, y: lblY, 'text-anchor': 'middle', 'font-size': 6.8, 'font-weight': 600, fill: txt.label });
+      pt.textContent = String(n);
+      pt.setAttribute('pointer-events', 'none');
+      ns.appendChild(pt);
+    }
+
+    // 7. QSFP Uplinks (if present)
+    if (qsfpCount > 0) {
+      const totalSfpCols = Math.ceil(sfpCount / 2);
+      const sfpBlocks = totalSfpCols > 0 ? Math.floor((totalSfpCols - 1) / 4) : 0;
+      const lastColInBlock = totalSfpCols > 0 ? (totalSfpCols - 1) % 4 : 0;
+      const sfpEndJx = totalSfpCols > 0
+        ? TOR_SFP_X + sfpBlocks * (4 * TOR_SFP_W + 3 * TOR_SFP_COL_GAP + TOR_SFP_BLK_GAP) + lastColInBlock * (TOR_SFP_W + TOR_SFP_COL_GAP) + TOR_SFP_W
+        : TOR_SFP_X;
+      const sep2X = sfpCount < 48 ? sfpEndJx + 20 : TOR_SEP2_X;
+      const qsfpStartX = sfpCount < 48 ? sep2X + 10 : TOR_QSFP_X;
+
+      ns.appendChild(el('line', { x1: sep2X, y1: 16, x2: sep2X, y2: TOR_U1 - 16, stroke: '#334155', 'stroke-width': 1 }));
+      const qsfpHeadT = el('text', { x: qsfpStartX, y: 16, 'font-size': 8.5, 'font-weight': 700, fill: '#a855f7', 'letter-spacing': 1.2 });
+      qsfpHeadT.textContent = `100G QSFP28 (Q1–Q${qsfpCount})`;
+      ns.appendChild(qsfpHeadT);
+
+      for (let n = 1; n <= qsfpCount; n++) {
+        const isOdd = n % 2 === 1;
+        const col = Math.floor((n - 1) / 2);
+        const row = isOdd ? 0 : 1;
+        const jx = qsfpStartX + col * (TOR_QSFP_W + TOR_QSFP_COL_GAP);
+        const jy = row === 0 ? TOR_QSFP_TOP0 : TOR_QSFP_TOP1;
+
+        const port = qsfpPorts[n - 1];
+        const globalIdx = port ? ports.indexOf(port) : (sfpCount + n - 1);
+        const connected = connectedPortIndices.has(globalIdx);
+        const symId = connected ? `tor-qsfpPlug-${uid}` : `tor-qsfpCage-${uid}`;
+
+        const qg = g(); qg.setAttribute('transform', `translate(${jx} ${jy})`);
+        qg.setAttribute('role', 'button'); qg.setAttribute('tabindex', '0');
+        qg.setAttribute('aria-label', `100G QSFP28 port Q${n}${connected ? ' (Connected)' : ''}`);
+        qg.setAttribute('style', 'cursor:pointer;outline:none');
+
+        const u = el('use'); u.setAttribute('href', `#${symId}`);
+        u.setAttribute('width', String(TOR_QSFP_W)); u.setAttribute('height', String(TOR_QSFP_H));
+        qg.appendChild(u);
+
+        const ledY = row === 0 ? 4.5 : TOR_QSFP_H - 4.5;
+        switchLed(qg, uid, TOR_QSFP_W / 2 - 6, ledY, connected ? linkOn : 'off', 1.2);
+        switchLed(qg, uid, TOR_QSFP_W / 2 + 6, ledY, connected ? actOn : 'off', 1.2);
+
+        const hov = el('rect', { x: 0, y: 0, width: TOR_QSFP_W, height: TOR_QSFP_H, rx: 2, fill: accent, opacity: 0 });
+        hov.setAttribute('class', `hov-${uid}`); hov.setAttribute('pointer-events', 'none');
+        qg.appendChild(hov);
+        ns.appendChild(qg);
+
+        const lblY = row === 0 ? jy - 4 : jy + TOR_QSFP_H + 9;
+        const qt = el('text', { x: jx + TOR_QSFP_W / 2, y: lblY, 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 700, fill: '#c084fc' });
+        qt.textContent = `Q${n}`;
+        qt.setAttribute('pointer-events', 'none');
+        ns.appendChild(qt);
+      }
+    }
   }
 
   // 9. CSS animations
@@ -1064,21 +1223,28 @@ export function renderSwitchPanel(
     t.setAttribute('pointer-events', 'none'); t.textContent = String(n); ns.appendChild(t);
   }
 
-  // ── uplink transceivers (SFP / SFP+ / QSFP, one combined row) ──────────
+  // ── uplink transceivers (SFP / SFP+ / QSFP, stacked or side patterns) ──
   if (sfpCount > 0) {
+    const sfpRows = sfpCount >= 4 ? 2 : 1;
+    const sfpTop0 = sfpRows === 1 ? sfpTop : 20;
+    const sfpTop1 = sfpRows === 1 ? sfpTop : 68;
+
     ns.appendChild(el('line', { x1: sfpX - SECTION_GAP / 2, y1: 20, x2: sfpX - SECTION_GAP / 2, y2: U1 - 20, stroke: isLight ? '#d4d7dc' : '#3a4147', 'stroke-width': 1, opacity: 0.5 }));
-    const ts = el('text', { x: sfpX, y: sfpTop - 9, 'font-size': 8, fill: txt.mute, 'letter-spacing': 1.4 });
+    const ts = el('text', { x: sfpX, y: sfpTop0 - 9, 'font-size': 8, fill: txt.mute, 'letter-spacing': 1.4 });
     ts.textContent = 'UPLINK'; ns.appendChild(ts);
 
     for (let n = 1; n <= sfpCount; n++) {
       const port = uplinkPorts[n - 1];
       const displayLabel = port?.type === 'qsfp28' ? `Q${uplinkPorts.slice(0, n).filter(p => p.type === 'qsfp28').length}` : String(rj45Count + n);
-      const sx = sfpX + (n - 1) * (SFP_W + SFP_GAP_X);
+      const col = sfpRows === 1 ? (n - 1) : Math.floor((n - 1) / 2);
+      const row = sfpRows === 1 ? 0 : (n - 1) % 2;
+      const sx = sfpX + col * (SFP_W + SFP_GAP_X);
+      const sy = row === 0 ? sfpTop0 : sfpTop1;
       const globalIdx = rj45Count + n - 1;
       const connected = connectedPortIndices.has(globalIdx);
       const linkState = connected ? linkOn : 'off';
       const actState = connected ? actOn : 'off';
-      const sg = g(); sg.setAttribute('transform', `translate(${sx} ${sfpTop})`);
+      const sg = g(); sg.setAttribute('transform', `translate(${sx} ${sy})`);
       sg.setAttribute('role', 'button'); sg.setAttribute('tabindex', '0');
       sg.setAttribute('aria-label', `Uplink port ${displayLabel}`);
       sg.setAttribute('style', 'cursor:pointer;outline:none;--bail:#39ff8a');
@@ -1086,7 +1252,8 @@ export function renderSwitchPanel(
       sg.appendChild(u);
       switchLed(sg, uid, 6.5, SFP_H - 3.2, linkState);
       switchLed(sg, uid, SFP_W - 6.5, SFP_H - 3.2, actState);
-      const tl = el('text', { x: SFP_W / 2, y: -5.5, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 600, fill: txt.label });
+      const labelY = row === 0 ? -5.5 : SFP_H + 9;
+      const tl = el('text', { x: SFP_W / 2, y: labelY, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 600, fill: txt.label });
       tl.setAttribute('pointer-events', 'none'); tl.textContent = displayLabel; sg.appendChild(tl);
       if (showDustCovers && !connected) {
         sg.appendChild(el('rect', { x: 4, y: 4, width: SFP_W - 8, height: SFP_H - 8, rx: 2, fill: '#3a3f46', opacity: 0.55 }));

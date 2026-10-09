@@ -12,6 +12,8 @@
 
 export type PublicationClassification = 'private' | 'invite-only' | 'public';
 
+export type GenerationSource = 'ai-generated' | 'human-generated';
+
 export type DesignHubCategory =
   | 'Storage & HCI'
   | 'Cloud Architecture'
@@ -120,6 +122,7 @@ export interface PublishedArchitecture {
   category: DesignHubCategory;
   tags: string[];
   classification: PublicationClassification;
+  generationSource: GenerationSource;
   author: {
     id: string;
     name: string;

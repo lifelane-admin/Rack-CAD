@@ -7,6 +7,7 @@
 import {
   PublishedArchitecture,
   PublicationClassification,
+  GenerationSource,
   DesignHubCategory,
   RankingSortTab,
   CommunityReview,
@@ -30,6 +31,7 @@ const SEED_PUBLISHED_DESIGNS: PublishedArchitecture[] = [
     category: 'Storage & HCI',
     tags: ['Ceph', 'Proxmox', '25GbE', 'HCI', 'Mesh-Network', 'NVMe'],
     classification: 'public',
+    generationSource: 'human-generated',
     author: {
       id: 'usr-srinivas-architect',
       name: 'Srinivas V.',
@@ -135,6 +137,7 @@ const SEED_PUBLISHED_DESIGNS: PublishedArchitecture[] = [
     category: 'Cloud Architecture',
     tags: ['Azure', 'Landing-Zone', 'Hub-Spoke', 'Firewall-Premium', 'ExpressRoute', 'Enterprise'],
     classification: 'public',
+    generationSource: 'ai-generated',
     author: {
       id: 'usr-elena-cloud',
       name: 'Elena Rostova',
@@ -195,6 +198,7 @@ const SEED_PUBLISHED_DESIGNS: PublishedArchitecture[] = [
     category: 'AI Infrastructure',
     tags: ['NVIDIA', 'H100', 'InfiniBand', 'NDR-800G', 'Liquid-Cooling', 'AI-Cluster'],
     classification: 'public',
+    generationSource: 'ai-generated',
     author: {
       id: 'usr-marcus-ai',
       name: 'Marcus Vance',
@@ -255,6 +259,7 @@ const SEED_PUBLISHED_DESIGNS: PublishedArchitecture[] = [
     category: 'Virtualization',
     tags: ['Proxmox', 'Ceph', 'PBS', 'Cisco-Nexus', 'Dual-ToR', '25GbE'],
     classification: 'public',
+    generationSource: 'human-generated',
     author: {
       id: 'usr-srinivas-architect',
       name: 'Srinivas V.',
@@ -315,6 +320,7 @@ const SEED_PUBLISHED_DESIGNS: PublishedArchitecture[] = [
     category: 'Microsoft Hybrid',
     tags: ['Hyper-V', 'Azure-Arc', 'S2D', 'Windows-Server', 'Dell-PowerEdge', 'Hybrid'],
     classification: 'public',
+    generationSource: 'human-generated',
     author: {
       id: 'usr-kavita-win',
       name: 'Kavita Sundaram',
@@ -375,6 +381,7 @@ const SEED_PUBLISHED_DESIGNS: PublishedArchitecture[] = [
     category: 'Cloud Architecture',
     tags: ['AWS', 'Transit-Gateway', 'DirectConnect', 'Hybrid', 'FortiGate', 'Multi-VPC'],
     classification: 'public',
+    generationSource: 'human-generated',
     author: {
       id: 'usr-liam-net',
       name: 'Liam Chen',
@@ -450,7 +457,14 @@ class DesignHubStore {
           // Merge seed designs to guarantee fresh updates
           const storedIds = new Set(stored.map((d: PublishedArchitecture) => d.id));
           const missing = SEED_PUBLISHED_DESIGNS.filter(s => !storedIds.has(s.id));
-          this.designs = [...stored, ...missing];
+          const merged = [...stored, ...missing];
+          for (const d of merged) {
+            if (!d.generationSource) {
+              const seed = SEED_PUBLISHED_DESIGNS.find(s => s.id === d.id);
+              d.generationSource = seed ? seed.generationSource : 'human-generated';
+            }
+          }
+          this.designs = merged;
           return;
         }
       }
@@ -735,6 +749,7 @@ class DesignHubStore {
       category: DesignHubCategory;
       tags: string[];
       classification: PublicationClassification;
+      generationSource?: GenerationSource;
       license: string;
       invitedUsers?: InvitedUser[];
       communitySettings: PublishedArchitecture['communitySettings'];
@@ -751,6 +766,7 @@ class DesignHubStore {
       category: params.category,
       tags: params.tags,
       classification: params.classification,
+      generationSource: params.generationSource || 'human-generated',
       author: {
         id: currentUser.id,
         name: currentUser.name,

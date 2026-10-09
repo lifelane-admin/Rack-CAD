@@ -1,5 +1,5 @@
 import { DeviceTemplate, DeviceData, DeviceCategory, SwitchConfig, FirewallConfig, NacConfig, AtsConfig } from '../core/types';
-import { switchPorts, torSwitchPorts } from '../renderers/switch-renderer';
+import { switchPorts, torSwitchPorts, leafSwitchPorts } from '../renderers/switch-renderer';
 import { fortigatePorts, firewallPorts } from '../renderers/firewall-renderer';
 import { networkingPorts } from '../renderers/networking-renderer';
 import { nacPorts } from '../renderers/nac-renderer';
@@ -326,6 +326,30 @@ export const deviceCatalog: DeviceTemplate[] = [
     ports: switchPorts(SW_ENTERPRISE_CONFIG.rj45Count!, SW_ENTERPRISE_CONFIG.sfpPlusCount!, 2, 'sw-ent-'),
   },
   {
+    id: 'sw-1u-tor-16x25g',
+    name: '1U Compact Leaf/ToR Switch (16x 25G + 2x 100G)',
+    manufacturer: 'Cisco / Arista',
+    model: 'Nexus 9336C-FX2 / 7020R',
+    category: 'switch',
+    heightUnits: 1,
+    color: '#1e3a8a',
+    icon: '🌐',
+    powerWatts: 220,
+    ports: torSwitchPorts(16, 2, 'tor16-'),
+  },
+  {
+    id: 'sw-1u-tor-24x25g',
+    name: '1U Enterprise ToR Switch (24x 25G + 4x 100G)',
+    manufacturer: 'Cisco / Arista',
+    model: 'Nexus 93180YC / 7050SX3-24',
+    category: 'switch',
+    heightUnits: 1,
+    color: '#1e3a8a',
+    icon: '🌐',
+    powerWatts: 320,
+    ports: torSwitchPorts(24, 4, 'tor24-'),
+  },
+  {
     id: 'sw-1u-tor-25g-100g',
     name: '1U Top-of-Rack Switch (48x 25G + 6x 100G)',
     manufacturer: 'Cisco / Arista',
@@ -347,17 +371,7 @@ export const deviceCatalog: DeviceTemplate[] = [
     color: '#1d4ed8',
     icon: '🌿',
     powerWatts: 650,
-    ports: [
-      ...Array.from({ length: 32 }, (_, i) => ({
-        id: `leaf-q${i + 1}`,
-        name: `400G QSFP-DD ${i + 1}`,
-        type: 'qsfp-dd' as const,
-        relativeX: 45 + (i % 16) * 18,
-        relativeY: i < 16 ? 6 : 18,
-        speed: '400 Gbps',
-      })),
-      { id: 'leaf-mgmt', name: 'MGMT', type: 'management' as const, relativeX: 340, relativeY: 10, speed: '1 Gbps' },
-    ],
+    ports: leafSwitchPorts(32, 'leaf-'),
   },
   {
     id: 'sw-2u-spine-64x100g',
