@@ -109,7 +109,7 @@ export interface ArchitectureTemplate {
   categoryLabel: string;
   description: string;
   specs: string[];
-  costEstimate: string;
+  costEstimate?: string;
   savingEstimate?: string;
   pros: string[];
   cons?: string[];
@@ -120,13 +120,11 @@ export interface ArchitectureTemplate {
 export const ARCHITECTURE_TEMPLATES: ArchitectureTemplate[] = [
   {
     id: 'tpl-ceph-mesh',
-    title: '3-Node Ceph — MESH Network (Cost-Optimized)',
+    title: '3-Node Ceph — MESH Network',
     category: 'storage',
     categoryLabel: 'STORAGE & HCI',
-    description: 'Direct point-to-point mesh cabling between 3 nodes eliminating redundant 25GbE ToR switches, saving ₹3,65,000.',
+    description: 'Direct point-to-point mesh cabling between 3 nodes eliminating redundant 25GbE ToR switches with sub-millisecond replication latency.',
     specs: ['3x Storage Nodes', 'Dual 25GbE Mesh NICs', 'Zero Dedicated Switches', 'Redundant Replication'],
-    costEstimate: '₹14,75,000',
-    savingEstimate: 'Save ₹3,65,000 (20%)',
     pros: ['No ToR switch capital expenditure', 'Ultra-low latency direct replication', 'Ideal for 3-node edge cluster'],
     cons: ['Scalability limit to 3-5 nodes', 'Routing complexity compared to switched'],
     recommendedBadge: '★ AI Recommended',
@@ -139,7 +137,6 @@ export const ARCHITECTURE_TEMPLATES: ArchitectureTemplate[] = [
     categoryLabel: 'MICROSOFT HYBRID',
     description: 'High-availability Windows Server 2025 failover cluster with Storage Spaces Direct (S2D) and cloud management.',
     specs: ['2x 2U Compute Nodes', 'Storage Spaces Direct', 'Dual 10GbE RDMA', 'Azure Arc Enabled'],
-    costEstimate: '₹18,50,000',
     pros: ['Zero external SAN cost', 'Seamless Azure Portal governance', 'Automated VM live migration'],
     targetCategory: 'rack',
   },
@@ -150,8 +147,6 @@ export const ARCHITECTURE_TEMPLATES: ArchitectureTemplate[] = [
     categoryLabel: 'VIRTUALIZATION',
     description: 'Enterprise open-source HCI virtualization with native Ceph distributed storage and deduplicated PBS backup repository.',
     specs: ['3x Supermicro 1U Nodes', 'Ceph OSD NVMe Pool', 'Proxmox Backup Server', 'Dual 25GbE SFP28'],
-    costEstimate: '₹12,80,000',
-    savingEstimate: 'Save ₹8,40,000 vs VMware',
     pros: ['No hypervisor licensing tax', 'Native incremental backups', 'Full API automation'],
     recommendedBadge: 'Popular',
     targetCategory: 'rack',
@@ -163,7 +158,6 @@ export const ARCHITECTURE_TEMPLATES: ArchitectureTemplate[] = [
     categoryLabel: 'AZURE CLOUD',
     description: 'Secure multi-VNet cloud architecture with Azure Firewall, ExpressRoute gateway, and private endpoints.',
     specs: ['Central Hub VNet', '3x Spoke Workloads', 'Azure Firewall Premium', 'VPN / ExpressRoute'],
-    costEstimate: '$1,850/mo',
     pros: ['Zero-Trust perimeter isolation', 'Centralized traffic inspection', 'Scalable to hundreds of VNets'],
     targetCategory: 'cloud-azure',
   },
@@ -174,7 +168,6 @@ export const ARCHITECTURE_TEMPLATES: ArchitectureTemplate[] = [
     categoryLabel: 'AWS CLOUD',
     description: 'Hub-and-spoke multi-account AWS network architecture connecting production, staging, and shared services.',
     specs: ['AWS Transit Gateway', 'Direct Connect Gateway', 'Multi-AZ NAT Gateways', 'Security VPC'],
-    costEstimate: '$1,420/mo',
     pros: ['Unified routing table', 'Cross-VPC isolation', 'Simplified hybrid connectivity'],
     targetCategory: 'cloud-aws',
   },
@@ -185,7 +178,6 @@ export const ARCHITECTURE_TEMPLATES: ArchitectureTemplate[] = [
     categoryLabel: 'AI / GPU INFRASTRUCTURE',
     description: 'High-density 10.2 kW AI supercomputing rack with 800Gb/s Quantum-2 InfiniBand and liquid cooling manifolds.',
     specs: ['1x 4U 8x H100 Server', '400GbE / InfiniBand ToR', 'Dual 30A 3-Phase PDUs', 'Rear-Door Heat Exchanger'],
-    costEstimate: '₹2,10,00,000',
     pros: ['Maximum compute density per U', 'Sub-microsecond RoCE v2 networking', 'Ready for LLM training'],
     recommendedBadge: 'High Density',
     targetCategory: 'rack',

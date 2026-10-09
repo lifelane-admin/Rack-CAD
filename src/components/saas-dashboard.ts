@@ -543,15 +543,11 @@ export class SaaSWorkspaceDashboard {
           ${tpl.specs.map(s => `<span class="saas-tpl-spec-item">${s}</span>`).join('')}
         </div>
         <div class="saas-tpl-footer">
-          <div>
-            <div class="saas-tpl-cost">${tpl.costEstimate}</div>
-            ${tpl.savingEstimate ? `<div class="saas-tpl-saving">⚡ ${tpl.savingEstimate}</div>` : ''}
-          </div>
-          <div style="display:flex; gap:6px; align-items:center;">
-            <button class="saas-tpl-excel-btn" data-tpl-id="${tpl.id}" title="Download Architecture Blueprint Excel (.xlsx) with Cable Schedules & BOM" style="background:rgba(16, 185, 129, 0.15); border:1px solid rgba(16, 185, 129, 0.4); color:#34d399; font-size:11px; padding:6px 9px; border-radius:6px; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:4px; transition: all 0.2s ease;">
+          <div style="display:flex; gap:8px; align-items:center; width:100%; justify-content:flex-end;">
+            <button class="saas-tpl-excel-btn" data-tpl-id="${tpl.id}" title="Download Architecture Blueprint Excel (.xlsx) with Cable Schedules & BOM" style="background:rgba(16, 185, 129, 0.15); border:1px solid rgba(16, 185, 129, 0.4); color:#34d399; font-size:11px; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:5px; transition: all 0.2s ease;">
               📊 Blueprint
             </button>
-            <button class="saas-tpl-use-btn" data-tpl-id="${tpl.id}">
+            <button class="saas-tpl-use-btn" data-tpl-id="${tpl.id}" style="padding:6px 14px;">
               Use Template
             </button>
           </div>
